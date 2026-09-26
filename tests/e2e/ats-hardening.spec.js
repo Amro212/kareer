@@ -1,7 +1,7 @@
 import { test, expect, LEVER_HOST, ASHBY_HOST, GREENHOUSE_HOST } from './support/fixtures.js';
 
 const profile = {
-  fullName: 'Test Applicant', email: 'test@example.com', location: 'Toronto, Ontario, Canada',
+  fullName: 'Test Applicant', email: 'test@example.com', phone: '+1 555 0100', location: 'Toronto, Ontario, Canada',
   linkedin: 'https://linkedin.com/in/example', pronouns: 'He/him', resumeContext: 'Software engineer.',
 };
 
