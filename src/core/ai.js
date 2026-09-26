@@ -2,7 +2,7 @@ import { hasApiKey, getSettings, getProfile } from './storage.js';
 import { logger } from './debug.js';
 import { platform } from './platform.js';
 import { findExactOption } from './fields/combobox.js';
-import { profileForAI, fixedProfileAnswer } from './profile.js';
+import { profileForAI, fixedProfileAnswer, formatStructuredBackground } from './profile.js';
 
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 const AUTOFILL_TIMEOUT_MS = 120000;
@@ -157,8 +157,8 @@ CRITICAL OPERATING RULES:
 2. NEVER fabricate or invent unlisted jobs, employers, dates, metrics, degrees, tools, or certifications (Rule 11).
 3. For structured questions (radio, select, checkbox, short text) where candidate preferences or standard defaults apply:
    - Explicit structured applicantProfile answers have priority over conflicting resume context, applicant notes, previous answers, and generic defaults. Preserve explicit No answers.
-   - Work authorization and sponsorshipNow/sponsorshipFuture apply ONLY to applicantProfile.workCountry. Match the question's country, or the confirmed job work country when implicit. Do not transfer eligibility across countries or infer it from residence, nationality, or a phone number. Unknown country or unsupported eligibility: return an empty string. When structured eligibility is unset, only use unambiguous, country-specific facts from applicant context; never guess Yes or No.
-   - For sponsorship "now OR in the future", answer Yes if either scoped answer is Yes; answer No only when BOTH scoped answers are No. Otherwise leave empty. Distinguish current from future sponsorship.
+   - Work authorization and sponsorshipNow/sponsorshipFuture: candidate may have work eligibility in multiple countries listed in applicantProfile.workEligibilities (with fallback to applicantProfile.workCountry). Match the question's target country, or the confirmed job work country when implicit, to the corresponding entry in workEligibilities. Do not transfer eligibility across countries or infer it from residence, nationality, or a phone number. If applicantProfile has no eligibility entry matching the target country, return an empty string. When structured eligibility is unset for that country, only use unambiguous, country-specific facts from applicant context; never guess Yes or No.
+   - For sponsorship "now OR in the future", answer Yes if either scoped answer is Yes for that country; answer No only when BOTH scoped answers are No. Otherwise leave empty. Distinguish current from future sponsorship.
    - Years of experience dropdowns: infer the candidate's level (e.g. Senior, Mid, 5+ years) from their resume context and select the best matching option. Set "inferred": true.
    - Demographic surveys / EEOD / gender / pronouns / race or ethnicity / disability / veteran status: use ONLY the corresponding explicit structured profile answer. Not set means return an empty string, never a guessed identity or guessed No. Prefer not to answer means choose an actual decline option; if absent leave empty. Match meaning precisely: general veteran status does not establish protected veteran status, race does not establish Hispanic ethnicity, and gender does not establish sex assigned at birth. Use genderDescription only when gender is Self-describe. Do not mention demographics in unrelated narrative answers.
    - "How did you hear about us?" and equivalent job discovery/source questions: always LinkedIn. For option fields choose only an offered LinkedIn option; if unavailable return empty (combobox may search LinkedIn). Do not invent a referrer or replace a LinkedIn profile URL with this source answer.
@@ -430,9 +430,12 @@ export async function generateAutofillAnswers(normalizedFields, { allowSearch = 
   const structuredFields = normalizedFields.filter(field => !isNarrativeField(field));
   const narrativeFields = normalizedFields.filter(field => isNarrativeField(field));
 
+  const structuredBg = formatStructuredBackground(profile);
+  const combinedResumeContext = structuredBg || profile.resumeContext || '';
+
   const baseUserContext = {
     applicantProfile: profileForAI(profile),
-    resumeContext: profile.resumeContext,
+    resumeContext: combinedResumeContext,
     applicantNotes: profile.applicantNotes,
     pageContext: {
       url: window.location.href,
@@ -502,7 +505,7 @@ export async function generateAutofillAnswers(normalizedFields, { allowSearch = 
             const editorUserContent = JSON.stringify({
               answersToEdit: answers,
               jobContext,
-              resumeContext: profile.resumeContext,
+              resumeContext: combinedResumeContext,
             });
             const editResult = await requestAiJson({
               model: narrativeModel,
@@ -603,7 +606,10 @@ Rules:
 2. Incorporate the candidate's specific feedback and revision instructions.
 3. Follow NARRATIVE VOICE. First-person. Natural spoken English.
 4. Output ONLY the rewritten answer text with no surrounding quotes or commentary.
-5. Explicit structured profile answers take precedence over conflicting notes. Eligibility applies only to workCountry. Do not guess unknown eligibility or demographics, expose demographics in unrelated answers, or convert compensation units. Job discovery source is always LinkedIn.`;
+5. Explicit structured profile answers take precedence over conflicting notes. Eligibility applies only to the matching country in workEligibilities or workCountry. Do not guess unknown eligibility or demographics, expose demographics in unrelated answers, or convert compensation units. Job discovery source is always LinkedIn.`;
+
+  const structuredBg = formatStructuredBackground(profile);
+  const combinedResumeContext = structuredBg || profile.resumeContext || '';
 
   const userPrompt = `Question Label: ${fieldLabel}
 Current Answer:
@@ -613,7 +619,7 @@ Explicit Applicant Profile:
 ${JSON.stringify(profileForAI(profile))}
 
 Candidate Resume Highlights:
-${profile.resumeContext}
+${combinedResumeContext}
 
 Applicant Notes / Rules:
 ${profile.applicantNotes}

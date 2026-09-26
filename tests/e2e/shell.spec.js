@@ -1,6 +1,37 @@
 import { test, expect } from './support/fixtures.js';
 
 test.describe('extension shell', () => {
+  test('profile save dock floats while dirty and persists edits on desktop and mobile', async ({ kr }) => {
+    const page = await kr.context.newPage();
+    await page.goto(kr.optionsUrl());
+    const dock = page.locator('#profile-floating-dock');
+    await expect(page.locator('#pf-github')).toBeVisible();
+    await expect(dock).toBeHidden();
+    await expect(dock).toHaveCSS('position', 'fixed');
+
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 800 });
+      const github = `https://github.com/applicant-${width}`;
+      await page.locator('#pf-github').fill(github);
+      await expect(dock).toBeVisible();
+      await expect(dock).toContainText('Unsaved profile changes');
+      await expect(dock).toBeInViewport();
+      await page.locator('#applicantNotes').fill(`Notes at ${width}`);
+      await expect(dock).toBeInViewport();
+      const box = await dock.boundingBox();
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(width);
+      await page.locator('#floating-save-btn').click();
+      await expect(dock).toContainText('Profile saved');
+      await expect.poll(async () => (await kr.readStorage('kr:profile')).github).toBe(github);
+      expect((await kr.readStorage('kr:profile')).applicantNotes).toBe(`Notes at ${width}`);
+      await expect(dock).toBeHidden();
+      await page.reload();
+      await expect(page.locator('#pf-github')).toHaveValue(github);
+      await expect(dock).toBeHidden();
+    }
+  });
+
   test('panel mounts in the page and reports the hydrated key state', async ({ kr }) => {
     await kr.seed({ apiKey: 'sk-or-v1-e2e-test-key' });
 
@@ -64,7 +95,7 @@ test.describe('extension shell', () => {
     await page.locator('#pf-fullName').fill('Test Applicant');
     await page.locator('#pf-workCountry').fill('Canada');
     await page.locator('#pf-workAuthorization').selectOption('Yes');
-    await page.locator('#resumeContext').fill('Ships production software.');
+    await page.locator('#applicantNotes').fill('Ships production software.');
     await page.locator('#profile-form button[type=submit]').click();
     await expect(page.locator('#profile-feedback')).toHaveText('Profile saved.');
 
@@ -75,7 +106,39 @@ test.describe('extension shell', () => {
     expect(profile.fullName).toBe('Test Applicant');
     expect(profile.workCountry).toBe('Canada');
     expect(profile.workAuthorization).toBe('Yes');
-    expect(profile.resumeContext).toBe('Ships production software.');
+    expect(profile.workEligibilities.length).toBeGreaterThanOrEqual(1);
+    expect(profile.workEligibilities[0].country).toBe('Canada');
+    expect(profile.workEligibilities[0].workAuthorization).toBe('Yes');
+    expect(profile.applicantNotes).toBe('Ships production software.');
+  });
+
+  test('options page allows adding multiple eligible countries and persists all entries', async ({ kr }) => {
+    const page = await kr.context.newPage();
+    await page.goto(kr.optionsUrl());
+
+    await page.locator('#pf-fullName').fill('Dual Citizen');
+    await page.locator('#pf-workCountry').fill('United States');
+    await page.locator('#pf-workAuthorization').selectOption('Yes');
+
+    // Add a second country
+    await page.locator('#add-eligibility-btn').click();
+    const secondCard = page.locator('#eligibility-list .repeatable-card').nth(1);
+    await secondCard.locator('.elig-country').fill('Canada');
+    await secondCard.locator('.elig-auth').selectOption('Yes');
+    await secondCard.locator('.elig-sponsor-future').selectOption('No');
+
+    await page.locator('#profile-form button[type=submit]').click();
+    await expect(page.locator('#profile-feedback')).toHaveText('Profile saved.');
+
+    const profile = await kr.readStorage('kr:profile');
+    expect(profile.workCountry).toBe('United States');
+    expect(profile.workAuthorization).toBe('Yes');
+    expect(profile.workEligibilities).toHaveLength(2);
+    expect(profile.workEligibilities[0].country).toBe('United States');
+    expect(profile.workEligibilities[0].workAuthorization).toBe('Yes');
+    expect(profile.workEligibilities[1].country).toBe('Canada');
+    expect(profile.workEligibilities[1].workAuthorization).toBe('Yes');
+    expect(profile.workEligibilities[1].sponsorshipFuture).toBe('No');
   });
 
   test('profile edits made in the options page reach an already-open page', async ({ kr }) => {

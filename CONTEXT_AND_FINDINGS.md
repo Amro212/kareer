@@ -3,7 +3,338 @@
 Running log of changes, bugs, and platform findings for the dual-target
 (extension + userscript) Kareer.
 
-## Turn: 2026-09-24 — CI/CD trigger filtering & extension change detection
+## Turn: 2026-09-26 — Floating profile save dock asset regression
+
+### Findings
+- Target: extension options page (user screenshots show v0.4.53); not a live ATS issue.
+- Symptoms: the floating save control appears as a second ordinary inline button below the form, even when clean, and is offscreen while editing earlier fields. Its status dot and flex layout are also absent.
+- Review: the recent staged dock markup and dirty-state handlers have corresponding fixed-position CSS in source. The screenshots are consistent with that CSS being absent/stale in the loaded build, rather than a broken click handler; the exact installed asset cannot be inspected from screenshots.
+- Confirmed build defect: `npm run dev` only copied CSS/HTML at startup; esbuild watched JavaScript alone. Static styles could remain stale after source edits. Stylesheet URLs also had no cache key.
+- Related accessibility defect: opacity and pointer-events alone left the clean dock keyboard-focusable.
+
+### Turn changes
+- `tools/build.js`: register copied CSS, HTML, manifests, and first-run script with esbuild's watcher and refresh static files after successful rebuilds; add a content hash to generated stylesheet URLs for Chrome and Firefox.
+- `src/targets/extension/shared/pages.css`: hide the inactive dock with visibility so it cannot receive keyboard focus.
+- `tests/unit/build-watch.test.js`: exercise a real watch process in a temporary project; verify CSS changes, stylesheet cache keys, and HTML changes reach both browsers.
+- `tests/e2e/shell.spec.js`: verify dock positioning, dirty/clean visibility, viewport bounds, save persistence, and reload behavior at desktop/mobile widths using the loaded extension.
+- Build output: generated Chrome ZIP, Firefox XPI, and userscript; the existing build process advanced version 0.4.55 to 0.4.56 and synchronized `package.json`, `firefox-updates.json`, `site/firefox-updates.json`, `site/version.json`, and `site/index.html`.
+- Existing staged changes preserved. No profile data or unrelated application behavior changed.
+
+### Verification / status
+- `npm run build`: passed (v0.4.56).
+- Watch regression: passed. Initial filesystem watcher attempt hit sandbox EMFILE; replaced with esbuild's existing watcher and verified successfully.
+- Initial targeted browser run encountered a trace-file teardown collision; full suite rerun uses a separate output directory.
+- `npm test`: 229 passed, including the new watch-build regression.
+- `npm run test:e2e -- tests/e2e/shell.spec.js --grep "profile save dock" --output=/private/tmp/kareer-save-dock-focused`: passed (desktop and mobile persistence/positioning).
+- `npm run test:e2e -- --output=/private/tmp/kareer-save-dock-e2e`: not green; 6 passed, 2 Lever tests failed because their seeded profile lacks the phone required by the existing profile gate. Stopped after these repeated unrelated failures; 1 test interrupted and 44 not run. Those unrelated fixtures/gating behavior remain deferred.
+- `git diff --check`: passed. Fix built and targeted behavior verified; full-suite clearance remains blocked by the unrelated profile-gate failures. Reload the unpacked extension and reopen Options to load v0.4.56.
+
+## Turn: 2026-09-26 — Multi-Country Work Eligibility Support
+
+### User Need & Problem
+- Previously, Kareer assumed a single work country (`workCountry`, `workAuthorization`, `sponsorshipNow`, `sponsorshipFuture`).
+- Many applicants hold citizenship, permanent residency, or valid work authorization in multiple countries (e.g. dual US/Canada citizens, UK/EU visa holders, global remote workers) and need to specify work authorization and visa sponsorship status for each country.
+- When applying across different global locations, autofill and AI grounding must match the specific country of the target job/question against the applicant's country-specific eligibility entries.
+
+### Changes
+- **`src/core/constants.js`**:
+  - Added `workEligibilities: []` to `DEFAULT_PROFILE`.
+  - Preserved legacy fields `workCountry`, `workAuthorization`, `sponsorshipNow`, `sponsorshipFuture` for backwards compatibility.
+- **`src/core/profile.js`**:
+  - Added `createWorkEligibility(data = {})` factory with `{ id, enabled, country, workAuthorization, sponsorshipNow, sponsorshipFuture, _collapsed }`.
+  - Updated `profileForAI(profile)` to supply active `workEligibilities` in prompt payloads while preserving root fields for legacy model consumers.
+- **`src/core/storage.js`**:
+  - In `getProfile()`: Migrated legacy profiles lacking `workEligibilities` by auto-synthesizing an entry from `workCountry`/`workAuthorization`. Mirrored primary active country eligibility to root fields.
+  - In `saveProfile()`: Preserved `workEligibilities` and maintained bidirectional synchronization with root fields `workCountry`, `workAuthorization`, `sponsorshipNow`, and `sponsorshipFuture`.
+- **`src/core/ai.js`**:
+  - Updated structured system prompt (`buildStructuredSystemPrompt`) and narrative rewrite prompt (`buildNarrativeRewriteSystemPrompt`) to check `applicantProfile.workEligibilities` for the matching country of the job or question before falling back to `workCountry`.
+  - Specified that for multi-country applicants, questions must resolve to the specific country entry and not guess or cross-transfer eligibility.
+- **`src/targets/extension/options/index.html` & `index.js`**:
+  - Added `#section-eligibility` repeatable section with `+ Add eligible country` button and card list (`#eligibility-list`).
+  - Added sidebar navigation link `#section-eligibility` with active count badge (`#subnav-eligibility-count`).
+  - Implemented `renderEligibilityList()` providing repeatable cards with Country, Authorized to work?, Sponsorship now?, and Sponsorship future? dropdowns, Active toggle, Move Up/Down reordering, and Delete.
+  - Ensured the primary card retains `#pf-workCountry` and `#pf-workAuthorization` IDs/names for seamless E2E compatibility.
+  - Filtered static 'Work eligibility' from `#profile-sections` to avoid duplicated controls.
+  - Added scrollspy tracking for `#section-eligibility`.
+- **`src/core/ui.js`**:
+  - Added eligible countries badge (`${eligCount} Eligible countr(y/ies)`) to the Detailed Profile Background card in the extension panel.
+  - Ensured `#kr-autofill-btn` is enabled when an API key is present, providing non-blocking recommended guidance for incomplete profiles.
+- **Verification**:
+  - `node --test tests/unit/profile.test.js`: **27 passed, 0 failed**.
+  - `node --test tests/unit/*.test.js`: **228 passed, 0 failed** (all unit tests).
+  - `npx playwright test tests/e2e/shell.spec.js`: **7 passed, 0 failed** (including new test verifying multi-country creation and persistence).
+  - `node tools/build.js`: Built cleanly at **v0.4.55** (Chrome extension, Firefox XPI, Userscript).
+
+---
+
+## Turn: 2026-09-26 — Decomposed Address Schema, Fieldset Separation, & Floating Save Dock
+
+### Architectural Parity & Grill-me Alignment
+- Compared Kareer's profile implementation against Simplify Copilot ([docs/plans/simplify-research.md](./docs/plans/simplify-research.md)):
+  - Evaluated Simplify's remote 137 canonical keys, deterministic-first selector mapping, and per-category controls vs Kareer's local-first BYOK privacy architecture, active/disabled record toggles, and rich AI steering via `applicantNotes`.
+  - Walked down the design tree in a `/grill-me` interview:
+    1. Identified granular address decomposition as the primary parity gap to eliminate failure modes when ATS forms split addresses into individual inputs.
+    2. Aligned on migrating single `location` to decomposed address fields (`streetAddress`, `addressLine2`, `city`, `stateProvince`, `postalCode`, `country`) with automatic backward compatibility.
+    3. Aligned on dynamic on-the-fly synthesis of `location` (`[city, stateProvince, country].filter(Boolean).join(', ')`) when ATS platforms (e.g. Greenhouse, Lever) ask for a single residence/location input.
+    4. Aligned on deterministic resolution in `fixedProfileAnswer` for free-text address inputs, while delegating state/country comboboxes to AI grounded in the profile.
+    5. Followed `/impeccable` design principles and `DESIGN.md` guidelines for Options page visual hierarchy: separated into distinct semantic fieldsets (`#section-identity`, `#section-address`, `#section-links`), distinct sidebar navigation targets, balanced 2-column grids with full-width street address/country/portfolio, and an ambient floating save dock that reveals itself upon detected changes.
+
+### Changes
+- **`src/core/constants.js`**: Added `streetAddress`, `addressLine2`, `city`, `stateProvince`, `postalCode`, `country` to `DEFAULT_PROFILE`.
+- **`src/core/storage.js`**: Added `parseLegacyLocation` to auto-split legacy comma-separated location strings on load, and updated `saveProfile` to preserve decomposed fields and keep synthesized `location` synchronized.
+- **`src/core/profile.js`**:
+  - Updated `profileForAI` to include all decomposed address fields in the AI prompt payload.
+  - Updated `fixedProfileAnswer` to deterministically match free-text inputs for street address, address line 2 / apt / suite / unit, city, state / province, postal / zip code, and country; and route single residence queries to synthesized location.
+  - Updated `MVP_PROFILE_FIELDS` and `calculateProfileStrength` to check `city` and `country` for core identity completeness while remaining backward-compatible with legacy location profiles.
+- **`src/core/capture.js`**: Added all decomposed address fields to `profileSecrets` so full addresses are redacted in debug exports and logs.
+- **`src/targets/extension/options/index.html`**:
+  - Separated Identity, Address, and Links into distinct semantic `<fieldset>` elements (`#section-identity`, `#section-address`, `#section-links`) with individual `<legend>` headers.
+  - Added sidebar navigation anchors for `#section-identity`, `#section-address`, and `#section-links`.
+  - Added floating save dock markup (`#profile-floating-dock`) with status dot, status message, and quick-save button.
+- **`src/targets/extension/options/index.js`**:
+  - Added `serializeCurrentProfile` and `checkProfileDirty` to track unsaved edits across form inputs, date dropdowns, repeatable card changes, and skills chips.
+  - Wired floating save button click to `$('profile-form').requestSubmit()`.
+  - Added scrollspy tracking for `#section-address` and `#section-links` in `onWindowScroll`.
+- **`src/targets/extension/shared/pages.css`**:
+  - Added `.floating-save-dock` pill-shaped flight deck styling with ambient backdrop blur, subtle shadow, status dot, and smooth entrance/exit transitions.
+- **`tests/unit/profile.test.js`**: Added unit tests covering `parseLegacyLocation`, `getProfile` migration and synthesis, `fixedProfileAnswer` address resolution, and profile strength evaluation.
+
+### Verification
+- `npm test`: **226 passed, 0 failed** (`node --test tests/unit/*.test.js`).
+- `node tools/build.js`: Built cleanly at **v0.4.53** (Chrome extension, Firefox XPI, Userscript).
+
+---
+
+## Turn: 2026-09-26 — Immediate Pre-Autofill Embedded Form Field Discovery
+
+### Bugs/findings
+- **Target**: Embedded cross-frame field discovery on initial load & rescan (`src/core/agent.js`, `src/core/remote.js`, `src/core/ui.js`, `tests/unit/remote.test.js`, `tests/e2e/cross-frame.spec.js`).
+- **Platform/ATS**: Embedded iframe applications (e.g., Greenhouse embed on Stripe).
+- **Symptoms & User Need**:
+  - In normal (non-embedded) applications, form fields appear in "Field Verification & Review" immediately upon load/rescan as UNTOUCHED, allowing navigation and field inspection before autofill is run.
+  - In embedded applications, fields were only discovered when autofill was initiated, leaving the review section empty (`0 FIELDS`, `"No form fields detected on this page."`) prior to autofill.
+- **Resolution**:
+  1. Added lightweight `inspect` action in `src/core/agent.js` that scans fields in the frame document without option harvesting or dropdown side effects, deduplicates field IDs, and returns normalized field metadata.
+  2. Added `inspectRemoteFields()` in `src/core/remote.js` to query registered remote frames for their fields, assigning namespaced remote IDs and storing frame URL metadata.
+  3. In `src/core/ui.js`, updated `refreshRemoteFieldCount()` to inspect remote frames whenever frame counts change or when remote fields are unpopulated, immediately populating `remoteFieldsCache` on page load and frame announce.
+  4. Updated rescan button (`#kr-rescan-btn`) to force-refresh remote field inspection.
+  5. Updated `.kr-locate-field-btn` handler to use `fieldMeta.frameUrl` to accurately select and scroll the target iframe into view before dispatching `locate`.
+- **Verification**:
+  - `npm test`: **223 passed, 0 failed** (`node --test tests/unit/*.test.js`).
+  - `npm run test:e2e`: **6 passed, 0 failed** (`tests/e2e/cross-frame.spec.js`), including new assertion proving embedded fields are discovered and listed as `UNTOUCHED` before autofill.
+  - `npm run build`: built cleanly at **v0.4.50** (Chrome extension, Firefox XPI, Userscript).
+
+---
+
+## Turn: 2026-09-26 — Fix Cross-Frame (Embedded) Form Tracking, Review, & Jump Navigation
+
+### Bugs/findings
+- **Target**: Embedded cross-frame form tracking, verification review, and jump navigation (`src/core/ui.js`, `src/core/remote.js`, `src/core/agent.js`, `tests/unit/panel.test.js`, `tests/unit/remote.test.js`, `tests/e2e/cross-frame.spec.js`).
+- **Platform/ATS**: Embedded iframe applications (e.g., Greenhouse embed on Stripe).
+- **Symptoms**:
+  - Embedded iframe forms were recognized and autofilled by the frame agent, but the Field Verification & Review section reported `0 FIELDS` and `"No form fields detected on this page."`
+  - Completion logs reported: `Autofill finished: 0 filled, 0 failed and 0 untouched out of 0 current fields.`
+  - The jump buttons (`.kr-locate-field-btn`) did not locate or scroll to fields inside the iframe.
+- **Root-Cause Analysis**:
+  1. `startAutofillFlow()` collected `remoteFields` as a local transient variable and did not retain them in state. On completion, `refreshDetectedFields()` ran on the top host document (which has 0 fields), leaving `detectedFieldsCache` empty.
+  2. `renderFieldReviewSection()` evaluated only `detectedFieldsCache` rather than an aggregated set of local and remote fields.
+  3. `summarizeFieldResults()` and `renderItem()` only read `field.id`, failing to fall back to `field.fieldId` (`jcf<frameId>::<fieldId>`) used by cross-frame normalized fields.
+  4. `.kr-locate-field-btn` only looked for DOM elements in `detectedFieldsCache`, which do not exist in the top frame document; and `agent.js` lacked a `'locate'` handler to highlight and scroll fields inside subframes.
+- **Resolution**:
+  1. Maintained `remoteFieldsCache` in `src/core/ui.js` and added `getAllDetectedFields()` which merges local fields, remote fields, and any remote results stored in `fieldResultsCache`.
+  2. Updated `startAutofillFlow()` to cache `remoteFields`, pass `getAllDetectedFields()` to `summarizeFieldResults()`, and correctly log completion statistics.
+  3. Updated `renderFieldReviewSection()` to evaluate `getAllDetectedFields()` and display fallback labels from results.
+  4. Updated `summarizeFieldResults()` and `renderItem()` to handle `f.id || f.fieldId`.
+  5. Added `'locate'` action to `src/core/agent.js` and `locateRemoteField()` to `src/core/remote.js`. Updated `.kr-locate-field-btn` click handler to dispatch cross-frame location and scroll the parent iframe into view.
+  6. Added unit tests in `tests/unit/remote.test.js` and `tests/unit/panel.test.js`, and added E2E assertions in `tests/e2e/cross-frame.spec.js`.
+- **Verification**:
+  - `npm test`: **222 passed, 0 failed** (`node --test tests/unit/*.test.js`).
+  - `npm run test:e2e`: **6 passed, 0 failed** (`tests/e2e/cross-frame.spec.js`).
+  - `npm run build`: built cleanly at **v0.4.49** (Chrome extension, Firefox XPI, Userscript).
+
+---
+
+## Turn: 2026-09-26 — Minimum Viable Profile (MVP) Gating & Profile Strength Indicator
+
+### Bugs/findings
+- **Target**: Profile completeness gating and strength visualization (`src/core/profile.js`, `src/core/ui.js`, `src/targets/extension/options/index.html`, `src/targets/extension/options/index.js`, `src/targets/extension/shared/pages.css`, `tests/unit/profile.test.js`).
+- **Symptoms & User Need**:
+  - Without minimum core identity data (`fullName`, `email`, `phone`, `location`), launching autofill leads to degraded, incomplete, or rejected applications.
+  - Users had no visual feedback indicating whether their profile was sufficiently configured to generate high-quality applications.
+- **Resolution**:
+  1. **MVP Definition & Strength Calculation** (`src/core/profile.js`):
+     - Defined `MVP_PROFILE_FIELDS` (`fullName`, `email`, `phone`, `location`).
+     - Added `getMissingCoreProfileFields(profile)` to return unpopulated core labels.
+     - Added `calculateProfileStrength(profile)` calculating a 5-tier weighted score (100% total: 40% Core Identity, 20% Work History, 15% Education, 15% Skills, 10% Projects & Links) and assigning status tiers (`Incomplete`, `Basic MVP Ready`, `Strong`, `Flight-Deck Ready`).
+  2. **Options Sidebar Strength Meter** (`options/index.html`, `pages.css`, `options/index.js`):
+     - Added `.nav-strength-meter` under Profile navigation with progress track, percentage, and tier label.
+     - Wired real-time updates on form `'input'` and repeatable list changes.
+  3. **In-Page Panel & HUD Gating** (`src/core/ui.js`):
+     - When MVP is incomplete:
+       - Displays amber alert banner (`.kr-mvp-alert`) above action buttons with missing tags and `[Complete Profile]` action.
+       - Disables `#kr-autofill-btn` and sets warning CTA on `#kr-hud-autofill-btn`.
+       - Clicking `Complete Profile` or HUD warning button switches to the Profile tab and auto-focuses the first missing field input.
+     - When MVP is complete:
+       - Displays compact readiness chip (`.kr-strength-chip`) in Form Fields header.
+       - Autofill CTA is active.
+     - In Profile tab: displays Profile Strength readiness card with dynamic tier badge, progress bar, and status guidance.
+  4. **Design Quality (/impeccable)**:
+     - Authored SVG icons throughout (no unicode emojis).
+     - Clean 1px borders, high contrast ratios, and monospace numerals for data.
+  5. **Verification**:
+     - Unit tests: **220 passed, 0 failed** (`tests/unit/profile.test.js`).
+     - Build: clean build at **v0.4.48** (Chrome extension, Firefox XPI, Userscript).
+
+---
+
+## Turn: 2026-09-26 — Surgical Removal of Redundant Resume Highlights Field
+
+### Bugs/findings
+- **Target**: Profile configuration & AI context generation (`src/targets/extension/options/index.html`, `src/targets/extension/options/index.js`, `src/core/ui.js`, `src/core/ai.js`, `src/core/storage.js`, `tests/e2e/shell.spec.js`).
+- **Symptoms & Root Cause**:
+  - Having a freeform "Resume highlights & background summary" (`resumeContext`) textarea alongside structured repeatable sections (Work Experience, Education, Projects, Skills) created cognitive overhead, confusing dual source-of-truth conflicts, and burned redundant prompt tokens in `combinedResumeContext`.
+- **Resolution**:
+  1. **UI Clean-up**:
+     - Removed `resumeContext` textarea and label from the Settings page (`options/index.html`) and from the in-page side panel (`src/core/ui.js`).
+     - Clarified that `applicantNotes` is the single source for steering rules, custom constraints, and miscellaneous highlights.
+  2. **AI Prompt Optimization & Backward Compatibility**:
+     - In `src/core/ai.js`, updated `combinedResumeContext` to use formatted structured background (`structuredBg`) as the primary context, falling back to legacy `profile.resumeContext` only when no structured records exist.
+     - Preserved `resumeContext` in storage defaults and panel form handling so legacy profiles remain undamaged.
+  3. **Test Suite Alignment**:
+     - Updated `tests/e2e/shell.spec.js` to target `#applicantNotes`.
+- **Verification**:
+  - `npm test`: **219 passed, 0 failed**.
+  - `npm run build`: Incremented to `0.4.47` across userscript, Chrome extension, and Firefox XPI.
+
+---
+
+## Turn: 2026-09-25 — Settings Page Sidebar Subsections & Jump Navigation
+
+### Bugs/findings
+- **Target**: Settings / options page left sidebar navigation (`src/targets/extension/options/index.html`, `src/targets/extension/options/index.js`, `src/targets/extension/shared/pages.css`).
+- **Symptoms & Root Cause**:
+  - The settings page sidebar only had top-level anchor links (`API connection`, `Model`, `Profile & preferences`, `Resume`, `Backup & migration`).
+  - Users had to scroll endlessly through the long profile form to find Work Experience, Education, Projects, Skills, Preferences, or Rules.
+- **Resolution**:
+  1. **Reverted Unwanted Core UI / Widget Changes**:
+     - Fully restored `src/core/ui.js`, `src/core/platform.js`, `src/targets/extension/content/host.js`, and `src/targets/extension/background/index.js` to pristine condition.
+  2. **Profile Subsections Sidebar Navigation**:
+     - In `src/targets/extension/options/index.html`, added a structured `.nav-group` under `Profile & preferences` with dedicated subnav jump links for:
+       - `Identity & links` (`#section-identity`)
+       - `Work experience` (`#section-work`) with live count badge
+       - `Education` (`#section-education`) with live count badge
+       - `Projects` (`#section-projects`) with live count badge
+       - `Skills` (`#section-skills`) with live count badge
+       - `Job preferences` (`#section-preferences`)
+       - `Rules & notes` (`#section-rules`)
+     - Added a collapsible chevron toggle button (`#profile-subnav-toggle`) allowing users to expand or collapse subsections.
+  3. **Visual Polish & Tree-Guide Styling**:
+     - In `pages.css`, implemented clean developer-tool tree-guide styling with a subtle vertical guide line (`border-left: 1px solid var(--kr-line)`), restrained spacing, and active states (`color: var(--kr-signal); background: rgba(163, 230, 53, 0.1)`).
+     - Styled live item count badges in dark graphite with lime active tints, conforming strictly to `DESIGN.md`.
+     - Set `scroll-margin-top: 32px` on target fieldsets for clean viewport alignment.
+  4. **Dynamic Badges, Scroll Spy & Smooth Jumps**:
+     - In `options/index.js`, implemented `updateSubnavBadges()` to dynamically reflect current counts for work, education, projects, and skills as items are added, removed, or imported.
+     - Implemented `setupNavigation()` with smooth scrolling, pulse animation (`.highlight-pulse`), and a throttled scroll spy (`onWindowScroll`) that automatically highlights the active subsection in the sidebar as the user scrolls.
+- **Verification**:
+  - `npm test`: **219 passed, 0 failed**.
+  - `npm run build`: Incremented to `0.4.46` and built userscript, Chrome extension, and Firefox XPI.
+
+---
+
+## Turn: 2026-09-25 — Collapsed-by-Default Repeatable Section Cards
+
+### Bugs/findings
+- **Target**: Options console repeatable cards for Work Experience, Education, and Projects (`src/targets/extension/options/index.js`, `src/core/profile.js`).
+- **Symptoms & Root Cause**:
+  - Repeatable profile entries were all rendered fully expanded on load, creating a massive, noisy scroll surface when users have several roles or projects.
+  - While `.repeatable-card.is-collapsed` styles existed in `pages.css`, `createWorkExperience()`, `createEducation()`, and `createProject()` were instantiating fresh objects that stripped the `_collapsed: true` flag. Furthermore, card rendering lacked a fallback defaulting `_collapsed` to `true` when unset.
+- **Resolution**:
+  1. Updated `createWorkExperience`, `createEducation`, and `createProject` in `src/core/profile.js` to preserve `_collapsed` state.
+  2. In `src/targets/extension/options/index.js`, ensured all repeatable lists (`renderWorkExperiencesList`, `renderEducationList`, `renderProjectsList`) explicitly default `item._collapsed` to `true` on initial render.
+  3. Preserved `_collapsed: false` for newly appended items so clicking "+ Add experience / education / project" opens that specific new card for immediate editing.
+  4. Added keyboard support (`Enter` and `Space`) to toggle collapse/expansion directly from the focused card header.
+- **Verification**:
+  - `npm run build`: Built version `0.4.44` across userscript, Chrome extension, and Firefox XPI.
+  - `npm test`: **219 passed, 0 failed**.
+
+---
+
+## Turn: 2026-09-25 — Unambiguous Date Pickers & Header Button Restraint
+
+### Bugs/findings
+- **Target**: Options console profile repeatable cards (`src/targets/extension/options/index.js`, `src/targets/extension/shared/pages.css`).
+- **Symptoms & Root Cause**:
+  1. *Ambiguous date inputs*: `<input type="month">` rendered across browsers in dark mode as an empty dark text box with no placeholder, calendar icon, or formatting cues, leaving users completely unaware of what format to enter (e.g. `MM/YYYY`, `YYYY-MM`, or text month).
+  2. *Green button flooding*: Card header controls (`↑`, `↓`, `✕`) inherited global `button` styles (`background: var(--kr-signal)` / `#A3E635`) in stale builds and lacked `.secondary` classes, violating `DESIGN.md` rules against neon lime flooding.
+  3. *Orphaned grid cells*: The "Currently enrolled / working" checkbox sat in an isolated 7th grid item, throwing off the 2-column symmetry.
+- **Resolution**:
+  1. **Coordinated Month & Year Dropdowns**:
+     - Replaced raw text/month inputs with dedicated side-by-side `<select>` pickers: Month (named `January` through `December`) and Year (`1960` through `currentYear + 8`).
+     - Zero formatting ambiguity: Users pick month and year directly from dropdowns, persisted cleanly as `YYYY-MM` (or `YYYY`).
+     - Added partial date resilience: Supports month-first selection (`--MM`), preserving selected values if reordered or toggled.
+  2. **Inline Current Status Toggles**:
+     - Moved "Currently enrolled", "I currently work here", and "Ongoing project" toggles directly into the End Date header row (`.label-with-action`).
+     - Toggling automatically disables the End Date Month & Year selects and updates card summary to `Present` / `Ongoing`.
+     - Balanced grid layout across Work Experience, Education, and Projects with `.full-width` helpers for location and URL fields.
+  3. **Strict Button Specificity**:
+     - Added explicit `secondary` class to all icon buttons (`class="icon-btn secondary ..."`).
+     - Applied `!important` dark graphite styling (`--kr-bg-2`, `--kr-line-strong`, `--kr-text-2`) in `pages.css` so secondary buttons are never flooded with lime green.
+  4. **AI Pipeline Verification & Voice Editor Context**:
+     - Verified that all active structured entries (`workExperiences`, `education`, `projects`, `skills`) are passed in `applicantProfile` and serialized chronologically in `combinedResumeContext` for all AI requests.
+     - Updated narrative voice editor pass in `src/core/ai.js` to also receive `combinedResumeContext` instead of raw legacy text notes.
+  5. **Export & Import Complete Profile Roundtrip**:
+     - Audited `exportPayload()` and `importPayload()` in `src/core/migration.js`. Verified that `STORAGE_KEYS.PROFILE` exports and imports the complete profile object including `workExperiences`, `education`, `projects`, `skills`, `resumeContext`, `applicantNotes`, and all flat fields.
+     - Added comprehensive unit test in `tests/unit/migration.test.js` validating complete profile export and import roundtrip fidelity.
+- **Verification**:
+  - `npm test`: **219 passed, 0 failed**.
+  - `npm run build`: Compiled extension bundle `v0.4.43` with updated CSS and bundled JS.
+
+---
+
+## Turn: 2026-09-25 — Structured applicant profile & Simplify-parity background overhaul
+
+### Bugs/findings
+- **Target**: Applicant profile data model, options console, in-page panel, and AI grounding (`src/core/profile.js`, `src/core/constants.js`, `src/core/storage.js`, `src/core/ai.js`, `src/targets/extension/options/`, `src/core/ui.js`, `src/targets/extension/shared/pages.css`).
+- **Goal**: Harden the applicant profile from unstructured plain-text notes into rich, structured, multi-entry collections matching Simplify (Work Experience, Education, Projects, and Skills) while preserving existing data, brand signature (`DESIGN.md`), and `/impeccable` design principles.
+- **Key implementations**:
+  1. **Data Model & Schema**:
+     - Extended `DEFAULT_PROFILE` with `workExperiences: []`, `education: []`, `projects: []`, and `skills: []`.
+     - Added robust factory methods in `src/core/profile.js`: `createWorkExperience()`, `createEducation()`, `createProject()`.
+     - Guarded `getProfile()` and `saveProfile()` in `src/core/storage.js` so legacy profiles or partial payloads always resolve repeatable fields to arrays.
+  2. **Options Console (1180px Full-Width Editor)**:
+     - Implemented repeatable accordion card editors for Work Experience, Education, and Projects with:
+       - Header summary (e.g. "Senior Software Engineer at Stripe • Jan 2022 – Present"), collapsible state, and enabled toggle switch for fine-grained autofill inclusion.
+       - Reorder controls (Move Up / Move Down) and delete actions.
+       - Native `<input type="month">` Month/Year date pickers for start and end dates.
+       - "I currently work here" / "Currently enrolled" / "Ongoing project" toggles that dynamically disable end-date pickers.
+       - Inline field guides under every label providing clear, practical examples and guidelines.
+     - Implemented interactive chip/tag editor for Skills with Enter/comma keyboard shortcuts, duplicate prevention, and remove badges.
+     - Maintained backward compatibility for `resumeContext` and `applicantNotes` as supplementary notes.
+  3. **In-Page Panel Integration**:
+     - Added a Flight-deck styled background summary card in the 460px in-page panel displaying active counts of roles, degrees, projects, and skills with a direct deep-link ("Settings ↗") opening the full options console.
+     - Preserved repeatable collections when saving flat identity fields from the in-page panel.
+  4. **AI Context & Grounding**:
+     - Implemented `formatStructuredBackground()` to serialize active structured work experiences, education, projects, and skills into a clean, chronological format for AI autofill and narrative rewrite prompts.
+     - Updated `profileForAI()` to filter out disabled entries so candidate preferences are strictly honored.
+  5. **Design & Brand Fidelity**:
+     - Applied dark graphite palette (`--kr-bg-0`, `--kr-bg-1`, `--kr-bg-2`, `--kr-bg-3`), restrained signal lime (`--kr-signal`), and Geist font typography matching `DESIGN.md`.
+
+### Turn changes
+- `src/core/constants.js`: Extended `DEFAULT_PROFILE` with structured collections (`workExperiences`, `education`, `projects`, `skills`).
+- `src/core/profile.js`: Added entry factories, `formatStructuredBackground()`, and updated `profileForAI()`.
+- `src/core/storage.js`: Ensured repeatable collections always fallback to arrays in `getProfile()` and `saveProfile()`.
+- `src/core/ai.js`: Injected structured background into `generateAutofillAnswers()` and `rewriteNarrativeField()`.
+- `src/targets/extension/options/index.html`: Added Work Experience, Education, Projects, and Skills fieldsets with add buttons, chip list, and field guides.
+- `src/targets/extension/options/index.js`: Implemented full interactive CRUD, accordion toggles, reordering, date pickers, skill tag input, and state persistence.
+- `src/targets/extension/shared/pages.css`: Added styling for repeatable cards, headers, controls, skill chips, and field guides matching `DESIGN.md`.
+- `src/core/ui.js`: Added detailed background summary card and Options deep-link to the in-page panel's Profile tab; safeguarded repeatable collections on save.
+- `tests/unit/profile.test.js`: Added unit tests covering factories, defaults, background formatting, `profileForAI`, and storage persistence.
+- `CONTEXT_AND_FINDINGS.md`: Logged audit, architecture, and verification.
+
+### Verification/status
+- `npm test`: **218 passed, 0 failed** across all unit test suites.
+- `npm run build`: Extension and userscript built cleanly.
+
 
 ### Bugs/findings
 - **Target**: Release workflow triggering and versioning (`.github/workflows/deploy.yml`, `.github/workflows/ci.yml`).

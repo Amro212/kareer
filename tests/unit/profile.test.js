@@ -1,7 +1,8 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { getProfile, saveProfile, saveApiKey, gmSet } from '../../src/core/storage.js';
+import { getProfile, saveProfile, saveApiKey, gmSet, parseLegacyLocation } from '../../src/core/storage.js';
 import { generateAutofillAnswers, rewriteNarrativeField } from '../../src/core/ai.js';
+import { fixedProfileAnswer } from '../../src/core/profile.js';
 
 let payload;
 function respond(answers) {
@@ -177,3 +178,321 @@ test('source does not overwrite unrelated questions that share a discovery prefi
   const { answers } = await generateAutofillAnswers([{ fieldId: 'experience', label: 'Where did you find the most challenging technical problem in your previous role?', type: 'textarea' }]);
   assert.equal(answers[0].value, 'While working on a compiler project.');
 });
+
+test('structured profile factories generate IDs and default values', async () => {
+  const { createWorkExperience, createEducation, createProject, createWorkEligibility } = await import('../../src/core/profile.js');
+  const work = createWorkExperience({ title: 'Staff Engineer', company: 'Acme' });
+  assert.ok(work.id.startsWith('work_'));
+  assert.equal(work.title, 'Staff Engineer');
+  assert.equal(work.company, 'Acme');
+  assert.equal(work.enabled, true);
+  assert.equal(work.current, false);
+
+  const edu = createEducation({ institution: 'Stanford', degree: "Master's" });
+  assert.ok(edu.id.startsWith('edu_'));
+  assert.equal(edu.institution, 'Stanford');
+  assert.equal(edu.enabled, true);
+
+  const proj = createProject({ name: 'Kareer', role: 'Maintainer' });
+  assert.ok(proj.id.startsWith('proj_'));
+  assert.equal(proj.name, 'Kareer');
+  assert.equal(proj.enabled, true);
+
+  const elig = createWorkEligibility({ country: 'Canada', workAuthorization: 'Yes' });
+  assert.ok(elig.id.startsWith('elig_'));
+  assert.equal(elig.country, 'Canada');
+  assert.equal(elig.workAuthorization, 'Yes');
+  assert.equal(elig.sponsorshipNow, '');
+  assert.equal(elig.sponsorshipFuture, '');
+  assert.equal(elig.enabled, true);
+});
+
+test('getProfile provides array defaults for repeatable collections on legacy objects', () => {
+  gmSet('kr:profile', { fullName: 'Legacy User' });
+  const profile = getProfile();
+  assert.deepEqual(profile.workExperiences, []);
+  assert.deepEqual(profile.education, []);
+  assert.deepEqual(profile.projects, []);
+  assert.deepEqual(profile.skills, []);
+  assert.deepEqual(profile.workEligibilities, []);
+});
+
+test('formatStructuredBackground formats active entries and excludes disabled ones', async () => {
+  const { formatStructuredBackground } = await import('../../src/core/profile.js');
+  const profile = {
+    workExperiences: [
+      { enabled: true, title: 'Lead Engineer', company: 'Stripe', startDate: '2022-01', current: true, description: 'Scaled payments' },
+      { enabled: false, title: 'Intern', company: 'OldCo', startDate: '2020-05', endDate: '2020-08' },
+    ],
+    education: [
+      { enabled: true, institution: 'MIT', degree: 'BS', fieldOfStudy: 'CS', startDate: '2018-09', endDate: '2022-05', gpa: '3.9' },
+    ],
+    projects: [
+      { enabled: true, name: 'TaskEngine', role: 'Creator', url: 'https://github.com/demo', description: 'Distributed queue' },
+    ],
+    skills: ['TypeScript', 'Rust', 'Docker'],
+  };
+
+  const text = formatStructuredBackground(profile);
+  assert.match(text, /WORK EXPERIENCE:/);
+  assert.match(text, /Lead Engineer at Stripe/);
+  assert.match(text, /Present/);
+  assert.match(text, /Scaled payments/);
+  assert.doesNotMatch(text, /OldCo/);
+  assert.match(text, /EDUCATION:/);
+  assert.match(text, /BS in CS – MIT/);
+  assert.match(text, /PROJECTS:/);
+  assert.match(text, /TaskEngine \(Creator\)/);
+  assert.match(text, /SKILLS:\n• TypeScript, Rust, Docker/);
+});
+
+test('profileForAI includes enabled repeatable entries and filters out disabled ones', async () => {
+  const { profileForAI } = await import('../../src/core/profile.js');
+  const profile = {
+    fullName: 'Jane Doe',
+    email: 'jane@example.com',
+    workEligibilities: [
+      { id: 'el1', enabled: true, country: 'Canada', workAuthorization: 'Yes', sponsorshipNow: 'No', sponsorshipFuture: 'No' },
+      { id: 'el2', enabled: false, country: 'Mars', workAuthorization: 'No', sponsorshipNow: 'Yes', sponsorshipFuture: 'Yes' },
+    ],
+    workExperiences: [
+      { id: 'w1', enabled: true, title: 'Engineer' },
+      { id: 'w2', enabled: false, title: 'Intern' },
+    ],
+    education: [
+      { id: 'e1', enabled: true, degree: 'BS' },
+    ],
+    projects: [
+      { id: 'p1', enabled: true, name: 'Proj1' },
+      { id: 'p2', enabled: false, name: 'Secret' },
+    ],
+    skills: ['JavaScript'],
+  };
+
+  const aiProfile = profileForAI(profile);
+  assert.equal(aiProfile.fullName, 'Jane Doe');
+  assert.equal(aiProfile.workEligibilities.length, 1);
+  assert.equal(aiProfile.workEligibilities[0].country, 'Canada');
+  assert.equal(aiProfile.workExperiences.length, 1);
+  assert.equal(aiProfile.workExperiences[0].id, 'w1');
+  assert.equal(aiProfile.education.length, 1);
+  assert.equal(aiProfile.projects.length, 1);
+  assert.equal(aiProfile.projects[0].name, 'Proj1');
+  assert.deepEqual(aiProfile.skills, ['JavaScript']);
+});
+
+test('saveProfile preserves and persists repeatable entries', () => {
+  const profile = saveProfile({
+    fullName: 'Bob Smith',
+    workExperiences: [{ id: 'w1', title: 'Developer', enabled: true }],
+    education: [{ id: 'e1', degree: 'MS', enabled: true }],
+    projects: [{ id: 'p1', name: 'OpenSource', enabled: true }],
+    skills: ['Python', 'SQL'],
+  });
+
+  assert.equal(profile.fullName, 'Bob Smith');
+  assert.equal(profile.workExperiences.length, 1);
+  assert.equal(profile.workExperiences[0].title, 'Developer');
+  assert.equal(profile.education.length, 1);
+  assert.equal(profile.projects.length, 1);
+  assert.deepEqual(profile.skills, ['Python', 'SQL']);
+
+  const loaded = getProfile();
+  assert.equal(loaded.workExperiences[0].title, 'Developer');
+  assert.deepEqual(loaded.skills, ['Python', 'SQL']);
+});
+
+test('getProfile and saveProfile handle multi-country work eligibilities and synchronize with legacy root fields', () => {
+  const profile = saveProfile({
+    fullName: 'Global Candidate',
+    workEligibilities: [
+      { country: 'United States', workAuthorization: 'Yes', sponsorshipNow: 'No', sponsorshipFuture: 'No', enabled: true },
+      { country: 'Canada', workAuthorization: 'Yes', sponsorshipNow: 'No', sponsorshipFuture: 'Yes', enabled: true },
+      { country: 'United Kingdom', workAuthorization: 'No', sponsorshipNow: 'Yes', sponsorshipFuture: 'Yes', enabled: true },
+    ],
+  });
+
+  assert.equal(profile.workEligibilities.length, 3);
+  assert.equal(profile.workCountry, 'United States');
+  assert.equal(profile.workAuthorization, 'Yes');
+  assert.equal(profile.sponsorshipNow, 'No');
+  assert.equal(profile.sponsorshipFuture, 'No');
+
+  const loaded = getProfile();
+  assert.equal(loaded.workEligibilities.length, 3);
+  assert.equal(loaded.workEligibilities[1].country, 'Canada');
+  assert.equal(loaded.workEligibilities[1].sponsorshipFuture, 'Yes');
+  assert.equal(loaded.workCountry, 'United States');
+  assert.equal(loaded.workAuthorization, 'Yes');
+});
+
+test('saveProfile auto-populates workEligibilities from legacy workCountry and workAuthorization', () => {
+  const profile = saveProfile({
+    workCountry: 'Canada',
+    workAuthorization: 'Yes',
+    sponsorshipNow: 'No',
+    sponsorshipFuture: 'Yes',
+  });
+
+  assert.equal(profile.workCountry, 'Canada');
+  assert.equal(profile.workAuthorization, 'Yes');
+  assert.equal(profile.workEligibilities.length, 1);
+  assert.equal(profile.workEligibilities[0].country, 'Canada');
+  assert.equal(profile.workEligibilities[0].workAuthorization, 'Yes');
+  assert.equal(profile.workEligibilities[0].sponsorshipNow, 'No');
+  assert.equal(profile.workEligibilities[0].sponsorshipFuture, 'Yes');
+});
+
+test('calculateProfileStrength and getMissingCoreProfileFields correctly evaluate MVP and strength tiers', async () => {
+  const { calculateProfileStrength, getMissingCoreProfileFields } = await import('../../src/core/profile.js');
+
+  // Empty profile
+  const empty = {};
+  assert.deepEqual(getMissingCoreProfileFields(empty), ['Full Name', 'Email', 'Phone', 'City', 'Country']);
+  const emptyStrength = calculateProfileStrength(empty);
+  assert.equal(emptyStrength.percentage, 0);
+  assert.equal(emptyStrength.isMvpComplete, false);
+  assert.deepEqual(emptyStrength.missingCore, ['Full Name', 'Email', 'Phone', 'City', 'Country']);
+  assert.equal(emptyStrength.tierLabel, 'Incomplete');
+
+  // Partial MVP (name + email only)
+  const partial = { fullName: 'Alex Rivera', email: 'alex@example.com' };
+  assert.deepEqual(getMissingCoreProfileFields(partial), ['Phone', 'City', 'Country']);
+  const partialStrength = calculateProfileStrength(partial);
+  assert.equal(partialStrength.percentage, 20);
+  assert.equal(partialStrength.isMvpComplete, false);
+
+  // Exact MVP complete
+  const mvp = {
+    fullName: 'Alex Rivera',
+    email: 'alex@example.com',
+    phone: '555-123-4567',
+    location: 'Austin, TX',
+  };
+  assert.deepEqual(getMissingCoreProfileFields(mvp), []);
+  const mvpStrength = calculateProfileStrength(mvp);
+  assert.equal(mvpStrength.percentage, 40);
+  assert.equal(mvpStrength.isMvpComplete, true);
+  assert.equal(mvpStrength.tierLabel, 'Basic MVP Ready');
+
+  // MVP + Work + Education + 2 Skills
+  const mid = {
+    ...mvp,
+    workExperiences: [{ id: 'w1', title: 'Software Engineer', enabled: true }],
+    education: [{ id: 'e1', degree: 'BS Computer Science', enabled: true }],
+    skills: ['JavaScript', 'Python'],
+  };
+  const midStrength = calculateProfileStrength(mid);
+  // 40 (core) + 20 (work) + 15 (edu) + 10 (2 skills) = 85
+  assert.equal(midStrength.percentage, 85);
+  assert.equal(midStrength.isMvpComplete, true);
+  assert.equal(midStrength.tierLabel, 'Flight-Deck Ready');
+
+  // Complete profile with projects and links
+  const full = {
+    ...mid,
+    skills: ['JavaScript', 'Python', 'Go'],
+    projects: [{ id: 'p1', name: 'Kareer Copilot', enabled: true }],
+    linkedin: 'https://linkedin.com/in/alexrivera',
+  };
+  const fullStrength = calculateProfileStrength(full);
+  // 40 + 20 + 15 + 15 (3 skills) + 5 (project) + 5 (link) = 100
+  assert.equal(fullStrength.percentage, 100);
+  assert.equal(fullStrength.isMvpComplete, true);
+  assert.equal(fullStrength.tierLabel, 'Flight-Deck Ready');
+
+  // Decomposed address fields fulfill MVP requirements
+  const splitMvp = {
+    fullName: 'Alex Rivera',
+    email: 'alex@example.com',
+    phone: '555-123-4567',
+    city: 'Austin',
+    country: 'United States',
+  };
+  assert.deepEqual(getMissingCoreProfileFields(splitMvp), []);
+  const splitStrength = calculateProfileStrength(splitMvp);
+  assert.equal(splitStrength.percentage, 40);
+  assert.equal(splitStrength.isMvpComplete, true);
+});
+
+test('parseLegacyLocation correctly decomposes comma-separated location strings', () => {
+  assert.deepEqual(parseLegacyLocation('Toronto, Ontario, Canada'), {
+    city: 'Toronto',
+    stateProvince: 'Ontario',
+    country: 'Canada',
+  });
+  assert.deepEqual(parseLegacyLocation('San Francisco, USA'), {
+    city: 'San Francisco',
+    country: 'USA',
+  });
+  assert.deepEqual(parseLegacyLocation('London'), {
+    city: 'London',
+  });
+  assert.deepEqual(parseLegacyLocation(''), {});
+});
+
+test('getProfile migrates legacy location and synthesizes missing location string', () => {
+  gmSet('kr:profile', {
+    fullName: 'Jane Doe',
+    location: 'Vancouver, BC, Canada',
+  });
+  const profile = getProfile();
+  assert.equal(profile.city, 'Vancouver');
+  assert.equal(profile.stateProvince, 'BC');
+  assert.equal(profile.country, 'Canada');
+  assert.equal(profile.location, 'Vancouver, BC, Canada');
+
+  // When saved with split address, location is synthesized
+  saveProfile({
+    fullName: 'Jane Doe',
+    streetAddress: '100 Main St',
+    addressLine2: 'Suite 400',
+    city: 'Seattle',
+    stateProvince: 'WA',
+    postalCode: '98101',
+    country: 'United States',
+  });
+  const updated = getProfile();
+  assert.equal(updated.streetAddress, '100 Main St');
+  assert.equal(updated.addressLine2, 'Suite 400');
+  assert.equal(updated.city, 'Seattle');
+  assert.equal(updated.stateProvince, 'WA');
+  assert.equal(updated.postalCode, '98101');
+  assert.equal(updated.country, 'United States');
+  assert.equal(updated.location, 'Seattle, WA, United States');
+});
+
+test('fixedProfileAnswer deterministically resolves decomposed address fields', () => {
+  const profile = {
+    streetAddress: '742 Evergreen Terrace',
+    addressLine2: 'Apt 2',
+    city: 'Springfield',
+    stateProvince: 'Oregon',
+    postalCode: '97477',
+    country: 'United States',
+  };
+
+  const street = fixedProfileAnswer({ fieldId: 'f1', label: 'Street Address', type: 'text' }, profile);
+  assert.equal(street?.value, '742 Evergreen Terrace');
+
+  const apt = fixedProfileAnswer({ fieldId: 'f2', label: 'Apt, Suite, Unit', type: 'text' }, profile);
+  assert.equal(apt?.value, 'Apt 2');
+
+  const city = fixedProfileAnswer({ fieldId: 'f3', label: 'City', type: 'text' }, profile);
+  assert.equal(city?.value, 'Springfield');
+
+  const state = fixedProfileAnswer({ fieldId: 'f4', label: 'State / Province', type: 'text' }, profile);
+  assert.equal(state?.value, 'Oregon');
+
+  const zip = fixedProfileAnswer({ fieldId: 'f5', label: 'Zip / Postal Code', type: 'text' }, profile);
+  assert.equal(zip?.value, '97477');
+
+  const country = fixedProfileAnswer({ fieldId: 'f6', label: 'Country', type: 'text' }, profile);
+  assert.equal(country?.value, 'United States');
+
+  // Single residence question resolves to synthesized location
+  const residence = fixedProfileAnswer({ fieldId: 'f7', label: 'Current location', type: 'text' }, profile);
+  assert.equal(residence?.value, 'Springfield, Oregon, United States');
+});
+
+

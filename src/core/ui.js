@@ -1,6 +1,6 @@
 import { TOKENS, VISUAL_NAME, installPanelFonts } from './theme.js';
 import { APP_VERSION, APP_NAME, POPULAR_MODELS, UI_IDS, FILL_STATUS } from './constants.js';
-import { PROFILE_SECTIONS, PROFILE_FIELDS } from './profile.js';
+import { PROFILE_SECTIONS, PROFILE_FIELDS, calculateProfileStrength } from './profile.js';
 import {
   getSettings,
   saveSettings,
@@ -30,7 +30,7 @@ import {
   initInlineRewriteBadge,
 } from './fields/highlight.js';
 import { startFormObserver, pauseFormObserver, resumeFormObserver, stopFormObserver } from './observer.js';
-import { collectRemoteFields, applyRemoteAnswers, searchRemoteOptions, listRemoteFrames, captureRemoteFixtures, isRemoteFieldId, applyRemoteResumeUploads } from './remote.js';
+import { collectRemoteFields, applyRemoteAnswers, searchRemoteOptions, listRemoteFrames, captureRemoteFixtures, isRemoteFieldId, applyRemoteResumeUploads, locateRemoteField, inspectRemoteFields } from './remote.js';
 import { captureFixture, fixtureFileName } from './capture.js';
 import { createApplicationEngine } from './application.js';
 import { classifyPage } from './pageClassifier.js';
@@ -70,9 +70,35 @@ let isAiTesting = false;
 let isAutofilling = false;
 let autofillProgress = { current: 0, total: 0, statusText: '' };
 let detectedFieldsCache = [];
+let remoteFieldsCache = [];
 let remoteFieldCount = 0;
 let remoteFrameCount = 0;
 let fieldResultsCache = new Map(); // fieldId -> { status, value, error, inferred }
+
+export function getAllDetectedFields() {
+  const map = new Map();
+  for (const f of detectedFieldsCache) {
+    const id = f.id || f.fieldId;
+    if (id) map.set(id, { ...f, id, fieldId: id });
+  }
+  for (const f of remoteFieldsCache) {
+    const id = f.id || f.fieldId;
+    if (id && !map.has(id)) map.set(id, { ...f, id, fieldId: id });
+  }
+  for (const [id, res] of fieldResultsCache) {
+    if (!map.has(id) && (isRemoteFieldId(id) || res?.remote)) {
+      map.set(id, {
+        id,
+        fieldId: id,
+        label: res?.label || id,
+        type: 'text',
+        currentValue: res?.value || '',
+        remote: true,
+      });
+    }
+  }
+  return Array.from(map.values());
+}
 
 const ICONS = {
   brandMark: `<svg width="14" height="14" viewBox="0 0 100 100" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M41.1 12.3L29.7 12.2L28.8 12.5L9.8 31L9.2 32.1L9 36.8V81.8L9.3 83.6L10.1 85.2L11.4 86.6L13 87.5L14.2 87.8H40.6L41.2 87.6L41.8 86.9L41.9 13.2ZM36 16.1V28.5L35.9 31.7H14.7L14.5 31.5L30.6 16ZM68.6 31.8L42.6 58L69.5 87.4H90.2L64.9 57.8L91 31.8Z"/></svg>`,
@@ -839,6 +865,122 @@ input:checked + .kr-slider:before {
   line-height: 1.4;
 }
 
+/* MVP Alert Banner */
+.kr-mvp-alert {
+  background: rgba(242, 184, 75, 0.08);
+  border: 1px solid rgba(242, 184, 75, 0.3);
+  border-radius: var(--kr-radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kr-mvp-alert-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kr-mvp-alert-icon {
+  color: var(--kr-warning);
+  display: inline-flex;
+  align-items: center;
+}
+
+.kr-mvp-alert-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--kr-warning);
+}
+
+.kr-mvp-alert-desc {
+  font-size: 12px;
+  color: var(--kr-text-2);
+  line-height: 1.4;
+}
+
+.kr-mvp-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.kr-mvp-tag {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 6px;
+  background: rgba(242, 184, 75, 0.12);
+  border: 1px solid rgba(242, 184, 75, 0.25);
+  border-radius: var(--kr-radius-xs);
+  color: var(--kr-warning);
+}
+
+.kr-mvp-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+/* Strength Chip in Form Fields Header */
+.kr-strength-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  background: var(--kr-bg-1);
+  border: 1px solid var(--kr-line);
+  border-radius: var(--kr-radius-xs);
+}
+
+.kr-strength-chip-bar {
+  width: 28px;
+  height: 4px;
+  background: var(--kr-bg-3);
+  border-radius: 2px;
+  overflow: hidden;
+  display: inline-block;
+}
+
+.kr-strength-chip-fill {
+  height: 100%;
+  display: block;
+  border-radius: 2px;
+  transition: width 0.2s ease;
+}
+
+.kr-strength-chip.high .kr-strength-chip-fill { background: var(--kr-signal); }
+.kr-strength-chip.med .kr-strength-chip-fill { background: #38bdf8; }
+.kr-strength-chip.low .kr-strength-chip-fill { background: var(--kr-warning); }
+
+.kr-strength-chip-val {
+  font-family: var(--kr-font-mono, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--kr-text-2);
+}
+
+/* Strength Track & Fill (shared in cards) */
+.kr-strength-track {
+  height: 5px;
+  background: var(--kr-bg-1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.kr-strength-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.kr-strength-fill.high { background: var(--kr-signal); }
+.kr-strength-fill.med { background: #38bdf8; }
+.kr-strength-fill.low { background: var(--kr-warning); }
+
 /* Progress Bars */
 .kr-progress-bar-container {
   width: 100%;
@@ -1245,12 +1387,26 @@ function refreshDetectedFields() {
  * a frame announces, because an embed-only page produces almost no mutations in
  * this document to react to.
  */
-export function refreshRemoteFieldCount() {
+export function refreshRemoteFieldCount({ force = false } = {}) {
   if (!platform.capabilities.crossFrame) return;
   listRemoteFrames()
-    .then((frames) => {
+    .then(async (frames) => {
       const total = frames.reduce((sum, frame) => sum + frame.fieldCount, 0);
-      if (total === remoteFieldCount && frames.length === remoteFrameCount) return;
+      const countsChanged = total !== remoteFieldCount || frames.length !== remoteFrameCount;
+      const needsInspection = force || countsChanged || (total > 0 && !remoteFieldsCache.length);
+
+      if (needsInspection) {
+        if (total === 0) {
+          remoteFieldsCache = [];
+        } else {
+          const inspected = await inspectRemoteFields().catch(() => []);
+          if (inspected.length) {
+            remoteFieldsCache = inspected;
+          }
+        }
+      }
+
+      if (!force && !countsChanged && (!total || remoteFieldsCache.length)) return;
       remoteFieldCount = total;
       remoteFrameCount = frames.length;
       updatePanelDOM();
@@ -1327,6 +1483,21 @@ async function executeAutofillFlow() {
     return;
   }
 
+  const profile = getProfile();
+  const strength = calculateProfileStrength(profile);
+  if (!strength.isMvpComplete) {
+    panelVisible = true;
+    currentTab = 'profile';
+    updatePanelDOM();
+    const firstMissing = strength.missingCore[0];
+    const keyMap = { 'Full Name': 'fullName', 'Email': 'email', 'Phone': 'phone', 'Location': 'location' };
+    const fieldId = keyMap[firstMissing] ? `kr-profile-${keyMap[firstMissing]}` : null;
+    if (fieldId) {
+      setTimeout(() => shadowRootRef?.querySelector(`#${fieldId}`)?.focus(), 50);
+    }
+    return;
+  }
+
   isAutofilling = true;
   autofillProgress = { current: 0, total: 0, statusText: 'Scanning page fields...' };
   updatePanelDOM();
@@ -1381,11 +1552,14 @@ async function executeAutofillFlow() {
     const remoteGroups = await collectRemoteFields({ overwriteExisting: overwrite });
     if (token !== autofillGeneration) return;
     const remoteFields = remoteGroups.flatMap((group) => group.fields);
+    if (remoteFields.length) {
+      remoteFieldsCache = remoteFields.map((f) => ({ ...f, id: f.fieldId, fieldId: f.fieldId }));
+    }
 
     const aiTargetFields = targetFields.filter((f) => f.type !== 'file');
 
     if (aiTargetFields.length === 0 && remoteFields.length === 0 && fileFields.length === 0 && remoteUploads.length === 0) {
-      autofillProgress.statusText = detectedFieldsCache.length === 0
+      autofillProgress.statusText = (detectedFieldsCache.length === 0 && remoteFieldCount === 0)
         ? 'No form fields detected on this page.'
         : 'All fields are already filled. Enable "Overwrite Existing Values" in Settings to overwrite.';
       logger.info(autofillProgress.statusText);
@@ -1548,7 +1722,7 @@ async function executeAutofillFlow() {
     }
 
     refreshDetectedFields();
-    const report = summarizeFieldResults(detectedFieldsCache, fieldResultsCache);
+    const report = summarizeFieldResults(getAllDetectedFields(), fieldResultsCache);
     autofillProgress.current = report.total;
     autofillProgress.total = report.total;
     autofillProgress.statusText = 'Autofill complete. Review field statuses below.';
@@ -1625,6 +1799,8 @@ function renderHud() {
   const wfStatus = session?.status || '';
   const wfIsRunning = wfStatus === 'running' || wfStatus === 'submitting';
   const wfIsWaiting = ['captcha', 'boundary'].includes(wfStatus);
+  const profile = getProfile();
+  const strength = calculateProfileStrength(profile);
 
   if (isPebble) {
     const pebbleDotClass = isAutofilling || wfIsRunning ? 'running' : status.dotClass;
@@ -1669,6 +1845,13 @@ function renderHud() {
         <span>Action Required</span>
       </button>
     `;
+  } else if (!strength.isMvpComplete) {
+    ctaContent = `
+      <button class="kr-hud-cta" id="kr-hud-autofill-btn" style="background: rgba(242, 184, 75, 0.12); color: var(--kr-warning); border: 1px solid rgba(242, 184, 75, 0.35);" title="Profile incomplete (${escapeHtml(strength.missingCore.join(', '))} required). Click to complete profile.">
+        ${ICONS.alert}
+        <span>Setup Profile</span>
+      </button>
+    `;
   } else {
     ctaContent = `
       <button class="kr-hud-cta" id="kr-hud-autofill-btn" ${fieldCount === 0 ? 'disabled' : ''} title="Autofill fields on this page">
@@ -1707,7 +1890,8 @@ export function summarizeFieldResults(fields, results) {
   const untouchedFields = [];
 
   for (const f of fields) {
-    const res = results.get(f.id);
+    const id = f.id || f.fieldId;
+    const res = results.get(id);
     if (res?.status === FILL_STATUS.VERIFIED) {
       verifiedFields.push({ field: f, result: res });
     } else if (res?.status === FILL_STATUS.INFERRED || res?.inferred) {
@@ -1736,20 +1920,22 @@ function renderFieldReviewSection() {
     failed: failedFields,
     untouched: untouchedFields,
     total,
-  } = summarizeFieldResults(detectedFieldsCache, fieldResultsCache);
+  } = summarizeFieldResults(getAllDetectedFields(), fieldResultsCache);
 
   const renderItem = (item, badgeClass, badgeLabel) => {
+    const fieldId = item.field.id || item.field.fieldId;
+    const label = item.field.label || item.result?.label || fieldId;
     const val = item.result?.value ?? item.field.currentValue ?? '';
     const displayVal = val !== '' ? String(val) : 'Empty';
     return `
       <div class="kr-review-item">
         <div class="kr-review-info">
-          <div class="kr-review-label">${escapeHtml(item.field.label || item.field.id)}</div>
+          <div class="kr-review-label">${escapeHtml(label)}</div>
           <div class="kr-review-value" title="${escapeHtml(displayVal)}">${escapeHtml(displayVal)}</div>
         </div>
         <div class="kr-review-meta">
           <span class="kr-badge ${badgeClass}">${badgeLabel}</span>
-          <button type="button" class="kr-btn kr-btn-secondary kr-btn-small kr-locate-field-btn" data-field-id="${escapeHtml(item.field.id)}" title="Scroll to and highlight field">
+          <button type="button" class="kr-btn kr-btn-secondary kr-btn-small kr-locate-field-btn" data-field-id="${escapeHtml(fieldId)}" title="Scroll to and highlight field">
             ${ICONS.locate}
           </button>
         </div>
@@ -1919,6 +2105,32 @@ function renderHomeTab() {
     }
   }
 
+  const profile = getProfile();
+  const strength = calculateProfileStrength(profile);
+
+  const mvpAlertHtml = !strength.isMvpComplete ? `
+    <div class="kr-mvp-alert">
+      <div class="kr-mvp-alert-header">
+        <span class="kr-mvp-alert-icon">${ICONS.alert}</span>
+        <span class="kr-mvp-alert-title">Minimum Profile Required</span>
+      </div>
+      <div class="kr-mvp-alert-desc">
+        Autofill is locked until required core fields are saved (${escapeHtml(strength.missingCore.join(', '))} required).
+      </div>
+      <div class="kr-mvp-tags">
+        ${strength.missingCore.map(field => `<span class="kr-mvp-tag">${escapeHtml(field)}</span>`).join('')}
+      </div>
+      <div class="kr-mvp-actions">
+        <button type="button" class="kr-btn kr-btn-secondary" id="kr-complete-profile-btn" style="font-size: 11px; padding: 4px 8px;">
+          ${ICONS.user} Complete Profile
+        </button>
+        <button type="button" class="kr-btn kr-btn-secondary" id="kr-mvp-settings-link" style="font-size: 11px; padding: 4px 8px;">
+          Settings ↗
+        </button>
+      </div>
+    </div>
+  ` : '';
+
   const adapter = detectAdapter();
   return `
     ${safetyBannerHtml}
@@ -1926,16 +2138,25 @@ function renderHomeTab() {
 
     <div class="kr-card">
       <div class="kr-row">
-        <span class="kr-card-title">Form Fields</span>
-        <span class="kr-badge kr-badge-blue" style="text-transform: uppercase;">${fieldCount + remoteFieldCount} detected</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="kr-card-title">Form Fields</span>
+          <span class="kr-badge kr-badge-blue" style="text-transform: uppercase;">${fieldCount + remoteFieldCount} detected</span>
+        </div>
+        ${strength.isMvpComplete ? `
+        <div class="kr-strength-chip ${strength.percentage >= 80 ? 'high' : strength.percentage >= 50 ? 'med' : 'low'}" title="Profile Strength: ${strength.percentage}% (${strength.tierLabel})">
+          <span class="kr-strength-chip-bar"><span class="kr-strength-chip-fill" style="width: ${strength.percentage}%;"></span></span>
+          <span class="kr-strength-chip-val">${strength.percentage}%</span>
+        </div>
+        ` : ''}
       </div>
       ${remoteFieldCount ? `
       <div style="font-size: 11px; color: var(--kr-text-2);">
         ${fieldCount} here, ${remoteFieldCount} in ${remoteFrameCount} embedded frame${remoteFrameCount === 1 ? '' : 's'}.
       </div>
       ` : ''}
+      ${mvpAlertHtml}
       <div class="kr-row" style="margin-top: 4px; gap: 8px;">
-        <button class="kr-btn kr-btn-large ${session ? 'kr-btn-secondary' : ''}" id="kr-autofill-btn" style="flex: 1;" ${isAutofilling ? 'disabled' : ''}>
+        <button class="kr-btn kr-btn-large ${session ? 'kr-btn-secondary' : ''}" id="kr-autofill-btn" style="flex: 1;" ${isAutofilling ? 'disabled' : ''} ${!strength.isMvpComplete ? `title="Recommended: Complete core profile fields (${escapeHtml(strength.missingCore.join(', '))})"` : ''}>
           ${isAutofilling ? `${ICONS.play} Filling Fields...` : `${ICONS.play} Autofill This Page`}
         </button>
         <button class="kr-btn kr-btn-secondary ${isAutofilling ? 'kr-btn-pause-active' : ''}" id="kr-pause-autofill-btn" style="padding: 9px 14px; font-size: 12px;" ${!isAutofilling ? 'disabled' : ''} title="Pause / Stop autofill">
@@ -1982,6 +2203,51 @@ function renderHomeTab() {
 
 function renderProfileTab() {
   const profile = getProfile();
+  const strength = calculateProfileStrength(profile);
+  const workCount = (profile.workExperiences || []).length;
+  const eduCount = (profile.education || []).length;
+  const projCount = (profile.projects || []).length;
+  const skillCount = (profile.skills || []).length;
+  const eligCount = (profile.workEligibilities || []).filter(e => e && e.enabled !== false && String(e.country || '').trim()).length || (profile.workCountry ? 1 : 0);
+
+  const strengthCardHtml = `
+    <div class="kr-card" style="margin-bottom: 2px; gap: 8px;">
+      <div class="kr-row">
+        <span class="kr-card-title">Profile Strength</span>
+        <span class="kr-badge ${strength.percentage >= 80 ? 'kr-badge-green' : strength.percentage >= 50 ? 'kr-badge-blue' : 'kr-badge-amber'}">${strength.tierLabel} (${strength.percentage}%)</span>
+      </div>
+      <div class="kr-strength-track">
+        <div class="kr-strength-fill ${strength.percentage >= 80 ? 'high' : strength.percentage >= 50 ? 'med' : 'low'}" style="width: ${strength.percentage}%;"></div>
+      </div>
+      ${!strength.isMvpComplete ? `
+        <div style="font-size: 11px; color: var(--kr-warning);">
+          Missing core identity: ${escapeHtml(strength.missingCore.join(', '))}. Fill them below to enable autofill.
+        </div>
+      ` : `
+        <div style="font-size: 11px; color: var(--kr-text-3);">
+          Core identity verified. Add more background in Settings for optimal application answers.
+        </div>
+      `}
+    </div>
+  `;
+
+  const backgroundSummaryHtml = `
+    <div style="border: 1px solid var(--kr-line); border-radius: var(--kr-radius-md); padding: 12px; background: rgba(255,255,255,0.02); display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <span style="font-weight: 600; font-size: 13px; color: var(--kr-text-1);">Detailed Profile Background</span>
+        <button type="button" class="kr-btn kr-btn-secondary" id="kr-open-full-profile-btn" style="font-size: 11px; padding: 4px 8px; line-height: 1;">Settings ↗</button>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+        <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${workCount} Experience${workCount === 1 ? '' : 's'}</span>
+        <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${eduCount} Education</span>
+        <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${projCount} Project${projCount === 1 ? '' : 's'}</span>
+        <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${skillCount} Skill${skillCount === 1 ? '' : 's'}</span>
+        <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${eligCount} Eligible countr${eligCount === 1 ? 'y' : 'ies'}</span>
+      </div>
+      <div style="font-size: 11px; color: var(--kr-text-3);">Manage all roles, degrees, projects, dates, and multiple work countries in the full Settings console.</div>
+    </div>
+  `;
+
   const sections = PROFILE_SECTIONS.map((section, index) => `
     <details class="kr-profile-section" ${index === 0 ? 'open' : ''} style="border: 1px solid var(--kr-line); border-radius: var(--kr-radius-md); padding: 12px; background: rgba(255,255,255,0.02);">
       <summary style="cursor: pointer; font-weight: 600; color: var(--kr-text-1); display: flex; align-items: center; justify-content: space-between;">
@@ -2007,41 +2273,43 @@ function renderProfileTab() {
 
   return `
     <form id="kr-profile-form" style="display: flex; flex-direction: column; gap: 12px;">
+      ${strengthCardHtml}
+      ${backgroundSummaryHtml}
       <div style="font-size: 12px; color: var(--kr-text-2);">Save common answers once. Explicit answers take priority over background notes.</div>
       <div class="kr-form-group">
-        <label>Full Name</label>
-        <input class="kr-input" type="text" name="fullName" value="${escapeHtml(profile.fullName)}" placeholder="e.g. Jane Doe" />
+        <label for="kr-profile-fullName">Full Name</label>
+        <input class="kr-input" id="kr-profile-fullName" type="text" name="fullName" value="${escapeHtml(profile.fullName)}" placeholder="e.g. Jane Doe" />
       </div>
 
       <div class="kr-row" style="gap: 10px;">
         <div class="kr-form-group" style="flex: 1;">
-          <label>Email</label>
-          <input class="kr-input" type="email" name="email" value="${escapeHtml(profile.email)}" placeholder="jane@example.com" />
+          <label for="kr-profile-email">Email</label>
+          <input class="kr-input" id="kr-profile-email" type="email" name="email" value="${escapeHtml(profile.email)}" placeholder="jane@example.com" />
         </div>
         <div class="kr-form-group" style="flex: 1;">
-          <label>Phone</label>
-          <input class="kr-input" type="tel" name="phone" value="${escapeHtml(profile.phone)}" placeholder="+1 555 123 4567" />
+          <label for="kr-profile-phone">Phone</label>
+          <input class="kr-input" id="kr-profile-phone" type="tel" name="phone" value="${escapeHtml(profile.phone)}" placeholder="+1 555 123 4567" />
         </div>
       </div>
 
       <div class="kr-form-group">
-        <label>Location</label>
-        <input class="kr-input" type="text" name="location" value="${escapeHtml(profile.location)}" placeholder="e.g. San Francisco, CA" />
+        <label for="kr-profile-location">Location</label>
+        <input class="kr-input" id="kr-profile-location" type="text" name="location" value="${escapeHtml(profile.location)}" placeholder="e.g. San Francisco, CA" />
       </div>
 
       <div class="kr-form-group">
-        <label>LinkedIn URL</label>
-        <input class="kr-input" type="url" name="linkedin" value="${escapeHtml(profile.linkedin)}" placeholder="https://linkedin.com/in/..." />
+        <label for="kr-profile-linkedin">LinkedIn URL</label>
+        <input class="kr-input" id="kr-profile-linkedin" type="url" name="linkedin" value="${escapeHtml(profile.linkedin)}" placeholder="https://linkedin.com/in/..." />
       </div>
 
       <div class="kr-row" style="gap: 10px;">
         <div class="kr-form-group" style="flex: 1;">
-          <label>GitHub URL</label>
-          <input class="kr-input" type="url" name="github" value="${escapeHtml(profile.github)}" placeholder="https://github.com/..." />
+          <label for="kr-profile-github">GitHub URL</label>
+          <input class="kr-input" id="kr-profile-github" type="url" name="github" value="${escapeHtml(profile.github)}" placeholder="https://github.com/..." />
         </div>
         <div class="kr-form-group" style="flex: 1;">
-          <label>Portfolio URL</label>
-          <input class="kr-input" type="url" name="portfolio" value="${escapeHtml(profile.portfolio)}" placeholder="https://..." />
+          <label for="kr-profile-portfolio">Portfolio URL</label>
+          <input class="kr-input" id="kr-profile-portfolio" type="url" name="portfolio" value="${escapeHtml(profile.portfolio)}" placeholder="https://..." />
         </div>
       </div>
 
@@ -2052,13 +2320,8 @@ function renderProfileTab() {
       </div>
 
       <div class="kr-form-group">
-        <label for="kr-profile-resumeContext">Resume / Background Summary</label>
-        <textarea id="kr-profile-resumeContext" class="kr-textarea" name="resumeContext" rows="4" placeholder="Paste your core resume highlights, skills, and background summary...">${escapeHtml(profile.resumeContext)}</textarea>
-      </div>
-
-      <div class="kr-form-group">
         <label for="kr-profile-applicantNotes">Applicant Notes / Custom Rules</label>
-        <textarea id="kr-profile-applicantNotes" class="kr-textarea" name="applicantNotes" rows="2" placeholder="Additional preferences, exceptions, and guidance for written answers...">${escapeHtml(profile.applicantNotes)}</textarea>
+        <textarea id="kr-profile-applicantNotes" class="kr-textarea" name="applicantNotes" rows="3" placeholder="Additional preferences, exceptions, and guidance for written answers...">${escapeHtml(profile.applicantNotes)}</textarea>
       </div>
 
       <div class="kr-row" style="margin-top: 4px;">
@@ -2412,7 +2675,18 @@ function attachEventHandlers() {
   locateBtns.forEach((btn) => {
     btn.onclick = () => {
       const fieldId = btn.getAttribute('data-field-id');
-      const target = detectedFieldsCache.find((f) => f.id === fieldId);
+      if (isRemoteFieldId(fieldId)) {
+        locateRemoteField(fieldId);
+        const iframes = Array.from(document.querySelectorAll('iframe'));
+        const fieldMeta = remoteFieldsCache.find((f) => (f.id || f.fieldId) === fieldId);
+        const targetIframe = (fieldMeta?.frameUrl && iframes.find((el) => el.src && el.src.includes(fieldMeta.frameUrl)))
+          || iframes.find((el) => {
+            try { return el.offsetHeight > 0; } catch { return false; }
+          });
+        if (targetIframe) targetIframe.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      const target = detectedFieldsCache.find((f) => (f.id || f.fieldId) === fieldId);
       if (target?.element) {
         scrollToField(target.element);
         highlightActiveField(target.element);
@@ -2425,7 +2699,10 @@ function attachEventHandlers() {
   if (rescanBtn) {
     rescanBtn.onclick = () => {
       refreshDetectedFields();
-      logger.info(`Rescanned form: ${detectedFieldsCache.length} fields detected.`);
+      if (platform.capabilities.crossFrame) {
+        refreshRemoteFieldCount({ force: true });
+      }
+      logger.info(`Rescanned form: ${getAllDetectedFields().length} fields detected.`);
       updatePanelDOM();
     };
   }
@@ -2447,14 +2724,45 @@ function attachEventHandlers() {
     };
   }
 
+  const completeProfileBtn = shadowRootRef.querySelector('#kr-complete-profile-btn');
+  if (completeProfileBtn) {
+    completeProfileBtn.onclick = () => {
+      currentTab = 'profile';
+      updatePanelDOM();
+      const profile = getProfile();
+      const strength = calculateProfileStrength(profile);
+      const firstMissing = strength.missingCore[0];
+      const keyMap = { 'Full Name': 'fullName', 'Email': 'email', 'Phone': 'phone', 'Location': 'location' };
+      const fieldId = keyMap[firstMissing] ? `kr-profile-${keyMap[firstMissing]}` : null;
+      if (fieldId) {
+        setTimeout(() => shadowRootRef?.querySelector(`#${fieldId}`)?.focus(), 50);
+      }
+    };
+  }
+
+  const mvpSettingsLink = shadowRootRef.querySelector('#kr-mvp-settings-link');
+  if (mvpSettingsLink) {
+    mvpSettingsLink.onclick = () => {
+      platform.openOptions();
+    };
+  }
+
   // Profile Form
+  const openFullProfileBtn = shadowRootRef.querySelector('#kr-open-full-profile-btn');
+  if (openFullProfileBtn) {
+    openFullProfileBtn.onclick = () => {
+      platform.openOptions();
+    };
+  }
+
   const profileForm = shadowRootRef.querySelector('#kr-profile-form');
   if (profileForm) {
     profileForm.onsubmit = (e) => {
       e.preventDefault();
       const formData = new FormData(profileForm);
+      const current = getProfile();
       const newProfile = {
-        ...getProfile(),
+        ...current,
         ...Object.fromEntries(PROFILE_FIELDS.map(field => [field.name, String(formData.get(field.name) || '').trim()])),
         fullName: formData.get('fullName') || '',
         email: formData.get('email') || '',
@@ -2463,11 +2771,16 @@ function attachEventHandlers() {
         linkedin: formData.get('linkedin') || '',
         github: formData.get('github') || '',
         portfolio: formData.get('portfolio') || '',
-        resumeContext: formData.get('resumeContext') || '',
+        resumeContext: formData.get('resumeContext') !== null ? String(formData.get('resumeContext') || '') : (current.resumeContext || ''),
         applicantNotes: formData.get('applicantNotes') || '',
+        workExperiences: current.workExperiences || [],
+        education: current.education || [],
+        projects: current.projects || [],
+        skills: current.skills || [],
       };
       saveProfile(newProfile);
       logger.info('Profile saved successfully.');
+      updatePanelDOM();
 
       const feedback = shadowRootRef.querySelector('#kr-profile-feedback');
       if (feedback) {

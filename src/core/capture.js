@@ -34,8 +34,9 @@ const VALUE_ATTRIBUTES = ['value', 'placeholder', 'title', 'alt', 'aria-valuetex
 
 function profileSecrets(profile) {
   const values = [
-    profile.fullName, profile.email, profile.phone, profile.location,
-    profile.linkedin, profile.github, profile.portfolio,
+    profile.fullName, profile.email, profile.phone,
+    profile.streetAddress, profile.addressLine2, profile.city, profile.stateProvince, profile.postalCode, profile.country,
+    profile.location, profile.linkedin, profile.github, profile.portfolio,
     profile.expectedSalary, profile.genderDescription,
   ];
   return values

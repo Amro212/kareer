@@ -30,12 +30,23 @@ export const DEFAULT_PROFILE = {
   fullName: '',
   email: '',
   phone: '',
+  streetAddress: '',
+  addressLine2: '',
+  city: '',
+  stateProvince: '',
+  postalCode: '',
+  country: '',
   location: '',
   linkedin: '',
   github: '',
   portfolio: '',
   resumeContext: '',
   applicantNotes: '',
+  workEligibilities: [],
+  workExperiences: [],
+  education: [],
+  projects: [],
+  skills: [],
 };
 
 export const POPULAR_MODELS = [

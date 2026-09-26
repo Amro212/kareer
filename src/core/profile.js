@@ -40,9 +40,151 @@ export const PROFILE_SECTIONS = [
 export const PROFILE_FIELDS = PROFILE_SECTIONS.flatMap(section => section.fields);
 export const STRUCTURED_PROFILE_DEFAULTS = Object.fromEntries(PROFILE_FIELDS.map(field => [field.name, '']));
 
+export function createWorkExperience(data = {}) {
+  const result = {
+    id: data.id || `work_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    enabled: data.enabled !== false,
+    title: data.title || '',
+    company: data.company || '',
+    location: data.location || '',
+    startDate: data.startDate || '',
+    endDate: data.endDate || '',
+    current: Boolean(data.current),
+    description: data.description || '',
+  };
+  if (data._collapsed !== undefined) result._collapsed = Boolean(data._collapsed);
+  return result;
+}
+
+export function createEducation(data = {}) {
+  const result = {
+    id: data.id || `edu_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    enabled: data.enabled !== false,
+    institution: data.institution || '',
+    degree: data.degree || '',
+    fieldOfStudy: data.fieldOfStudy || '',
+    startDate: data.startDate || '',
+    endDate: data.endDate || '',
+    current: Boolean(data.current),
+    gpa: data.gpa || '',
+    description: data.description || '',
+  };
+  if (data._collapsed !== undefined) result._collapsed = Boolean(data._collapsed);
+  return result;
+}
+
+export function createProject(data = {}) {
+  const result = {
+    id: data.id || `proj_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    enabled: data.enabled !== false,
+    name: data.name || '',
+    role: data.role || '',
+    url: data.url || '',
+    startDate: data.startDate || '',
+    endDate: data.endDate || '',
+    current: Boolean(data.current),
+    description: data.description || '',
+  };
+  if (data._collapsed !== undefined) result._collapsed = Boolean(data._collapsed);
+  return result;
+}
+
+export function createWorkEligibility(data = {}) {
+  const result = {
+    id: data.id || `elig_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    enabled: data.enabled !== false,
+    country: data.country || '',
+    workAuthorization: data.workAuthorization || '',
+    sponsorshipNow: data.sponsorshipNow || '',
+    sponsorshipFuture: data.sponsorshipFuture || '',
+  };
+  if (data._collapsed !== undefined) result._collapsed = Boolean(data._collapsed);
+  return result;
+}
+
+function formatRangeDate(val) {
+  if (!val) return '';
+  const str = String(val).trim();
+  if (str.startsWith('--')) {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const idx = parseInt(str.slice(2), 10) - 1;
+    return monthNames[idx] || str;
+  }
+  const parts = str.split('-');
+  if (parts.length >= 2) {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const idx = parseInt(parts[1], 10) - 1;
+    const m = monthNames[idx] || parts[1];
+    return `${m} ${parts[0]}`;
+  }
+  return str;
+}
+
+export function formatStructuredBackground(profile) {
+  const lines = [];
+  const experiences = (profile.workExperiences || []).filter(e => e && e.enabled !== false);
+  if (experiences.length > 0) {
+    lines.push('WORK EXPERIENCE:');
+    for (const exp of experiences) {
+      const dates = [formatRangeDate(exp.startDate), exp.current ? 'Present' : formatRangeDate(exp.endDate)].filter(Boolean).join(' – ');
+      lines.push(`• ${exp.title || 'Role'} at ${exp.company || 'Company'}${exp.location ? ` (${exp.location})` : ''}${dates ? ` [${dates}]` : ''}`);
+      if (exp.description) lines.push(`  ${exp.description.replace(/\n+/g, '\n  ')}`);
+    }
+  }
+
+  const education = (profile.education || []).filter(e => e && e.enabled !== false);
+  if (education.length > 0) {
+    lines.push('\nEDUCATION:');
+    for (const edu of education) {
+      const dates = [formatRangeDate(edu.startDate), edu.current ? 'Present' : formatRangeDate(edu.endDate)].filter(Boolean).join(' – ');
+      lines.push(`• ${edu.degree || 'Degree'} in ${edu.fieldOfStudy || 'Field'} – ${edu.institution || 'Institution'}${dates ? ` [${dates}]` : ''}${edu.gpa ? ` (GPA: ${edu.gpa})` : ''}`);
+      if (edu.description) lines.push(`  ${edu.description.replace(/\n+/g, '\n  ')}`);
+    }
+  }
+
+  const projects = (profile.projects || []).filter(e => e && e.enabled !== false);
+  if (projects.length > 0) {
+    lines.push('\nPROJECTS:');
+    for (const proj of projects) {
+      const dates = [formatRangeDate(proj.startDate), proj.current ? 'Present' : formatRangeDate(proj.endDate)].filter(Boolean).join(' – ');
+      lines.push(`• ${proj.name || 'Project'}${proj.role ? ` (${proj.role})` : ''}${proj.url ? ` – ${proj.url}` : ''}${dates ? ` [${dates}]` : ''}`);
+      if (proj.description) lines.push(`  ${proj.description.replace(/\n+/g, '\n  ')}`);
+    }
+  }
+
+  const skills = (profile.skills || []).filter(Boolean);
+  if (skills.length > 0) {
+    lines.push(`\nSKILLS:\n• ${skills.join(', ')}`);
+  }
+
+  return lines.join('\n').trim();
+}
+
 export function profileForAI(profile) {
-  const keys = ['fullName', 'email', 'phone', 'location', 'linkedin', 'github', 'portfolio', ...PROFILE_FIELDS.map(field => field.name)];
-  return Object.fromEntries(keys.map(key => [key, profile[key] || '']));
+  const keys = [
+    'fullName', 'email', 'phone',
+    'streetAddress', 'addressLine2', 'city', 'stateProvince', 'postalCode', 'country',
+    'location', 'linkedin', 'github', 'portfolio',
+    ...PROFILE_FIELDS.map(field => field.name)
+  ];
+  const synthesizedLoc = (profile?.location?.trim() || [profile?.city, profile?.stateProvince, profile?.country].filter(Boolean).join(', ')).trim();
+  const known = Object.fromEntries(keys.map(key => [key, key === 'location' ? (synthesizedLoc || profile?.[key] || '') : (profile?.[key] || '')]));
+  const { resumeContext, applicantNotes, _collapsed, workEligibilities, workExperiences, education, projects, skills, ...extra } = profile || {};
+  return {
+    ...extra,
+    ...known,
+    location: synthesizedLoc,
+    workEligibilities: (profile?.workEligibilities || []).filter(e => e && e.enabled !== false).map(e => ({
+      country: e.country,
+      workAuthorization: e.workAuthorization,
+      sponsorshipNow: e.sponsorshipNow,
+      sponsorshipFuture: e.sponsorshipFuture,
+    })),
+    workExperiences: (profile?.workExperiences || []).filter(e => e && e.enabled !== false),
+    education: (profile?.education || []).filter(e => e && e.enabled !== false),
+    projects: (profile?.projects || []).filter(e => e && e.enabled !== false),
+    skills: (profile?.skills || []).filter(Boolean),
+  };
 }
 
 const normalize = value => String(value || '').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
@@ -64,16 +206,40 @@ function matchesDemographicOption(key, value, label) {
 // questions remain grounded by the AI rather than being replaced by a short value.
 export function fixedProfileAnswer(field, profile, { allowSearch = true } = {}) {
   const label = normalize(field.label);
+  const synthesizedLocation = (profile.location?.trim() || [profile.city, profile.stateProvince, profile.country].filter(Boolean).join(', ')).trim();
+
   if (['text', 'textarea', 'url'].includes(field.type)) {
-    const key = isResidenceLabel(field.label) ? 'location' : /^(?:your )?linkedin(?: (?:url|link|profile|profile url|profile link))?$/.test(label) ? 'linkedin' : null;
+    let addressKey = null;
+    if (/^(?:street address|address line 1|address 1|street|mailing address)$/i.test(label)) {
+      addressKey = 'streetAddress';
+    } else if (/^(?:address line 2|address 2|apartment)$/i.test(label) || /^(?:apt|suite|unit)\b/i.test(label)) {
+      addressKey = 'addressLine2';
+    } else if (/^(?:city|town)$/i.test(label)) {
+      addressKey = 'city';
+    } else if (/^(?:state|province|state province|state and province|region)$/i.test(label)) {
+      addressKey = 'stateProvince';
+    } else if (/^(?:postal code|zip code|zip postal code|zip and postal code|zip|postcode)$/i.test(label)) {
+      addressKey = 'postalCode';
+    } else if (/^(?:country|country of residence)$/i.test(label)) {
+      addressKey = 'country';
+    }
+    if (addressKey && profile[addressKey]?.trim()) {
+      return { fieldId: field.fieldId, value: profile[addressKey].trim(), inferred: false };
+    }
+
+    if (isResidenceLabel(field.label) && synthesizedLocation) {
+      return { fieldId: field.fieldId, value: synthesizedLocation, inferred: false };
+    }
+
+    const key = /^(?:your )?linkedin(?: (?:url|link|profile|profile url|profile link))?$/.test(label) ? 'linkedin' : null;
     if (key && profile[key]?.trim()) return { fieldId: field.fieldId, value: profile[key].trim(), inferred: false };
   }
+
   // Only explicit residence questions: bare "Location" can refer to an employer.
-  if (field.type === 'combobox' && isResidenceLabel(field.label) && profile.location?.trim()) {
-    const location = profile.location.trim();
-    const matches = (field.options || []).filter(option => locationMatches(option.label, location));
+  if (field.type === 'combobox' && isResidenceLabel(field.label) && synthesizedLocation) {
+    const matches = (field.options || []).filter(option => locationMatches(option.label, synthesizedLocation));
     return { fieldId: field.fieldId, value: matches.length === 1 ? matches[0].label : '', inferred: false,
-      ...(!matches.length && allowSearch ? { searchQuery: location } : {}) };
+      ...(!matches.length && allowSearch ? { searchQuery: synthesizedLocation } : {}) };
   }
   const source = /^(?:how (?:did|do) you (?:hear|learn) about\b|where did you (?:hear about|find|learn about|see) (?:us|this (?:job|role|position|opportunity|opening)|(?:the|our) (?:job|company|role|position|opportunity|opening))\b|(?:application|applicant|referral|recruitment|job) source$|source$)/.test(label);
   let key;
@@ -101,3 +267,73 @@ export function fixedProfileAnswer(field, profile, { allowSearch = true } = {}) 
   if (source && !match && field.type === 'combobox' && allowSearch) answer.searchQuery = 'LinkedIn';
   return answer;
 }
+
+export const MVP_PROFILE_FIELDS = [
+  { key: 'fullName', label: 'Full Name' },
+  { key: 'email', label: 'Email' },
+  { key: 'phone', label: 'Phone' },
+  { key: 'city', label: 'City' },
+  { key: 'country', label: 'Country' },
+];
+
+export function getMissingCoreProfileFields(profile = {}) {
+  return MVP_PROFILE_FIELDS
+    .filter(f => {
+      if (f.key === 'city' && !String(profile.city || '').trim() && String(profile.location || '').trim()) return false;
+      if (f.key === 'country' && !String(profile.country || '').trim() && String(profile.location || '').trim()) return false;
+      return !String(profile[f.key] || '').trim();
+    })
+    .map(f => f.label);
+}
+
+export function calculateProfileStrength(profile = {}) {
+  let score = 0;
+  const missingCore = getMissingCoreProfileFields(profile);
+
+  // 1. Core Identity (40% total: 10% each for Name, Email, Phone; 5% each for City, Country)
+  if (String(profile.fullName || '').trim()) score += 10;
+  if (String(profile.email || '').trim()) score += 10;
+  if (String(profile.phone || '').trim()) score += 10;
+  const hasCity = Boolean(String(profile.city || '').trim() || String(profile.location || '').trim());
+  const hasCountry = Boolean(String(profile.country || '').trim() || String(profile.location || '').trim());
+  if (hasCity) score += 5;
+  if (hasCountry) score += 5;
+
+  // 2. Work History (20% total: >= 1 active role)
+  const activeWork = (profile.workExperiences || []).filter(w => w && w.enabled !== false && String(w.title || '').trim());
+  if (activeWork.length > 0) score += 20;
+
+  // 3. Education (15% total: >= 1 active degree/institution)
+  const activeEdu = (profile.education || []).filter(e => e && e.enabled !== false && (String(e.institution || '').trim() || String(e.degree || '').trim()));
+  if (activeEdu.length > 0) score += 15;
+
+  // 4. Skills (15% total: 1 skill = 5%, 2 skills = 10%, >= 3 skills = 15%)
+  const skillsCount = Array.isArray(profile.skills) ? profile.skills.filter(s => String(s || '').trim()).length : 0;
+  if (skillsCount >= 3) score += 15;
+  else if (skillsCount === 2) score += 10;
+  else if (skillsCount === 1) score += 5;
+
+  // 5. Projects & Links (10% total: >= 1 project = 5%, >= 1 link = 5%)
+  const activeProjects = (profile.projects || []).filter(p => p && p.enabled !== false && String(p.name || '').trim());
+  if (activeProjects.length > 0) score += 5;
+
+  const hasLink = Boolean(String(profile.linkedin || '').trim() || String(profile.github || '').trim() || String(profile.portfolio || '').trim());
+  if (hasLink) score += 5;
+
+  const percentage = Math.min(100, Math.round(score));
+  const isMvpComplete = missingCore.length === 0;
+
+  let tierLabel = 'Incomplete';
+  if (percentage >= 85) tierLabel = 'Flight-Deck Ready';
+  else if (percentage >= 60) tierLabel = 'Strong';
+  else if (isMvpComplete) tierLabel = 'Basic MVP Ready';
+
+  return {
+    score: percentage,
+    percentage,
+    isMvpComplete,
+    missingCore,
+    tierLabel,
+  };
+}
+
