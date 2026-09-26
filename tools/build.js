@@ -217,15 +217,17 @@ function writeExtensionStaticFiles(pkg, browser) {
   fs.writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8');
   fs.cpSync(path.join(srcDir, 'assets', 'fonts'), path.join(outDir, 'assets', 'fonts'), { recursive: true });
   const pageStyles = fs.readFileSync(path.join(extDir, 'shared', 'pages.css'), 'utf8');
-  fs.writeFileSync(path.join(outDir, 'assets', 'theme.css'),
-    fontFaceCSS(file => `fonts/${file}`) + `\n:root {${TOKENS}}\n` + pageStyles);
+  const themeStyles = fontFaceCSS(file => `fonts/${file}`) + `\n:root {${TOKENS}}\n` + pageStyles;
+  const themeHash = crypto.createHash('sha256').update(themeStyles).digest('hex').slice(0, 12);
+  fs.writeFileSync(path.join(outDir, 'assets', 'theme.css'), themeStyles);
 
   for (const page of ['options', 'popup', 'first-run']) {
     const html = path.join(extDir, page, 'index.html');
     if (fs.existsSync(html)) {
       fs.mkdirSync(path.join(outDir, page), { recursive: true });
       fs.writeFileSync(path.join(outDir, page, 'index.html'),
-        fs.readFileSync(html, 'utf8').replaceAll('{{VISUAL_NAME}}', VISUAL_NAME));
+        fs.readFileSync(html, 'utf8').replaceAll('{{VISUAL_NAME}}', VISUAL_NAME)
+          .replace('../assets/theme.css', `../assets/theme.css?v=${themeHash}`));
     }
     const js = path.join(extDir, page, 'index.js');
     // first-run is a tiny page script, not an esbuild entry.
@@ -266,6 +268,25 @@ async function run() {
 
   for (const job of jobs) {
     if (isWatch) {
+      if (job.after) {
+        // Copied page assets must participate in esbuild's watch graph too.
+        job.options.plugins = [{
+          name: 'extension-static-assets',
+          setup(build) {
+            build.onLoad({ filter: /options[/\\]index\.js$/ }, (args) => {
+              const extDir = path.join(srcDir, 'targets', 'extension');
+              const watchFiles = [
+                'shared/pages.css', 'manifest.base.json', 'manifest.chrome.json', 'manifest.firefox.json',
+                'options/index.html', 'popup/index.html', 'first-run/index.html', 'first-run/index.js',
+              ].map(file => path.join(extDir, file));
+              return { contents: fs.readFileSync(args.path, 'utf8'), loader: 'js', watchFiles };
+            });
+            build.onEnd(result => {
+              if (!result.errors.length) job.after();
+            });
+          },
+        }];
+      }
       const ctx = await esbuild.context(job.options);
       await ctx.watch();
       job.after?.();

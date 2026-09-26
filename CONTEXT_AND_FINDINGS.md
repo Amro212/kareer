@@ -3,6 +3,32 @@
 Running log of changes, bugs, and platform findings for the dual-target
 (extension + userscript) Kareer.
 
+## Turn: 2026-09-26 — Floating profile save dock asset regression
+
+### Findings
+- Target: extension options page (user screenshots show v0.4.53); not a live ATS issue.
+- Symptoms: the floating save control appears as a second ordinary inline button below the form, even when clean, and is offscreen while editing earlier fields. Its status dot and flex layout are also absent.
+- Review: the recent staged dock markup and dirty-state handlers have corresponding fixed-position CSS in source. The screenshots are consistent with that CSS being absent/stale in the loaded build, rather than a broken click handler; the exact installed asset cannot be inspected from screenshots.
+- Confirmed build defect: `npm run dev` only copied CSS/HTML at startup; esbuild watched JavaScript alone. Static styles could remain stale after source edits. Stylesheet URLs also had no cache key.
+- Related accessibility defect: opacity and pointer-events alone left the clean dock keyboard-focusable.
+
+### Turn changes
+- `tools/build.js`: register copied CSS, HTML, manifests, and first-run script with esbuild's watcher and refresh static files after successful rebuilds; add a content hash to generated stylesheet URLs for Chrome and Firefox.
+- `src/targets/extension/shared/pages.css`: hide the inactive dock with visibility so it cannot receive keyboard focus.
+- `tests/unit/build-watch.test.js`: exercise a real watch process in a temporary project; verify CSS changes, stylesheet cache keys, and HTML changes reach both browsers.
+- `tests/e2e/shell.spec.js`: verify dock positioning, dirty/clean visibility, viewport bounds, save persistence, and reload behavior at desktop/mobile widths using the loaded extension.
+- Build output: generated Chrome ZIP, Firefox XPI, and userscript; the existing build process advanced version 0.4.55 to 0.4.56 and synchronized `package.json`, `firefox-updates.json`, `site/firefox-updates.json`, `site/version.json`, and `site/index.html`.
+- Existing staged changes preserved. No profile data or unrelated application behavior changed.
+
+### Verification / status
+- `npm run build`: passed (v0.4.56).
+- Watch regression: passed. Initial filesystem watcher attempt hit sandbox EMFILE; replaced with esbuild's existing watcher and verified successfully.
+- Initial targeted browser run encountered a trace-file teardown collision; full suite rerun uses a separate output directory.
+- `npm test`: 229 passed, including the new watch-build regression.
+- `npm run test:e2e -- tests/e2e/shell.spec.js --grep "profile save dock" --output=/private/tmp/kareer-save-dock-focused`: passed (desktop and mobile persistence/positioning).
+- `npm run test:e2e -- --output=/private/tmp/kareer-save-dock-e2e`: not green; 6 passed, 2 Lever tests failed because their seeded profile lacks the phone required by the existing profile gate. Stopped after these repeated unrelated failures; 1 test interrupted and 44 not run. Those unrelated fixtures/gating behavior remain deferred.
+- `git diff --check`: passed. Fix built and targeted behavior verified; full-suite clearance remains blocked by the unrelated profile-gate failures. Reload the unpacked extension and reopen Options to load v0.4.56.
+
 ## Turn: 2026-09-26 — Multi-Country Work Eligibility Support
 
 ### User Need & Problem

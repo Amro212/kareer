@@ -1,6 +1,37 @@
 import { test, expect } from './support/fixtures.js';
 
 test.describe('extension shell', () => {
+  test('profile save dock floats while dirty and persists edits on desktop and mobile', async ({ kr }) => {
+    const page = await kr.context.newPage();
+    await page.goto(kr.optionsUrl());
+    const dock = page.locator('#profile-floating-dock');
+    await expect(page.locator('#pf-github')).toBeVisible();
+    await expect(dock).toBeHidden();
+    await expect(dock).toHaveCSS('position', 'fixed');
+
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 800 });
+      const github = `https://github.com/applicant-${width}`;
+      await page.locator('#pf-github').fill(github);
+      await expect(dock).toBeVisible();
+      await expect(dock).toContainText('Unsaved profile changes');
+      await expect(dock).toBeInViewport();
+      await page.locator('#applicantNotes').fill(`Notes at ${width}`);
+      await expect(dock).toBeInViewport();
+      const box = await dock.boundingBox();
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(width);
+      await page.locator('#floating-save-btn').click();
+      await expect(dock).toContainText('Profile saved');
+      await expect.poll(async () => (await kr.readStorage('kr:profile')).github).toBe(github);
+      expect((await kr.readStorage('kr:profile')).applicantNotes).toBe(`Notes at ${width}`);
+      await expect(dock).toBeHidden();
+      await page.reload();
+      await expect(page.locator('#pf-github')).toHaveValue(github);
+      await expect(dock).toBeHidden();
+    }
+  });
+
   test('panel mounts in the page and reports the hydrated key state', async ({ kr }) => {
     await kr.seed({ apiKey: 'sk-or-v1-e2e-test-key' });
 
