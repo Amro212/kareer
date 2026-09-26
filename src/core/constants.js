@@ -42,6 +42,7 @@ export const DEFAULT_PROFILE = {
   portfolio: '',
   resumeContext: '',
   applicantNotes: '',
+  workEligibilities: [],
   workExperiences: [],
   education: [],
   projects: [],

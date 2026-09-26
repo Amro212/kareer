@@ -3,7 +3,45 @@
 Running log of changes, bugs, and platform findings for the dual-target
 (extension + userscript) Kareer.
 
-## Turn: 2026-09-26 — Decomposed Address Schema, Deterministic Matching, & Options UI Alignment
+## Turn: 2026-09-26 — Multi-Country Work Eligibility Support
+
+### User Need & Problem
+- Previously, Kareer assumed a single work country (`workCountry`, `workAuthorization`, `sponsorshipNow`, `sponsorshipFuture`).
+- Many applicants hold citizenship, permanent residency, or valid work authorization in multiple countries (e.g. dual US/Canada citizens, UK/EU visa holders, global remote workers) and need to specify work authorization and visa sponsorship status for each country.
+- When applying across different global locations, autofill and AI grounding must match the specific country of the target job/question against the applicant's country-specific eligibility entries.
+
+### Changes
+- **`src/core/constants.js`**:
+  - Added `workEligibilities: []` to `DEFAULT_PROFILE`.
+  - Preserved legacy fields `workCountry`, `workAuthorization`, `sponsorshipNow`, `sponsorshipFuture` for backwards compatibility.
+- **`src/core/profile.js`**:
+  - Added `createWorkEligibility(data = {})` factory with `{ id, enabled, country, workAuthorization, sponsorshipNow, sponsorshipFuture, _collapsed }`.
+  - Updated `profileForAI(profile)` to supply active `workEligibilities` in prompt payloads while preserving root fields for legacy model consumers.
+- **`src/core/storage.js`**:
+  - In `getProfile()`: Migrated legacy profiles lacking `workEligibilities` by auto-synthesizing an entry from `workCountry`/`workAuthorization`. Mirrored primary active country eligibility to root fields.
+  - In `saveProfile()`: Preserved `workEligibilities` and maintained bidirectional synchronization with root fields `workCountry`, `workAuthorization`, `sponsorshipNow`, and `sponsorshipFuture`.
+- **`src/core/ai.js`**:
+  - Updated structured system prompt (`buildStructuredSystemPrompt`) and narrative rewrite prompt (`buildNarrativeRewriteSystemPrompt`) to check `applicantProfile.workEligibilities` for the matching country of the job or question before falling back to `workCountry`.
+  - Specified that for multi-country applicants, questions must resolve to the specific country entry and not guess or cross-transfer eligibility.
+- **`src/targets/extension/options/index.html` & `index.js`**:
+  - Added `#section-eligibility` repeatable section with `+ Add eligible country` button and card list (`#eligibility-list`).
+  - Added sidebar navigation link `#section-eligibility` with active count badge (`#subnav-eligibility-count`).
+  - Implemented `renderEligibilityList()` providing repeatable cards with Country, Authorized to work?, Sponsorship now?, and Sponsorship future? dropdowns, Active toggle, Move Up/Down reordering, and Delete.
+  - Ensured the primary card retains `#pf-workCountry` and `#pf-workAuthorization` IDs/names for seamless E2E compatibility.
+  - Filtered static 'Work eligibility' from `#profile-sections` to avoid duplicated controls.
+  - Added scrollspy tracking for `#section-eligibility`.
+- **`src/core/ui.js`**:
+  - Added eligible countries badge (`${eligCount} Eligible countr(y/ies)`) to the Detailed Profile Background card in the extension panel.
+  - Ensured `#kr-autofill-btn` is enabled when an API key is present, providing non-blocking recommended guidance for incomplete profiles.
+- **Verification**:
+  - `node --test tests/unit/profile.test.js`: **27 passed, 0 failed**.
+  - `node --test tests/unit/*.test.js`: **228 passed, 0 failed** (all unit tests).
+  - `npx playwright test tests/e2e/shell.spec.js`: **7 passed, 0 failed** (including new test verifying multi-country creation and persistence).
+  - `node tools/build.js`: Built cleanly at **v0.4.55** (Chrome extension, Firefox XPI, Userscript).
+
+---
+
+## Turn: 2026-09-26 — Decomposed Address Schema, Fieldset Separation, & Floating Save Dock
 
 ### Architectural Parity & Grill-me Alignment
 - Compared Kareer's profile implementation against Simplify Copilot ([docs/plans/simplify-research.md](./docs/plans/simplify-research.md)):
@@ -13,7 +51,7 @@ Running log of changes, bugs, and platform findings for the dual-target
     2. Aligned on migrating single `location` to decomposed address fields (`streetAddress`, `addressLine2`, `city`, `stateProvince`, `postalCode`, `country`) with automatic backward compatibility.
     3. Aligned on dynamic on-the-fly synthesis of `location` (`[city, stateProvince, country].filter(Boolean).join(', ')`) when ATS platforms (e.g. Greenhouse, Lever) ask for a single residence/location input.
     4. Aligned on deterministic resolution in `fixedProfileAnswer` for free-text address inputs, while delegating state/country comboboxes to AI grounded in the profile.
-    5. Followed `/impeccable` design principles and `DESIGN.md` guidelines for Options page visual hierarchy: structured sub-grids, refined `.grid-subhead` dividers, uppercase 11px section labels, no kickers/eyebrows, and tight grouping with generous separation.
+    5. Followed `/impeccable` design principles and `DESIGN.md` guidelines for Options page visual hierarchy: separated into distinct semantic fieldsets (`#section-identity`, `#section-address`, `#section-links`), distinct sidebar navigation targets, balanced 2-column grids with full-width street address/country/portfolio, and an ambient floating save dock that reveals itself upon detected changes.
 
 ### Changes
 - **`src/core/constants.js`**: Added `streetAddress`, `addressLine2`, `city`, `stateProvince`, `postalCode`, `country` to `DEFAULT_PROFILE`.
@@ -23,13 +61,21 @@ Running log of changes, bugs, and platform findings for the dual-target
   - Updated `fixedProfileAnswer` to deterministically match free-text inputs for street address, address line 2 / apt / suite / unit, city, state / province, postal / zip code, and country; and route single residence queries to synthesized location.
   - Updated `MVP_PROFILE_FIELDS` and `calculateProfileStrength` to check `city` and `country` for core identity completeness while remaining backward-compatible with legacy location profiles.
 - **`src/core/capture.js`**: Added all decomposed address fields to `profileSecrets` so full addresses are redacted in debug exports and logs.
-- **`src/targets/extension/shared/pages.css`**: Added `.grid-subhead` with clean 1px rule divider following Impeccable and `DESIGN.md` flight-deck styling.
-- **`src/targets/extension/options/index.js`**: Replaced flat identity fields with structured sub-grids (Contact info -> Residential address -> Online profiles & links) and updated `getLiveProfileForStrength`.
+- **`src/targets/extension/options/index.html`**:
+  - Separated Identity, Address, and Links into distinct semantic `<fieldset>` elements (`#section-identity`, `#section-address`, `#section-links`) with individual `<legend>` headers.
+  - Added sidebar navigation anchors for `#section-identity`, `#section-address`, and `#section-links`.
+  - Added floating save dock markup (`#profile-floating-dock`) with status dot, status message, and quick-save button.
+- **`src/targets/extension/options/index.js`**:
+  - Added `serializeCurrentProfile` and `checkProfileDirty` to track unsaved edits across form inputs, date dropdowns, repeatable card changes, and skills chips.
+  - Wired floating save button click to `$('profile-form').requestSubmit()`.
+  - Added scrollspy tracking for `#section-address` and `#section-links` in `onWindowScroll`.
+- **`src/targets/extension/shared/pages.css`**:
+  - Added `.floating-save-dock` pill-shaped flight deck styling with ambient backdrop blur, subtle shadow, status dot, and smooth entrance/exit transitions.
 - **`tests/unit/profile.test.js`**: Added unit tests covering `parseLegacyLocation`, `getProfile` migration and synthesis, `fixedProfileAnswer` address resolution, and profile strength evaluation.
 
 ### Verification
 - `npm test`: **226 passed, 0 failed** (`node --test tests/unit/*.test.js`).
-- `node tools/build.js`: Built cleanly at **v0.4.51** (Chrome extension, Firefox XPI, Userscript).
+- `node tools/build.js`: Built cleanly at **v0.4.53** (Chrome extension, Firefox XPI, Userscript).
 
 ---
 

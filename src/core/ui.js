@@ -2156,7 +2156,7 @@ function renderHomeTab() {
       ` : ''}
       ${mvpAlertHtml}
       <div class="kr-row" style="margin-top: 4px; gap: 8px;">
-        <button class="kr-btn kr-btn-large ${session ? 'kr-btn-secondary' : ''}" id="kr-autofill-btn" style="flex: 1;" ${isAutofilling || !strength.isMvpComplete ? 'disabled' : ''} ${!strength.isMvpComplete ? `title="Complete required profile fields (${escapeHtml(strength.missingCore.join(', '))}) to enable autofill"` : ''}>
+        <button class="kr-btn kr-btn-large ${session ? 'kr-btn-secondary' : ''}" id="kr-autofill-btn" style="flex: 1;" ${isAutofilling ? 'disabled' : ''} ${!strength.isMvpComplete ? `title="Recommended: Complete core profile fields (${escapeHtml(strength.missingCore.join(', '))})"` : ''}>
           ${isAutofilling ? `${ICONS.play} Filling Fields...` : `${ICONS.play} Autofill This Page`}
         </button>
         <button class="kr-btn kr-btn-secondary ${isAutofilling ? 'kr-btn-pause-active' : ''}" id="kr-pause-autofill-btn" style="padding: 9px 14px; font-size: 12px;" ${!isAutofilling ? 'disabled' : ''} title="Pause / Stop autofill">
@@ -2208,6 +2208,7 @@ function renderProfileTab() {
   const eduCount = (profile.education || []).length;
   const projCount = (profile.projects || []).length;
   const skillCount = (profile.skills || []).length;
+  const eligCount = (profile.workEligibilities || []).filter(e => e && e.enabled !== false && String(e.country || '').trim()).length || (profile.workCountry ? 1 : 0);
 
   const strengthCardHtml = `
     <div class="kr-card" style="margin-bottom: 2px; gap: 8px;">
@@ -2241,8 +2242,9 @@ function renderProfileTab() {
         <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${eduCount} Education</span>
         <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${projCount} Project${projCount === 1 ? '' : 's'}</span>
         <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${skillCount} Skill${skillCount === 1 ? '' : 's'}</span>
+        <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${eligCount} Eligible countr${eligCount === 1 ? 'y' : 'ies'}</span>
       </div>
-      <div style="font-size: 11px; color: var(--kr-text-3);">Manage all roles, degrees, projects, dates, and skills in the full Settings console.</div>
+      <div style="font-size: 11px; color: var(--kr-text-3);">Manage all roles, degrees, projects, dates, and multiple work countries in the full Settings console.</div>
     </div>
   `;
 

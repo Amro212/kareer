@@ -1,13 +1,14 @@
 import { api, sendMessage } from '../shared/browser.js';
 import { MSG } from '../shared/protocol.js';
 import { APP_VERSION, POPULAR_MODELS, DEFAULT_SETTINGS, DEFAULT_PROFILE, STORAGE_KEYS } from '../../../core/constants.js';
-import { PROFILE_SECTIONS, createWorkExperience, createEducation, createProject, calculateProfileStrength } from '../../../core/profile.js';
+import { PROFILE_SECTIONS, createWorkExperience, createEducation, createProject, createWorkEligibility, calculateProfileStrength } from '../../../core/profile.js';
 import { exportPayload, importPayload } from '../../../core/migration.js';
 
 let currentWork = [];
 let currentEducation = [];
 let currentProjects = [];
 let currentSkills = [];
+let currentEligibilities = [];
 
 function escapeHtml(str) {
   return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -92,13 +93,13 @@ const ADDRESS_FIELDS = [
   { name: 'city', label: 'City', type: 'text', placeholder: 'e.g. San Francisco' },
   { name: 'stateProvince', label: 'State / Province / Region', type: 'text', placeholder: 'e.g. CA or California' },
   { name: 'postalCode', label: 'Postal / Zip code', type: 'text', placeholder: 'e.g. 94107' },
-  { name: 'country', label: 'Country', type: 'text', placeholder: 'e.g. United States' },
+  { name: 'country', label: 'Country', type: 'text', placeholder: 'e.g. United States', fullWidth: true },
 ];
 
 const LINK_FIELDS = [
   { name: 'linkedin', label: 'LinkedIn URL', type: 'url', placeholder: 'e.g. https://linkedin.com/in/username' },
   { name: 'github', label: 'GitHub URL', type: 'url', placeholder: 'e.g. https://github.com/username' },
-  { name: 'portfolio', label: 'Portfolio URL', type: 'url', placeholder: 'e.g. https://alexmorgan.dev' },
+  { name: 'portfolio', label: 'Portfolio URL', type: 'url', placeholder: 'e.g. https://alexmorgan.dev', fullWidth: true },
 ];
 
 const IDENTITY_FIELDS = [...CORE_CONTACT_FIELDS, ...ADDRESS_FIELDS, ...LINK_FIELDS];
@@ -109,13 +110,6 @@ function flash(el, message, isError = false) {
   el.textContent = message;
   el.classList.toggle('error', isError);
   if (!isError) setTimeout(() => { if (el.textContent === message) el.textContent = ''; }, 2500);
-}
-
-function subhead(title) {
-  const el = document.createElement('div');
-  el.className = 'grid-subhead';
-  el.textContent = title;
-  return el;
 }
 
 function group(field, value) {
@@ -178,6 +172,7 @@ function getLiveProfileForStrength() {
     education: currentEducation,
     projects: currentProjects,
     skills: currentSkills,
+    workEligibilities: currentEligibilities,
   };
 }
 
@@ -212,7 +207,51 @@ function updateSubnavBadges() {
   setBadge('subnav-edu-count', currentEducation.length);
   setBadge('subnav-proj-count', currentProjects.length);
   setBadge('subnav-skills-count', currentSkills.length);
+  setBadge('subnav-eligibility-count', currentEligibilities.filter((e) => e && e.enabled !== false && String(e.country || '').trim()).length);
   updateProfileStrength();
+  checkProfileDirty();
+}
+
+let savedProfileSnapshot = null;
+let saveHideTimeout = null;
+
+function serializeCurrentProfile() {
+  const form = $('profile-form');
+  if (!form) return '';
+  const data = {};
+  for (const input of form.querySelectorAll('input, select, textarea')) {
+    if (input.name && !input.closest('.repeatable-card') && !input.closest('.skill-input-row')) {
+      data[input.name] = input.value;
+    }
+  }
+  data.workExperiences = currentWork.map(({ _collapsed, ...rest }) => rest);
+  data.education = currentEducation.map(({ _collapsed, ...rest }) => rest);
+  data.projects = currentProjects.map(({ _collapsed, ...rest }) => rest);
+  data.skills = [...currentSkills];
+  data.workEligibilities = currentEligibilities.map(({ _collapsed, ...rest }) => rest);
+  return JSON.stringify(data);
+}
+
+function checkProfileDirty() {
+  if (!savedProfileSnapshot) return;
+  const current = serializeCurrentProfile();
+  const isDirty = current !== savedProfileSnapshot;
+  const dock = $('profile-floating-dock');
+  const dot = $('dock-status-dot');
+  const message = $('dock-status-message');
+  if (dock) {
+    if (saveHideTimeout) {
+      clearTimeout(saveHideTimeout);
+      saveHideTimeout = null;
+    }
+    dock.classList.toggle('is-visible', isDirty);
+    if (dot) {
+      dot.className = 'dock-dot' + (isDirty ? '' : ' saved');
+    }
+    if (message) {
+      message.textContent = isDirty ? 'Unsaved profile changes' : 'All changes saved';
+    }
+  }
 }
 
 function renderSkillsChips() {
@@ -882,30 +921,236 @@ function renderProjectsList() {
   updateSubnavBadges();
 }
 
+function renderEligibilityList() {
+  const container = $('eligibility-list');
+  if (!container) return;
+  container.innerHTML = '';
+  if (currentEligibilities.length === 0) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.style.margin = '8px 0';
+    p.textContent = 'No eligible countries added yet. Click "+ Add eligible country" to specify your work authorization.';
+    container.append(p);
+    updateSubnavBadges();
+    return;
+  }
+
+  currentEligibilities.forEach((item, index) => {
+    if (item._collapsed === undefined) item._collapsed = (index > 0);
+    const card = document.createElement('div');
+    card.className = `repeatable-card ${item._collapsed ? 'is-collapsed' : ''} ${item.enabled === false ? 'is-disabled' : ''}`;
+
+    const authText = item.workAuthorization === 'Yes' ? 'Authorized' : item.workAuthorization === 'No' ? 'Not authorized' : 'Authorization unset';
+    const countryTitle = item.country ? escapeHtml(item.country) : 'New Eligible Country';
+
+    const sponsorParts = [];
+    if (item.sponsorshipNow === 'Yes') sponsorParts.push('Needs sponsorship now');
+    else if (item.sponsorshipNow === 'No') sponsorParts.push('No immediate sponsorship');
+    if (item.sponsorshipFuture === 'Yes') sponsorParts.push('Needs future sponsorship');
+    else if (item.sponsorshipFuture === 'No') sponsorParts.push('No future sponsorship');
+    const sponsorText = sponsorParts.length ? sponsorParts.join(' • ') : (item.workAuthorization ? 'Sponsorship not specified' : 'Country and visa requirements');
+
+    card.innerHTML = `
+      <div class="card-header" role="button" tabindex="0">
+        <div class="card-title-group">
+          <div class="card-summary-title">${countryTitle} – ${authText}</div>
+          <div class="card-summary-date">${escapeHtml(sponsorText)}</div>
+        </div>
+        <div class="card-controls">
+          <label class="checkbox-row" style="margin: 0; margin-right: 6px;" title="Include in autofill">
+            <input type="checkbox" class="elig-enabled-toggle" ${item.enabled !== false ? 'checked' : ''} />
+            <span style="font-size: 11px;">Active</span>
+          </label>
+          <button type="button" class="icon-btn secondary elig-move-up" title="Move Up" ${index === 0 ? 'disabled' : ''}>↑</button>
+          <button type="button" class="icon-btn secondary elig-move-down" title="Move Down" ${index === currentEligibilities.length - 1 ? 'disabled' : ''}>↓</button>
+          <button type="button" class="icon-btn secondary danger elig-delete" title="Remove country">✕</button>
+          <span class="chevron-indicator">▼</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="grid">
+          <div class="group">
+            <label for="${index === 0 ? 'pf-workCountry' : 'elig-country-' + index}">Country</label>
+            <input type="text" class="elig-country" ${index === 0 ? 'id="pf-workCountry" name="workCountry"' : 'id="elig-country-' + index + '"'} placeholder="e.g. Canada, United States, United Kingdom" value="${escapeHtml(item.country)}" />
+            <span class="field-guide">Country where you hold citizenship, residency, or work rights.</span>
+          </div>
+          <div class="group">
+            <label for="${index === 0 ? 'pf-workAuthorization' : 'elig-auth-' + index}">Authorized to work in this country?</label>
+            <select class="elig-auth" ${index === 0 ? 'id="pf-workAuthorization" name="workAuthorization"' : 'id="elig-auth-' + index + '"'}>
+              <option value="" ${!item.workAuthorization ? 'selected' : ''}>Not set</option>
+              <option value="Yes" ${item.workAuthorization === 'Yes' ? 'selected' : ''}>Yes</option>
+              <option value="No" ${item.workAuthorization === 'No' ? 'selected' : ''}>No</option>
+            </select>
+            <span class="field-guide">Are you legally authorized to work in this country?</span>
+          </div>
+          <div class="group">
+            <label for="${index === 0 ? 'pf-sponsorshipNow' : 'elig-sponsor-now-' + index}">Require sponsorship now?</label>
+            <select class="elig-sponsor-now" ${index === 0 ? 'id="pf-sponsorshipNow" name="sponsorshipNow"' : 'id="elig-sponsor-now-' + index + '"'}>
+              <option value="" ${!item.sponsorshipNow ? 'selected' : ''}>Not set</option>
+              <option value="Yes" ${item.sponsorshipNow === 'Yes' ? 'selected' : ''}>Yes</option>
+              <option value="No" ${item.sponsorshipNow === 'No' ? 'selected' : ''}>No</option>
+            </select>
+            <span class="field-guide">Do you now require employer sponsorship for employment visa status?</span>
+          </div>
+          <div class="group">
+            <label for="${index === 0 ? 'pf-sponsorshipFuture' : 'elig-sponsor-future-' + index}">Require sponsorship in the future?</label>
+            <select class="elig-sponsor-future" ${index === 0 ? 'id="pf-sponsorshipFuture" name="sponsorshipFuture"' : 'id="elig-sponsor-future-' + index + '"'}>
+              <option value="" ${!item.sponsorshipFuture ? 'selected' : ''}>Not set</option>
+              <option value="Yes" ${item.sponsorshipFuture === 'Yes' ? 'selected' : ''}>Yes</option>
+              <option value="No" ${item.sponsorshipFuture === 'No' ? 'selected' : ''}>No</option>
+            </select>
+            <span class="field-guide">Will you in the future require visa sponsorship in this country?</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const header = card.querySelector('.card-header');
+    const toggleCollapse = () => {
+      item._collapsed = !item._collapsed;
+      card.classList.toggle('is-collapsed', item._collapsed);
+    };
+    header.addEventListener('click', (e) => {
+      if (e.target.closest('.card-controls')) return;
+      toggleCollapse();
+    });
+    header.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        if (e.target.closest('.card-controls')) return;
+        e.preventDefault();
+        toggleCollapse();
+      }
+    });
+
+    const enabledToggle = card.querySelector('.elig-enabled-toggle');
+    enabledToggle.addEventListener('change', () => {
+      item.enabled = enabledToggle.checked;
+      card.classList.toggle('is-disabled', !item.enabled);
+      updateSubnavBadges();
+      checkProfileDirty();
+    });
+
+    const moveUp = card.querySelector('.elig-move-up');
+    moveUp.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (index > 0) {
+        const temp = currentEligibilities[index];
+        currentEligibilities[index] = currentEligibilities[index - 1];
+        currentEligibilities[index - 1] = temp;
+        renderEligibilityList();
+        checkProfileDirty();
+      }
+    });
+
+    const moveDown = card.querySelector('.elig-move-down');
+    moveDown.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (index < currentEligibilities.length - 1) {
+        const temp = currentEligibilities[index];
+        currentEligibilities[index] = currentEligibilities[index + 1];
+        currentEligibilities[index + 1] = temp;
+        renderEligibilityList();
+        checkProfileDirty();
+      }
+    });
+
+    const delBtn = card.querySelector('.elig-delete');
+    delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      currentEligibilities.splice(index, 1);
+      renderEligibilityList();
+      checkProfileDirty();
+    });
+
+    const countryInput = card.querySelector('.elig-country');
+    const authSelect = card.querySelector('.elig-auth');
+    const sponsorNowSelect = card.querySelector('.elig-sponsor-now');
+    const sponsorFutureSelect = card.querySelector('.elig-sponsor-future');
+
+    function updateCardLabels() {
+      const aText = item.workAuthorization === 'Yes' ? 'Authorized' : item.workAuthorization === 'No' ? 'Not authorized' : 'Authorization unset';
+      const cTitle = item.country ? item.country : 'New Eligible Country';
+      card.querySelector('.card-summary-title').textContent = `${cTitle} – ${aText}`;
+
+      const sParts = [];
+      if (item.sponsorshipNow === 'Yes') sParts.push('Needs sponsorship now');
+      else if (item.sponsorshipNow === 'No') sParts.push('No immediate sponsorship');
+      if (item.sponsorshipFuture === 'Yes') sParts.push('Needs future sponsorship');
+      else if (item.sponsorshipFuture === 'No') sParts.push('No future sponsorship');
+      card.querySelector('.card-summary-date').textContent = sParts.length ? sParts.join(' • ') : (item.workAuthorization ? 'Sponsorship not specified' : 'Country and visa requirements');
+    }
+
+    countryInput.addEventListener('input', () => {
+      item.country = countryInput.value;
+      updateCardLabels();
+      updateSubnavBadges();
+      checkProfileDirty();
+    });
+
+    authSelect.addEventListener('change', () => {
+      item.workAuthorization = authSelect.value;
+      updateCardLabels();
+      checkProfileDirty();
+    });
+
+    sponsorNowSelect.addEventListener('change', () => {
+      item.sponsorshipNow = sponsorNowSelect.value;
+      updateCardLabels();
+      checkProfileDirty();
+    });
+
+    sponsorFutureSelect.addEventListener('change', () => {
+      item.sponsorshipFuture = sponsorFutureSelect.value;
+      updateCardLabels();
+      checkProfileDirty();
+    });
+
+    container.append(card);
+  });
+  updateSubnavBadges();
+}
+
 function renderProfile(profile) {
   const identity = $('identity-fields');
-  const elements = [
-    ...CORE_CONTACT_FIELDS.map((field) => group(field, profile[field.name])),
-    subhead('Residential address'),
-    ...ADDRESS_FIELDS.map((field) => group(field, profile[field.name])),
-    subhead('Online profiles & links'),
-    ...LINK_FIELDS.map((field) => group(field, profile[field.name])),
-  ];
-  identity.replaceChildren(...elements);
+  if (identity) {
+    identity.replaceChildren(...CORE_CONTACT_FIELDS.map((field) => group(field, profile[field.name])));
+  }
+
+  const address = $('address-fields');
+  if (address) {
+    address.replaceChildren(...ADDRESS_FIELDS.map((field) => group(field, profile[field.name])));
+  }
+
+  const links = $('links-fields');
+  if (links) {
+    links.replaceChildren(...LINK_FIELDS.map((field) => group(field, profile[field.name])));
+  }
 
   currentWork = (profile.workExperiences || []).map((w) => createWorkExperience({ ...w, _collapsed: true }));
   currentEducation = (profile.education || []).map((e) => createEducation({ ...e, _collapsed: true }));
   currentProjects = (profile.projects || []).map((p) => createProject({ ...p, _collapsed: true }));
   currentSkills = Array.isArray(profile.skills) ? [...profile.skills] : [];
+  currentEligibilities = (profile.workEligibilities || []).map((e, idx) => createWorkEligibility({ ...e, _collapsed: idx === 0 ? false : (e._collapsed ?? true) }));
+  if (currentEligibilities.length === 0) {
+    currentEligibilities = [createWorkEligibility({
+      country: profile.workCountry || '',
+      workAuthorization: profile.workAuthorization || '',
+      sponsorshipNow: profile.sponsorshipNow || '',
+      sponsorshipFuture: profile.sponsorshipFuture || '',
+      _collapsed: false,
+    })];
+  }
 
   renderWorkExperiencesList();
   renderEducationList();
   renderProjectsList();
   renderSkillsChips();
+  renderEligibilityList();
   updateSubnavBadges();
 
   const sections = $('profile-sections');
-  sections.replaceChildren(...PROFILE_SECTIONS.map((section) => {
+  const nonRepeatableSections = PROFILE_SECTIONS.filter((section) => section.title !== 'Work eligibility');
+  sections.replaceChildren(...nonRepeatableSections.map((section) => {
     const fieldset = document.createElement('fieldset');
     const legend = document.createElement('legend');
     legend.textContent = section.title;
@@ -924,6 +1169,9 @@ function renderProfile(profile) {
   }));
 
   $('applicantNotes').value = profile.applicantNotes || '';
+  savedProfileSnapshot = serializeCurrentProfile();
+  const dock = $('profile-floating-dock');
+  if (dock) dock.classList.remove('is-visible');
 }
 
 function renderModel(settings) {
@@ -1066,6 +1314,15 @@ async function init() {
     renderProjectsList();
   };
 
+  const addEligibilityBtn = $('add-eligibility-btn');
+  if (addEligibilityBtn) {
+    addEligibilityBtn.onclick = () => {
+      currentEligibilities.push(createWorkEligibility({ _collapsed: false }));
+      renderEligibilityList();
+      checkProfileDirty();
+    };
+  }
+
   $('add-skill-btn').onclick = () => {
     addSkillFromInput();
   };
@@ -1091,13 +1348,50 @@ async function init() {
     next.education = currentEducation.map(({ _collapsed, ...rest }) => rest);
     next.projects = currentProjects.map(({ _collapsed, ...rest }) => rest);
     next.skills = [...currentSkills];
+    next.workEligibilities = currentEligibilities.map(({ _collapsed, ...rest }) => rest);
+
+    const primaryElig = next.workEligibilities.find((e) => e && e.enabled !== false) || next.workEligibilities[0];
+    if (primaryElig) {
+      next.workCountry = primaryElig.country || '';
+      next.workAuthorization = primaryElig.workAuthorization || '';
+      next.sponsorshipNow = primaryElig.sponsorshipNow || '';
+      next.sponsorshipFuture = primaryElig.sponsorshipFuture || '';
+    }
 
     await sendMessage({ type: MSG.STORAGE_SET, key: STORAGE_KEYS.PROFILE, value: next });
+    savedProfileSnapshot = serializeCurrentProfile();
     flash($('profile-feedback'), 'Profile saved.');
     updateProfileStrength();
+
+    const dock = $('profile-floating-dock');
+    const dot = $('dock-status-dot');
+    const message = $('dock-status-message');
+    if (dock) {
+      if (dot) dot.className = 'dock-dot saved';
+      if (message) message.textContent = 'Profile saved';
+      if (saveHideTimeout) clearTimeout(saveHideTimeout);
+      saveHideTimeout = setTimeout(() => {
+        dock.classList.remove('is-visible');
+        saveHideTimeout = null;
+      }, 1600);
+    }
   };
 
-  $('profile-form').addEventListener('input', updateProfileStrength);
+  const floatingSaveBtn = $('floating-save-btn');
+  if (floatingSaveBtn) {
+    floatingSaveBtn.onclick = () => {
+      $('profile-form').requestSubmit();
+    };
+  }
+
+  $('profile-form').addEventListener('input', () => {
+    updateProfileStrength();
+    checkProfileDirty();
+  });
+  $('profile-form').addEventListener('change', () => {
+    updateProfileStrength();
+    checkProfileDirty();
+  });
 
   $('export-data').onclick = async () => {
     const current = await readStore();
@@ -1218,10 +1512,13 @@ function onWindowScroll() {
     { id: 'connection', el: $('connection') },
     { id: 'models', el: $('models') },
     { id: 'section-identity', el: $('section-identity') },
+    { id: 'section-address', el: $('section-address') },
+    { id: 'section-links', el: $('section-links') },
     { id: 'section-work', el: $('section-work') },
     { id: 'section-education', el: $('section-education') },
     { id: 'section-projects', el: $('section-projects') },
     { id: 'section-skills', el: $('section-skills') },
+    { id: 'section-eligibility', el: $('section-eligibility') },
     { id: 'section-preferences', el: $('section-preferences') },
     { id: 'section-rules', el: $('section-rules') },
     { id: 'resume', el: $('resume') },
@@ -1246,10 +1543,13 @@ function onWindowScroll() {
 
   const profileSubIds = [
     'section-identity',
+    'section-address',
+    'section-links',
     'section-work',
     'section-education',
     'section-projects',
     'section-skills',
+    'section-eligibility',
     'section-preferences',
     'section-rules',
   ];

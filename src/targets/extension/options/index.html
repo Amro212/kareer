@@ -32,7 +32,13 @@
           </div>
           <div class="nav-subsections" id="profile-subsections">
             <a href="#section-identity" class="subnav-item" data-section="section-identity">
-              <span class="subnav-label">Identity &amp; links</span>
+              <span class="subnav-label">Identity &amp; contact</span>
+            </a>
+            <a href="#section-address" class="subnav-item" data-section="section-address">
+              <span class="subnav-label">Residential address</span>
+            </a>
+            <a href="#section-links" class="subnav-item" data-section="section-links">
+              <span class="subnav-label">Online profiles</span>
             </a>
             <a href="#section-work" class="subnav-item" data-section="section-work">
               <span class="subnav-label">Work experience</span>
@@ -49,6 +55,10 @@
             <a href="#section-skills" class="subnav-item" data-section="section-skills">
               <span class="subnav-label">Skills</span>
               <span class="subnav-badge" id="subnav-skills-count"></span>
+            </a>
+            <a href="#section-eligibility" class="subnav-item" data-section="section-eligibility">
+              <span class="subnav-label">Work eligibility</span>
+              <span class="subnav-badge" id="subnav-eligibility-count"></span>
             </a>
             <a href="#section-preferences" class="subnav-item" data-section="section-preferences">
               <span class="subnav-label">Job preferences</span>
@@ -110,8 +120,18 @@
       </div>
       <form id="profile-form">
         <fieldset id="section-identity">
-          <legend>Identity and links</legend>
+          <legend>Identity and contact</legend>
           <div class="grid" id="identity-fields"></div>
+        </fieldset>
+
+        <fieldset id="section-address">
+          <legend>Residential address</legend>
+          <div class="grid" id="address-fields"></div>
+        </fieldset>
+
+        <fieldset id="section-links">
+          <legend>Online profiles &amp; links</legend>
+          <div class="grid" id="links-fields"></div>
         </fieldset>
 
         <fieldset class="repeatable-section" id="section-work">
@@ -157,6 +177,17 @@
           </div>
         </fieldset>
 
+        <fieldset class="repeatable-section" id="section-eligibility">
+          <div class="section-header-row">
+            <div>
+              <legend>Work authorization &amp; eligibility</legend>
+              <p class="hint">Specify countries where you hold legal work authorization, citizenship, or visas, and whether you require sponsorship. You can add multiple countries.</p>
+            </div>
+            <button type="button" class="secondary add-btn" id="add-eligibility-btn">+ Add eligible country</button>
+          </div>
+          <div id="eligibility-list" class="repeatable-list"></div>
+        </fieldset>
+
         <div id="section-preferences">
           <div id="profile-sections" style="display: flex; flex-direction: column; gap: 14px; margin-top: 14px;"></div>
         </div>
@@ -174,6 +205,16 @@
           <span class="feedback" role="status" aria-live="polite" id="profile-feedback"></span>
         </div>
       </form>
+
+      <div class="floating-save-dock" id="profile-floating-dock" aria-live="polite">
+        <div class="dock-status">
+          <span class="dock-dot" id="dock-status-dot"></span>
+          <span class="dock-message" id="dock-status-message">Unsaved profile changes</span>
+        </div>
+        <div class="dock-actions">
+          <button type="button" id="floating-save-btn">Save profile</button>
+        </div>
+      </div>
     </section>
 
     <section id="resume">

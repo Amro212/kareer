@@ -89,6 +89,19 @@ export function createProject(data = {}) {
   return result;
 }
 
+export function createWorkEligibility(data = {}) {
+  const result = {
+    id: data.id || `elig_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    enabled: data.enabled !== false,
+    country: data.country || '',
+    workAuthorization: data.workAuthorization || '',
+    sponsorshipNow: data.sponsorshipNow || '',
+    sponsorshipFuture: data.sponsorshipFuture || '',
+  };
+  if (data._collapsed !== undefined) result._collapsed = Boolean(data._collapsed);
+  return result;
+}
+
 function formatRangeDate(val) {
   if (!val) return '';
   const str = String(val).trim();
@@ -156,11 +169,17 @@ export function profileForAI(profile) {
   ];
   const synthesizedLoc = (profile?.location?.trim() || [profile?.city, profile?.stateProvince, profile?.country].filter(Boolean).join(', ')).trim();
   const known = Object.fromEntries(keys.map(key => [key, key === 'location' ? (synthesizedLoc || profile?.[key] || '') : (profile?.[key] || '')]));
-  const { resumeContext, applicantNotes, _collapsed, workExperiences, education, projects, skills, ...extra } = profile || {};
+  const { resumeContext, applicantNotes, _collapsed, workEligibilities, workExperiences, education, projects, skills, ...extra } = profile || {};
   return {
     ...extra,
     ...known,
     location: synthesizedLoc,
+    workEligibilities: (profile?.workEligibilities || []).filter(e => e && e.enabled !== false).map(e => ({
+      country: e.country,
+      workAuthorization: e.workAuthorization,
+      sponsorshipNow: e.sponsorshipNow,
+      sponsorshipFuture: e.sponsorshipFuture,
+    })),
     workExperiences: (profile?.workExperiences || []).filter(e => e && e.enabled !== false),
     education: (profile?.education || []).filter(e => e && e.enabled !== false),
     projects: (profile?.projects || []).filter(e => e && e.enabled !== false),

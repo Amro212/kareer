@@ -180,7 +180,7 @@ test('source does not overwrite unrelated questions that share a discovery prefi
 });
 
 test('structured profile factories generate IDs and default values', async () => {
-  const { createWorkExperience, createEducation, createProject } = await import('../../src/core/profile.js');
+  const { createWorkExperience, createEducation, createProject, createWorkEligibility } = await import('../../src/core/profile.js');
   const work = createWorkExperience({ title: 'Staff Engineer', company: 'Acme' });
   assert.ok(work.id.startsWith('work_'));
   assert.equal(work.title, 'Staff Engineer');
@@ -197,6 +197,14 @@ test('structured profile factories generate IDs and default values', async () =>
   assert.ok(proj.id.startsWith('proj_'));
   assert.equal(proj.name, 'Kareer');
   assert.equal(proj.enabled, true);
+
+  const elig = createWorkEligibility({ country: 'Canada', workAuthorization: 'Yes' });
+  assert.ok(elig.id.startsWith('elig_'));
+  assert.equal(elig.country, 'Canada');
+  assert.equal(elig.workAuthorization, 'Yes');
+  assert.equal(elig.sponsorshipNow, '');
+  assert.equal(elig.sponsorshipFuture, '');
+  assert.equal(elig.enabled, true);
 });
 
 test('getProfile provides array defaults for repeatable collections on legacy objects', () => {
@@ -206,6 +214,7 @@ test('getProfile provides array defaults for repeatable collections on legacy ob
   assert.deepEqual(profile.education, []);
   assert.deepEqual(profile.projects, []);
   assert.deepEqual(profile.skills, []);
+  assert.deepEqual(profile.workEligibilities, []);
 });
 
 test('formatStructuredBackground formats active entries and excludes disabled ones', async () => {
@@ -242,6 +251,10 @@ test('profileForAI includes enabled repeatable entries and filters out disabled 
   const profile = {
     fullName: 'Jane Doe',
     email: 'jane@example.com',
+    workEligibilities: [
+      { id: 'el1', enabled: true, country: 'Canada', workAuthorization: 'Yes', sponsorshipNow: 'No', sponsorshipFuture: 'No' },
+      { id: 'el2', enabled: false, country: 'Mars', workAuthorization: 'No', sponsorshipNow: 'Yes', sponsorshipFuture: 'Yes' },
+    ],
     workExperiences: [
       { id: 'w1', enabled: true, title: 'Engineer' },
       { id: 'w2', enabled: false, title: 'Intern' },
@@ -258,6 +271,8 @@ test('profileForAI includes enabled repeatable entries and filters out disabled 
 
   const aiProfile = profileForAI(profile);
   assert.equal(aiProfile.fullName, 'Jane Doe');
+  assert.equal(aiProfile.workEligibilities.length, 1);
+  assert.equal(aiProfile.workEligibilities[0].country, 'Canada');
   assert.equal(aiProfile.workExperiences.length, 1);
   assert.equal(aiProfile.workExperiences[0].id, 'w1');
   assert.equal(aiProfile.education.length, 1);
@@ -285,6 +300,47 @@ test('saveProfile preserves and persists repeatable entries', () => {
   const loaded = getProfile();
   assert.equal(loaded.workExperiences[0].title, 'Developer');
   assert.deepEqual(loaded.skills, ['Python', 'SQL']);
+});
+
+test('getProfile and saveProfile handle multi-country work eligibilities and synchronize with legacy root fields', () => {
+  const profile = saveProfile({
+    fullName: 'Global Candidate',
+    workEligibilities: [
+      { country: 'United States', workAuthorization: 'Yes', sponsorshipNow: 'No', sponsorshipFuture: 'No', enabled: true },
+      { country: 'Canada', workAuthorization: 'Yes', sponsorshipNow: 'No', sponsorshipFuture: 'Yes', enabled: true },
+      { country: 'United Kingdom', workAuthorization: 'No', sponsorshipNow: 'Yes', sponsorshipFuture: 'Yes', enabled: true },
+    ],
+  });
+
+  assert.equal(profile.workEligibilities.length, 3);
+  assert.equal(profile.workCountry, 'United States');
+  assert.equal(profile.workAuthorization, 'Yes');
+  assert.equal(profile.sponsorshipNow, 'No');
+  assert.equal(profile.sponsorshipFuture, 'No');
+
+  const loaded = getProfile();
+  assert.equal(loaded.workEligibilities.length, 3);
+  assert.equal(loaded.workEligibilities[1].country, 'Canada');
+  assert.equal(loaded.workEligibilities[1].sponsorshipFuture, 'Yes');
+  assert.equal(loaded.workCountry, 'United States');
+  assert.equal(loaded.workAuthorization, 'Yes');
+});
+
+test('saveProfile auto-populates workEligibilities from legacy workCountry and workAuthorization', () => {
+  const profile = saveProfile({
+    workCountry: 'Canada',
+    workAuthorization: 'Yes',
+    sponsorshipNow: 'No',
+    sponsorshipFuture: 'Yes',
+  });
+
+  assert.equal(profile.workCountry, 'Canada');
+  assert.equal(profile.workAuthorization, 'Yes');
+  assert.equal(profile.workEligibilities.length, 1);
+  assert.equal(profile.workEligibilities[0].country, 'Canada');
+  assert.equal(profile.workEligibilities[0].workAuthorization, 'Yes');
+  assert.equal(profile.workEligibilities[0].sponsorshipNow, 'No');
+  assert.equal(profile.workEligibilities[0].sponsorshipFuture, 'Yes');
 });
 
 test('calculateProfileStrength and getMissingCoreProfileFields correctly evaluate MVP and strength tiers', async () => {

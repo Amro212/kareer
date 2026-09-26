@@ -75,7 +75,39 @@ test.describe('extension shell', () => {
     expect(profile.fullName).toBe('Test Applicant');
     expect(profile.workCountry).toBe('Canada');
     expect(profile.workAuthorization).toBe('Yes');
+    expect(profile.workEligibilities.length).toBeGreaterThanOrEqual(1);
+    expect(profile.workEligibilities[0].country).toBe('Canada');
+    expect(profile.workEligibilities[0].workAuthorization).toBe('Yes');
     expect(profile.applicantNotes).toBe('Ships production software.');
+  });
+
+  test('options page allows adding multiple eligible countries and persists all entries', async ({ kr }) => {
+    const page = await kr.context.newPage();
+    await page.goto(kr.optionsUrl());
+
+    await page.locator('#pf-fullName').fill('Dual Citizen');
+    await page.locator('#pf-workCountry').fill('United States');
+    await page.locator('#pf-workAuthorization').selectOption('Yes');
+
+    // Add a second country
+    await page.locator('#add-eligibility-btn').click();
+    const secondCard = page.locator('#eligibility-list .repeatable-card').nth(1);
+    await secondCard.locator('.elig-country').fill('Canada');
+    await secondCard.locator('.elig-auth').selectOption('Yes');
+    await secondCard.locator('.elig-sponsor-future').selectOption('No');
+
+    await page.locator('#profile-form button[type=submit]').click();
+    await expect(page.locator('#profile-feedback')).toHaveText('Profile saved.');
+
+    const profile = await kr.readStorage('kr:profile');
+    expect(profile.workCountry).toBe('United States');
+    expect(profile.workAuthorization).toBe('Yes');
+    expect(profile.workEligibilities).toHaveLength(2);
+    expect(profile.workEligibilities[0].country).toBe('United States');
+    expect(profile.workEligibilities[0].workAuthorization).toBe('Yes');
+    expect(profile.workEligibilities[1].country).toBe('Canada');
+    expect(profile.workEligibilities[1].workAuthorization).toBe('Yes');
+    expect(profile.workEligibilities[1].sponsorshipFuture).toBe('No');
   });
 
   test('profile edits made in the options page reach an already-open page', async ({ kr }) => {
