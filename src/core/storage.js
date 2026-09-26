@@ -27,22 +27,47 @@ export function saveSettings(settings) {
   return getSettings();
 }
 
+export function parseLegacyLocation(locationStr) {
+  if (!locationStr || typeof locationStr !== 'string') return {};
+  const parts = locationStr.split(',').map((s) => s.trim()).filter(Boolean);
+  if (parts.length >= 3) {
+    return { city: parts[0], stateProvince: parts[1], country: parts.slice(2).join(', ') };
+  }
+  if (parts.length === 2) {
+    return { city: parts[0], country: parts[1] };
+  }
+  if (parts.length === 1) {
+    return { city: parts[0] };
+  }
+  return {};
+}
+
 export function getProfile() {
   const stored = gmGet(STORAGE_KEYS.PROFILE, {});
-  return {
+  const legacyAddress = (!stored.city && !stored.country && stored.location)
+    ? parseLegacyLocation(stored.location)
+    : {};
+  const merged = {
     ...DEFAULT_PROFILE,
+    ...legacyAddress,
     ...stored,
     workExperiences: Array.isArray(stored?.workExperiences) ? stored.workExperiences : [],
     education: Array.isArray(stored?.education) ? stored.education : [],
     projects: Array.isArray(stored?.projects) ? stored.projects : [],
     skills: Array.isArray(stored?.skills) ? stored.skills : [],
   };
+  if (!merged.location) {
+    merged.location = [merged.city, merged.stateProvince, merged.country].filter(Boolean).join(', ');
+  }
+  return merged;
 }
 
 export function saveProfile(profile) {
+  const synthesizedLocation = [profile?.city, profile?.stateProvince, profile?.country].filter(Boolean).join(', ');
   const cleanProfile = {
     ...DEFAULT_PROFILE,
     ...profile,
+    location: profile?.location?.trim() ? profile.location.trim() : synthesizedLocation,
     workExperiences: Array.isArray(profile?.workExperiences) ? profile.workExperiences : [],
     education: Array.isArray(profile?.education) ? profile.education : [],
     projects: Array.isArray(profile?.projects) ? profile.projects : [],

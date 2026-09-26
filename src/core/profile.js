@@ -148,12 +148,19 @@ export function formatStructuredBackground(profile) {
 }
 
 export function profileForAI(profile) {
-  const keys = ['fullName', 'email', 'phone', 'location', 'linkedin', 'github', 'portfolio', ...PROFILE_FIELDS.map(field => field.name)];
-  const known = Object.fromEntries(keys.map(key => [key, profile?.[key] || '']));
+  const keys = [
+    'fullName', 'email', 'phone',
+    'streetAddress', 'addressLine2', 'city', 'stateProvince', 'postalCode', 'country',
+    'location', 'linkedin', 'github', 'portfolio',
+    ...PROFILE_FIELDS.map(field => field.name)
+  ];
+  const synthesizedLoc = (profile?.location?.trim() || [profile?.city, profile?.stateProvince, profile?.country].filter(Boolean).join(', ')).trim();
+  const known = Object.fromEntries(keys.map(key => [key, key === 'location' ? (synthesizedLoc || profile?.[key] || '') : (profile?.[key] || '')]));
   const { resumeContext, applicantNotes, _collapsed, workExperiences, education, projects, skills, ...extra } = profile || {};
   return {
     ...extra,
     ...known,
+    location: synthesizedLoc,
     workExperiences: (profile?.workExperiences || []).filter(e => e && e.enabled !== false),
     education: (profile?.education || []).filter(e => e && e.enabled !== false),
     projects: (profile?.projects || []).filter(e => e && e.enabled !== false),
@@ -180,16 +187,40 @@ function matchesDemographicOption(key, value, label) {
 // questions remain grounded by the AI rather than being replaced by a short value.
 export function fixedProfileAnswer(field, profile, { allowSearch = true } = {}) {
   const label = normalize(field.label);
+  const synthesizedLocation = (profile.location?.trim() || [profile.city, profile.stateProvince, profile.country].filter(Boolean).join(', ')).trim();
+
   if (['text', 'textarea', 'url'].includes(field.type)) {
-    const key = isResidenceLabel(field.label) ? 'location' : /^(?:your )?linkedin(?: (?:url|link|profile|profile url|profile link))?$/.test(label) ? 'linkedin' : null;
+    let addressKey = null;
+    if (/^(?:street address|address line 1|address 1|street|mailing address)$/i.test(label)) {
+      addressKey = 'streetAddress';
+    } else if (/^(?:address line 2|address 2|apartment)$/i.test(label) || /^(?:apt|suite|unit)\b/i.test(label)) {
+      addressKey = 'addressLine2';
+    } else if (/^(?:city|town)$/i.test(label)) {
+      addressKey = 'city';
+    } else if (/^(?:state|province|state province|state and province|region)$/i.test(label)) {
+      addressKey = 'stateProvince';
+    } else if (/^(?:postal code|zip code|zip postal code|zip and postal code|zip|postcode)$/i.test(label)) {
+      addressKey = 'postalCode';
+    } else if (/^(?:country|country of residence)$/i.test(label)) {
+      addressKey = 'country';
+    }
+    if (addressKey && profile[addressKey]?.trim()) {
+      return { fieldId: field.fieldId, value: profile[addressKey].trim(), inferred: false };
+    }
+
+    if (isResidenceLabel(field.label) && synthesizedLocation) {
+      return { fieldId: field.fieldId, value: synthesizedLocation, inferred: false };
+    }
+
+    const key = /^(?:your )?linkedin(?: (?:url|link|profile|profile url|profile link))?$/.test(label) ? 'linkedin' : null;
     if (key && profile[key]?.trim()) return { fieldId: field.fieldId, value: profile[key].trim(), inferred: false };
   }
+
   // Only explicit residence questions: bare "Location" can refer to an employer.
-  if (field.type === 'combobox' && isResidenceLabel(field.label) && profile.location?.trim()) {
-    const location = profile.location.trim();
-    const matches = (field.options || []).filter(option => locationMatches(option.label, location));
+  if (field.type === 'combobox' && isResidenceLabel(field.label) && synthesizedLocation) {
+    const matches = (field.options || []).filter(option => locationMatches(option.label, synthesizedLocation));
     return { fieldId: field.fieldId, value: matches.length === 1 ? matches[0].label : '', inferred: false,
-      ...(!matches.length && allowSearch ? { searchQuery: location } : {}) };
+      ...(!matches.length && allowSearch ? { searchQuery: synthesizedLocation } : {}) };
   }
   const source = /^(?:how (?:did|do) you (?:hear|learn) about\b|where did you (?:hear about|find|learn about|see) (?:us|this (?:job|role|position|opportunity|opening)|(?:the|our) (?:job|company|role|position|opportunity|opening))\b|(?:application|applicant|referral|recruitment|job) source$|source$)/.test(label);
   let key;
@@ -222,12 +253,17 @@ export const MVP_PROFILE_FIELDS = [
   { key: 'fullName', label: 'Full Name' },
   { key: 'email', label: 'Email' },
   { key: 'phone', label: 'Phone' },
-  { key: 'location', label: 'Location' },
+  { key: 'city', label: 'City' },
+  { key: 'country', label: 'Country' },
 ];
 
 export function getMissingCoreProfileFields(profile = {}) {
   return MVP_PROFILE_FIELDS
-    .filter(f => !String(profile[f.key] || '').trim())
+    .filter(f => {
+      if (f.key === 'city' && !String(profile.city || '').trim() && String(profile.location || '').trim()) return false;
+      if (f.key === 'country' && !String(profile.country || '').trim() && String(profile.location || '').trim()) return false;
+      return !String(profile[f.key] || '').trim();
+    })
     .map(f => f.label);
 }
 
@@ -235,11 +271,14 @@ export function calculateProfileStrength(profile = {}) {
   let score = 0;
   const missingCore = getMissingCoreProfileFields(profile);
 
-  // 1. Core Identity (40% total: 10% each for Name, Email, Phone, Location)
+  // 1. Core Identity (40% total: 10% each for Name, Email, Phone; 5% each for City, Country)
   if (String(profile.fullName || '').trim()) score += 10;
   if (String(profile.email || '').trim()) score += 10;
   if (String(profile.phone || '').trim()) score += 10;
-  if (String(profile.location || '').trim()) score += 10;
+  const hasCity = Boolean(String(profile.city || '').trim() || String(profile.location || '').trim());
+  const hasCountry = Boolean(String(profile.country || '').trim() || String(profile.location || '').trim());
+  if (hasCity) score += 5;
+  if (hasCountry) score += 5;
 
   // 2. Work History (20% total: >= 1 active role)
   const activeWork = (profile.workExperiences || []).filter(w => w && w.enabled !== false && String(w.title || '').trim());

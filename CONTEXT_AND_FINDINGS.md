@@ -3,6 +3,36 @@
 Running log of changes, bugs, and platform findings for the dual-target
 (extension + userscript) Kareer.
 
+## Turn: 2026-09-26 — Decomposed Address Schema, Deterministic Matching, & Options UI Alignment
+
+### Architectural Parity & Grill-me Alignment
+- Compared Kareer's profile implementation against Simplify Copilot ([docs/plans/simplify-research.md](./docs/plans/simplify-research.md)):
+  - Evaluated Simplify's remote 137 canonical keys, deterministic-first selector mapping, and per-category controls vs Kareer's local-first BYOK privacy architecture, active/disabled record toggles, and rich AI steering via `applicantNotes`.
+  - Walked down the design tree in a `/grill-me` interview:
+    1. Identified granular address decomposition as the primary parity gap to eliminate failure modes when ATS forms split addresses into individual inputs.
+    2. Aligned on migrating single `location` to decomposed address fields (`streetAddress`, `addressLine2`, `city`, `stateProvince`, `postalCode`, `country`) with automatic backward compatibility.
+    3. Aligned on dynamic on-the-fly synthesis of `location` (`[city, stateProvince, country].filter(Boolean).join(', ')`) when ATS platforms (e.g. Greenhouse, Lever) ask for a single residence/location input.
+    4. Aligned on deterministic resolution in `fixedProfileAnswer` for free-text address inputs, while delegating state/country comboboxes to AI grounded in the profile.
+    5. Followed `/impeccable` design principles and `DESIGN.md` guidelines for Options page visual hierarchy: structured sub-grids, refined `.grid-subhead` dividers, uppercase 11px section labels, no kickers/eyebrows, and tight grouping with generous separation.
+
+### Changes
+- **`src/core/constants.js`**: Added `streetAddress`, `addressLine2`, `city`, `stateProvince`, `postalCode`, `country` to `DEFAULT_PROFILE`.
+- **`src/core/storage.js`**: Added `parseLegacyLocation` to auto-split legacy comma-separated location strings on load, and updated `saveProfile` to preserve decomposed fields and keep synthesized `location` synchronized.
+- **`src/core/profile.js`**:
+  - Updated `profileForAI` to include all decomposed address fields in the AI prompt payload.
+  - Updated `fixedProfileAnswer` to deterministically match free-text inputs for street address, address line 2 / apt / suite / unit, city, state / province, postal / zip code, and country; and route single residence queries to synthesized location.
+  - Updated `MVP_PROFILE_FIELDS` and `calculateProfileStrength` to check `city` and `country` for core identity completeness while remaining backward-compatible with legacy location profiles.
+- **`src/core/capture.js`**: Added all decomposed address fields to `profileSecrets` so full addresses are redacted in debug exports and logs.
+- **`src/targets/extension/shared/pages.css`**: Added `.grid-subhead` with clean 1px rule divider following Impeccable and `DESIGN.md` flight-deck styling.
+- **`src/targets/extension/options/index.js`**: Replaced flat identity fields with structured sub-grids (Contact info -> Residential address -> Online profiles & links) and updated `getLiveProfileForStrength`.
+- **`tests/unit/profile.test.js`**: Added unit tests covering `parseLegacyLocation`, `getProfile` migration and synthesis, `fixedProfileAnswer` address resolution, and profile strength evaluation.
+
+### Verification
+- `npm test`: **226 passed, 0 failed** (`node --test tests/unit/*.test.js`).
+- `node tools/build.js`: Built cleanly at **v0.4.51** (Chrome extension, Firefox XPI, Userscript).
+
+---
+
 ## Turn: 2026-09-26 — Immediate Pre-Autofill Embedded Form Field Discovery
 
 ### Bugs/findings

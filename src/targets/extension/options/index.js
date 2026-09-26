@@ -80,15 +80,28 @@ function formatMonthYear(val) {
   return '';
 }
 
-const IDENTITY_FIELDS = [
-  { name: 'fullName', label: 'Full name', type: 'text' },
-  { name: 'email', label: 'Email', type: 'email' },
-  { name: 'phone', label: 'Phone', type: 'tel' },
-  { name: 'location', label: 'Current location', type: 'text', placeholder: 'City, Province/State, Country' },
-  { name: 'linkedin', label: 'LinkedIn URL', type: 'url' },
-  { name: 'github', label: 'GitHub URL', type: 'url' },
-  { name: 'portfolio', label: 'Portfolio URL', type: 'url' },
+const CORE_CONTACT_FIELDS = [
+  { name: 'fullName', label: 'Full name', type: 'text', placeholder: 'e.g. Alex Morgan' },
+  { name: 'email', label: 'Email', type: 'email', placeholder: 'e.g. alex@example.com' },
+  { name: 'phone', label: 'Phone', type: 'tel', placeholder: 'e.g. +1 555-0199' },
 ];
+
+const ADDRESS_FIELDS = [
+  { name: 'streetAddress', label: 'Street address', type: 'text', placeholder: 'e.g. 123 Main Street', fullWidth: true },
+  { name: 'addressLine2', label: 'Apt, Suite, Unit', type: 'text', placeholder: 'e.g. Apt 4B (optional)' },
+  { name: 'city', label: 'City', type: 'text', placeholder: 'e.g. San Francisco' },
+  { name: 'stateProvince', label: 'State / Province / Region', type: 'text', placeholder: 'e.g. CA or California' },
+  { name: 'postalCode', label: 'Postal / Zip code', type: 'text', placeholder: 'e.g. 94107' },
+  { name: 'country', label: 'Country', type: 'text', placeholder: 'e.g. United States' },
+];
+
+const LINK_FIELDS = [
+  { name: 'linkedin', label: 'LinkedIn URL', type: 'url', placeholder: 'e.g. https://linkedin.com/in/username' },
+  { name: 'github', label: 'GitHub URL', type: 'url', placeholder: 'e.g. https://github.com/username' },
+  { name: 'portfolio', label: 'Portfolio URL', type: 'url', placeholder: 'e.g. https://alexmorgan.dev' },
+];
+
+const IDENTITY_FIELDS = [...CORE_CONTACT_FIELDS, ...ADDRESS_FIELDS, ...LINK_FIELDS];
 
 const $ = (id) => document.getElementById(id);
 
@@ -98,9 +111,16 @@ function flash(el, message, isError = false) {
   if (!isError) setTimeout(() => { if (el.textContent === message) el.textContent = ''; }, 2500);
 }
 
+function subhead(title) {
+  const el = document.createElement('div');
+  el.className = 'grid-subhead';
+  el.textContent = title;
+  return el;
+}
+
 function group(field, value) {
   const wrap = document.createElement('div');
-  wrap.className = 'group';
+  wrap.className = 'group' + (field.fullWidth ? ' full-width' : '');
   const label = document.createElement('label');
   label.htmlFor = `pf-${field.name}`;
   label.textContent = field.label;
@@ -136,11 +156,21 @@ async function readStore() {
 }
 
 function getLiveProfileForStrength() {
+  const city = $('pf-city')?.value || '';
+  const stateProvince = $('pf-stateProvince')?.value || '';
+  const country = $('pf-country')?.value || '';
+  const synthesizedLocation = [city, stateProvince, country].filter(Boolean).join(', ');
   return {
     fullName: $('pf-fullName')?.value || '',
     email: $('pf-email')?.value || '',
     phone: $('pf-phone')?.value || '',
-    location: $('pf-location')?.value || '',
+    streetAddress: $('pf-streetAddress')?.value || '',
+    addressLine2: $('pf-addressLine2')?.value || '',
+    city,
+    stateProvince,
+    postalCode: $('pf-postalCode')?.value || '',
+    country,
+    location: synthesizedLocation,
     linkedin: $('pf-linkedin')?.value || '',
     github: $('pf-github')?.value || '',
     portfolio: $('pf-portfolio')?.value || '',
@@ -854,7 +884,14 @@ function renderProjectsList() {
 
 function renderProfile(profile) {
   const identity = $('identity-fields');
-  identity.replaceChildren(...IDENTITY_FIELDS.map((field) => group(field, profile[field.name])));
+  const elements = [
+    ...CORE_CONTACT_FIELDS.map((field) => group(field, profile[field.name])),
+    subhead('Residential address'),
+    ...ADDRESS_FIELDS.map((field) => group(field, profile[field.name])),
+    subhead('Online profiles & links'),
+    ...LINK_FIELDS.map((field) => group(field, profile[field.name])),
+  ];
+  identity.replaceChildren(...elements);
 
   currentWork = (profile.workExperiences || []).map((w) => createWorkExperience({ ...w, _collapsed: true }));
   currentEducation = (profile.education || []).map((e) => createEducation({ ...e, _collapsed: true }));

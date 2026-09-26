@@ -1,7 +1,8 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { getProfile, saveProfile, saveApiKey, gmSet } from '../../src/core/storage.js';
+import { getProfile, saveProfile, saveApiKey, gmSet, parseLegacyLocation } from '../../src/core/storage.js';
 import { generateAutofillAnswers, rewriteNarrativeField } from '../../src/core/ai.js';
+import { fixedProfileAnswer } from '../../src/core/profile.js';
 
 let payload;
 function respond(answers) {
@@ -291,16 +292,16 @@ test('calculateProfileStrength and getMissingCoreProfileFields correctly evaluat
 
   // Empty profile
   const empty = {};
-  assert.deepEqual(getMissingCoreProfileFields(empty), ['Full Name', 'Email', 'Phone', 'Location']);
+  assert.deepEqual(getMissingCoreProfileFields(empty), ['Full Name', 'Email', 'Phone', 'City', 'Country']);
   const emptyStrength = calculateProfileStrength(empty);
   assert.equal(emptyStrength.percentage, 0);
   assert.equal(emptyStrength.isMvpComplete, false);
-  assert.deepEqual(emptyStrength.missingCore, ['Full Name', 'Email', 'Phone', 'Location']);
+  assert.deepEqual(emptyStrength.missingCore, ['Full Name', 'Email', 'Phone', 'City', 'Country']);
   assert.equal(emptyStrength.tierLabel, 'Incomplete');
 
   // Partial MVP (name + email only)
   const partial = { fullName: 'Alex Rivera', email: 'alex@example.com' };
-  assert.deepEqual(getMissingCoreProfileFields(partial), ['Phone', 'Location']);
+  assert.deepEqual(getMissingCoreProfileFields(partial), ['Phone', 'City', 'Country']);
   const partialStrength = calculateProfileStrength(partial);
   assert.equal(partialStrength.percentage, 20);
   assert.equal(partialStrength.isMvpComplete, false);
@@ -343,6 +344,99 @@ test('calculateProfileStrength and getMissingCoreProfileFields correctly evaluat
   assert.equal(fullStrength.percentage, 100);
   assert.equal(fullStrength.isMvpComplete, true);
   assert.equal(fullStrength.tierLabel, 'Flight-Deck Ready');
+
+  // Decomposed address fields fulfill MVP requirements
+  const splitMvp = {
+    fullName: 'Alex Rivera',
+    email: 'alex@example.com',
+    phone: '555-123-4567',
+    city: 'Austin',
+    country: 'United States',
+  };
+  assert.deepEqual(getMissingCoreProfileFields(splitMvp), []);
+  const splitStrength = calculateProfileStrength(splitMvp);
+  assert.equal(splitStrength.percentage, 40);
+  assert.equal(splitStrength.isMvpComplete, true);
+});
+
+test('parseLegacyLocation correctly decomposes comma-separated location strings', () => {
+  assert.deepEqual(parseLegacyLocation('Toronto, Ontario, Canada'), {
+    city: 'Toronto',
+    stateProvince: 'Ontario',
+    country: 'Canada',
+  });
+  assert.deepEqual(parseLegacyLocation('San Francisco, USA'), {
+    city: 'San Francisco',
+    country: 'USA',
+  });
+  assert.deepEqual(parseLegacyLocation('London'), {
+    city: 'London',
+  });
+  assert.deepEqual(parseLegacyLocation(''), {});
+});
+
+test('getProfile migrates legacy location and synthesizes missing location string', () => {
+  gmSet('kr:profile', {
+    fullName: 'Jane Doe',
+    location: 'Vancouver, BC, Canada',
+  });
+  const profile = getProfile();
+  assert.equal(profile.city, 'Vancouver');
+  assert.equal(profile.stateProvince, 'BC');
+  assert.equal(profile.country, 'Canada');
+  assert.equal(profile.location, 'Vancouver, BC, Canada');
+
+  // When saved with split address, location is synthesized
+  saveProfile({
+    fullName: 'Jane Doe',
+    streetAddress: '100 Main St',
+    addressLine2: 'Suite 400',
+    city: 'Seattle',
+    stateProvince: 'WA',
+    postalCode: '98101',
+    country: 'United States',
+  });
+  const updated = getProfile();
+  assert.equal(updated.streetAddress, '100 Main St');
+  assert.equal(updated.addressLine2, 'Suite 400');
+  assert.equal(updated.city, 'Seattle');
+  assert.equal(updated.stateProvince, 'WA');
+  assert.equal(updated.postalCode, '98101');
+  assert.equal(updated.country, 'United States');
+  assert.equal(updated.location, 'Seattle, WA, United States');
+});
+
+test('fixedProfileAnswer deterministically resolves decomposed address fields', () => {
+  const profile = {
+    streetAddress: '742 Evergreen Terrace',
+    addressLine2: 'Apt 2',
+    city: 'Springfield',
+    stateProvince: 'Oregon',
+    postalCode: '97477',
+    country: 'United States',
+  };
+
+  const street = fixedProfileAnswer({ fieldId: 'f1', label: 'Street Address', type: 'text' }, profile);
+  assert.equal(street?.value, '742 Evergreen Terrace');
+
+  const apt = fixedProfileAnswer({ fieldId: 'f2', label: 'Apt, Suite, Unit', type: 'text' }, profile);
+  assert.equal(apt?.value, 'Apt 2');
+
+  const city = fixedProfileAnswer({ fieldId: 'f3', label: 'City', type: 'text' }, profile);
+  assert.equal(city?.value, 'Springfield');
+
+  const state = fixedProfileAnswer({ fieldId: 'f4', label: 'State / Province', type: 'text' }, profile);
+  assert.equal(state?.value, 'Oregon');
+
+  const zip = fixedProfileAnswer({ fieldId: 'f5', label: 'Zip / Postal Code', type: 'text' }, profile);
+  assert.equal(zip?.value, '97477');
+
+  const country = fixedProfileAnswer({ fieldId: 'f6', label: 'Country', type: 'text' }, profile);
+  assert.equal(country?.value, 'United States');
+
+  // Single residence question resolves to synthesized location
+  const residence = fixedProfileAnswer({ fieldId: 'f7', label: 'Current location', type: 'text' }, profile);
+  assert.equal(residence?.value, 'Springfield, Oregon, United States');
 });
 
 
