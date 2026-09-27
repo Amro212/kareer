@@ -345,11 +345,19 @@ export function scanFormFields(root = document) {
     // adapter-declared single-choice widgets consume a whole question container.
     if (field.type === FIELD_TYPES.CHECKBOX && adapter.id !== 'workday') return field;
     return { ...field, ...metadata };
-  }).sort((a, b) => adapter.id === 'workday' ? workdayOrder(a) - workdayOrder(b) : 0);
+  }).sort(compareDocumentOrder);
 }
 
-function workdayOrder(field) {
-  return field.ats?.canonicalKey === 'country' ? -3 : field.ats?.canonicalKey === 'preferred_check' ? -2 : field.ats?.canonicalKey === 'current' ? -1 : 0;
+function compareDocumentOrder(a, b) {
+  const elA = a?.element;
+  const elB = b?.element;
+  if (!elA || !elB || elA === elB) return 0;
+  if (typeof elA.compareDocumentPosition === 'function') {
+    const pos = elA.compareDocumentPosition(elB);
+    if (pos & 4 /* Node.DOCUMENT_POSITION_FOLLOWING */) return -1;
+    if (pos & 2 /* Node.DOCUMENT_POSITION_PRECEDING */) return 1;
+  }
+  return 0;
 }
 
 export function deduplicateFields(fields) {

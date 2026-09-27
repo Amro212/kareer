@@ -96,7 +96,10 @@ export async function prepareWorkdaySections(doc, profile, { session = null, isC
 // This makes country-specific address fields and preferred-name inputs visible
 // in the primary scan, and applies current-job state before end-date discovery.
 export async function prepareWorkdayDependencies(doc, profile, { overwrite = false, isCurrent = () => true } = {}) {
-  const controls = scanFormFields(doc).filter(field => ['country', 'preferred_check', 'current'].includes(field.ats?.canonicalKey));
+  const priority = { country: 1, preferred_check: 2, current: 3 };
+  const controls = scanFormFields(doc)
+    .filter(field => ['country', 'preferred_check', 'current'].includes(field.ats?.canonicalKey))
+    .sort((a, b) => (priority[a.ats?.canonicalKey] || 9) - (priority[b.ats?.canonicalKey] || 9));
   for (const original of controls) {
     if (!isCurrent()) throw new Error('Workday dependency preparation cancelled.');
     const field = scanFormFields(doc).find(candidate => candidate.id === original.id);

@@ -261,3 +261,19 @@ test('unset pronouns override model guesses and partial native options are rejec
   assert.equal(answers.find(a => a.fieldId === 'candidatePronounsCheckboxes').value, '');
   assert.equal(answers.some(a => a.fieldId === 'select'), false);
 });
+
+test('Ashby and Lever choice groups preserve chronological DOM document order', () => {
+  boot('ashby');
+  const ashbyFields = scanFormFields();
+  const ashbyLabels = ashbyFields.map(f => f.label || f.id);
+  assert.equal(ashbyLabels[0], 'Full Name');
+  assert.equal(ashbyLabels[1], 'Current Location');
+  assert.match(ashbyLabels[2], /legally authorized/i);
+
+  boot('lever');
+  const leverFields = scanFormFields();
+  const leverLabels = leverFields.map(f => f.label || f.id);
+  assert.equal(leverLabels[0], 'Full name');
+  assert.equal(leverLabels[1], 'Pronouns');
+});
+

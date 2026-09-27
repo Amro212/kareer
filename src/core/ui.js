@@ -2073,8 +2073,8 @@ function renderFieldReviewSection() {
         ${total === 0 ? '<div style="font-size: 12px; color: var(--kr-text-3); text-align: center; padding: 12px;">No form fields detected on this page.</div>' : ''}
         ${failedFields.map(i => renderItem(i, 'kr-badge-red', 'FAILED')).join('')}
         ${inferredFields.map(i => renderItem(i, 'kr-badge-amber', i.result?.provenance === 'guessed' || i.result?.status === FILL_STATUS.GUESSED ? 'GUESSED' : 'INFERRED')).join('')}
-        ${verifiedFields.map(i => renderItem(i, 'kr-badge-green', 'VERIFIED')).join('')}
         ${untouchedFields.map(i => renderItem(i, '', 'UNTOUCHED')).join('')}
+        ${verifiedFields.map(i => renderItem(i, 'kr-badge-green', 'VERIFIED')).join('')}
       </div>
     </div>
   `;

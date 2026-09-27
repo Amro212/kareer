@@ -3,6 +3,40 @@
 Running log of changes, bugs, and platform findings for the dual-target
 (extension + userscript) Kareer.
 
+## Turn: 2026-09-27 — Chronological Field Verification & Review Order (Scanner DOM Order & Post-Autofill Priority)
+
+### Findings
+- **Platform/ATS**: Workday, Lever, Ashby, and all supported ATS targets.
+- **Target**: Extension and userscript shared core (`src/core/fields/scanner.js`, `src/core/adapters/workday-sections.js`, `src/core/ui.js`).
+- **Symptoms**: In the "Field Verification & Review" section, fields appeared in an apparently "random" or counter-intuitive order instead of matching the physical top-to-bottom layout of the web page. For example, on Workday, "How Did You Hear About Us?" and "Have you previously worked for CBC/Radio-Canada?" sit at the top of the form, but "Country" and "I have a preferred name" appeared at the top of the review list. On Lever, "Pronouns" appeared ahead of "Resume/CV" and "Full name". On Ashby, the bottom Yes/No question ("Are you open to working 5 days a week in-office?") appeared at index 0.
+- **Root-Cause Analysis**:
+  1. `scanFormFields` scanned `adapter.choiceGroups?.(root)` and pushed them into `detectedFields` *before* scanning standard input/textarea/select candidates. As a result, custom choice groups (Ashby Yes/No buttons, Lever pronouns checkboxes) were always positioned at index 0 regardless of their physical page location.
+  2. `scanFormFields` had an artificial sort `.sort((a, b) => adapter.id === 'workday' ? workdayOrder(a) - workdayOrder(b) : 0)` that forced `country` to `-3`, `preferred_check` to `-2`, and `current` to `-1`, dragging those fields to the top in Workday.
+  3. Workday's dependency handling (`prepareWorkdayDependencies`) legitimately requires `country` to resolve before address/state fields and `preferred_check` before preferred name, but this dependency priority belongs strictly within `prepareWorkdayDependencies()`, not within the global scanner.
+  4. In `renderFieldReviewSection()`, post-autofill fields were grouped into `failed -> inferred -> verified -> untouched`. The user requested the post-autofill ordering to prioritize attention: `failed -> inferred -> untouched -> verified`.
+- **Resolution**:
+  1. Replaced `workdayOrder` in `src/core/fields/scanner.js` with DOM tree position comparison using `compareDocumentPosition` (`Node.DOCUMENT_POSITION_FOLLOWING` / `PRECEDING`). All fields (candidate inputs, comboboxes, file uploads, choice groups) are now returned in exact top-to-bottom document order.
+  2. Isolated Workday's dependency control priority (`country` -> `preferred_check` -> `current`) to `prepareWorkdayDependencies` in `src/core/adapters/workday-sections.js` by sorting its local `controls` array.
+  3. Updated `renderFieldReviewSection()` in `src/core/ui.js` to render `failedFields`, then `inferredFields`, then `untouchedFields`, then `verifiedFields`.
+  4. Added unit tests in `tests/unit/workday.test.js` and `tests/unit/ats-hardening.test.js` verifying that Workday, Lever, and Ashby fields are scanned in DOM document order.
+
+### Turn Changes
+- `src/core/fields/scanner.js`:
+  - Removed `workdayOrder`.
+  - Added `compareDocumentOrder` using `compareDocumentPosition` to sort all scanned fields in native document tree order.
+- `src/core/adapters/workday-sections.js`:
+  - Sorted `controls` inside `prepareWorkdayDependencies()` by dependency priority (`country: 1, preferred_check: 2, current: 3`).
+- `src/core/ui.js`:
+  - Updated `renderFieldReviewSection()` to render `failedFields` -> `inferredFields` -> `untouchedFields` -> `verifiedFields`.
+- `tests/unit/workday.test.js`:
+  - Added test `Workday scanned fields follow chronological DOM document order instead of artificial key priority`.
+- `tests/unit/ats-hardening.test.js`:
+  - Added test `Ashby and Lever choice groups preserve chronological DOM document order`.
+
+### Verification / Status
+- `npm test`: 259 unit tests pass (100% pass, 0 fail).
+- `npm run test:e2e`: 56 E2E tests pass in real Chromium browser (100% pass, 0 fail).
+
 ## Turn: 2026-09-26 — Workday Hardening & Unified Application Hero Card (Impeccable Design)
 
 ### Findings

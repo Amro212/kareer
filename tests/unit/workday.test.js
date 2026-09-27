@@ -313,3 +313,37 @@ test('Workday multi-checkbox disclosures survive normalization and use option va
   assert.equal((await verifyField(field, answer.value)).verified, true);
   assert.equal(document.querySelector('[value="old"]').checked, true);
 });
+
+test('Workday scanned fields follow chronological DOM document order instead of artificial key priority', () => {
+  boot(`
+    <main>
+      <div data-automation-id="sourceSection">
+        <label for="source">How did you hear about us? *</label>
+        <div data-automation-id="multiSelectContainer"><input id="source" placeholder="Search" data-uxi-widget-type="selectinput"></div>
+      </div>
+      <div data-automation-id="formField-previousWorker">
+        <label>Have you previously worked for CBC/Radio-Canada? *</label>
+        <input type="radio" name="worked" id="worked-yes" value="Yes"><label for="worked-yes">Yes</label>
+        <input type="radio" name="worked" id="worked-no" value="No"><label for="worked-no">No</label>
+      </div>
+      <div data-automation-id="formField-country">
+        <label>Country *</label>
+        <select id="country"><option value="CA">Canada</option></select>
+      </div>
+      <div data-automation-id="legalNameSection">
+        <label for="firstName">First Name *</label>
+        <input id="firstName">
+        <label for="pref">I have a preferred name</label>
+        <input type="checkbox" id="pref" data-automation-id="formField-usePreferredName">
+      </div>
+    </main>
+  `);
+  const fields = scanFormFields();
+  assert.deepEqual(fields.map(f => f.label), [
+    'How did you hear about us?',
+    'Have you previously worked for CBC/Radio-Canada?',
+    'Country',
+    'First Name',
+    'I have a preferred name',
+  ]);
+});
