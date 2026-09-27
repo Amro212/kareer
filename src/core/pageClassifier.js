@@ -24,10 +24,10 @@ export function classifyPage(doc = document) {
     || /\bI (?:certify|attest|declare under penalty)|\b(?:sign electronically|provide your electronic signature|start (?:the |your )?(?:assessment|video interview)|verify your identity)\b/i.exec(text);
   if (boundary) return { type: 'boundary', reason: `Manual action required: ${boundary[0]}.` };
   if (/application (?:has been |was )?(?:submitted|received)|thank you for applying/i.test(text)) return { type: 'confirmation', reason: 'Application confirmation detected.' };
-  const final = Array.from(doc.querySelectorAll('button,input[type=submit],[role=button]')).filter(isVisible).some(el => /\bsubmit (?:my |your |the )?application\b|\bfinal submit\b|^submit$|^apply now$/i.test(visibleText(el) || el.value || el.getAttribute('aria-label') || ''));
-  if (/review (?:your )?application|final review|review and submit/i.test(headings) || final && doc.querySelector('form,input,textarea')) return { type: 'review', reason: 'Ready for review. Final submission is manual.' };
+  if (/review (?:your )?application|final review|review and submit/i.test(headings)) return { type: 'review', reason: 'Ready for review. Final submission is manual.' };
   const fields = Array.from(doc.querySelectorAll('input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=search]),textarea,select,[role=combobox],[contenteditable=true]')).some(isVisible);
   if (fields) return { type: 'application', reason: 'Application fields detected.' };
+  const final = Array.from(doc.querySelectorAll('button,input[type=submit],[role=button]')).filter(isVisible).some(el => /\bsubmit (?:my |your |the )?application\b|\bfinal submit\b|^submit$|^apply now$/i.test(visibleText(el) || el.value || el.getAttribute('aria-label') || ''));
   if (final) return { type: 'review', reason: 'Ready for review. Final submission is manual.' };
   if (doc.querySelector('script[type="application/ld+json"]') && /JobPosting/.test(doc.querySelector('script[type="application/ld+json"]')?.textContent || '') || /job description|about (?:the|this) (?:role|job)/i.test(text)) return { type: 'listing', reason: 'Job listing detected.' };
   return { type: 'unrelated', reason: 'No application step detected.' };

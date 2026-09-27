@@ -16,7 +16,7 @@ test.describe('opt-in Auto Submit', () => {
     await page.goto(kr.fixtureUrl('phase3-application-fixture.html', undefined, '?scenario=validation&step=review'));
     await kr.openPanel(page);
     await page.locator('#kr-capture-job').click();
-    await page.locator('#kr-start-application').click();
+    await page.locator('#kr-autofill-btn').click();
     await expect(page.locator('#kr-main-panel')).toContainText(/Submitting in \d+s/, { timeout: 20000 });
     await expect(page.locator('main')).toContainText(/application submitted/i, { timeout: 20000 });
   });
@@ -27,9 +27,9 @@ test.describe('opt-in Auto Submit', () => {
     await page.goto(kr.fixtureUrl('phase3-application-fixture.html', undefined, '?scenario=validation&step=review'));
     await kr.openPanel(page);
     await page.locator('#kr-capture-job').click();
-    await page.locator('#kr-start-application').click();
+    await page.locator('#kr-autofill-btn').click();
     await expect(page.locator('#kr-main-panel')).toContainText(/Submitting in \d+s/, { timeout: 20000 });
-    await page.locator('#kr-pause-application').click();
+    await page.locator('#kr-pause-autofill-btn').click();
     await page.waitForTimeout(6000);
     const submitted = await page.evaluate(() => {
       const main = document.querySelector('main')?.textContent || '';

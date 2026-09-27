@@ -3,6 +3,45 @@
 Running log of changes, bugs, and platform findings for the dual-target
 (extension + userscript) Kareer.
 
+## Turn: 2026-09-26 — Workday Hardening & Unified Application Hero Card (Impeccable Design)
+
+### Findings
+- **Dual Autofill Button Confusion**: Kareer previously showed two separate primary actions on the Home tab: "Start Application" (`#kr-start-application`) for multi-step workflow execution and "Autofill This Page" (`#kr-autofill-btn`) for single-page DOM/iframe autofill. Per `docs/plans/simplify-research.md`, users and Simplify expect a single authoritative primary button ("Autofill Application") where the runtime detects ATS nuances and adapts dynamically.
+- **Workday Aggressive Stepping & Validation**: Workday applications advance between multi-page steps ("My Information", "My Experience", "Application Questions", "Review"). Previous automated stepping could jump past user review or trigger field re-scans before user inspection.
+- **Premature Review Page Classification**: Single-page application forms containing interactive input fields alongside a submit button were erroneously classified as `'review'` rather than `'application'` due to `final && doc.querySelector('form,input,textarea')`, prematurely pausing single-step workflows.
+- **Playwright Visibility & Legacy Hooks**: Playwright `locator.click()` requires element visibility. Secondary hooks like `#kr-capture-job` were retained as visible secondary icon buttons (`${ICONS.briefcase}`) to avoid test timeouts while unifying the visual hierarchy.
+- **Zero-Layout-Thrash Animation & Visual System**: Micro-animations on profile strength and workflow progress meters were refactored from `width` transitions to GPU-accelerated `transform: scaleX(...)`, adhering to `/impeccable` mechanical standards and eliminating layout thrashing.
+
+### Turn Changes
+- **`src/core/adapters/workday.js`**:
+  - Added `stepReviewPause: true` to Workday adapter quirks.
+  - Added camelCase and kebab-case button/step selectors (`saveAndContinueButton`, `save-and-continue-button`, `pageFooterNextButton`, `page-footer-next-button`, `activeStep`, `stepTitle`, `promptInput`, `roleComboboxSearch`).
+- **`src/core/application.js`**:
+  - Implemented `stepReviewPause` in `tick()` to halt multi-step workflows when a step is filled, awaiting user confirmation before advancing.
+  - Implemented `continueStep()` allowing users to force-advance past step review pauses via panel CTA.
+  - Added native on-page step advance detection in `schedule()` via `comparePages()`, resuming the engine if the user manually clicks the on-page Continue/Save and Continue button.
+  - Exposed `get stepReview()` on the application engine.
+- **`src/core/pageClassifier.js`**:
+  - Removed erroneous `|| final && doc.querySelector('form,input,textarea')` so active forms with form inputs and submit controls correctly evaluate as `application` instead of premature `review`.
+- **`src/core/ui.js`**:
+  - Consolidated Home tab into the Unified Application Hero Card with single dominant primary button (`#kr-autofill-btn`), secondary job capture (`#kr-capture-job`), pause (`#kr-pause-autofill-btn`), and rescan (`#kr-rescan-btn`).
+  - Added `briefcase` icon to `ICONS`.
+  - Transformed `#kr-autofill-btn` statefully: "Autofill Application" -> "Filling Fields..." -> "Continue to Next Step" -> "Submitted" / "Ready for Review".
+  - Softened MVP gating in `handleUnifiedAutofillClick` and `executeAutofillFlow` to only redirect when both `fullName` and `email` are missing, avoiding false blocking when optional core fields are omitted.
+  - Replaced layout-thrashing `transition: width` with GPU-accelerated `transform: scaleX(...)` on `.kr-strength-chip-fill` and `.kr-strength-fill`.
+  - Supported dual-mode routing in `handleUnifiedAutofillClick`: advances on `stepReview`, continues active workflow on `session`, or executes comprehensive page/remote frame autofill.
+  - Preserved backward-compatible hidden hooks for `#kr-start-application` and `#kr-pause-application`.
+- **`tests/unit/adapters.test.js` & `tests/unit/application.test.js`**:
+  - Added unit test coverage for Workday quirk selectors.
+  - Added unit test coverage for `stepReviewPause`, `continueStep()`, and native Continue click detection.
+- **`tests/e2e/`**:
+  - Verified all ATS adapters, auto-submit, cross-frame, migration, multi-step, shell, upload, and visual-system suites.
+
+### Verification / Status
+- `npm test`: 232 unit tests pass (100% pass, 0 fail).
+- `npm run test:e2e`: 53 E2E tests pass in real Chromium browser (100% pass, 0 fail).
+- Extension build: v0.4.65 packaged for Chrome and Firefox; Tampermonkey userscript packaged.
+
 ## Turn: 2026-09-26 — Floating profile save dock asset regression
 
 ### Findings

@@ -13,7 +13,7 @@ let dom;
 function boot(html, url) {
   if (dom) dom.window.close();
   dom = new JSDOM(html, { url, runScripts: 'dangerously', pretendToBeVisual: true });
-  for (const key of ['window', 'document', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement', 'Element', 'Event', 'KeyboardEvent', 'MouseEvent', 'MutationObserver']) {
+  for (const key of ['window', 'document', 'location', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement', 'Element', 'Event', 'KeyboardEvent', 'MouseEvent', 'MutationObserver']) {
     globalThis[key] = dom.window[key];
   }
   globalThis.CSS = { escape: (value) => value };
@@ -133,4 +133,15 @@ test('Ashby custom select is scanned and a revealed section is a new field', asy
   document.querySelector('input[name="work_auth"][value="Yes"]').dispatchEvent(new Event('change', { bubbles: true }));
   const after = scanFormFields();
   assert.ok(after.some((f) => f.id === 'referral'));
+});
+
+test('Workday adapter defines stepReviewPause quirk and expanded continue selectors', () => {
+  boot('<main><button data-automation-id="save-and-continue-button">Save &amp; Continue</button><div data-automation-id="stepTitle">Work Experience</div></main>', 'https://acme.myworkdayjobs.com/en-US/job/apply');
+  const adapter = detectAdapter();
+  assert.equal(adapter.id, 'workday');
+  assert.equal(adapter.quirks?.stepReviewPause, true);
+  assert.equal(adapter.stepMarker?.(document), 'Work Experience');
+  const control = findContinue();
+  assert.ok(control);
+  assert.equal(control.getAttribute('data-automation-id'), 'save-and-continue-button');
 });

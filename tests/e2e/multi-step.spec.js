@@ -19,7 +19,7 @@ test.describe('multi-step application workflow', () => {
     await kr.openPanel(page);
 
     await page.locator('#kr-capture-job').click();
-    await page.locator('#kr-start-application').click();
+    await page.locator('#kr-autofill-btn').click();
 
     // The fixture advances by URL, so the engine must survive real navigations and
     // recover from the scenario's deliberate first-answer rejection.
@@ -42,7 +42,7 @@ test.describe('multi-step application workflow', () => {
     await page.goto(kr.fixtureUrl('phase3-application-fixture.html', undefined, '?scenario=validation&step=1'));
     await kr.openPanel(page);
     await page.locator('#kr-capture-job').click();
-    await page.locator('#kr-start-application').click();
+    await page.locator('#kr-autofill-btn').click();
 
     await expect(page.locator('#kr-main-panel')).toContainText('Ready for review', { timeout: 90000 });
     await expect(page.locator('#kr-main-panel')).toContainText('Final submission is manual');

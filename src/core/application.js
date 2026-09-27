@@ -450,7 +450,20 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
           return;
         }
         if (await attemptAutoSubmit(token, step)) return;
-        if (!getSettings().autoContinue) { status('paused', 'Page filled. Auto Continue is off.'); return; }
+        if (!getSettings().autoContinue && !step.forceContinue) {
+          session.stepReview = true;
+          saveSession(session);
+          status('paused', 'Page filled. Auto Continue is off.');
+          return;
+        }
+        step.forceContinue = false;
+        if (detectAdapter().quirks?.stepReviewPause && !step.reviewed) {
+          step.reviewed = true;
+          session.stepReview = true;
+          saveSession(session);
+          status('paused', 'Workday step filled. Ready for your review.');
+          return;
+        }
         control = findContinue();
         if (control && isDisabled(control)) {
           const readiness = await waitForNavigation(signature, token, false);
@@ -505,6 +518,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
   return {
     get session() { return session; },
     get busy() { return busy; },
+    get stepReview() { return Boolean(session?.stepReview); },
     async initialize() {
       session = await restoreSession();
       if (session) bindTab(session);
@@ -517,11 +531,32 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         const navigatedSincePending = navigation.at > 0 && navigation.at >= (session.pendingAt || 0);
         if (previous && (['review', 'confirmation'].includes(page.type) || navigatedSincePending || comparePages(previous.observation, observePage(scanPageFields()), true) === 'changed')) {
           completeStep();
+          session.stepReview = false;
           if (page.type === 'application') session.currentStep = '';
         }
+      } else if (!session) {
+        try { captureJob(); } catch { /* Ignore early DOM access */ }
       }
       emit();
-      const schedule = () => { clearTimeout(timer); timer = setTimeout(() => void tick(), 300); };
+      const checkNativeStepAdvance = () => {
+        if (!session || !session.stepReview) return;
+        const currentFields = scanPageFields();
+        const currentObservation = observePage(currentFields);
+        const stepObs = session.steps[session.currentStep]?.observation;
+        if (stepObs && comparePages(stepObs, currentObservation, true) === 'changed') {
+          logger.info('Detected step advancement via native on-page Continue action. Resuming autofill.');
+          completeStep();
+          session.stepReview = false;
+          session.active = true;
+          session.currentStep = '';
+          status('running', 'Advancing to next step.');
+        }
+      };
+      const schedule = () => {
+        checkNativeStepAdvance();
+        clearTimeout(timer);
+        timer = setTimeout(() => void tick(), 300);
+      };
       observer = new MutationObserver(mutations => {
         if (mutations.some(m => !m.target.closest?.('#kareer-root,#kareer-inline-rewrite'))) schedule();
       });
@@ -546,8 +581,20 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       generation++;
       if (job || !session) session = createSession(job || captureJob());
       if (!compatibleSession()) return;
+      session.stepReview = false;
       session.active = true;
       status('running', 'Starting application workflow.');
+      await tick();
+    },
+    async continueStep() {
+      if (busy || !session) return;
+      generation++;
+      session.stepReview = false;
+      session.active = true;
+      const current = session.steps[session.currentStep];
+      if (current) current.forceContinue = true;
+      saveSession(session);
+      status('running', 'Advancing to next step.');
       await tick();
     },
     pause() {

@@ -24,7 +24,7 @@ test('watch builds refresh copied CSS and HTML for both browsers', { timeout: 20
     for (const name of ['src', 'tools', 'package.json']) {
       fs.cpSync(path.join(root, name), path.join(dir, name), { recursive: true });
     }
-    fs.symlinkSync(path.join(root, 'node_modules'), path.join(dir, 'node_modules'), 'dir');
+    fs.symlinkSync(path.join(root, 'node_modules'), path.join(dir, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
     child = spawn(process.execPath, ['tools/build.js', '--target=extension', '--watch'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] });
     child.stdout.on('data', chunk => { output += chunk; });
     child.stderr.on('data', chunk => { output += chunk; });
