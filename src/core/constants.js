@@ -47,6 +47,7 @@ export const DEFAULT_PROFILE = {
   education: [],
   projects: [],
   skills: [],
+  languageRecords: [],
 };
 
 export const POPULAR_MODELS = [
@@ -86,4 +87,5 @@ export const FILL_STATUS = {
   FAILED: 'failed',
   SKIPPED: 'skipped',
   INFERRED: 'inferred',
+  GUESSED: 'guessed',
 };

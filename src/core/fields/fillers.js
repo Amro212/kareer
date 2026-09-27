@@ -257,8 +257,8 @@ export async function fillCombobox(element, targetValue, knownOptions) {
     }
     await openCombobox(element);
     const location = isLeverLocation(element) || isPlacesLocation(element) || known && isResidenceLabel(extractLabel(element));
-    ownsSearch = setComboboxSearch(input, location ? target.split(',')[0].trim() : '');
-    let options = await waitForComboboxOptions(element, undefined, location ? target : undefined);
+    ownsSearch = setComboboxSearch(input, location ? target.split(',')[0].trim() : detectAdapter().id === 'workday' && input ? target : '');
+    let options = await waitForComboboxOptions(element, undefined, location || detectAdapter().id === 'workday' ? target : undefined);
     if (!ownsSearch()) return false;
     let match = findExactOption(options.map(option => ({ ...optionData(option), element: option })), target);
     // Search only for an option already harvested from this field (async/virtual menus).
@@ -344,6 +344,7 @@ export async function fillFileInput(element) {
 
 export async function fillField(field, targetValue) {
   if (!field || !field.element) return false;
+  if (field.widget === 'workday-choice') return detectAdapter().fillChoice(field, targetValue, { checkbox: fillCheckbox }) === true;
   if (['select', 'radio'].includes(field.type)) {
     const option = findExactOption(field.options || [], targetValue);
     if (!option) return false;
@@ -368,6 +369,11 @@ export async function fillField(field, targetValue) {
       return fillCheckbox(field.element, targetValue);
 
     case FIELD_TYPES.COMBOBOX:
+      if (Array.isArray(targetValue)) {
+        if (!field.ats?.multiple) return false;
+        for (const value of targetValue) if (!await fillCombobox(field.element, value, field.options || [])) return false;
+        return true;
+      }
       return await fillCombobox(field.element, targetValue, field.options || []);
 
     case FIELD_TYPES.CONTENTEDITABLE:

@@ -28,7 +28,7 @@ export function isResumeField(field, allFileFields) {
   if (allFileFields) return allFileFields[0] === field;
   return true;
 }
-const parserHosts = new Set(['ashby', 'lever']);
+const parserHosts = new Set(['ashby', 'lever', 'workday']);
 const BUSY = '[aria-busy="true"], [role="progressbar"], .resume-upload-working, ' +
   '.ashby-application-form-autofill-input-root:is([data-state="loading"], [data-state="uploading"], [data-state="parsing"], [data-state="processing"])';
 
@@ -42,6 +42,7 @@ function visible(element) {
 }
 
 function parserBusy(doc) {
+  if (detectAdapter().uploadBusy?.(doc)) return true;
   return Array.from(doc.querySelectorAll(`${BUSY}, [role="status"]`))
     .some(el => !el.closest(`#${UI_IDS.CONTAINER}`) && visible(el) &&
       (el.matches(BUSY) || /\b(parsing|processing|uploading|analyzing)\b/i.test(el.textContent)));

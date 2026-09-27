@@ -4,6 +4,13 @@ const yesNo = ['Yes', 'No'];
 const disclosure = ['Yes', 'No', 'Prefer not to answer'];
 
 export const PROFILE_SECTIONS = [
+  { title: 'Application identity', description: 'Use explicit legal names when the application asks for separate parts. Optional values stay unset.', fields: [
+    { name: 'firstName', label: 'Legal first name' }, { name: 'middleName', label: 'Legal middle name' }, { name: 'lastName', label: 'Legal last name' },
+    { name: 'preferredName', label: 'Preferred first name' }, { name: 'preferredLastName', label: 'Preferred last name' },
+    { name: 'phoneCountry', label: 'Phone country', placeholder: 'e.g. Canada or United Kingdom' },
+    { name: 'phoneType', label: 'Phone type', options: ['Mobile', 'Home', 'Work'] }, { name: 'phoneExtension', label: 'Phone extension' },
+    { name: 'birthDate', label: 'Date of birth', type: 'date' }, { name: 'addressLine3', label: 'Address line 3' },
+  ] },
   { title: 'Work eligibility', description: 'Authorization and sponsorship answers apply only to this work country. Leave unknown answers unset.', fields: [
     { name: 'workCountry', label: 'Work country', placeholder: 'e.g. Canada' },
     { name: 'workAuthorization', label: 'Authorized to work in this country?', options: yesNo },
@@ -34,11 +41,20 @@ export const PROFILE_SECTIONS = [
     { name: 'raceEthnicity', label: 'Race / ethnicity', placeholder: 'Your self-description or Prefer not to answer' },
     { name: 'disabilityStatus', label: 'Disability (current or past)', options: disclosure },
     { name: 'veteranStatus', label: 'Veteran status', options: disclosure },
+    { name: 'hispanic', label: 'Hispanic / Latino', options: disclosure },
+    { name: 'lgbtStatus', label: 'LGBTQ+', options: disclosure },
+    { name: 'visibleMinority', label: 'Visible minority', options: disclosure },
+    { name: 'armedForces', label: 'Armed forces service', options: disclosure },
   ] },
 ];
 
 export const PROFILE_FIELDS = PROFILE_SECTIONS.flatMap(section => section.fields);
 export const STRUCTURED_PROFILE_DEFAULTS = Object.fromEntries(PROFILE_FIELDS.map(field => [field.name, '']));
+
+export function createLanguage(data = {}) {
+  return { id: data.id || `language_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, enabled: data.enabled !== false,
+    language: data.language || '', fluent: data.fluent ?? '', reading: data.reading || '', writing: data.writing || '', speaking: data.speaking || '' };
+}
 
 export function createWorkExperience(data = {}) {
   const result = {

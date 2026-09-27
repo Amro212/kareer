@@ -21,6 +21,7 @@ export function normalizeFieldsForAI(detectedFields, options = {}) {
       currentValue: field.currentValue || '',
       isAlreadyFilled: isFilled,
     };
+    if (field.ats) normalized.ats = field.ats;
 
     if (field.description) {
       normalized.description = field.description;

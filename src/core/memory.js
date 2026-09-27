@@ -7,7 +7,7 @@ const profileKey = () => JSON.stringify(getProfile());
 const common = field => /^(full name|first name|last name|email|email address|phone|phone number|linkedin|linkedin url|github|github url|portfolio|portfolio url)$/.test(normalizeQuestion(field.label));
 const compatible = (field, answer) => answer && (!field.options?.length || field.type === 'checkbox' || field.options.some(o => String(o.value) === String(answer.value) || String(o.label) === String(answer.value)));
 export function rememberAnswer(session, field, answer) {
-  const entry = { value: answer.value, inferred: Boolean(answer.inferred), profileKey: profileKey(), label: field.label, updatedAt: new Date().toISOString() };
+  const entry = { value: answer.value, inferred: Boolean(answer.inferred), provenance: answer.provenance, profileKey: profileKey(), label: field.label, updatedAt: new Date().toISOString() };
   if (session?.answers) session.answers[questionKey(field)] = entry;
   if (common(field) && !entry.inferred) {
     const memory = gmGet(STORAGE_KEYS.MEMORY, {});
@@ -17,5 +17,5 @@ export function rememberAnswer(session, field, answer) {
 }
 export function recallAnswer(session, field) {
   const entry = session.answers[questionKey(field)] || (common(field) ? gmGet(STORAGE_KEYS.MEMORY, {})[questionKey(field)] : null);
-  return entry?.profileKey === profileKey() && compatible(field, entry) ? { value: entry.value, inferred: entry.inferred } : null;
+  return entry?.profileKey === profileKey() && compatible(field, entry) ? { value: entry.value, inferred: entry.inferred, ...(entry.provenance ? { provenance: entry.provenance } : {}) } : null;
 }

@@ -1,0 +1,44 @@
+<!doctype html>
+<!-- Synthetic selector inventory based on the public Workday recipe, 2026-09-27. -->
+<html lang="en"><meta charset="utf-8"><title>Workday selector inventory</title><main>
+<div data-automation-id="resumeUpload"><label>Resume</label><input id="resume" type="file" data-automation-id="file-upload-input-ref"></div>
+<div data-automation-id="formField-country"><label>Country</label><button id="country--country" data-automation-id="countryDropdown" aria-haspopup="listbox">Select One</button></div>
+<div data-automation-id="formField-legalName-firstName"><label>Legal first name</label><input id="legal-first" type="text"></div>
+<div data-automation-id="formField-legalName-lastName"><label>Legal last name</label><input id="legal-last" type="text"></div>
+<div data-automation-id="formField-legalName-middle-name"><label>Legal middle name</label><input id="legal-middle" type="text"></div>
+<div data-automation-id="formField-preferredCheck"><label>Use a preferred name</label><input id="preferredCheck" type="checkbox"></div>
+<div data-automation-id="formField-preferredName-firstName"><label>Preferred first name</label><input id="preferred-first" type="text"></div>
+<div data-automation-id="formField-preferredName-lastName"><label>Preferred last name</label><input id="preferred-last" type="text"></div>
+<div data-automation-id="formField-name"><label>Full name</label><input id="full-name" data-automation-id="name"></div>
+<div id="textInput.email"><label for="contact-email">Email address</label><input id="contact-email" type="text"></div>
+<div data-automation-id="formField-phoneType"><label>Phone type</label><button id="phoneNumber--phoneType" data-automation-id="phone-device-type" aria-haspopup="listbox">Select One</button></div>
+<div data-automation-id="formField-phoneNumber"><label>Phone number</label><input id="phone-number" data-automation-id="phone-number"></div>
+<div data-automation-id="formField-countryPhoneCode"><label>Country phone code</label><div data-automation-id="multiselectInputContainer"><input id="phoneNumber--countryPhoneCode" placeholder="Search"></div></div>
+<div data-automation-id="formField-phoneExtension"><label>Extension</label><input id="extension"></div>
+<div data-automation-id="formField-addressSection_countryRegion"><label>State</label><button id="region" data-automation-id="addressSection_countryRegion" aria-haspopup="listbox">Select One</button></div>
+<div data-automation-id="formField-addressSection_addressLine1"><label>Address line 1</label><input id="address-one" name="addressLine1"></div>
+<div data-automation-id="formField-addressSection_addressLine2"><label>Address line 2</label><input id="address-two" name="addressLine2"></div>
+<div data-automation-id="formField-addressSection_addressLine3"><label>Address line 3</label><input id="address-three" name="addressLine3"></div>
+<div data-automation-id="formField-addressSection_city"><label>City</label><input id="city"></div>
+<div data-automation-id="formField-postalCode"><label>Postal code</label><input id="postal"></div>
+<div class="field"><label>Highest degree</label><button id="highest" aria-label="Your highest degree" data-automation-id="customDropdown" aria-haspopup="listbox">Select One</button></div>
+<div class="field" data-automation-id="formField-languageSpoken"><label>Which languages do you speak?</label><textarea id="languages-text"></textarea></div>
+<div class="field"><label>LinkedIn</label><input id="linkedin" name="linkedInAccount"></div>
+<div class="field"><label>Are you 18 years or older?</label><button id="age" aria-haspopup="listbox">Select One</button></div>
+<fieldset><legend>Gender identity</legend><button id="gender" aria-haspopup="listbox">Select One</button></fieldset>
+<fieldset><legend>Sexual orientation</legend><button id="orientation" aria-haspopup="listbox">Select One</button></fieldset>
+<fieldset><legend>Visible minority</legend><button id="minority" aria-haspopup="listbox">Select One</button></fieldset>
+<fieldset><legend>Race / ethnicity</legend><button id="race" aria-haspopup="listbox">Select One</button></fieldset>
+<fieldset><legend>Hispanic or Latino</legend><button id="hispanic" aria-haspopup="listbox">Select One</button></fieldset>
+<fieldset><legend>Veteran status</legend><button id="veteran" aria-haspopup="listbox">Select One</button></fieldset>
+<fieldset><legend>Have you served in the armed forces?</legend><button id="armed" aria-haspopup="listbox">Select One</button></fieldset>
+<div data-automation-id="formField-disabilities"><label>Disabilities</label><div data-automation-id="multiSelectContainer"><input id="disability" placeholder="Search"></div></div>
+<div data-automation-id="formField-currentDate"><label>Today's date</label><input id="today-year" data-automation-id="dateSectionYear-input"><input id="today-month" data-automation-id="dateSectionMonth-input"><input id="today-day" data-automation-id="dateSectionDay-input"><div role="button" data-automation-id="dateIcon">Calendar</div></div>
+<div id="formField-dateOfBirth"><label>Date of birth</label><input id="birth-year" data-automation-id="dateSectionYear-input"><input id="birth-month" data-automation-id="dateSectionMonth-input"><input id="birth-day" data-automation-id="dateSectionDay-input"></div>
+<div data-automation-id="sourceSection"><div class="field"><label>How did you hear about us?</label><div data-automation-id="multiSelectContainer"><input id="source--source" placeholder="Search"></div></div></div>
+<div data-automation-id="formField-skills"><label>Skills</label><div data-automation-id="multiSelectContainer"><input id="skills" placeholder="Search"></div></div>
+<div aria-labelledby="Employment-History-section"><div role="group" aria-labelledby="Employment-History-0-panel"><input id="work-title" data-automation-id="jobTitle"><input id="work-company" data-automation-id="company"><input id="work-location" data-automation-id="location"><input id="work-current" type="checkbox" data-automation-id="currentlyWorkHere"><textarea id="work-description" data-automation-id="description"></textarea><div data-automation-id="formField-startDate"><input id="work-start-year" aria-label="Year"><input id="work-start-month" aria-label="Month"></div><div data-automation-id="formField-endDate"><input id="work-end-year" aria-label="Year"><input id="work-end-month" aria-label="Month"></div></div><button type="button" data-automation-id="add-button">Add another</button></div>
+<div aria-labelledby="Education-section"><div role="group" aria-labelledby="Education-0-panel"><div class="field"><label>School</label><div data-automation-id="multiSelectContainer"><input id="school" data-automation-id="schoolName" placeholder="Search"></div></div><button id="degree" data-automation-id="degree" aria-haspopup="listbox">Select One</button><div data-automation-id="formField-field-of-study"><label>Field of study</label><div data-automation-id="multiSelectContainer"><input id="major" placeholder="Search"></div></div><input id="gpa" name="gradeAverage"><input id="education-firstYear"><input id="education-lastYear"></div><button type="button" data-automation-id="add-button">Add another</button></div>
+<div aria-labelledby="Languages-section"><div aria-labelledby="Languages-0-panel"><div data-automation-id="formField-language"><label>Language</label><button id="language" data-automation-id="language" aria-haspopup="listbox">Select One</button></div><input id="fluent" type="checkbox" data-automation-id="native"><button id="reading" data-automation-id="reading" aria-haspopup="listbox">Select One</button><button id="writing" data-automation-id="writing" aria-haspopup="listbox">Select One</button><button id="speaking" data-automation-id="speaking" aria-haspopup="listbox">Select One</button></div><button type="button" data-automation-id="add-button">Add another</button></div>
+<div aria-labelledby="Websites-section"><div aria-labelledby="Websites-0-panel"><input id="website" data-automation-id="website"></div><button type="button" data-automation-id="add-button">Add another</button></div>
+</main></html>

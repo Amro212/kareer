@@ -1402,6 +1402,7 @@ function setSafeHTML(element, htmlString) {
 }
 
 function getStatusInfo() {
+  if (!hasApiKey() && detectAdapter().id === 'workday') return { label: 'Profile Autofill Ready', dotClass: '', badgeClass: 'kr-badge-green', text: 'Known profile values are ready. Add an API key for unanswered questions.' };
   if (!hasApiKey()) {
     return {
       label: 'No API Key',
@@ -1527,7 +1528,7 @@ async function handleUnifiedAutofillClick() {
     updatePanelDOM();
     return;
   }
-  if (!hasApiKey()) {
+  if (!hasApiKey() && detectAdapter().id !== 'workday') {
     alert('Please configure your OpenRouter API Key in Settings first.');
     currentTab = 'settings';
     updatePanelDOM();
@@ -1579,7 +1580,7 @@ async function executeAutofillFlow() {
     updatePanelDOM();
     return;
   }
-  if (!hasApiKey()) {
+  if (!hasApiKey() && detectAdapter().id !== 'workday') {
     alert('Please configure your OpenRouter API Key in Settings first.');
     currentTab = 'settings';
     updatePanelDOM();
@@ -1610,7 +1611,10 @@ async function executeAutofillFlow() {
     const overwrite = Boolean(settings.overwriteExisting);
 
     const shouldFill = (f) => {
+      if (f.element?.disabled || f.element?.readOnly) return false;
       if (overwrite) return true;
+      const adapterNeeds = detectAdapter().needsFill?.(f, profile);
+      if (adapterNeeds != null) return adapterNeeds;
       if (f.hasExistingValue) return false;
       const val = f.currentValue;
       return !val || val === 'false' || val === '0' || String(val).trim().length === 0;
@@ -1641,6 +1645,9 @@ async function executeAutofillFlow() {
     }
     // Parsing can populate, clear, add, or replace controls. Choose targets only
     // after it settles, preserving parser/user values unless overwrite is on.
+    await detectAdapter().prepareSections?.(document, profile, { session: applicationEngine?.session, isCurrent: () => token === autofillGeneration && window.location.href === runUrl });
+    await detectAdapter().prepareFields?.(document, profile, { overwrite, isCurrent: () => token === autofillGeneration && window.location.href === runUrl });
+    if (applicationEngine?.session) saveSession(applicationEngine.session);
     refreshDetectedFields();
     deduplicateFields(detectedFieldsCache);
     const targetFields = detectedFieldsCache.filter(shouldFill);
@@ -1684,7 +1691,7 @@ async function executeAutofillFlow() {
     ];
     let aiResponse = { answers: [] };
     if (normalized.length) {
-      autofillProgress.statusText = `Generating answers with AI (${settings.model})...`;
+      autofillProgress.statusText = detectAdapter().id === 'workday' ? 'Resolving application answers...' : `Generating answers with AI (${settings.model})...`;
       updatePanelDOM();
       aiResponse = await generateAutofillAnswers(normalized);
     }
@@ -1723,7 +1730,7 @@ async function executeAutofillFlow() {
             fieldResultsCache.set(field.id, {
               status: FILL_STATUS.FAILED,
               value: field.currentValue || '',
-              error: 'Required field left empty by AI',
+              error: field.ats?.adapter === 'workday' ? 'No usable saved or generated answer for this required field' : 'Required field left empty by AI',
             });
             highlightFailedField(field.element);
           } else {
@@ -1761,7 +1768,8 @@ async function executeAutofillFlow() {
         if (verification.verified) {
           highlightVerifiedField(field.element);
           fieldResultsCache.set(field.id, {
-            status: answer.inferred ? FILL_STATUS.INFERRED : FILL_STATUS.VERIFIED,
+            status: answer.provenance === 'guessed' ? FILL_STATUS.GUESSED : answer.inferred ? FILL_STATUS.INFERRED : FILL_STATUS.VERIFIED,
+            provenance: answer.provenance || (answer.inferred ? 'inferred' : 'saved'),
             value: verification.actualValue || answer.value,
             inferred: answer.inferred,
           });
@@ -1814,6 +1822,7 @@ async function executeAutofillFlow() {
           value: result.value || '',
           error: result.error,
           inferred: result.inferred,
+          provenance: result.provenance,
           label: result.label,
           remote: true,
         });
@@ -1998,7 +2007,7 @@ export function summarizeFieldResults(fields, results) {
     const res = results.get(id);
     if (res?.status === FILL_STATUS.VERIFIED) {
       verifiedFields.push({ field: f, result: res });
-    } else if (res?.status === FILL_STATUS.INFERRED || res?.inferred) {
+    } else if (res?.status === FILL_STATUS.INFERRED || res?.status === FILL_STATUS.GUESSED || res?.inferred) {
       inferredFields.push({ field: f, result: res });
     } else if (res?.status === FILL_STATUS.FAILED) {
       failedFields.push({ field: f, result: res });
@@ -2063,7 +2072,7 @@ function renderFieldReviewSection() {
       <div class="kr-review-list" style="margin-top: 6px;">
         ${total === 0 ? '<div style="font-size: 12px; color: var(--kr-text-3); text-align: center; padding: 12px;">No form fields detected on this page.</div>' : ''}
         ${failedFields.map(i => renderItem(i, 'kr-badge-red', 'FAILED')).join('')}
-        ${inferredFields.map(i => renderItem(i, 'kr-badge-amber', 'INFERRED')).join('')}
+        ${inferredFields.map(i => renderItem(i, 'kr-badge-amber', i.result?.provenance === 'guessed' || i.result?.status === FILL_STATUS.GUESSED ? 'GUESSED' : 'INFERRED')).join('')}
         ${verifiedFields.map(i => renderItem(i, 'kr-badge-green', 'VERIFIED')).join('')}
         ${untouchedFields.map(i => renderItem(i, '', 'UNTOUCHED')).join('')}
       </div>

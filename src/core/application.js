@@ -4,7 +4,7 @@ import { classifyPage, isVisible } from './pageClassifier.js';
 import { inspectValidation } from './validation.js';
 import { findContinue, inspectContinue, inspectSubmit, pageSignature, isDisabled, observePage, comparePages, workflowLabel, questionIdentity } from './navigation.js';
 import { rememberAnswer, recallAnswer } from './memory.js';
-import { getSettings } from './storage.js';
+import { getSettings, getProfile } from './storage.js';
 import { scanFormFields as scanAllFields, harvestComboboxOptions } from './fields/scanner.js';
 import { normalizeFieldsForAI } from './fields/normalize.js';
 import { fillField } from './fields/fillers.js';
@@ -20,7 +20,7 @@ import { applyRemoteResumeUploads } from './remote.js';
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const scanPageFields = () => scanAllFields().filter(f => isVisible(f.element) && !f.element.closest('[role=listbox],.select__menu')).map(f => ({ ...f, label: workflowLabel(f) }));
 const scanFormFields = () => scanPageFields().filter(f => !f.element.disabled && !f.element.readOnly);
-const empty = field => field.hasExistingValue ? false : field.type === 'checkbox' ? !field.element.checked : field.type === 'file' ? !(field.element.files && field.element.files.length) : !String(field.currentValue ?? '').trim();
+const empty = field => detectAdapter().needsFill?.(field, getProfile()) ?? (field.hasExistingValue ? false : field.type === 'checkbox' && !field.widget ? !field.element.checked : !String(field.currentValue ?? '').trim());
 const runnable = new Set(['running', 'captcha', 'waiting', 'submitting']);
 
 export function createApplicationEngine({ answer = generateAutofillAnswers, onChange = () => {}, settleMs = 180, transitionMs = 1200, navigationTimeoutMs = transitionMs === 0 ? 0 : 10000, submitCountdownMs = 5000 } = {}) {
@@ -290,10 +290,10 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       const live = scanFormFields().find(f => f.id === field.id && f.label === field.label);
       const verified = filled && live ? await verifyField(live, entry.value) : { verified: false };
       // Phase 2's generic verifier only checks non-empty values. Workflow requires exact persistence.
-      let exact = !['text', 'textarea', 'email', 'tel', 'url', 'number', 'contenteditable'].includes(field.type) || String(verified.actualValue ?? '').trim() === String(entry.value).trim();
+      let exact = field.ats?.adapter === 'workday' || !['text', 'textarea', 'email', 'tel', 'url', 'number', 'contenteditable'].includes(field.type) || String(verified.actualValue ?? '').trim() === String(entry.value).trim();
       if (['select', 'radio'].includes(field.type)) exact = field.options.some(o => (String(o.value) === String(entry.value) || o.label === String(entry.value)) && String(o.value) === String(verified.actualValue));
       const valid = verified.verified && exact && !inspectValidation([live]).some(error => error.fieldId === live.id);
-      results.set(field.id, { status: valid ? entry.inferred ? 'inferred' : 'verified' : 'failed', value: verified.actualValue ?? '', inferred: Boolean(entry.inferred), error: valid ? '' : 'Value rejected or failed verification.' });
+      results.set(field.id, { status: valid ? entry.provenance === 'guessed' ? 'guessed' : entry.inferred ? 'inferred' : 'verified' : 'failed', provenance: entry.provenance || (entry.inferred ? 'inferred' : 'saved'), value: verified.actualValue ?? '', inferred: Boolean(entry.inferred), error: valid ? '' : 'Value rejected or failed verification.' });
       if (valid) rememberAnswer(session, field, entry);
       saveSession(session);
       emit();
@@ -368,7 +368,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         const page = classifyPage();
         if (page.type !== 'application') { status('paused', page.reason); return; }
         const fields = scanFormFields();
-        const signature = observePage(scanPageFields());
+        let signature = observePage(scanPageFields());
         if (new Set(fields.map(f => f.id)).size !== fields.length) { status('paused', 'Ambiguous duplicate field IDs. Fill this page manually.'); return; }
         session.currentUrl = window.location.href;
         session.pendingUrl = '';
@@ -396,6 +396,12 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
             step.questions[field.id] = question;
           }
           if (!await applyResumeUploads(fields, token, signature)) return;
+          await detectAdapter().prepareSections?.(document, getProfile(), { session, isCurrent: () => guard(token) });
+          await detectAdapter().prepareFields?.(document, getProfile(), { overwrite: getSettings().overwriteExisting, isCurrent: () => guard(token) });
+          if (!guard(token)) return;
+          signature = observePage(scanPageFields());
+          step.observation = signature;
+          for (const field of scanFormFields()) step.questions[field.id] = questionIdentity(field);
           const targets = scanFormFields().filter(f => f.type !== 'file' && (getSettings().overwriteExisting || empty(f)));
           const missing = [];
           for (const field of targets) {

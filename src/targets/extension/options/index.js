@@ -1,7 +1,7 @@
 import { api, sendMessage } from '../shared/browser.js';
 import { MSG } from '../shared/protocol.js';
 import { APP_VERSION, POPULAR_MODELS, DEFAULT_SETTINGS, DEFAULT_PROFILE, STORAGE_KEYS } from '../../../core/constants.js';
-import { PROFILE_SECTIONS, createWorkExperience, createEducation, createProject, createWorkEligibility, calculateProfileStrength } from '../../../core/profile.js';
+import { PROFILE_SECTIONS, createWorkExperience, createEducation, createProject, createWorkEligibility, createLanguage, calculateProfileStrength } from '../../../core/profile.js';
 import { exportPayload, importPayload } from '../../../core/migration.js';
 
 let currentWork = [];
@@ -9,6 +9,7 @@ let currentEducation = [];
 let currentProjects = [];
 let currentSkills = [];
 let currentEligibilities = [];
+let currentLanguages = [];
 
 function escapeHtml(str) {
   return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -229,6 +230,7 @@ function serializeCurrentProfile() {
   data.projects = currentProjects.map(({ _collapsed, ...rest }) => rest);
   data.skills = [...currentSkills];
   data.workEligibilities = currentEligibilities.map(({ _collapsed, ...rest }) => rest);
+  data.languageRecords = currentLanguages;
   return JSON.stringify(data);
 }
 
@@ -1130,6 +1132,7 @@ function renderProfile(profile) {
   currentEducation = (profile.education || []).map((e) => createEducation({ ...e, _collapsed: true }));
   currentProjects = (profile.projects || []).map((p) => createProject({ ...p, _collapsed: true }));
   currentSkills = Array.isArray(profile.skills) ? [...profile.skills] : [];
+  currentLanguages = (profile.languageRecords || []).map(createLanguage);
   currentEligibilities = (profile.workEligibilities || []).map((e, idx) => createWorkEligibility({ ...e, _collapsed: idx === 0 ? false : (e._collapsed ?? true) }));
   if (currentEligibilities.length === 0) {
     currentEligibilities = [createWorkEligibility({
@@ -1167,6 +1170,34 @@ function renderProfile(profile) {
     fieldset.append(grid);
     return fieldset;
   }));
+
+  const languages = document.createElement('fieldset');
+  languages.innerHTML = '<legend>Structured languages</legend><p class="hint">Workday uses these records for language and proficiency rows. Leave unknown proficiency unset.</p>';
+  const list = document.createElement('div');
+  const renderLanguages = () => {
+    list.replaceChildren();
+    for (const item of currentLanguages) {
+      const card = document.createElement('div');
+      card.className = 'repeatable-card';
+      const fields = [{ name: 'language', label: 'Language' }, { name: 'fluent', label: 'Fluent?', options: ['Yes', 'No'] }, ...['reading', 'writing', 'speaking'].map(name => ({ name, label: name[0].toUpperCase() + name.slice(1), placeholder: 'Exact proficiency, e.g. Advanced' }))];
+      for (const field of fields) {
+        const node = group(field, item[field.name]);
+        const input = node.querySelector('input,select');
+        input.id = `pf-language-${item.id}-${field.name}`;
+        node.querySelector('label')?.setAttribute('for', input.id);
+        node.querySelector('input,select').addEventListener('input', event => { item[field.name] = event.target.value; checkProfileDirty(); });
+        card.append(node);
+      }
+      const remove = document.createElement('button');
+      remove.type = 'button'; remove.textContent = 'Remove language';
+      remove.onclick = () => { currentLanguages.splice(currentLanguages.indexOf(item), 1); renderLanguages(); checkProfileDirty(); };
+      card.append(remove); list.append(card);
+    }
+  };
+  const addLanguage = document.createElement('button');
+  addLanguage.type = 'button'; addLanguage.textContent = 'Add language';
+  addLanguage.onclick = () => { currentLanguages.push(createLanguage()); renderLanguages(); checkProfileDirty(); };
+  languages.append(list, addLanguage); sections.append(languages); renderLanguages();
 
   $('applicantNotes').value = profile.applicantNotes || '';
   savedProfileSnapshot = serializeCurrentProfile();
@@ -1349,6 +1380,7 @@ async function init() {
     next.projects = currentProjects.map(({ _collapsed, ...rest }) => rest);
     next.skills = [...currentSkills];
     next.workEligibilities = currentEligibilities.map(({ _collapsed, ...rest }) => rest);
+    next.languageRecords = currentLanguages;
 
     const primaryElig = next.workEligibilities.find((e) => e && e.enabled !== false) || next.workEligibilities[0];
     if (primaryElig) {

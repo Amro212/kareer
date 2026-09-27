@@ -68,6 +68,7 @@ export function getProfile() {
     education: Array.isArray(stored?.education) ? stored.education : [],
     projects: Array.isArray(stored?.projects) ? stored.projects : [],
     skills: Array.isArray(stored?.skills) ? stored.skills : [],
+    languageRecords: Array.isArray(stored?.languageRecords) ? stored.languageRecords : [],
   };
   if (!merged.location) {
     merged.location = [merged.city, merged.stateProvince, merged.country].filter(Boolean).join(', ');
@@ -114,6 +115,7 @@ export function saveProfile(profile) {
     education: Array.isArray(profile?.education) ? profile.education : [],
     projects: Array.isArray(profile?.projects) ? profile.projects : [],
     skills: Array.isArray(profile?.skills) ? profile.skills : [],
+    languageRecords: Array.isArray(profile?.languageRecords) ? profile.languageRecords : [],
   };
   gmSet(STORAGE_KEYS.PROFILE, cleanProfile);
   return getProfile();

@@ -9,6 +9,8 @@ import { captureFixture } from './capture.js';
 import { classifyPage } from './pageClassifier.js';
 import { FILL_STATUS } from './constants.js';
 import { logger } from './debug.js';
+import { detectAdapter } from './adapters/index.js';
+import { getProfile } from './storage.js';
 
 /**
  * Field agent for a document the panel cannot reach through the DOM, i.e. a
@@ -20,6 +22,8 @@ export function createFieldAgent() {
   let cache = new Map();
 
   function unfilled(field) {
+    const adapterNeeds = detectAdapter().needsFill?.(field, getProfile());
+    if (adapterNeeds != null) return adapterNeeds;
     if (field.hasExistingValue) return false;
     const value = field.currentValue;
     return !value || value === 'false' || value === '0' || String(value).trim().length === 0;
@@ -31,6 +35,8 @@ export function createFieldAgent() {
 
   async function scan({ overwriteExisting = false } = {}) {
     const page = classifyPage();
+    if (page.type === 'application') await detectAdapter().prepareSections?.(document, getProfile());
+    if (page.type === 'application') await detectAdapter().prepareFields?.(document, getProfile(), { overwrite: overwriteExisting });
     const scanned = scanFormFields(document);
     assertUniqueFields(scanned);
     cache = new Map(scanned.map((field) => [field.id, field]));
@@ -92,7 +98,8 @@ export function createFieldAgent() {
           highlightVerifiedField(field.element);
           results.push({
             fieldId: answer.fieldId,
-            status: answer.inferred ? FILL_STATUS.INFERRED : FILL_STATUS.VERIFIED,
+            status: answer.provenance === 'guessed' ? FILL_STATUS.GUESSED : answer.inferred ? FILL_STATUS.INFERRED : FILL_STATUS.VERIFIED,
+            provenance: answer.provenance || (answer.inferred ? 'inferred' : 'saved'),
             value: verification.actualValue || answer.value,
             inferred: Boolean(answer.inferred),
             label: field.label,
