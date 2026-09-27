@@ -15,7 +15,7 @@ test('local typography, internal options navigation, and responsive console', as
   await popup.locator('#open-options').click();
   const page = await opened;
   await page.waitForURL(kr.optionsUrl());
-  await expect(page.locator('#pf-fullName')).toBeVisible();
+  await expect(page.locator('#pf-firstName')).toBeVisible();
   const loaded = await fonts(page);
   expect(loaded).toHaveLength(2);
   expect(loaded.every(face => face.status === 'loaded')).toBe(true);

@@ -4,13 +4,6 @@ const yesNo = ['Yes', 'No'];
 const disclosure = ['Yes', 'No', 'Prefer not to answer'];
 
 export const PROFILE_SECTIONS = [
-  { title: 'Application identity', description: 'Use explicit legal names when the application asks for separate parts. Optional values stay unset.', fields: [
-    { name: 'firstName', label: 'Legal first name' }, { name: 'middleName', label: 'Legal middle name' }, { name: 'lastName', label: 'Legal last name' },
-    { name: 'preferredName', label: 'Preferred first name' }, { name: 'preferredLastName', label: 'Preferred last name' },
-    { name: 'phoneCountry', label: 'Phone country', placeholder: 'e.g. Canada or United Kingdom' },
-    { name: 'phoneType', label: 'Phone type', options: ['Mobile', 'Home', 'Work'] }, { name: 'phoneExtension', label: 'Phone extension' },
-    { name: 'birthDate', label: 'Date of birth', type: 'date' }, { name: 'addressLine3', label: 'Address line 3' },
-  ] },
   { title: 'Work eligibility', description: 'Authorization and sponsorship answers apply only to this work country. Leave unknown answers unset.', fields: [
     { name: 'workCountry', label: 'Work country', placeholder: 'e.g. Canada' },
     { name: 'workAuthorization', label: 'Authorized to work in this country?', options: yesNo },
@@ -29,12 +22,12 @@ export const PROFILE_SECTIONS = [
     { name: 'salaryCurrency', label: 'Currency', placeholder: 'e.g. CAD, USD, GBP' },
     { name: 'salaryPeriod', label: 'Pay period', options: ['Annual', 'Monthly', 'Hourly'] },
   ] },
-  { title: 'Background', description: 'Your context below still supplies detailed experience, projects and qualifications.', fields: [
+  { title: 'Background', description: 'General background and experience level.', fields: [
     { name: 'educationLevel', label: 'Highest education level', options: ['High school', 'Associate degree', "Bachelor's degree", "Master's degree", 'Doctorate', 'Professional degree', 'Other'] },
     { name: 'yearsExperience', label: 'Total years of professional experience', type: 'number', placeholder: 'e.g. 3', min: '0', step: '0.5' },
     { name: 'languages', label: 'Languages and proficiency', placeholder: 'e.g. English (fluent), French (intermediate)' },
   ] },
-  { title: 'Optional self-identification', description: 'Not set leaves the answer blank. Choose “Prefer not to answer” to decline disclosure. These answers are never guessed.', fields: [
+  { title: 'Demographics & disclosures', description: 'Not set leaves the answer blank. Choose “Prefer not to answer” to decline disclosure. These answers are never guessed.', fields: [
     { name: 'gender', label: 'Gender', options: ['Woman', 'Man', 'Non-binary', 'Self-describe', 'Prefer not to answer'] },
     { name: 'genderDescription', label: 'Gender self-description (if selected)', placeholder: 'Your own description' },
     { name: 'pronouns', label: 'Pronouns', placeholder: 'e.g. she/her, he/him, they/them, Prefer not to answer' },
@@ -48,12 +41,37 @@ export const PROFILE_SECTIONS = [
   ] },
 ];
 
+export const CORE_PROFILE_DEFAULTS = {
+  firstName: '',
+  middleName: '',
+  lastName: '',
+  preferredName: '',
+  preferredLastName: '',
+  phoneCountry: '',
+  phoneType: '',
+  phoneExtension: '',
+  birthDate: '',
+  addressLine3: '',
+};
+
 export const PROFILE_FIELDS = PROFILE_SECTIONS.flatMap(section => section.fields);
-export const STRUCTURED_PROFILE_DEFAULTS = Object.fromEntries(PROFILE_FIELDS.map(field => [field.name, '']));
+export const STRUCTURED_PROFILE_DEFAULTS = {
+  ...CORE_PROFILE_DEFAULTS,
+  ...Object.fromEntries(PROFILE_FIELDS.map(field => [field.name, ''])),
+};
 
 export function createLanguage(data = {}) {
-  return { id: data.id || `language_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, enabled: data.enabled !== false,
-    language: data.language || '', fluent: data.fluent ?? '', reading: data.reading || '', writing: data.writing || '', speaking: data.speaking || '' };
+  const result = {
+    id: data.id || `language_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    enabled: data.enabled !== false,
+    language: data.language || '',
+    fluent: data.fluent ?? '',
+    reading: data.reading || '',
+    writing: data.writing || '',
+    speaking: data.speaking || '',
+  };
+  if (data._collapsed !== undefined) result._collapsed = Boolean(data._collapsed);
+  return result;
 }
 
 export function createWorkExperience(data = {}) {
@@ -295,6 +313,10 @@ export const MVP_PROFILE_FIELDS = [
 export function getMissingCoreProfileFields(profile = {}) {
   return MVP_PROFILE_FIELDS
     .filter(f => {
+      if (f.key === 'fullName') {
+        const hasFullName = Boolean(String(profile.fullName || '').trim() || (String(profile.firstName || '').trim() && String(profile.lastName || '').trim()));
+        if (hasFullName) return false;
+      }
       if (f.key === 'city' && !String(profile.city || '').trim() && String(profile.location || '').trim()) return false;
       if (f.key === 'country' && !String(profile.country || '').trim() && String(profile.location || '').trim()) return false;
       return !String(profile[f.key] || '').trim();
@@ -307,7 +329,8 @@ export function calculateProfileStrength(profile = {}) {
   const missingCore = getMissingCoreProfileFields(profile);
 
   // 1. Core Identity (40% total: 10% each for Name, Email, Phone; 5% each for City, Country)
-  if (String(profile.fullName || '').trim()) score += 10;
+  const hasName = Boolean(String(profile.fullName || '').trim() || (String(profile.firstName || '').trim() && String(profile.lastName || '').trim()));
+  if (hasName) score += 10;
   if (String(profile.email || '').trim()) score += 10;
   if (String(profile.phone || '').trim()) score += 10;
   const hasCity = Boolean(String(profile.city || '').trim() || String(profile.location || '').trim());

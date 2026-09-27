@@ -3,7 +3,90 @@
 Running log of changes, bugs, and platform findings for the dual-target
 (extension + userscript) Kareer.
 
-## Turn: 2026-09-27 — Chronological Field Verification & Review Order (Scanner DOM Order & Post-Autofill Priority)
+## Turn: 2026-09-27 — Repeatable Cards Default Collapse Standardization (Languages & Work Authorization)
+
+### Findings
+- **Target**: Extension Options page (`src/targets/extension/options/index.js`, `tests/e2e/shell.spec.js`).
+- **Symptoms & User Feedback**:
+  - Repeatable fields for Languages and Work Authorization auto-expanded their cards on initial load, while Work Experience, Education, and Projects defaulted to collapsed (`_collapsed: true`).
+  - This visual inconsistency caused cluttered options page loads where some repeatable cards were open and others were closed.
+- **Root-Cause Analysis**:
+  - In `src/targets/extension/options/index.js`:
+    - `renderLanguagesList` used `if (item._collapsed === undefined) item._collapsed = false;`, defaulting language cards to open.
+    - `renderEligibilityList` used `if (item._collapsed === undefined) item._collapsed = (index > 0);`, forcing index 0 open.
+    - `renderProfile` mapped `currentLanguages` and `currentEligibilities` with `_collapsed: idx === 0 ? false : (l._collapsed ?? true)` and `_collapsed: false` for empty eligibility fallback, explicitly opening the first card.
+- **Resolution**:
+  - Standardized all repeatable card sections (Work Experience, Education, Projects, Languages, and Work Authorization) to `_collapsed: true` by default on initial hydration and render.
+  - User-initiated additions (`+ Add language`, `+ Add eligible country`) continue to open expanded (`_collapsed: false`) so newly added items are immediately editable.
+  - Updated `tests/e2e/shell.spec.js` to click the card header before filling fields in the collapsed eligibility card.
+  - Verified with full unit tests (259 passing) and Playwright E2E tests (11 passing).
+
+### Turn Changes
+- `src/targets/extension/options/index.js`:
+  - Standardized `renderLanguagesList` and `renderEligibilityList` to default `_collapsed = true`.
+  - Updated `renderProfile` hydration for `currentLanguages` and `currentEligibilities` (including empty fallback) to set `_collapsed: true`.
+- `tests/e2e/shell.spec.js`:
+  - Updated tests to click the card header before filling `#pf-workCountry` in collapsed cards.
+
+### Verification / Status
+- `npm test`: 259 unit tests pass (100% pass, 0 fail).
+- `npx playwright test tests/e2e/workday-prompts.spec.js tests/e2e/shell.spec.js`: 11 E2E tests pass (100% pass, 0 fail).
+
+## Turn: 2026-09-27 — Profile Options Harmonization, Structured Languages Repeatable Cards & Save Dock Polish
+
+### Findings
+- **Target**: Options page & profile data model (`src/core/profile.js`, `src/core/storage.js`, `src/core/constants.js`, `src/targets/extension/options/index.html`, `src/targets/extension/options/index.js`).
+- **Symptoms & User Feedback**:
+  1. The previously added "Application identity" section created severe redundancy with "Identity & contact" (both asking for name and phone details). Furthermore, it was rendered inside the "Job preferences" section, causing confusion and visual clutter.
+  2. The "Structured languages" section was rendered using ad-hoc, unstyled buttons ("Remove language" / "Add language") that did not follow the design system of the other repeatable card sections (Work experience, Education, Projects, Work eligibility).
+  3. Miscellaneous sections (Work preferences, Compensation, Background, Optional self-identification) were dumped haphazardly under a single "Job preferences" container without distinct navigation affordances.
+  4. There was a redundant static "Save profile" button at the bottom of the form when the options page already features a responsive floating save dock (`#profile-floating-dock`).
+- **Root-Cause Analysis**:
+  1. `PROFILE_SECTIONS` included `Application identity` as its first entry, causing both the extension Options page and the floating extension panel to display duplicate name and phone fields right after standard contact fields.
+  2. `renderProfile` dynamically rendered `Structured languages` into a plain fieldset with basic `<button>` elements that were styled as loud primary green buttons without accordion cards, active toggles, reordering controls, or proficiency summaries.
+  3. `addressLine3` was misplaced in the identity section instead of residential address.
+  4. The form retained an old static submit button block in addition to the floating save dock.
+- **Resolution**:
+  1. **Consolidated Identity & Contact**: Removed `Application identity` from `PROFILE_SECTIONS`. Replaced the single `fullName` input with clean, structured legal and preferred name fields (`firstName`, `middleName`, `lastName`, `preferredName`, `preferredLastName`), phone details (`phoneCountry`, `phoneType`, `phoneExtension`), and `birthDate` directly in "Identity & contact". Added bidirectional synchronization for `fullName` across storage, form rendering, and input listeners for 100% backward compatibility.
+  2. **Residential Address**: Moved `addressLine3` into `ADDRESS_FIELDS` alongside `addressLine2`.
+  3. **First-Class Languages Section**: Created a dedicated `#section-languages` section in the options page and sidebar navigation (with dynamic live badge count `Languages [N]`). Redesigned language items using the standard `.repeatable-card` system: accordion headers with title (`${language} • Fluent`), proficiency subtitle (`Reading: Advanced • Writing: ...`), active checkbox toggle (`lang-enabled-toggle`), move up (↑), move down (↓), delete (✕), and card body grid with helper text.
+  4. **Section Demographics & Disclosures**: Elevated self-identification questionnaires into a dedicated `#section-demographics` section with its own sidebar subnav item, leaving `#section-preferences` focused cleanly on job preferences, compensation, and general background.
+  5. **Floating Save Dock as Single Source of Truth**: Removed the bottom static "Save profile" button from the form. Made `#floating-save-btn` a native `type="submit"` button within `#profile-form` in the floating save dock, preserving Enter-key form submits and instant accessibility while eliminating visual duplication.
+  6. **Tests & Verification**: Updated E2E tests (`shell.spec.js`, `visual-system.spec.js`, `workday-prompts.spec.js`) to assert against the harmonized fields and floating save dock. All 259 unit tests and all 14 E2E tests pass.
+
+### Turn Changes
+- `src/core/profile.js`:
+  - Removed `Application identity` section from `PROFILE_SECTIONS`.
+  - Added `CORE_PROFILE_DEFAULTS` preserving defaults for `firstName`, `middleName`, `lastName`, `preferredName`, `preferredLastName`, `phoneCountry`, `phoneType`, `phoneExtension`, `birthDate`, and `addressLine3`.
+  - Updated `createLanguage` to support `_collapsed` property.
+  - Updated `getMissingCoreProfileFields` and `calculateProfileStrength` to recognize `firstName` and `lastName`.
+- `src/core/storage.js`:
+  - Imported `createLanguage`.
+  - Added bidirectional `fullName` sync with `firstName`, `middleName`, and `lastName` in `sanitizeProfile` and `saveProfile`.
+- `src/core/constants.js`:
+  - Explicitly added `addressLine3: ''` in `DEFAULT_PROFILE`.
+- `src/targets/extension/options/index.html`:
+  - Added `Languages` and `Demographics & disclosures` items to sidebar subnav.
+  - Added `#section-languages` repeatable section with `Add language` header button and `#languages-list`.
+  - Added `#section-demographics` fieldset.
+  - Removed duplicate bottom "Save profile" button container.
+  - Embedded `#profile-floating-dock` with `button type="submit" id="floating-save-btn"`.
+- `src/targets/extension/options/index.js`:
+  - Updated `CORE_CONTACT_FIELDS` with structured name, phone, and DOB fields.
+  - Added `addressLine3` to `ADDRESS_FIELDS`.
+  - Implemented `renderLanguagesList()` using `.repeatable-card` system.
+  - Updated `updateSubnavBadges()` to count active languages.
+  - Updated `getLiveProfileForStrength()` and `serializeCurrentProfile()`.
+  - Updated `renderProfile()` to map to preferences and demographics containers, and removed the old ad-hoc languages renderer.
+  - Updated `onWindowScroll()` scroll spy for `#section-languages` and `#section-demographics`.
+- `tests/e2e/shell.spec.js`:
+  - Updated tests to fill `pf-firstName` and `pf-lastName`.
+- `tests/e2e/visual-system.spec.js`:
+  - Updated options locator check from `pf-fullName` to `pf-firstName`.
+
+### Verification / Status
+- `npm test`: 259 unit tests pass (100% pass, 0 fail).
+- `npx playwright test tests/e2e/workday-prompts.spec.js tests/e2e/shell.spec.js tests/e2e/visual-system.spec.js`: 14 E2E tests pass (100% pass, 0 fail).
 
 ### Findings
 - **Platform/ATS**: Workday, Lever, Ashby, and all supported ATS targets.

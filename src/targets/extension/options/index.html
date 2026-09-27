@@ -56,12 +56,19 @@
               <span class="subnav-label">Skills</span>
               <span class="subnav-badge" id="subnav-skills-count"></span>
             </a>
+            <a href="#section-languages" class="subnav-item" data-section="section-languages">
+              <span class="subnav-label">Languages</span>
+              <span class="subnav-badge" id="subnav-languages-count"></span>
+            </a>
             <a href="#section-eligibility" class="subnav-item" data-section="section-eligibility">
               <span class="subnav-label">Work eligibility</span>
               <span class="subnav-badge" id="subnav-eligibility-count"></span>
             </a>
             <a href="#section-preferences" class="subnav-item" data-section="section-preferences">
               <span class="subnav-label">Job preferences</span>
+            </a>
+            <a href="#section-demographics" class="subnav-item" data-section="section-demographics">
+              <span class="subnav-label">Demographics &amp; disclosures</span>
             </a>
             <a href="#section-rules" class="subnav-item" data-section="section-rules">
               <span class="subnav-label">Rules &amp; notes</span>
@@ -177,6 +184,17 @@
           </div>
         </fieldset>
 
+        <fieldset class="repeatable-section" id="section-languages">
+          <div class="section-header-row">
+            <div>
+              <legend>Languages &amp; proficiency <span style="font-weight: 400; color: var(--kr-text-3); font-size: 12px;">(Structured languages)</span></legend>
+              <p class="hint">Workday and other ATS platforms use these records for language and proficiency rows. Leave unknown proficiencies unset.</p>
+            </div>
+            <button type="button" class="secondary add-btn" id="add-language-btn">Add language</button>
+          </div>
+          <div id="languages-list" class="repeatable-list"></div>
+        </fieldset>
+
         <fieldset class="repeatable-section" id="section-eligibility">
           <div class="section-header-row">
             <div>
@@ -189,8 +207,14 @@
         </fieldset>
 
         <div id="section-preferences">
-          <div id="profile-sections" style="display: flex; flex-direction: column; gap: 14px; margin-top: 14px;"></div>
+          <div id="profile-preferences-sections" style="display: flex; flex-direction: column; gap: 14px; margin-top: 14px;"></div>
         </div>
+
+        <fieldset id="section-demographics" style="margin-top: 14px;">
+          <legend>Demographics &amp; disclosures</legend>
+          <p class="hint">Voluntary self-identification answers for standard Equal Opportunity Employer questionnaires. Not set leaves the question blank. Choose “Prefer not to answer” to explicitly decline. These answers are never guessed by AI.</p>
+          <div class="grid" id="demographics-fields"></div>
+        </fieldset>
 
         <fieldset id="section-rules" style="margin-top: 14px;">
           <legend>Additional context &amp; rules</legend>
@@ -200,21 +224,18 @@
             <textarea id="applicantNotes" name="applicantNotes" placeholder="Rules for written answers (e.g. 'Emphasize backend architecture and distributed systems', 'Do not disclose salary below $100k', awards, or specific certifications)..."></textarea>
           </div>
         </fieldset>
-        <div class="actions" style="margin-top: 14px;">
-          <button type="submit">Save profile</button>
-          <span class="feedback" role="status" aria-live="polite" id="profile-feedback"></span>
+        <span class="feedback" role="status" aria-live="polite" id="profile-feedback" style="display: none;"></span>
+
+        <div class="floating-save-dock" id="profile-floating-dock" aria-live="polite">
+          <div class="dock-status">
+            <span class="dock-dot" id="dock-status-dot"></span>
+            <span class="dock-message" id="dock-status-message">Unsaved profile changes</span>
+          </div>
+          <div class="dock-actions">
+            <button type="submit" id="floating-save-btn">Save profile</button>
+          </div>
         </div>
       </form>
-
-      <div class="floating-save-dock" id="profile-floating-dock" aria-live="polite">
-        <div class="dock-status">
-          <span class="dock-dot" id="dock-status-dot"></span>
-          <span class="dock-message" id="dock-status-message">Unsaved profile changes</span>
-        </div>
-        <div class="dock-actions">
-          <button type="button" id="floating-save-btn">Save profile</button>
-        </div>
-      </div>
     </section>
 
     <section id="resume">

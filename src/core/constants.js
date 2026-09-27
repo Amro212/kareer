@@ -32,6 +32,7 @@ export const DEFAULT_PROFILE = {
   phone: '',
   streetAddress: '',
   addressLine2: '',
+  addressLine3: '',
   city: '',
   stateProvince: '',
   postalCode: '',

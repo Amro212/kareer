@@ -83,14 +83,23 @@ function formatMonthYear(val) {
 }
 
 const CORE_CONTACT_FIELDS = [
-  { name: 'fullName', label: 'Full name', type: 'text', placeholder: 'e.g. Alex Morgan' },
+  { name: 'firstName', label: 'First name', type: 'text', placeholder: 'e.g. Alex' },
+  { name: 'middleName', label: 'Middle name / Initial', type: 'text', placeholder: 'e.g. Morgan (optional)' },
+  { name: 'lastName', label: 'Last name', type: 'text', placeholder: 'e.g. Chen' },
+  { name: 'preferredName', label: 'Preferred first name', type: 'text', placeholder: 'e.g. Alex (optional)' },
+  { name: 'preferredLastName', label: 'Preferred last name', type: 'text', placeholder: 'e.g. Chen (optional)' },
   { name: 'email', label: 'Email', type: 'email', placeholder: 'e.g. alex@example.com' },
-  { name: 'phone', label: 'Phone', type: 'tel', placeholder: 'e.g. +1 555-0199' },
+  { name: 'phone', label: 'Phone number', type: 'tel', placeholder: 'e.g. +1 555-0199' },
+  { name: 'phoneCountry', label: 'Phone country', type: 'text', placeholder: 'e.g. Canada or United States' },
+  { name: 'phoneType', label: 'Phone type', options: ['Mobile', 'Home', 'Work'] },
+  { name: 'phoneExtension', label: 'Phone extension', type: 'text', placeholder: 'e.g. 101 (optional)' },
+  { name: 'birthDate', label: 'Date of birth', type: 'date' },
 ];
 
 const ADDRESS_FIELDS = [
   { name: 'streetAddress', label: 'Street address', type: 'text', placeholder: 'e.g. 123 Main Street', fullWidth: true },
   { name: 'addressLine2', label: 'Apt, Suite, Unit', type: 'text', placeholder: 'e.g. Apt 4B (optional)' },
+  { name: 'addressLine3', label: 'Address line 3', type: 'text', placeholder: 'e.g. Building / Department (optional)' },
   { name: 'city', label: 'City', type: 'text', placeholder: 'e.g. San Francisco' },
   { name: 'stateProvince', label: 'State / Province / Region', type: 'text', placeholder: 'e.g. CA or California' },
   { name: 'postalCode', label: 'Postal / Zip code', type: 'text', placeholder: 'e.g. 94107' },
@@ -155,12 +164,26 @@ function getLiveProfileForStrength() {
   const stateProvince = $('pf-stateProvince')?.value || '';
   const country = $('pf-country')?.value || '';
   const synthesizedLocation = [city, stateProvince, country].filter(Boolean).join(', ');
+  const firstName = $('pf-firstName')?.value || '';
+  const middleName = $('pf-middleName')?.value || '';
+  const lastName = $('pf-lastName')?.value || '';
+  const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ') || $('pf-fullName')?.value || '';
   return {
-    fullName: $('pf-fullName')?.value || '',
+    fullName,
+    firstName,
+    middleName,
+    lastName,
+    preferredName: $('pf-preferredName')?.value || '',
+    preferredLastName: $('pf-preferredLastName')?.value || '',
     email: $('pf-email')?.value || '',
     phone: $('pf-phone')?.value || '',
+    phoneCountry: $('pf-phoneCountry')?.value || '',
+    phoneType: $('pf-phoneType')?.value || '',
+    phoneExtension: $('pf-phoneExtension')?.value || '',
+    birthDate: $('pf-birthDate')?.value || '',
     streetAddress: $('pf-streetAddress')?.value || '',
     addressLine2: $('pf-addressLine2')?.value || '',
+    addressLine3: $('pf-addressLine3')?.value || '',
     city,
     stateProvince,
     postalCode: $('pf-postalCode')?.value || '',
@@ -174,6 +197,7 @@ function getLiveProfileForStrength() {
     projects: currentProjects,
     skills: currentSkills,
     workEligibilities: currentEligibilities,
+    languageRecords: currentLanguages,
   };
 }
 
@@ -208,6 +232,7 @@ function updateSubnavBadges() {
   setBadge('subnav-edu-count', currentEducation.length);
   setBadge('subnav-proj-count', currentProjects.length);
   setBadge('subnav-skills-count', currentSkills.length);
+  setBadge('subnav-languages-count', currentLanguages.filter((l) => l && l.enabled !== false && String(l.language || '').trim()).length);
   setBadge('subnav-eligibility-count', currentEligibilities.filter((e) => e && e.enabled !== false && String(e.country || '').trim()).length);
   updateProfileStrength();
   checkProfileDirty();
@@ -225,12 +250,16 @@ function serializeCurrentProfile() {
       data[input.name] = input.value;
     }
   }
+  const fn = $('pf-firstName')?.value?.trim() || '';
+  const mn = $('pf-middleName')?.value?.trim() || '';
+  const ln = $('pf-lastName')?.value?.trim() || '';
+  data.fullName = [fn, mn, ln].filter(Boolean).join(' ') || $('pf-fullName')?.value || data.fullName || '';
   data.workExperiences = currentWork.map(({ _collapsed, ...rest }) => rest);
   data.education = currentEducation.map(({ _collapsed, ...rest }) => rest);
   data.projects = currentProjects.map(({ _collapsed, ...rest }) => rest);
   data.skills = [...currentSkills];
   data.workEligibilities = currentEligibilities.map(({ _collapsed, ...rest }) => rest);
-  data.languageRecords = currentLanguages;
+  data.languageRecords = currentLanguages.map(({ _collapsed, ...rest }) => rest);
   return JSON.stringify(data);
 }
 
@@ -938,7 +967,7 @@ function renderEligibilityList() {
   }
 
   currentEligibilities.forEach((item, index) => {
-    if (item._collapsed === undefined) item._collapsed = (index > 0);
+    if (item._collapsed === undefined) item._collapsed = true;
     const card = document.createElement('div');
     card.className = `repeatable-card ${item._collapsed ? 'is-collapsed' : ''} ${item.enabled === false ? 'is-disabled' : ''}`;
 
@@ -1112,10 +1141,229 @@ function renderEligibilityList() {
   updateSubnavBadges();
 }
 
+function renderLanguagesList() {
+  const container = $('languages-list');
+  if (!container) return;
+  container.innerHTML = '';
+  if (currentLanguages.length === 0) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.style.margin = '8px 0';
+    p.textContent = 'No languages added yet. Click "+ Add language" to add languages and proficiency levels.';
+    container.append(p);
+    updateSubnavBadges();
+    return;
+  }
+
+  currentLanguages.forEach((item, index) => {
+    if (item._collapsed === undefined) item._collapsed = true;
+    const card = document.createElement('div');
+    card.className = `repeatable-card ${item._collapsed ? 'is-collapsed' : ''} ${item.enabled === false ? 'is-disabled' : ''}`;
+
+    const profParts = [
+      item.reading ? `Reading: ${item.reading}` : '',
+      item.writing ? `Writing: ${item.writing}` : '',
+      item.speaking ? `Speaking: ${item.speaking}` : '',
+    ].filter(Boolean);
+
+    const fluencyLabel = item.fluent === 'Yes' ? 'Fluent' : item.fluent === 'No' ? 'Not fluent' : '';
+    const subtitle = proficienciesSummary(profParts, fluencyLabel);
+
+    card.innerHTML = `
+      <div class="card-header" role="button" tabindex="0">
+        <div class="card-title-group">
+          <div class="card-summary-title">${escapeHtml(item.language || 'New Language')} ${fluencyLabel ? '• ' + escapeHtml(fluencyLabel) : ''}</div>
+          <div class="card-summary-date">${escapeHtml(subtitle)}</div>
+        </div>
+        <div class="card-controls">
+          <label class="checkbox-row" style="margin: 0; margin-right: 6px;" title="Include in autofill">
+            <input type="checkbox" class="lang-enabled-toggle" ${item.enabled !== false ? 'checked' : ''} />
+            <span style="font-size: 11px;">Active</span>
+          </label>
+          <button type="button" class="icon-btn secondary lang-move-up" title="Move Up" ${index === 0 ? 'disabled' : ''}>↑</button>
+          <button type="button" class="icon-btn secondary lang-move-down" title="Move Down" ${index === currentLanguages.length - 1 ? 'disabled' : ''}>↓</button>
+          <button type="button" class="icon-btn secondary danger lang-delete" title="Remove language">✕</button>
+          <span class="chevron-indicator">▼</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="grid">
+          <div class="group">
+            <label for="pf-lang-${item.id}-language">Language</label>
+            <input type="text" class="lang-language" id="pf-lang-${item.id}-language" placeholder="e.g. English, French, Spanish" value="${escapeHtml(item.language)}" />
+            <span class="field-guide">Full name of the language.</span>
+          </div>
+          <div class="group">
+            <label for="pf-lang-${item.id}-fluent">Fluent?</label>
+            <select class="lang-fluent" id="pf-lang-${item.id}-fluent">
+              <option value="" ${!item.fluent ? 'selected' : ''}>Not set</option>
+              <option value="Yes" ${item.fluent === 'Yes' ? 'selected' : ''}>Yes</option>
+              <option value="No" ${item.fluent === 'No' ? 'selected' : ''}>No</option>
+            </select>
+            <span class="field-guide">Whether you have native or fluent mastery.</span>
+          </div>
+          <div class="group">
+            <label for="pf-lang-${item.id}-reading">Reading</label>
+            <input type="text" class="lang-reading" id="pf-lang-${item.id}-reading" placeholder="e.g. Advanced, Intermediate, Native" value="${escapeHtml(item.reading)}" />
+            <span class="field-guide">Exact reading proficiency for ATS forms.</span>
+          </div>
+          <div class="group">
+            <label for="pf-lang-${item.id}-writing">Writing</label>
+            <input type="text" class="lang-writing" id="pf-lang-${item.id}-writing" placeholder="e.g. Advanced, Intermediate, Native" value="${escapeHtml(item.writing)}" />
+            <span class="field-guide">Exact writing proficiency for ATS forms.</span>
+          </div>
+          <div class="group full-width">
+            <label for="pf-lang-${item.id}-speaking">Speaking</label>
+            <input type="text" class="lang-speaking" id="pf-lang-${item.id}-speaking" placeholder="e.g. Advanced, Intermediate, Native" value="${escapeHtml(item.speaking)}" />
+            <span class="field-guide">Exact speaking and conversational proficiency.</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    function proficienciesSummary(parts, fluency) {
+      if (parts.length > 0) return parts.join(' • ');
+      if (fluency) return fluency;
+      return 'Proficiency levels';
+    }
+
+    function updateLanguageLabels() {
+      const fLabel = item.fluent === 'Yes' ? 'Fluent' : item.fluent === 'No' ? 'Not fluent' : '';
+      card.querySelector('.card-summary-title').textContent = `${item.language || 'New Language'}${fLabel ? ' • ' + fLabel : ''}`;
+      const parts = [
+        item.reading ? `Reading: ${item.reading}` : '',
+        item.writing ? `Writing: ${item.writing}` : '',
+        item.speaking ? `Speaking: ${item.speaking}` : '',
+      ].filter(Boolean);
+      card.querySelector('.card-summary-date').textContent = proficienciesSummary(parts, fLabel);
+    }
+
+    const header = card.querySelector('.card-header');
+    header.addEventListener('click', (e) => {
+      if (e.target.closest('.card-controls')) return;
+      item._collapsed = !item._collapsed;
+      card.classList.toggle('is-collapsed', item._collapsed);
+    });
+
+    header.addEventListener('keydown', (e) => {
+      if ((e.key === 'Enter' || e.key === ' ') && !e.target.closest('.card-controls')) {
+        e.preventDefault();
+        item._collapsed = !item._collapsed;
+        card.classList.toggle('is-collapsed', item._collapsed);
+      }
+    });
+
+    card.querySelector('.lang-enabled-toggle').addEventListener('change', (e) => {
+      e.stopPropagation();
+      item.enabled = e.target.checked;
+      card.classList.toggle('is-disabled', !item.enabled);
+      updateSubnavBadges();
+      checkProfileDirty();
+    });
+
+    card.querySelector('.lang-move-up').addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (index > 0) {
+        const temp = currentLanguages[index];
+        currentLanguages[index] = currentLanguages[index - 1];
+        currentLanguages[index - 1] = temp;
+        renderLanguagesList();
+        checkProfileDirty();
+      }
+    });
+
+    card.querySelector('.lang-move-down').addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (index < currentLanguages.length - 1) {
+        const temp = currentLanguages[index];
+        currentLanguages[index] = currentLanguages[index + 1];
+        currentLanguages[index + 1] = temp;
+        renderLanguagesList();
+        checkProfileDirty();
+      }
+    });
+
+    card.querySelector('.lang-delete').addEventListener('click', (e) => {
+      e.stopPropagation();
+      currentLanguages.splice(index, 1);
+      renderLanguagesList();
+      checkProfileDirty();
+    });
+
+    const langInput = card.querySelector('.lang-language');
+    const fluentSelect = card.querySelector('.lang-fluent');
+    const readingInput = card.querySelector('.lang-reading');
+    const writingInput = card.querySelector('.lang-writing');
+    const speakingInput = card.querySelector('.lang-speaking');
+
+    langInput.addEventListener('input', () => {
+      item.language = langInput.value;
+      updateLanguageLabels();
+      updateSubnavBadges();
+      checkProfileDirty();
+    });
+
+    fluentSelect.addEventListener('change', () => {
+      item.fluent = fluentSelect.value;
+      updateLanguageLabels();
+      checkProfileDirty();
+    });
+
+    readingInput.addEventListener('input', () => {
+      item.reading = readingInput.value;
+      updateLanguageLabels();
+      checkProfileDirty();
+    });
+
+    writingInput.addEventListener('input', () => {
+      item.writing = writingInput.value;
+      updateLanguageLabels();
+      checkProfileDirty();
+    });
+
+    speakingInput.addEventListener('input', () => {
+      item.speaking = speakingInput.value;
+      updateLanguageLabels();
+      checkProfileDirty();
+    });
+
+    container.append(card);
+  });
+  updateSubnavBadges();
+}
+
 function renderProfile(profile) {
   const identity = $('identity-fields');
   if (identity) {
+    if (profile.fullName && !profile.firstName && !profile.lastName) {
+      const parts = profile.fullName.trim().split(/\s+/);
+      profile.firstName = parts[0] || '';
+      if (parts.length === 2) {
+        profile.lastName = parts[1];
+      } else if (parts.length > 2) {
+        profile.middleName = parts.slice(1, -1).join(' ');
+        profile.lastName = parts.at(-1);
+      }
+    }
     identity.replaceChildren(...CORE_CONTACT_FIELDS.map((field) => group(field, profile[field.name])));
+    const hiddenFullName = document.createElement('input');
+    hiddenFullName.type = 'hidden';
+    hiddenFullName.id = 'pf-fullName';
+    hiddenFullName.name = 'fullName';
+    hiddenFullName.value = profile.fullName || [profile.firstName, profile.middleName, profile.lastName].filter(Boolean).join(' ');
+    identity.append(hiddenFullName);
+
+    const syncFullName = () => {
+      const fn = $('pf-firstName')?.value?.trim() || '';
+      const mn = $('pf-middleName')?.value?.trim() || '';
+      const ln = $('pf-lastName')?.value?.trim() || '';
+      const full = [fn, mn, ln].filter(Boolean).join(' ');
+      const hidden = $('pf-fullName');
+      if (hidden) hidden.value = full;
+    };
+    $('pf-firstName')?.addEventListener('input', syncFullName);
+    $('pf-middleName')?.addEventListener('input', syncFullName);
+    $('pf-lastName')?.addEventListener('input', syncFullName);
   }
 
   const address = $('address-fields');
@@ -1132,15 +1380,15 @@ function renderProfile(profile) {
   currentEducation = (profile.education || []).map((e) => createEducation({ ...e, _collapsed: true }));
   currentProjects = (profile.projects || []).map((p) => createProject({ ...p, _collapsed: true }));
   currentSkills = Array.isArray(profile.skills) ? [...profile.skills] : [];
-  currentLanguages = (profile.languageRecords || []).map(createLanguage);
-  currentEligibilities = (profile.workEligibilities || []).map((e, idx) => createWorkEligibility({ ...e, _collapsed: idx === 0 ? false : (e._collapsed ?? true) }));
+  currentLanguages = (profile.languageRecords || []).map((l) => createLanguage({ ...l, _collapsed: true }));
+  currentEligibilities = (profile.workEligibilities || []).map((e) => createWorkEligibility({ ...e, _collapsed: true }));
   if (currentEligibilities.length === 0) {
     currentEligibilities = [createWorkEligibility({
       country: profile.workCountry || '',
       workAuthorization: profile.workAuthorization || '',
       sponsorshipNow: profile.sponsorshipNow || '',
       sponsorshipFuture: profile.sponsorshipFuture || '',
-      _collapsed: false,
+      _collapsed: true,
     })];
   }
 
@@ -1148,56 +1396,39 @@ function renderProfile(profile) {
   renderEducationList();
   renderProjectsList();
   renderSkillsChips();
+  renderLanguagesList();
   renderEligibilityList();
   updateSubnavBadges();
 
-  const sections = $('profile-sections');
-  const nonRepeatableSections = PROFILE_SECTIONS.filter((section) => section.title !== 'Work eligibility');
-  sections.replaceChildren(...nonRepeatableSections.map((section) => {
-    const fieldset = document.createElement('fieldset');
-    const legend = document.createElement('legend');
-    legend.textContent = section.title;
-    fieldset.append(legend);
-    if (section.description) {
-      const hint = document.createElement('p');
-      hint.className = 'hint';
-      hint.textContent = section.description;
-      fieldset.append(hint);
-    }
-    const grid = document.createElement('div');
-    grid.className = 'grid';
-    grid.append(...section.fields.map((field) => group(field, profile[field.name])));
-    fieldset.append(grid);
-    return fieldset;
-  }));
-
-  const languages = document.createElement('fieldset');
-  languages.innerHTML = '<legend>Structured languages</legend><p class="hint">Workday uses these records for language and proficiency rows. Leave unknown proficiency unset.</p>';
-  const list = document.createElement('div');
-  const renderLanguages = () => {
-    list.replaceChildren();
-    for (const item of currentLanguages) {
-      const card = document.createElement('div');
-      card.className = 'repeatable-card';
-      const fields = [{ name: 'language', label: 'Language' }, { name: 'fluent', label: 'Fluent?', options: ['Yes', 'No'] }, ...['reading', 'writing', 'speaking'].map(name => ({ name, label: name[0].toUpperCase() + name.slice(1), placeholder: 'Exact proficiency, e.g. Advanced' }))];
-      for (const field of fields) {
-        const node = group(field, item[field.name]);
-        const input = node.querySelector('input,select');
-        input.id = `pf-language-${item.id}-${field.name}`;
-        node.querySelector('label')?.setAttribute('for', input.id);
-        node.querySelector('input,select').addEventListener('input', event => { item[field.name] = event.target.value; checkProfileDirty(); });
-        card.append(node);
+  const prefSectionsContainer = $('profile-preferences-sections');
+  if (prefSectionsContainer) {
+    const prefSections = PROFILE_SECTIONS.filter((s) => ['Work preferences', 'Compensation', 'Background'].includes(s.title));
+    prefSectionsContainer.replaceChildren(...prefSections.map((section) => {
+      const fieldset = document.createElement('fieldset');
+      const legend = document.createElement('legend');
+      legend.textContent = section.title;
+      fieldset.append(legend);
+      if (section.description) {
+        const hint = document.createElement('p');
+        hint.className = 'hint';
+        hint.textContent = section.description;
+        fieldset.append(hint);
       }
-      const remove = document.createElement('button');
-      remove.type = 'button'; remove.textContent = 'Remove language';
-      remove.onclick = () => { currentLanguages.splice(currentLanguages.indexOf(item), 1); renderLanguages(); checkProfileDirty(); };
-      card.append(remove); list.append(card);
+      const grid = document.createElement('div');
+      grid.className = 'grid';
+      grid.append(...section.fields.map((field) => group(field, profile[field.name])));
+      fieldset.append(grid);
+      return fieldset;
+    }));
+  }
+
+  const demoContainer = $('demographics-fields');
+  if (demoContainer) {
+    const demoSection = PROFILE_SECTIONS.find((s) => s.title === 'Demographics & disclosures');
+    if (demoSection) {
+      demoContainer.replaceChildren(...demoSection.fields.map((field) => group(field, profile[field.name])));
     }
-  };
-  const addLanguage = document.createElement('button');
-  addLanguage.type = 'button'; addLanguage.textContent = 'Add language';
-  addLanguage.onclick = () => { currentLanguages.push(createLanguage()); renderLanguages(); checkProfileDirty(); };
-  languages.append(list, addLanguage); sections.append(languages); renderLanguages();
+  }
 
   $('applicantNotes').value = profile.applicantNotes || '';
   savedProfileSnapshot = serializeCurrentProfile();
@@ -1354,6 +1585,15 @@ async function init() {
     };
   }
 
+  const addLanguageBtn = $('add-language-btn');
+  if (addLanguageBtn) {
+    addLanguageBtn.onclick = () => {
+      currentLanguages.push(createLanguage({ _collapsed: false }));
+      renderLanguagesList();
+      checkProfileDirty();
+    };
+  }
+
   $('add-skill-btn').onclick = () => {
     addSkillFromInput();
   };
@@ -1375,12 +1615,17 @@ async function init() {
         next[input.name] = input.value;
       }
     }
+    const fn = $('pf-firstName')?.value?.trim() || '';
+    const mn = $('pf-middleName')?.value?.trim() || '';
+    const ln = $('pf-lastName')?.value?.trim() || '';
+    next.fullName = [fn, mn, ln].filter(Boolean).join(' ') || $('pf-fullName')?.value || next.fullName || '';
+
     next.workExperiences = currentWork.map(({ _collapsed, ...rest }) => rest);
     next.education = currentEducation.map(({ _collapsed, ...rest }) => rest);
     next.projects = currentProjects.map(({ _collapsed, ...rest }) => rest);
     next.skills = [...currentSkills];
     next.workEligibilities = currentEligibilities.map(({ _collapsed, ...rest }) => rest);
-    next.languageRecords = currentLanguages;
+    next.languageRecords = currentLanguages.map(({ _collapsed, ...rest }) => rest);
 
     const primaryElig = next.workEligibilities.find((e) => e && e.enabled !== false) || next.workEligibilities[0];
     if (primaryElig) {
@@ -1399,6 +1644,7 @@ async function init() {
     const dot = $('dock-status-dot');
     const message = $('dock-status-message');
     if (dock) {
+      dock.classList.add('is-visible');
       if (dot) dot.className = 'dock-dot saved';
       if (message) message.textContent = 'Profile saved';
       if (saveHideTimeout) clearTimeout(saveHideTimeout);
@@ -1550,8 +1796,10 @@ function onWindowScroll() {
     { id: 'section-education', el: $('section-education') },
     { id: 'section-projects', el: $('section-projects') },
     { id: 'section-skills', el: $('section-skills') },
+    { id: 'section-languages', el: $('section-languages') },
     { id: 'section-eligibility', el: $('section-eligibility') },
     { id: 'section-preferences', el: $('section-preferences') },
+    { id: 'section-demographics', el: $('section-demographics') },
     { id: 'section-rules', el: $('section-rules') },
     { id: 'resume', el: $('resume') },
     { id: 'advanced', el: $('advanced') },
@@ -1581,8 +1829,10 @@ function onWindowScroll() {
     'section-education',
     'section-projects',
     'section-skills',
+    'section-languages',
     'section-eligibility',
     'section-preferences',
+    'section-demographics',
     'section-rules',
   ];
   const isProfileSub = profileSubIds.includes(currentId);
