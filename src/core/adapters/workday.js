@@ -2,7 +2,7 @@
  * Workday: step identity from the progress bar, Continue that stays disabled
  * while a slow save finishes, and custom dropdowns that roll back on Escape.
  */
-import { PROMPT, workdayFieldMetadata, workdayValue, workdayAnswer, workdayNeedsFill } from './workday-fields.js';
+import { PROMPT, workdayFieldMetadata, workdayValue, workdayAnswer, workdayNeedsFill, workdayOptionMatches } from './workday-fields.js';
 import { prepareWorkdaySections, prepareWorkdayDependencies } from './workday-sections.js';
 import { extractOptionLabel } from '../fields/labels.js';
 
@@ -58,6 +58,12 @@ export const workdayAdapter = {
   fieldMetadata: workdayFieldMetadata,
   profileValue: workdayValue,
   resolveAnswer: workdayAnswer,
+  optionMatches: workdayOptionMatches,
+  searchQuery(field, value) {
+    const canonical = field?.ats?.canonicalKey || workdayFieldMetadata(field?.element || field).ats?.canonicalKey;
+    if (canonical === 'ethnicity' && /middle eastern|mena/i.test(value)) return 'Arab';
+    return value;
+  },
   needsFill: workdayNeedsFill,
   prepareSections: prepareWorkdaySections,
   prepareFields: prepareWorkdayDependencies,
@@ -105,9 +111,15 @@ export const workdayAdapter = {
   },
   comboboxParts(element) {
     const container = element.closest(PROMPT);
-    if (!container) return null;
-    const input = element.matches('input') ? element : container.querySelector('input:not([type="hidden"])');
-    return { container, input, controlBox: input || element, toggleBtn: container.querySelector('button[aria-label*="open" i]') };
+    if (container) {
+      const input = element.matches('input') ? element : container.querySelector('input:not([type="hidden"])');
+      return { container, input, controlBox: input || element, toggleBtn: container.querySelector('button[aria-label*="open" i]') };
+    }
+    // Single-select button listbox (e.g. Gender): no searchable input, button is the control.
+    if (element.matches('button[aria-haspopup="listbox"]')) {
+      return { container: element.closest('[data-automation-id^="formField"]') || element.parentElement, input: null, controlBox: element, toggleBtn: null };
+    }
+    return null;
   },
   beforeComboboxOpen(element) {
     const prior = owners.get(element.ownerDocument);
@@ -121,7 +133,8 @@ export const workdayAdapter = {
     const owner = owners.get(element.ownerDocument);
     if (owner?.element !== element && owner?.element !== this.comboboxParts(element)?.input) return [];
     const active = element.ownerDocument.activeElement;
-    if (active !== element && !container?.contains(active)) return [];
+    const inPopup = [...element.ownerDocument.querySelectorAll(POPUPS)].some(p => p.contains(active));
+    if (active !== element && !container?.contains(active) && !inPopup) return [];
     const menus = [...element.ownerDocument.querySelectorAll(POPUPS)].filter(menu => visible(menu) && (!owner.before.has(menu) || owner.before.get(menu) !== menu.innerHTML));
     const outer = menus.filter(menu => !menus.some(other => other !== menu && other.contains(menu)));
     return outer.length === 1 ? outer : [];

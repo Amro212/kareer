@@ -120,11 +120,18 @@ export function optionData(option) {
   return { value: option.getAttribute('data-value') || option.getAttribute('value') || label, label };
 }
 
-export function findExactOption(options, target) {
+export function findExactOption(options, target, field) {
   const key = optionKey(target);
   if (!key) return null;
   const matches = options.filter(option => optionKey(option.label) === key || optionKey(option.value) === key);
-  return matches.length === 1 ? matches[0] : null;
+  if (matches.length === 1) return matches[0];
+  const adapter = detectAdapter();
+  if (adapter.optionMatches) {
+    const meta = field?.ats ? field : adapter.fieldMetadata?.(field?.element || field) || {};
+    const adapterMatches = options.filter(option => adapter.optionMatches(meta, option.label, target) || adapter.optionMatches(meta, option.value, target));
+    if (adapterMatches.length === 1) return adapterMatches[0];
+  }
+  return null;
 }
 
 export function readComboboxSelection(element) {
@@ -236,7 +243,9 @@ export async function waitForComboboxOptions(element, timeoutMs, locationQuery) 
   const { input } = resolveComboboxParts(element);
   const search = input && searchesByInput.get(input);
   const query = input?.value || '';
-  const targetQuery = detectAdapter().id === 'workday' ? locationQuery || query : query;
+  // Workday button listboxes have no searchable input. Their visible options
+  // must reach exact/alias matching even when the saved label differs.
+  const targetQuery = detectAdapter().id === 'workday' ? input ? locationQuery || query : '' : query;
   const words = optionKey(targetQuery).match(/[\p{L}\p{N}]+/gu) || [];
   const deadline = Date.now() + (timeoutMs ?? (query ? 8000 : 3000));
   let previous = '', stableSince = Date.now();
@@ -257,7 +266,11 @@ export async function waitForComboboxOptions(element, timeoutMs, locationQuery) 
     const options = discoverComboboxOptions(element).filter(option => {
       if (isLeverLocation(element) && search && (Date.now() - search.started < 500 || search.priorOptions.has(option))) return false;
       const text = optionKey(option.textContent);
-      return location && query ? locationMatches(text, locationQuery || query) : words.every(word => text.includes(word));
+      const adapter = detectAdapter();
+      const meta = adapter.fieldMetadata?.(element);
+      return location && query
+        ? locationMatches(text, locationQuery || query)
+        : words.every(word => text.includes(word)) || Boolean(meta && adapter.optionMatches?.(meta, optionData(option).label, targetQuery));
     });
     const signature = JSON.stringify(options.map(optionData));
     if (loading || signature !== previous) { stableSince = Date.now(); previous = signature; }
@@ -272,10 +285,14 @@ export async function waitForComboboxOptions(element, timeoutMs, locationQuery) 
 export async function waitForComboboxSelection(element, target, timeoutMs = 2500) {
   const deadline = Date.now() + timeoutMs;
   let stableSince = null;
+  const adapter = detectAdapter();
+  const meta = adapter.fieldMetadata?.(element);
   do {
     if (!element?.isConnected) return false;
     const valid = element.getAttribute('aria-invalid') !== 'true' && element.validity?.valid !== false;
-    const matches = valid && readComboboxSelection(element).some(value => optionKey(value) === optionKey(target));
+    const matches = valid && readComboboxSelection(element).some(value =>
+      optionKey(value) === optionKey(target) || Boolean(meta && adapter.optionMatches?.(meta, value, target))
+    );
     if (!matches) stableSince = null;
     else if (stableSince === null) stableSince = Date.now();
     else if (Date.now() - stableSince >= 200) return true;

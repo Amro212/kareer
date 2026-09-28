@@ -93,6 +93,9 @@ export function scanFormFields(root = document) {
     if (processedElements.has(el)) continue;
     if (adapter.id === 'workday' && el.closest('[data-automation-id="signInContent"], [data-automation-id="activeListContainer"], [data-automation-activepopup="true"]')) continue;
     if (adapter.id === 'workday' && el.matches('button') && el.closest('[data-automation-id="multiSelectContainer"], [data-automation-id="multiselectInputContainer"]')?.querySelector('input:not([type="hidden"])')) continue;
+    // Workday single-select buttons can carry an unlabelled sibling input for
+    // filtering. The button owns the question; the sibling is not a second field.
+    if (adapter.id === 'workday' && el.matches('input:not([id]):not([name])') && !el.closest('[data-automation-id="multiSelectContainer"], [data-automation-id="multiselectInputContainer"]') && el.closest('[data-automation-id^="formField"]')?.querySelector('button[aria-haspopup="listbox"]')) continue;
 
     const tagName = el.tagName.toLowerCase();
     const typeAttr = (el.getAttribute('type') || '').toLowerCase();
@@ -414,7 +417,8 @@ export async function harvestComboboxOptions(fields, searchQueries = new Map()) 
     try {
       await openCombobox(element);
       const saved = detectAdapter().profileValue?.(field, getProfile());
-      const queries = searchQueries.has(field.id) ? [searchQueries.get(field.id)] : Array.isArray(saved) ? saved : [typeof saved === 'string' ? saved : ''];
+      const rawQueries = searchQueries.has(field.id) ? [searchQueries.get(field.id)] : Array.isArray(saved) ? saved : [typeof saved === 'string' ? saved : ''];
+      const queries = rawQueries.map(q => detectAdapter().searchQuery?.(field, q) || q);
       const discovered = [];
       for (const savedQuery of queries) {
         const query = savedQuery || (isResidenceLabel(field.label) ? profileLocation : '') || '';

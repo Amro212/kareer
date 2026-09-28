@@ -36,6 +36,7 @@ const mappings = [
   ['address_3', 'addressLine3,addressSection_addressLine3'], ['city', 'city,addressSection_city'], ['postal_code', 'postalCode'],
   ['source', 'source,source--source,sourceSection'], ['highestDegree', 'highestDegree'], ['skill', 'skills,skillsSection'],
   ['gender', 'gender,genderPrompt'], ['ethnicity', 'ethnicity,ethnicityPrompt,ethnicityMulti,ethnicities'],
+  ['pronouns', 'pronoun,pronouns'],
   ['disability_v2', 'disability,disabilities'], ['veteran_v2', 'veteran,veteranStatus'], ['hispanic', 'hispanic'],
   ['lgbt_v2', 'lgbt,lgbtq'], ['visible_minority', 'visibleMinority'], ['armed_forces', 'armedForces'],
   ['birthday', 'birthday,dateOfBirth'], ['current_date', 'todaysDate,currentDate,dateSignedOn'],
@@ -45,7 +46,7 @@ const profileKeys = {
   first_name: 'firstName', last_name: 'lastName', middle_name: 'middleName', preferred_name: 'preferredName', preferred_last_name: 'preferredLastName',
   full_name: 'fullName', email: 'email', phone_type: 'phoneType', phone_extension: 'phoneExtension', country: 'country', state: 'stateProvince',
   address: 'streetAddress', address_2: 'addressLine2', address_3: 'addressLine3', city: 'city', postal_code: 'postalCode', highestDegree: 'educationLevel',
-  gender: 'gender', ethnicity: 'raceEthnicity', disability_v2: 'disabilityStatus', veteran_v2: 'veteranStatus',
+  gender: 'gender', ethnicity: 'raceEthnicity', pronouns: 'pronouns', disability_v2: 'disabilityStatus', veteran_v2: 'veteranStatus',
   hispanic: 'hispanic', lgbt_v2: 'lgbtStatus', visible_minority: 'visibleMinority', armed_forces: 'armedForces', birthday: 'birthDate',
   linkedin: 'linkedin', languages_text: 'languages',
 };
@@ -122,7 +123,7 @@ export function workdayFieldMetadata(element) {
   const rowId = binding?.record.id || row?.getAttribute('data-automation-id') || row?.getAttribute('aria-labelledby');
   const metadata = {
     ats: { adapter: 'workday', version: WORKDAY_RECIPE_VERSION, canonicalKey: canonical, rowId, record: binding?.record,
-      multiple: element.closest('[data-automation-id="formField-skills"], [data-automation-id="skillsSection"], [data-automation-id="ethnicityMulti"], [data-automation-id="formField-ethnicities"]') != null || element.getAttribute('aria-multiselectable') === 'true' },
+      multiple: element.closest('[data-automation-id*="skills"], [data-automation-id*="ethnicit"], [data-automation-id*="pronoun"], [data-automation-id*="disabilit"]') != null || element.getAttribute('aria-multiselectable') === 'true' },
   };
   if (label) metadata.label = label;
   if (labelNode) metadata.required = /\*\s*$/.test(labelNode.textContent) || container?.getAttribute('aria-required') === 'true' || element.required || element.getAttribute('aria-required') === 'true';
@@ -188,10 +189,19 @@ export function workdayValue(field, profile) {
     return code ? countryNames.of(code) : undefined;
   }
   if (canonical === 'url') return profile.linkedin || undefined;
+  if (canonical === 'pronouns') {
+    const val = profile.pronouns;
+    if (!val) return '';
+    if (field.ats?.multiple) {
+      const parts = String(val).split(/[\/\s,]+/).map(p => p.trim()).filter(Boolean);
+      return parts.length >= 2 ? parts : [val];
+    }
+    return val;
+  }
   const value = profile[profileKeys[canonical]];
   if (value) return value;
   // Optional disclosures have no factual fallback; unset means leave unanswered.
-  if (['gender', 'ethnicity', 'disability_v2', 'veteran_v2', 'lgbt_v2', 'hispanic', 'visible_minority', 'armed_forces'].includes(canonical)) return '';
+  if (['gender', 'ethnicity', 'pronouns', 'disability_v2', 'veteran_v2', 'lgbt_v2', 'hispanic', 'visible_minority', 'armed_forces'].includes(canonical)) return '';
   return undefined;
 }
 
@@ -209,8 +219,16 @@ export function workdayAnswer(field, profile) {
     const matches = (field.options || []).filter(option => workdayOptionMatches(field, option.label, target) || key(option.value) === key(target));
     return matches.length === 1 ? matches[0] : null;
   });
-  if (matched.some(option => !option)) return { ...answer, value: '', ...(field.type === 'combobox' ? { searchQuery: String(values.find((_, index) => !matched[index])) } : {}) };
+  if (matched.some(option => !option)) {
+    const unrec = values.find((_, index) => !matched[index]);
+    const query = field.ats?.canonicalKey === 'ethnicity' && /middle eastern|mena/i.test(unrec) ? 'Arab' : String(unrec);
+    return { ...answer, value: '', ...(field.type === 'combobox' ? { searchQuery: query } : {}) };
+  }
   const answers = matched.map(option => field.type === 'combobox' ? option.label : option.value);
+  if (field.ats?.canonicalKey === 'ethnicity' && matched.some((option, index) => key(option.label) !== key(values[index]) && key(option.value) !== key(values[index]))) {
+    answer.provenance = 'guessed';
+    answer.inferred = true;
+  }
   return { ...answer, value: Array.isArray(value) ? answers : answers[0] };
 }
 
@@ -222,10 +240,30 @@ export function workdayOptionMatches(field, actual, expected) {
   if (key(actual) === key(expected)) return true;
   if (canonical === 'country' || canonical === 'phone_country') return countryCode(actual) && countryCode(actual) === countryCode(expected);
   if (canonical === 'disability_v2') {
-    if (key(expected) === 'no') return /^no[,\s]+i (?:do not|don't) have a disability(?:.*)$/i.test(actual);
-    if (key(expected) === 'yes') return /^yes[,\s]+i have a disability(?:.*)$/i.test(actual);
+    if (key(expected) === 'no') return /^no(?:\s*[-,]\s*|\s+)i (?:do not|don't) have (?:a|any) disabilit(?:y|ies)(?:\s*\(.*\))?$/i.test(actual);
+    if (key(expected) === 'yes') return /^yes(?:\s*[-,]\s*|\s+)i have (?:a|any) disabilit(?:y|ies)(?:\s*\(.*\))?$/i.test(actual);
   }
-  if (key(expected) === 'prefer not to answer') return /^(?:i )?(?:do not wish to answer|don't wish to answer|prefer not to (?:answer|say|disclose)|decline to (?:answer|disclose))$/i.test(actual);
+  if (canonical === 'gender') {
+    if (key(expected).replace(/[\s-]/g, '') === 'nonbinary' && key(actual).replace(/[\s-]/g, '') === 'nonbinary') return true;
+    const aliases = { female: 'woman', male: 'man' };
+    if (aliases[key(actual)] === key(expected) || aliases[key(expected)] === key(actual)) return true;
+  }
+  if (canonical === 'ethnicity') {
+    if (/middle eastern|mena/i.test(key(expected))) return /arab|maghrebi|middle eastern/i.test(actual);
+    if (/black|african/i.test(key(expected))) return /black|african/i.test(actual);
+    if (/asian/i.test(key(expected))) return /asian|chinese|filipino|japanese|korean/i.test(actual);
+    if (/white|caucasian/i.test(key(expected))) return /white|caucasian/i.test(actual);
+    if (/hispanic|latino/i.test(key(expected))) return /hispanic|latino/i.test(actual);
+    if (/indigenous|first nation|native/i.test(key(expected))) return /first nation|inuk|inuit|indigenous|aboriginal|native/i.test(actual);
+  }
+  if (canonical === 'pronouns') {
+    if (key(actual) === key(expected)) return true;
+    const parts = key(expected).split(/[\/\s,]+/);
+    if (parts.includes(key(actual))) return true;
+    const actualParts = key(actual).split(/[\/\s,]+/);
+    if (actualParts.includes(key(expected))) return true;
+  }
+  if (key(expected) === 'prefer not to answer') return /^(?:(?:i )?(?:do not wish to answer|don't wish to answer|prefer not to (?:answer|say|disclose)|decline to (?:answer|disclose))|rather not answer)(?:\s*\([^)]*\))?$/i.test(actual);
   const aliases = { female: 'woman', male: 'man', 'bachelor of science': "bachelor's degree", 'bachelor of arts': "bachelor's degree", 'master of science': "master's degree", 'master of arts': "master's degree", 'ph.d.': 'doctorate' };
   return aliases[key(actual)] === key(expected);
 }

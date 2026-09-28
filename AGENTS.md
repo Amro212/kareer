@@ -72,6 +72,12 @@ The architecture, implementation roadmap, and engineering patterns follow two di
 14. **Architectural files**: Planned architectural files (ATS adapters, schemas,
     options components, test fixtures, action executors) following the roadmap
     and research specs are authorized to be added and modified.
+15. **Simplicity and efficiency first**: prefer the smallest, most direct fix
+    that solves the stated problem. Avoid indirection, abstraction layers, or
+    helper code that doesn't earn its keep. Fewer moving parts means fewer bugs.
+16. **Never overengineer**: do not add speculative flexibility, premature
+    generalization, or framework scaffolding for problems that don't exist yet.
+    Solve the real bug, ship it, move on.
 
 ## 4. Multi-agent spawning
 

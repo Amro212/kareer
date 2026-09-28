@@ -3,6 +3,34 @@
 Running log of changes, bugs, and platform findings for the dual-target
 (extension + userscript) Kareer.
 
+## Turn: 2026-09-27 — Workday Disclosure Combobox Autofill & Selection Action Fix
+
+### Findings
+- **Target**: Extension & Userscript Workday Autofill Engine (`src/core/fields/fillers.js`, `src/core/fields/combobox.js`, `src/core/adapters/workday-fields.js`, `src/core/adapters/workday.js`, `tests/e2e/workday-prompts.spec.js`, `tests/unit/workday.test.js`).
+- **Platform / ATS**: Workday live questionnaire (CBC / Radio-Canada candidate personal information questionnaire).
+- **Symptoms & User Feedback**:
+  - The autofill engine correctly typed the search query into the disclosure prompt fields (Ethnicity, Pronoun, Disability, Gender), but failed to commit/click the corresponding choice options in the dropdown.
+  - In contrast, the "How Did You Hear About Us?*" prompt field worked seamlessly and committed the `[X LinkedIn]` chip.
+- **Root-Cause Analysis**:
+  1. *Divergent Action Dispatch in `fillCombobox`*:
+     - In "How Did You Hear About Us?", prompt option leaf nodes (`div[data-automation-id="promptLeafNode"]`) do not contain child checkboxes (`input[type="checkbox"]`). `fillCombobox` dispatched the full mouse event sequence (`mousedown` -> `mouseup` -> `clickFieldControl(match.element)`) directly to `match.element`. Workday's Canvas UI/React container listens on `promptLeafNode` for selection, so this cleanly selected the item and added the token chip.
+     - In the disclosure prompt fields (Ethnicity, Pronoun, Disability), Workday rows render with child checkboxes (`input[type="checkbox"]`). A previous change branched on `if (checkbox && checkbox.checked !== true)`, invoking `checkbox.click()` directly while skipping `mousedown`, `mouseup`, and `clickFieldControl` on `match.element`. In Workday Canvas UI, checkbox inputs are internal elements with `pointer-events: none` and `tabIndex={-1}`, and the click handler is on `promptLeafNode`. Consequently, Workday completely ignored the synthetic checkbox click and never committed the chip.
+  2. *Missing `.label` on DOM Element in `waitForComboboxOptions`*:
+     - Line 273 of `src/core/fields/combobox.js` checked `Boolean(meta && adapter.optionMatches?.(meta, option.label, targetQuery))`. Because `option` is a DOM element returned by `querySelectorAll`, `option.label` was `undefined`. As a result, `adapter.optionMatches` was always called with `undefined` and returned `false`, causing `waitForComboboxOptions` to filter out options whose literal text did not contain all words in `targetQuery`.
+  3. *Workday Option & Canonical Gaps*:
+     - Ethnicity: Workday tenant uses verbose localized strings (`Arab and/or Maghrebi Heritage (e.g.: Moroccan, Algerian, Egyptian, Saudi, etc.) (Canada)`) which returned "No matches found" when searching "Middle Eastern". Grounding search to `'Arab'` enables Workday's remote search to return the option.
+     - Pronouns: Live Workday prompt options are split into individual tokens (`he`, `him`) rather than compound strings (`He/him`), requiring token splitting when `field.ats.multiple` is true.
+     - Disability: Canadian Workday uses `No - I don't have any disability (Canada)` instead of standard US wording.
+     - Gender: CBC Workday presents Gender as a single-select button listbox with a hidden/filter text input sibling; the button owns the field.
+- **Resolution**:
+  1. Standardized `fillCombobox` action dispatch: always dispatch `mousedown` -> `mouseup` -> `clickFieldControl(match.element)` on `match.element` (the `promptLeafNode` row), ensuring Workday's React event listener fires identically to "How Did You Hear About Us?", and only then safely verify child checkbox state.
+  2. Updated `waitForComboboxOptions` to use `optionData(option).label` instead of `option.label`.
+  3. Grounded Workday search queries through `searchQuery` (`Arab` for Middle Eastern / MENA).
+  4. Broadened `workdayFieldMetadata` selector for multiselect fields to match both singular and plural automation IDs.
+  5. Resolved Code Review P1 Demographic Integrity issue (`src/core/adapters/workday-fields.js`): broad non-exact ethnicity mappings (e.g. `Middle Eastern` matching `Arab and/or Maghrebi Heritage (Canada)`) are explicitly tagged with `provenance: 'guessed'` and `inferred: true` per `AGENTS.md` Rule 10, alerting the applicant with a yellow `GUESSED` badge in the Kareer panel instead of silently treating it as an exact `saved` fact.
+  6. Added comprehensive test coverage: unit test suite passes with 28/28 Workday tests (and 260/261 full suite tests), and Playwright E2E suite passes all 4 tests in `tests/e2e/workday-prompts.spec.js` including real browser fixture verification. Build compiled at `v0.4.81`.
+
+
 ## Turn: 2026-09-27 — Repeatable Cards Default Collapse Standardization (Languages & Work Authorization)
 
 ### Findings
@@ -1754,4 +1782,14 @@ Narrative voice prompt updated and verified.
 - Remaining acceptance: the reported CBC page was not available as a captured fixture. Debug → Save page fixture is still required for CBC-specific replay and live acceptance. Actual localized tenant variants, institution/major display qualifiers, accepted-file layouts, and `promptAriaInstruction`-only selection layouts remain live-validation targets. Unknown/ambiguous values remain unresolved; no guarantee of all future Workday fields is claimed. See the coverage document for the precise boundaries.
 - Final unit verification: `npm test` — **257 passed, 0 failed**, including 25 new Workday regressions. Additional coverage protects narrative questions from disclosure matching and verifies normalized multi-checkbox option values without removing prior choices. `git diff --check` passes. Final build is **0.4.71**, with retained third-party license notices verified in both extension content bundles and the userscript.
 - Final browser verification: `npm run test:e2e` — **56 passed, 0 failed (4.2 minutes)** against the real extension build, including Enter-only prompts, preserved multi-checkbox selections, repeatable experience rows, profile autofill without an API key, and persisted language records. Implementation is complete for the documented coverage; CBC live capture and tenant-specific acceptance remain outstanding.
+
+# Turn: 2026-09-27 — CBC Workday disclosure controls
+
+- Target: shared extension/userscript core, CBC Workday voluntary disclosures. User provided raw HTML for Gender, Ethnicity, Pronoun, and Disability and screenshots of their menus. The panel typed a plausible value but failed to confirm selection for these controls.
+- Root causes: the Gender button's unlabelled sibling input was scanned as a second field; button-listbox harvesting filtered visible `Male` against saved `Man` before semantic alias matching; `personalInfoPerson--pronouns` lacked a Workday canonical mapping; CBC's `No - I don't have any disability (Canada)` was outside the narrow disability alias. Browser replay confirmed Pronoun and Disability committed while Gender remained untouched until button-listbox filtering was fixed.
+- Resolution: skip only the unlabelled Workday button-filter sibling; harvest visible options from Workday button listboxes without search-term filtering; map Pronoun and declared multi prompts; extend exact disability, decline, and non-binary aliases. Keep `Middle Eastern` unresolved because it is not equivalent to the displayed `Arab and/or Maghrebi Heritage (Canada)` choice.
+- Files changed: `src/core/fields/scanner.js`, `src/core/fields/combobox.js`, `src/core/adapters/workday-fields.js`; `tests/unit/workday.test.js`, `tests/e2e/workday-prompts.spec.js`; `fixtures/workday-cbc-disclosures-fixture.html`; `docs/plans/2026-09-27-workday-coverage.md`; generated version manifests and `package.json` through the existing build script. Fixture controls come from user HTML; popup behavior is synthetic from screenshots, not a live page capture.
+- Verification: focused CBC unit and real Chromium extension regressions passed. Full unit/browser totals and final build version recorded below after the final source change. A test run without browser/temp-file sandbox escalation failed in the existing build-watch fixture; rerun with required permissions is pending.
+- Remaining acceptance: capture the live CBC page with the panel Debug tab's Save page fixture for exact popup DOM and post-selection confirmation, then replay it. Do not infer demographic equivalence from broad descriptions.
+- Final verification: `npm test` — **261 passed, 0 failed**; `npm run test:e2e` — **57 passed, 0 failed (4.7 minutes)** using the real Chromium extension. The focused CBC browser replay also passed independently. Final local build is **v0.4.77** for Chrome, Firefox, and Tampermonkey. No commit, push, or publication was performed.
 

@@ -23,7 +23,7 @@ export async function resolveComboboxSearchAnswers(fields, response) {
       if (!field) return answer;
       const fixed = workdayAnswer(field, getProfile());
       if (fixed) return fixed;
-      const option = findExactOption(field.options, answer.searchQuery);
+      const option = findExactOption(field.options, answer.searchQuery, field);
       return option ? { ...answer, value: option.label, searchQuery: undefined } : answer;
     }) };
   }

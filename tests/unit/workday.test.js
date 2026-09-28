@@ -11,7 +11,7 @@ import { saveProfile, saveApiKey } from '../../src/core/storage.js';
 import { generateAutofillAnswers } from '../../src/core/ai.js';
 import { findContinue } from '../../src/core/navigation.js';
 import { prepareWorkdaySections, prepareWorkdayDependencies } from '../../src/core/adapters/workday-sections.js';
-import { workdayAnswer, workdayValue } from '../../src/core/adapters/workday-fields.js';
+import { workdayAnswer, workdayValue, workdayOptionMatches } from '../../src/core/adapters/workday-fields.js';
 import { inspectValidation } from '../../src/core/validation.js';
 import { normalizeFieldsForAI } from '../../src/core/fields/normalize.js';
 
@@ -346,4 +346,44 @@ test('Workday scanned fields follow chronological DOM document order instead of 
     'First Name',
     'I have a preferred name',
   ]);
+});
+
+test('CBC Workday disclosure controls are distinct fields with exact saved-choice matching', () => {
+  boot(`<main>
+    <div data-automation-id="formField-gender" data-fkit-id="personalInfoPerson--gender"><label for="personalInfoPerson--gender">Gender</label><div><button aria-haspopup="listbox" type="button" value="" aria-label="Gender Select One" name="gender" id="personalInfoPerson--gender">Select One</button><input type="text" value=""></div></div>
+    <div data-automation-id="formField-ethnicities" data-fkit-id="personalInfoPerson--ethnicities"><label for="personalInfoPerson--ethnicities">Ethnicity</label><div data-automation-id="multiSelectContainer" data-uxi-widget-type="multiselect"><div data-automation-id="multiselectInputContainer"><input enterkeyhint="search" placeholder="Search" data-uxi-widget-type="selectinput" id="personalInfoPerson--ethnicities"><div data-automation-id="promptSelectionLabel"></div><div data-automation-id="promptAriaInstruction">0 items selected</div></div></div></div>
+    <div data-automation-id="formField-pronouns" data-fkit-id="personalInfoPerson--pronouns"><label for="personalInfoPerson--pronouns">Pronoun</label><div data-automation-id="multiSelectContainer" data-uxi-widget-type="multiselect"><div data-automation-id="multiselectInputContainer"><input enterkeyhint="search" placeholder="Search" data-uxi-widget-type="selectinput" id="personalInfoPerson--pronouns"><div data-automation-id="promptAriaInstruction">0 items selected</div></div></div></div>
+    <div data-automation-id="formField-disabilities" data-fkit-id="personalInfoPerson--disabilities"><label for="personalInfoPerson--disabilities">Disability</label><div data-automation-id="multiSelectContainer" data-uxi-widget-type="multiselect"><div data-automation-id="multiselectInputContainer"><input enterkeyhint="search" placeholder="Search" data-uxi-widget-type="selectinput" id="personalInfoPerson--disabilities"><div data-automation-id="promptAriaInstruction">0 items selected</div></div></div></div>
+  </main>`);
+  const fields = scanFormFields();
+  assert.equal(fields.length, 4);
+  assert.deepEqual(fields.map(field => field.ats.canonicalKey), ['gender', 'ethnicity', 'pronouns', 'disability_v2']);
+  assert.deepEqual(fields.map(field => field.type), ['combobox', 'combobox', 'combobox', 'combobox']);
+  assert.equal(fields.find(field => field.ats.canonicalKey === 'ethnicity').ats.multiple, true);
+  assert.equal(fields.find(field => field.ats.canonicalKey === 'pronouns').ats.multiple, true);
+  assert.equal(fields.find(field => field.ats.canonicalKey === 'disability_v2').ats.multiple, true);
+  const disability = fields.find(field => field.ats.canonicalKey === 'disability_v2');
+  disability.options = [{ value: 'No - I don\'t have any disability (Canada)', label: 'No - I don\'t have any disability (Canada)' }, { value: 'Rather not answer (Canada)', label: 'Rather not answer (Canada)' }];
+  assert.equal(workdayAnswer(disability, { disabilityStatus: 'No' }).value, disability.options[0].label);
+  assert.equal(workdayAnswer(disability, { disabilityStatus: 'Prefer not to answer' }).value, disability.options[1].label);
+  const gender = fields.find(field => field.ats.canonicalKey === 'gender');
+  gender.options = [{ value: 'Non binary', label: 'Non binary' }];
+  assert.equal(workdayAnswer(gender, { gender: 'Non-binary' }).value, 'Non binary');
+  assert.equal(workdayOptionMatches(fields[1], 'Arab and/or Maghrebi Heritage (Canada)', 'Middle Eastern'), true);
+  const ethnicity = fields[1];
+  ethnicity.options = [{ value: 'Arab and/or Maghrebi Heritage (Canada)', label: 'Arab and/or Maghrebi Heritage (Canada)' }];
+  const ethAnswer = workdayAnswer(ethnicity, { raceEthnicity: 'Middle Eastern' });
+  assert.equal(ethAnswer.value, ethnicity.options[0].label);
+  assert.equal(ethAnswer.provenance, 'guessed');
+  assert.equal(ethAnswer.inferred, true);
+});
+
+test('CBC gender opens from its single-select button rather than its filter input', async () => {
+  boot('<div data-automation-id="formField-gender"><label for="personalInfoPerson--gender">Gender</label><div><button type="button" aria-haspopup="listbox" id="personalInfoPerson--gender">Select One</button><input type="text"></div></div><div data-automation-id="activeListContainer" hidden><div data-automation-id="promptLeafNode">Male</div></div>');
+  const button = document.querySelector('button');
+  button.onclick = () => { document.querySelector('[data-automation-id="activeListContainer"]').hidden = false; };
+  await openCombobox(button);
+  assert.equal(document.querySelector('[data-automation-id="activeListContainer"]').hidden, false);
+  assert.equal(discoverComboboxOptions(button).length, 1);
+  assert.equal((await waitForComboboxOptions(button, 350, 'Man')).length, 1, 'saved Man must not hide visible Male');
 });

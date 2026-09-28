@@ -63,3 +63,18 @@ test('options save legal name parts, phone country, and structured languages', a
   await page.reload();
   await expect(languages.getByLabel('Language', { exact: true })).toHaveValue('English');
 });
+
+test('CBC Workday disclosures commit exact gender and prompt choices including ethnicity', async ({ kr }) => {
+  await kr.seed({ apiKey: '', profile: { ...profile, city: 'Toronto', gender: 'Man', pronouns: 'He/him', disabilityStatus: 'No', raceEthnicity: 'Middle Eastern' }, settings: { autoContinue: false } });
+  const page = await kr.context.newPage();
+  await page.goto(kr.fixtureUrl('workday-cbc-disclosures-fixture.html', WORKDAY_HOST));
+  await kr.openPanel(page);
+  await page.locator('#kr-autofill-btn').click();
+  await expect(page.locator('#kr-autofill-btn')).toBeEnabled({ timeout: 90000 });
+  await expect(page.locator('#personalInfoPerson--gender')).toHaveText('Male');
+  await expect(page.locator('[data-automation-id="formField-pronouns"] [data-automation-id="selectedItem"]')).toHaveAttribute('title', 'He/him');
+  await expect(page.locator('[data-automation-id="formField-disabilities"] [data-automation-id="selectedItem"]')).toHaveAttribute('title', "No - I don't have any disability (Canada)");
+  await expect(page.locator('[data-automation-id="formField-ethnicities"] [data-automation-id="selectedItem"]')).toHaveAttribute('title', /Arab and\/or Maghrebi/);
+  expect(await page.evaluate(() => window.fixture)).toMatchObject({ submits: 0, continues: 0 });
+  expect(kr.openrouter.requests).toHaveLength(0);
+});

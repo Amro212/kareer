@@ -1,0 +1,63 @@
+<!doctype html>
+<!-- User-provided CBC Workday control markup, with synthetic popup responses from screenshots. Not a live page capture. -->
+<html lang="en"><meta charset="utf-8"><title>CBC Workday disclosures</title>
+<style>body{font:16px system-ui;margin:24px}main{max-width:720px}label{display:block;margin:10px 0 4px}button,input{font:inherit;padding:6px}[data-automation-id="activeListContainer"]{background:white;border:1px solid;position:absolute;left:500px;top:40px;padding:8px}[data-automation-id="promptLeafNode"]{padding:6px;cursor:pointer}</style>
+<main><div data-automation-id="progressBar"><span aria-current="step">Voluntary disclosures</span></div><form>
+  <div data-automation-id="formField-gender" data-fkit-id="personalInfoPerson--gender"><label for="personalInfoPerson--gender">Gender</label><div><button aria-haspopup="listbox" type="button" value="" aria-label="Gender Select One" name="gender" id="personalInfoPerson--gender">Select One</button><input type="text" value=""></div></div>
+  <div data-automation-id="formField-ethnicities" data-fkit-id="personalInfoPerson--ethnicities"><label for="personalInfoPerson--ethnicities">Ethnicity</label><div data-automation-id="multiSelectContainer" data-uxi-widget-type="multiselect"><div data-automation-id="multiselectInputContainer"><input enterkeyhint="search" placeholder="Search" autocomplete="off" data-uxi-widget-type="selectinput" id="personalInfoPerson--ethnicities"><div data-automation-id="promptSelectionLabel"></div><div data-automation-id="promptAriaInstruction">0 items selected</div></div></div></div>
+  <div data-automation-id="formField-pronouns" data-fkit-id="personalInfoPerson--pronouns"><label for="personalInfoPerson--pronouns">Pronoun</label><div data-automation-id="multiSelectContainer" data-uxi-widget-type="multiselect"><div data-automation-id="multiselectInputContainer"><input enterkeyhint="search" placeholder="Search" autocomplete="off" data-uxi-widget-type="selectinput" id="personalInfoPerson--pronouns"><div data-automation-id="promptSelectionLabel"></div><div data-automation-id="promptAriaInstruction">0 items selected</div></div></div></div>
+  <div data-automation-id="formField-disabilities" data-fkit-id="personalInfoPerson--disabilities"><label for="personalInfoPerson--disabilities">Disability</label><div data-automation-id="multiSelectContainer" data-uxi-widget-type="multiselect"><div data-automation-id="multiselectInputContainer"><input enterkeyhint="search" placeholder="Search" autocomplete="off" data-uxi-widget-type="selectinput" id="personalInfoPerson--disabilities"><div data-automation-id="promptSelectionLabel"></div><div data-automation-id="promptAriaInstruction">0 items selected</div></div></div></div>
+  <button type="button" data-automation-id="bottom-navigation-next-button">Save and Continue</button>
+</form></main><div data-automation-id="activeListContainer" hidden></div>
+<script>
+window.fixture = { enters: {}, selections: {}, submits: 0, continues: 0 };
+const menu = document.querySelector('[data-automation-id="activeListContainer"]');
+const choices = {
+  'personalInfoPerson--gender': ['Select One', 'Female', 'Male', 'Non binary', 'Not listed (Gender)', 'Two spirit'],
+  'personalInfoPerson--ethnicities': ['Arab and/or Maghrebi Heritage (e.g.: Moroccan, Algerian, Egyptian, Saudi, etc.) (Canada)', 'Black Peoples Heritage (Canada)', 'Rather not answer (Canada)'],
+  'personalInfoPerson--pronouns': ['He/him', 'She/her', 'They/them', 'Rather not answer (Canada)'],
+  'personalInfoPerson--disabilities': ["No - I don't have any disability (Canada)", 'Rather not answer (Canada)'],
+};
+function showOptions(control, query = '') {
+  menu.replaceChildren();
+  const labels = choices[control.id].filter(label => label.toLowerCase().includes(query.toLowerCase()));
+  const header = document.createElement('div'); header.dataset.automationId = 'promptMessage';
+  header.textContent = labels.length ? 'Search Results' : 'No matches found'; menu.append(header);
+  // The pictured ethnicity menu leaves its unfiltered choices visible after an unmatched query.
+  const shown = labels.length ? labels : control.id === 'personalInfoPerson--ethnicities' ? choices[control.id] : [];
+  for (const label of shown) {
+    const leaf = document.createElement('div'); leaf.dataset.automationId = 'promptLeafNode'; leaf.dataset.automationLabel = label;
+    if (control.tagName === 'INPUT') { const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; leaf.append(checkbox); }
+    leaf.append(document.createTextNode(label)); leaf.onmousedown = event => event.preventDefault();
+    leaf.onclick = () => {
+      if (control.tagName === 'BUTTON') { control.textContent = label; control.value = label; }
+      else {
+        const holder = control.parentElement.querySelector('[data-automation-id="promptSelectionLabel"]');
+        if (![...holder.querySelectorAll('[data-automation-id="selectedItem"]')].some(item => item.title === label)) {
+          const token = document.createElement('div'); token.dataset.automationId = 'selectedItem'; token.title = label; token.textContent = label; holder.append(token);
+        }
+        control.value = '';
+        control.parentElement.querySelector('[data-automation-id="promptAriaInstruction"]').textContent = `${holder.children.length} items selected`;
+      }
+      window.fixture.selections[control.id] = label; menu.hidden = true;
+    };
+    menu.append(leaf);
+  }
+  menu.hidden = false;
+}
+const gender = document.querySelector('#personalInfoPerson--gender');
+gender.onclick = () => showOptions(gender);
+for (const input of document.querySelectorAll('[data-uxi-widget-type="selectinput"]')) {
+  input.oninput = () => { menu.hidden = true; };
+  input.onkeydown = event => {
+    if (event.key !== 'Enter') return;
+    if (!event.defaultPrevented) document.querySelector('form').requestSubmit();
+    event.preventDefault();
+    window.fixture.enters[input.id] = (window.fixture.enters[input.id] || 0) + 1;
+    showOptions(input, input.value);
+  };
+}
+document.querySelector('form').onsubmit = event => { event.preventDefault(); window.fixture.submits++; };
+document.querySelector('[data-automation-id="bottom-navigation-next-button"]').onclick = () => { window.fixture.continues++; };
+document.body.addEventListener('mousedown', event => { if (!menu.contains(event.target) && !event.target.matches('[data-uxi-widget-type="selectinput"],#personalInfoPerson--gender')) menu.hidden = true; });
+</script></html>

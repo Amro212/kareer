@@ -24,7 +24,7 @@ export async function verifyField(field, expectedValue) {
       const verified = values.length > 0 && values.every(value => field.options.some(option => option.value === value) && actual.includes(value));
       return { verified, actualValue: actual.join(', '), error: verified ? undefined : 'Expected choices were not accepted' };
     }
-    const option = findExactOption(field.options || [], expectedValue);
+    const option = findExactOption(field.options || [], expectedValue, field);
     const verified = Boolean(option && actual.length === 1 && optionKey(actual[0]) === optionKey(option.value));
     return { verified, actualValue: actual.join(', '), error: verified ? undefined : 'The expected single choice was not accepted' };
   }
@@ -37,7 +37,7 @@ export async function verifyField(field, expectedValue) {
         return { verified: false, actualValue: '', error: 'No option selected' };
       }
       const actualVal = checkedRadio.value || checkedRadio.closest('label')?.textContent?.trim() || '';
-      const option = findExactOption(field.options || [], expectedValue);
+      const option = findExactOption(field.options || [], expectedValue, field);
       const verified = Boolean(option && radios.filter(r => r.checked).length === 1 && optionKey(actualVal) === optionKey(option.value));
       return { verified, actualValue: actualVal, error: verified ? undefined : 'Selected radio does not match the expected option' };
     }
@@ -71,7 +71,7 @@ export async function verifyField(field, expectedValue) {
         };
       }
 
-      const option = findExactOption(field.options || [], expectedValue);
+      const option = findExactOption(field.options || [], expectedValue, field);
       const verified = Boolean(option && optionKey(actualVal) === optionKey(option.value));
       return {
         verified,
@@ -156,7 +156,12 @@ export async function verifyCombobox(element, expectedValue) {
 function _checkComboboxState(element, expectedValue) {
   const values = readComboboxSelection(element);
   const expected = optionKey(expectedValue);
-  const verified = values.some(value => optionKey(value) === expected);
+  const adapter = detectAdapter();
+  const meta = adapter.fieldMetadata?.(element);
+  const verified = values.some(value =>
+    optionKey(value) === expected ||
+    Boolean(meta && adapter.optionMatches?.(meta, value, expectedValue))
+  );
   return {
     verified,
     actualValue: values.join(', '),
