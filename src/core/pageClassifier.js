@@ -4,8 +4,11 @@ export function isVisible(element) {
   if (!element || element.closest(`#${UI_IDS.CONTAINER}, #${UI_IDS.INLINE_REWRITE}, script, style, template`)) return false;
   for (let node = element; node && node.nodeType === 1; node = node.parentElement) {
     if (node.hidden || node.getAttribute('aria-hidden') === 'true') return false;
-    const style = node.ownerDocument.defaultView.getComputedStyle(node);
-    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    const view = node.ownerDocument?.defaultView;
+    if (view && typeof view.getComputedStyle === 'function') {
+      const style = view.getComputedStyle(node);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+    }
   }
   return true;
 }

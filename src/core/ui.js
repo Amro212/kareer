@@ -1,5 +1,5 @@
 import { TOKENS, VISUAL_NAME, installPanelFonts } from './theme.js';
-import { APP_VERSION, APP_NAME, POPULAR_MODELS, UI_IDS, FILL_STATUS } from './constants.js';
+import { APP_VERSION, APP_NAME, POPULAR_MODELS, UI_IDS, FILL_STATUS, STORAGE_KEYS } from './constants.js';
 import { PROFILE_SECTIONS, PROFILE_FIELDS, calculateProfileStrength } from './profile.js';
 import {
   getSettings,
@@ -9,6 +9,7 @@ import {
   hasApiKey,
   saveApiKey,
   getSanitizedState,
+  gmGet,
 } from './storage.js';
 import { platform, getHostName } from './platform.js';
 import { collectPortableData, exportPayload } from './migration.js';
@@ -37,6 +38,7 @@ import { classifyPage } from './pageClassifier.js';
 import { detectAdapter } from './adapters/index.js';
 import { rememberAnswer } from './memory.js';
 import { saveSession } from './sessions.js';
+import { captureJob } from './jobs.js';
 
 let applicationEngine = null;
 let applicationState = null;
@@ -1712,11 +1714,20 @@ async function executeAutofillFlow() {
       ...normalizeFieldsForAI(aiTargetFields, { overwriteExisting: overwrite }),
       ...remoteFields,
     ];
+    let currentJob = applicationEngine?.session?.job || gmGet(STORAGE_KEYS.JOB);
+    if (!currentJob || (currentJob.listingUrl !== window.location.href && currentJob.applicationUrl !== window.location.href)) {
+      try {
+        currentJob = captureJob();
+      } catch { /* Ignore early DOM access */ }
+    }
+    if (currentJob?.pendingHydration) {
+      await currentJob.pendingHydration;
+    }
     let aiResponse = { answers: [] };
     if (normalized.length) {
       autofillProgress.statusText = typeof detectAdapter().resolveAnswer === 'function' || detectAdapter().id === 'workday' ? 'Resolving application answers...' : `Generating answers with AI (${settings.model})...`;
       updatePanelDOM();
-      aiResponse = await generateAutofillAnswers(normalized);
+      aiResponse = await generateAutofillAnswers(normalized, { jobContext: currentJob });
     }
     if (token !== autofillGeneration) return;
     if (window.location.href !== runUrl) throw new Error('Page changed during autofill. Inspect the current step before retrying.');
@@ -2660,6 +2671,20 @@ function renderDebugTab() {
   const logs = logger.getLogs();
   const lastPageChange = applicationState?.session?.lastPageChange;
 
+  let currentJob = applicationState?.session?.job || gmGet(STORAGE_KEYS.JOB);
+  if (!currentJob || (currentJob.listingUrl !== window.location.href && currentJob.applicationUrl !== window.location.href)) {
+    try {
+      currentJob = captureJob();
+    } catch { /* Ignore early DOM access */ }
+  }
+
+  if (currentJob?.pendingHydration && !currentJob._hydrationHooked) {
+    currentJob._hydrationHooked = true;
+    currentJob.pendingHydration.then(() => {
+      updatePanelDOM();
+    }).catch(() => {});
+  }
+
   const logsHtml = logs.length === 0
     ? '<span style="color: var(--kr-text-3);">No debug logs recorded yet.</span>'
     : logs.slice().reverse().map((l) => {
@@ -2689,6 +2714,37 @@ function renderDebugTab() {
         <span class="kr-label">Current Host</span>
         <span class="kr-val" style="font-size: 11px;">${state.host}</span>
       </div>
+    </div>
+
+    <div class="kr-card">
+      <div class="kr-row">
+        <span class="kr-card-title">Captured Job & Description</span>
+        <button class="kr-btn kr-btn-secondary" id="kr-recapture-job-btn" style="padding: 4px 8px; font-size: 10px;">Re-capture</button>
+      </div>
+      <div class="kr-row">
+        <span class="kr-label">Title</span>
+        <span class="kr-val" style="font-size: 11px;">${escapeHtml(currentJob?.title || 'None detected')}</span>
+      </div>
+      <div class="kr-row">
+        <span class="kr-label">Company</span>
+        <span class="kr-val" style="font-size: 11px;">${escapeHtml(currentJob?.company || 'None detected')}</span>
+      </div>
+      <div class="kr-row">
+        <span class="kr-label">Description Status</span>
+        <span class="kr-badge ${currentJob?.description ? 'kr-badge-green' : 'kr-badge-amber'}">
+          ${currentJob?.description ? `${currentJob.description.length} chars (${currentJob.description.trim().split(/\s+/).filter(Boolean).length} words)` : 'None / Empty'}
+        </span>
+      </div>
+      ${currentJob?.description ? `
+        <div style="margin-top: 8px;">
+          <div style="font-size: 10px; color: var(--kr-text-3); margin-bottom: 4px;">Captured Description Preview:</div>
+          <pre style="margin: 0; font-family: var(--kr-font-mono); font-size: 11px; max-height: 160px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; color: var(--kr-text-2); background: rgba(11, 15, 25, 0.7); padding: 8px; border-radius: var(--kr-radius-sm); border: 1px solid var(--kr-line);">${escapeHtml(currentJob.description)}</pre>
+        </div>
+      ` : `
+        <div style="font-size: 11px; color: var(--kr-text-3); margin-top: 6px;">
+          No description captured from this page DOM. Click "Re-capture" to try scanning now.
+        </div>
+      `}
     </div>
 
     <div class="kr-card">
@@ -3069,6 +3125,29 @@ function attachEventHandlers() {
   const captureFixtureBtn = shadowRootRef.querySelector('#kr-capture-fixture');
   if (captureFixtureBtn) {
     captureFixtureBtn.onclick = () => void saveFixtureSnapshot();
+  }
+
+  const recaptureJobBtn = shadowRootRef.querySelector('#kr-recapture-job-btn');
+  if (recaptureJobBtn) {
+    recaptureJobBtn.onclick = async () => {
+      try {
+        recaptureJobBtn.textContent = 'Capturing...';
+        recaptureJobBtn.disabled = true;
+        const job = captureJob();
+        if (job?.pendingHydration) {
+          await job.pendingHydration;
+        }
+        if (applicationState?.session) {
+          applicationState.session.job = job;
+          saveSession(applicationState.session);
+        }
+        logger.info(`Re-captured job: "${job.title || 'Untitled'}" at "${job.company || 'Unknown'}" (${(job.description || '').length} chars)`);
+        updatePanelDOM();
+      } catch (err) {
+        logger.error(`Re-capture failed: ${err.message}`);
+        updatePanelDOM();
+      }
+    };
   }
 
   // Debug: Clear logs

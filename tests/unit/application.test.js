@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { captureJob } from '../../src/core/jobs.js';
 import { createSession, restoreSession, saveSession } from '../../src/core/sessions.js';
 import { rememberAnswer, recallAnswer } from '../../src/core/memory.js';
-import { classifyPage } from '../../src/core/pageClassifier.js';
+import { classifyPage, isVisible } from '../../src/core/pageClassifier.js';
 import { inspectValidation } from '../../src/core/validation.js';
 import { findContinue } from '../../src/core/navigation.js';
 import { pageSignature } from '../../src/core/navigation.js';
@@ -494,6 +494,45 @@ test('captures JSON-LD JobPosting and an explicit application link', () => {
   assert.equal(captured.company, 'Example');
   assert.equal(captured.description, 'Build useful software.');
   assert.equal(captured.applicationUrl, 'https://example.com/apply/42');
+});
+test('Lever /apply captures postingUrl as listingUrl and avoids form text in description', () => {
+  const leverDom = new JSDOM('<!DOCTYPE html><html><head><meta property="og:description" content="Build spacecraft software."></head><body><div class="posting-header"><h2>Embedded Engineer</h2></div><form><input id="name" /></form></body></html>', { url: 'https://jobs.lever.co/kepler/42/apply' });
+  const captured = captureJob(leverDom.window.document);
+  assert.equal(captured.listingUrl, 'https://jobs.lever.co/kepler/42');
+  assert.equal(captured.applicationUrl, 'https://jobs.lever.co/kepler/42/apply');
+  assert.equal(captured.description, 'Build spacecraft software.');
+  leverDom.window.close();
+});
+test('Lever /apply hydrates full description asynchronously when parent page has JSON-LD', async () => {
+  const leverDom = new JSDOM('<!DOCTYPE html><html><head><meta property="og:description" content="Short summary."></head><body><div class="posting-header"><h2>Embedded Engineer</h2></div><form><input id="name" /></form></body></html>', { url: 'https://jobs.lever.co/kepler/42/apply' });
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (url === 'https://jobs.lever.co/kepler/42') {
+      return {
+        ok: true,
+        text: async () => '<html><head><script type="application/ld+json">{"@type":"JobPosting","title":"Embedded Engineer","hiringOrganization":{"name":"Kepler"},"description":"Full detailed responsibilities and qualifications."}</script></head><body><div class="posting-headline"><h2>Embedded Engineer</h2></div><a class="postings-btn" href="/kepler/42/apply">Apply for this job</a><a href="https://kepler.space">Company site</a></body></html>',
+      };
+    }
+    return { ok: false };
+  };
+  try {
+    const captured = captureJob(leverDom.window.document);
+    assert.equal(captured.description, 'Short summary.');
+    assert.ok(captured.pendingHydration);
+    await captured.pendingHydration;
+    assert.equal(captured.description, 'Full detailed responsibilities and qualifications.');
+    assert.equal(captured.company, 'Kepler');
+    assert.equal(captured.companyUncertain, false);
+  } finally {
+    globalThis.fetch = origFetch;
+    leverDom.window.close();
+  }
+});
+test('isVisible safely evaluates nodes in DOMParser parsed documents without defaultView', () => {
+  const parsed = new dom.window.DOMParser().parseFromString('<div><a href="#test">Link</a></div>', 'text/html');
+  const link = parsed.querySelector('a');
+  assert.equal(parsed.defaultView, null);
+  assert.equal(isVisible(link), true);
 });
 test('session restores exact known URLs, not unrelated applications on the same host', async () => {
   const session = createSession(job());

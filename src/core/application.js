@@ -312,6 +312,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
   }
   async function request(fields, context, token, signature) {
     if (!guard(token)) return [];
+    if (session?.job?.pendingHydration) await session.job.pendingHydration;
     await harvestComboboxOptions(fields);
     if (!await settleFields(signature, token, 'option harvesting')) return [];
     let response = await answer(normalizeFieldsForAI(fields), { jobContext: session.job, ...context });
@@ -551,7 +552,10 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
           if (page.type === 'application') session.currentStep = '';
         }
       } else if (!session) {
-        try { captureJob(); } catch { /* Ignore early DOM access */ }
+        try {
+          const job = captureJob();
+          if (job?.pendingHydration) await job.pendingHydration;
+        } catch { /* Ignore early DOM access */ }
       }
       emit();
       const checkNativeStepAdvance = () => {
@@ -586,16 +590,27 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       interval = setInterval(() => void tick(), 1500);
       await tick();
     },
-    capture() {
+    async capture() {
       if (busy) return;
       generation++;
-      session = createSession(captureJob());
+      const job = captureJob();
+      session = createSession(job);
       emit();
+      if (session?.job?.pendingHydration) {
+        await session.job.pendingHydration;
+        saveSession(session);
+        emit();
+      }
     },
     async start(job) {
       if (busy) return;
       generation++;
       if (job || !session) session = createSession(job || captureJob());
+      if (session?.job?.pendingHydration) {
+        await session.job.pendingHydration;
+        saveSession(session);
+        emit();
+      }
       if (!compatibleSession()) return;
       session.stepReview = false;
       session.active = true;

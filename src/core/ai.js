@@ -1,4 +1,5 @@
-import { hasApiKey, getSettings, getProfile } from './storage.js';
+import { hasApiKey, getSettings, getProfile, gmGet } from './storage.js';
+import { STORAGE_KEYS } from './constants.js';
 import { logger } from './debug.js';
 import { platform } from './platform.js';
 import { findExactOption } from './fields/combobox.js';
@@ -422,8 +423,9 @@ export async function generateAutofillAnswers(normalizedFields, { allowSearch = 
   const settings = getSettings();
   const profile = getProfile();
   const adapter = detectAdapter();
+  const resolvedJob = jobContext || gmGet(STORAGE_KEYS.JOB) || null;
   if (typeof adapter.resolveAnswer === 'function' || normalizedFields.some(field => field.ats?.adapter === 'workday' || field.ats?.adapter === 'lever')) {
-    return generateAdapterAnswers(normalizedFields, { adapter, settings, profile, allowSearch, jobContext, repairErrors });
+    return generateAdapterAnswers(normalizedFields, { adapter, settings, profile, allowSearch, jobContext: resolvedJob, repairErrors });
   }
   const defaultModel = settings.model || 'google/gemini-2.0-flash';
   const structuredModel = settings.structuredModel || defaultModel;
@@ -447,7 +449,7 @@ export async function generateAutofillAnswers(normalizedFields, { allowSearch = 
       url: window.location.href,
       host: window.location.hostname,
     },
-    jobContext,
+    jobContext: resolvedJob,
     repairErrors,
   };
 
@@ -618,6 +620,9 @@ async function generateAdapterAnswers(fields, { adapter, settings, profile, allo
   if (!unresolved.length) return { answers, latencyMs: 0, model };
   if (!hasApiKey()) return { answers, latencyMs: 0, model };
   const tag = currentAdapter?.label ? `${currentAdapter.label} page` : 'Application page';
+  if (jobContext?.description) {
+    logger.info(`Grounding ${unresolved.length} questions in job context: "${jobContext.title || 'Untitled'}" at "${jobContext.company || 'Unknown'}" (${jobContext.description.length} chars)`);
+  }
   const result = await requestAiJson({ model, tag, messages: [
     { role: 'system', content: `${buildStructuredSystemPrompt({ allowSearch })}\n${NARRATIVE_VOICE_RULES}\n${getNarrativeStyleExamples(profile, settings)}\nFor declared multiple-choice fields only, value may be an array of exact owned option labels. Ground answers in profile and record context first. For ambiguous factual or open-ended questions, best-effort factual guessing is enabled: label unsupported facts with provenance=guessed and inferred=true. Label grounded contextual answers provenance=inferred. Never guess disclosures or select a label outside owned options. Never complete assessments, identity verification, recorded interviews, e-signatures, or legal attestations.` },
     { role: 'user', content: JSON.stringify({ applicantProfile: profileForAI(profile), resumeContext: formatStructuredBackground(profile) || profile.resumeContext, applicantNotes: profile.applicantNotes, jobContext, repairErrors, fieldsToFill: unresolved }) },
@@ -678,6 +683,10 @@ Rules:
 
   const structuredBg = formatStructuredBackground(profile);
   const combinedResumeContext = structuredBg || profile.resumeContext || '';
+  const job = gmGet(STORAGE_KEYS.JOB);
+  const jobContextStr = job?.description
+    ? `\n\nTarget Job Context:\n${job.title ? `Title: ${job.title}\n` : ''}${job.company ? `Company: ${job.company}\n` : ''}Description:\n${job.description.slice(0, 4000)}`
+    : '';
 
   const userPrompt = `Question Label: ${fieldLabel}
 Current Answer:
@@ -690,7 +699,7 @@ Candidate Resume Highlights:
 ${combinedResumeContext}
 
 Applicant Notes / Rules:
-${profile.applicantNotes}
+${profile.applicantNotes}${jobContextStr}
 
 User Revision Instructions:
 ${feedback || 'Make it clearer and more specific to this job.'}

@@ -3,6 +3,92 @@
 Running log of changes, bugs, and platform findings for the dual-target
 (extension + userscript) Kareer.
 
+## Turn: 2026-09-29 — Complete End-to-End Delivery of Job Context to AI & Request Visibility
+
+### Findings
+- **Target**: Job description propagation into AI autofill and inline rewrite requests (`src/core/ai.js`, `src/core/ui.js`).
+- **Platform / ATS**: All platforms, including Lever and Ashby.
+- **Symptoms**: Verification that the captured job description is strictly passed to AI requests. In `handleUnifiedAutofillClick`, `generateAutofillAnswers()` was being invoked without passing `{ jobContext }`, relying solely on callers.
+- **Resolution**:
+  - In `src/core/ai.js`:
+    - Updated `generateAutofillAnswers()` to automatically resolve `jobContext || gmGet(STORAGE_KEYS.JOB) || null`. If any caller omits `jobContext`, it guarantees fallback to the active job stored in `kr:job`.
+    - Added explicit logger statement in `generateAdapterAnswers()`: logs `Grounding X questions in job context: "<title>" at "<company>" (<len> chars)`.
+    - Updated `rewriteNarrativeField()` to include `Target Job Context` (`Title`, `Company`, `Description`) in the prompt payload for inline rewrites.
+  - In `src/core/ui.js`:
+    - In `handleUnifiedAutofillClick()`, explicitly resolve `currentJob`, await `pendingHydration`, and pass `{ jobContext: currentJob }` to `generateAutofillAnswers()`.
+- **Verification**:
+  - `npm test`: 280/280 tests pass.
+  - `npm run build`: v0.4.89 built cleanly.
+
+## Turn: 2026-09-29 — Fix Lever /apply Parent Posting Hydration Crash & Live Debug Re-render
+
+### Findings
+- **Target**: Lever `/apply` parent posting hydration (`src/core/pageClassifier.js`, `src/core/jobs.js`, `src/core/ui.js`, `tests/unit/application.test.js`).
+- **Platform / ATS**: Lever (`jobs.lever.co/<company>/<id>/apply`).
+- **Symptoms**:
+  - On Lever `/apply` pages, only the 293-character `meta[property="og:description"]` was captured and the company remained "None detected", whereas visiting the parent posting page captured the full 5,031-character description and "Kepler Communications".
+  - Manually clicking "Re-capture" on `/apply` did not resolve the full description.
+- **Root-Cause Analysis**:
+  - `hydrateJob()` fetches the parent posting URL and parses the HTML using `new DOMParser().parseFromString(html, 'text/html')`.
+  - When `captureJob(postingDoc)` was called on the parsed document, it checked `isVisible(el)` for candidate apply links.
+  - In `src/core/pageClassifier.js`, `isVisible` called `node.ownerDocument.defaultView.getComputedStyle(node)`. Documents created by `DOMParser.parseFromString()` do not have a browsing context (`defaultView === null`).
+  - Calling `.getComputedStyle` on `null` threw a `TypeError: Cannot read properties of null (reading 'getComputedStyle')`.
+  - This error was caught by the silent catch block in `hydrateJob()`, causing hydration to fail silently every single time on real pages with markup and falling back to the 293-character meta tag.
+  - Additionally, `renderDebugTab()` was not hooked into `pendingHydration` completion, so asynchronous resolution did not trigger a UI update until a manual re-render.
+- **Resolution**:
+  - Fixed `isVisible()` in `src/core/pageClassifier.js` to safely check `node.ownerDocument?.defaultView?.getComputedStyle`.
+  - Added structured logging to `hydrateJob()` in `src/core/jobs.js` (`logger.info` on start/success, `logger.warn` on failure) so hydration issues are never hidden.
+  - Added an auto-refresh hook in `renderDebugTab()` in `src/core/ui.js` that listens to `job.pendingHydration` and re-renders the panel once resolved.
+  - Added button loading state (`Capturing...` + disabled) to the "Re-capture" button so users receive clear visual feedback while async hydration is in flight.
+  - Updated unit test in `tests/unit/application.test.js` to include realistic HTML markup in parent posting mock responses and added explicit unit test for `isVisible()` with `DOMParser` documents.
+
+### Turn Changes
+- `src/core/pageClassifier.js`: Made `isVisible()` safe when `ownerDocument.defaultView` is `null`.
+- `src/core/jobs.js`: Added `logger` import and informational/warning logs to `hydrateJob()`.
+- `src/core/ui.js`: Hooked `pendingHydration` to auto-refresh DOM on resolution; added button busy state to Re-capture.
+- `tests/unit/application.test.js`: Added realistic mock body markup and explicit `DOMParser` `isVisible` test.
+
+### Verification / Status
+- Verified reproduction and fix using live Kepler Lever posting data (`node scratch/test-lever.mjs` resolved full 5,031 characters and "Kepler Communications").
+- `npm test`: 280/280 tests pass.
+- `npm run build`: v0.4.88 built cleanly.
+
+## Turn: 2026-09-29 — Automatic Job Description Capture & Lever /apply Hydration
+
+### Findings
+- **Target**: Job description extraction across ATS platforms (`src/core/jobs.js`, `src/core/application.js`, `tests/unit/application.test.js`).
+- **Platform / ATS**: Lever (`jobs.lever.co`), Ashby (`jobs.ashbyhq.com`), Workday (`myworkdayjobs.com`).
+- **Symptoms**:
+  - When landing directly on Lever application form pages (`https://jobs.lever.co/<company>/<jobId>/apply`), Lever unmounts the job posting description and drops the Schema.org JSON-LD `JobPosting` script.
+  - Because `captureJob()` fell back to `doc.body`, `session.job.description` captured form inputs, field labels, and cookie banner text (~3,600 characters of form questions) rather than the actual job description.
+  - When the AI engine was queried during autofill, this form junk was injected into `jobContext.description`, degrading model grounding on open-ended or role-specific questions.
+- **Root-Cause Analysis**:
+  - Lever segregates the full description with JSON-LD to the parent posting URL (`/<company>/<id>`), but strips it on `/apply`.
+  - `captureJob()` lacked detection for Lever's `/apply` route, lacked fallback to `<meta property="og:description">`, and lacked automatic same-origin parent posting fetching.
+- **Resolution**:
+  1. Updated `captureJob()` in `src/core/jobs.js`:
+     - Added Lever `/apply` route detection: derives clean parent `postingUrl = url.replace(/\/apply.*/, '')`, setting `listingUrl = postingUrl` and `applicationUrl = url`.
+     - Added `<meta property="og:description">` / `<meta name="twitter:description">` fallback before `doc.body`, preventing form inputs and cookie notices from polluting the description.
+  2. Implemented `hydrateJob(job, doc)`:
+     - Kicks off an automatic same-origin `fetch(postingUrl)` when on Lever `/apply`.
+     - Parses the parent page with `DOMParser` and extracts the complete Schema.org JSON-LD `JobPosting`, updating `job.description` (5,000+ characters), `company`, `title`, and `location` in-place, and saving to `STORAGE_KEYS.JOB`.
+     - Attached `job.pendingHydration` promise.
+  3. Integrated `pendingHydration` into `src/core/application.js`:
+     - Awaited in `request()` before dispatching AI answers, in `start()` before executing the application workflow, in `capture()` when the user clicks `#kr-capture-job`, and during initial engine mount.
+  4. Added unit tests in `tests/unit/application.test.js`:
+     - Validated Lever `/apply` listingUrl extraction and synchronous meta description fallback.
+     - Validated asynchronous JSON-LD hydration from parent posting page.
+
+### Turn Changes
+- `src/core/jobs.js`: Added `hydrateJob()`, Lever `/apply` detection, meta description fallback, and `pendingHydration` lifecycle.
+- `src/core/application.js`: Awaited `job.pendingHydration` in `request()`, `mountApplicationEngine()`, `capture()`, and `start()`.
+- `tests/unit/application.test.js`: Added unit tests for Lever `/apply` capture and async parent posting hydration.
+
+### Verification / Status
+- `npm test`: 279/279 tests pass (100% pass, 0 fail).
+- Live Playwright verification: Verified against live Lever page `https://jobs.lever.co/kepler/2ad02ce3-1d56-4aee-9f1d-5199c780c0c1/apply`, successfully extracting the full 5,031-character description and company name.
+- `npm run build`: v0.4.86 built cleanly for Chrome, Firefox, and Userscript.
+
 ## Turn: 2026-09-29 — Code Review Fixes for Lever Determinism and Source Provenance
 
 ### Findings
