@@ -197,7 +197,7 @@ export function workdayValue(field, profile) {
 export function workdayAnswer(field, profile) {
   const value = workdayValue(field, profile);
   if (value === undefined || Array.isArray(value) && !value.length) return null;
-  const answer = { fieldId: field.fieldId || field.id, value, inferred: false, provenance: 'saved' };
+  const answer = { fieldId: field.fieldId || field.id, value, inferred: false, provenance: 'saved', source: 'profile' };
   if (['first_name', 'last_name'].includes(field.ats?.canonicalKey) && !profile[profileKeys[field.ats.canonicalKey]]) Object.assign(answer, { inferred: true, provenance: 'guessed' });
   if (field.ats?.canonicalKey === 'source' || field.ats?.canonicalKey?.startsWith('current_date')) answer.provenance = 'inferred';
   if (field.ats?.canonicalKey?.match(/_(?:month|day)$/) && /^\d+$/.test(String(value)) && ['number', 'text'].includes(field.type)) answer.value = String(Number(value));

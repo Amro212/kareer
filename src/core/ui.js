@@ -812,6 +812,25 @@ input:checked + .kr-slider:before {
   border: 1px solid rgba(98, 200, 255, 0.3);
 }
 
+.kr-badge-ai {
+  background: rgba(168, 85, 247, 0.12);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.kr-badge-profile {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.kr-badge-saved {
+  background: rgba(98, 200, 255, 0.12);
+  color: var(--kr-info);
+  border: 1px solid rgba(98, 200, 255, 0.3);
+}
+
+
 /* Alerts & Banners */
 .kr-alert {
   padding: 10px 12px;
@@ -1636,10 +1655,11 @@ async function executeAutofillFlow() {
       field.element = resolveLiveFileElement(field);
       const verification = didFill ? await verifyField(field, '') : { verified: false, error: 'No stored resume' };
       if (verification.verified) {
-        fieldResultsCache.set(field.id, { status: FILL_STATUS.VERIFIED, value: verification.actualValue || '' });
+        fieldResultsCache.set(field.id, { status: FILL_STATUS.VERIFIED, value: verification.actualValue || '', source: 'profile' });
       } else {
-        fieldResultsCache.set(field.id, { status: FILL_STATUS.FAILED, value: '', error: verification.error || 'Resume was not attached' });
+        fieldResultsCache.set(field.id, { status: FILL_STATUS.FAILED, value: '', error: verification.error || 'Resume was not attached', source: 'profile' });
       }
+
     }
     const remoteUploads = await applyRemoteResumeUploads({ overwriteExisting: overwrite });
     if (token !== autofillGeneration) return;
@@ -1728,22 +1748,27 @@ async function executeAutofillFlow() {
         field.element = resolveLiveElement(field);
 
         const answer = answersMap.get(field.id);
+        const source = answer?.source || (answer?.inferred ? 'ai' : 'profile');
         if (!answer || answer.value === '' || answer.value === null || answer.value === undefined) {
           if (field.required || field.element?.getAttribute('data-reject-fill') === 'true') {
             fieldResultsCache.set(field.id, {
               status: FILL_STATUS.FAILED,
               value: field.currentValue || '',
               error: field.ats?.adapter === 'workday' ? 'No usable saved or generated answer for this required field' : 'Required field left empty by AI',
+              source,
             });
             highlightFailedField(field.element);
           } else {
             fieldResultsCache.set(field.id, {
               status: FILL_STATUS.SKIPPED,
               value: field.currentValue,
+              source,
             });
           }
           continue;
         }
+
+        logger.info(`Field action [${source === 'ai' ? 'AI' : source === 'saved' ? 'Saved' : 'Profile'}]: id=${field.id}, label="${field.label}", value="${String(answer.value).slice(0, 40)}"`);
 
         scrollToField(field.element);
         highlightActiveField(field.element);
@@ -1775,6 +1800,7 @@ async function executeAutofillFlow() {
             provenance: answer.provenance || (answer.inferred ? 'inferred' : 'saved'),
             value: verification.actualValue || answer.value,
             inferred: answer.inferred,
+            source,
           });
           // Preserve memory and session continuity without overwriting
           if (applicationEngine?.session) {
@@ -1789,6 +1815,7 @@ async function executeAutofillFlow() {
             status: FILL_STATUS.FAILED,
             value: verification.actualValue || '',
             error: verification.error || 'Value did not stick in DOM',
+            source,
           });
           logger.warn(`Verification failed for "${field.label}": ${verification.error}`);
         }
@@ -1826,12 +1853,14 @@ async function executeAutofillFlow() {
           error: result.error,
           inferred: result.inferred,
           provenance: result.provenance,
+          source: result.source || (result.inferred ? 'ai' : 'profile'),
           label: result.label,
           remote: true,
         });
       }
       autofillProgress.current = autofillProgress.total;
     }
+
 
     refreshDetectedFields();
     const report = summarizeFieldResults(getAllDetectedFields(), fieldResultsCache);
@@ -2004,6 +2033,8 @@ export function summarizeFieldResults(fields, results) {
   const inferredFields = [];
   const failedFields = [];
   const untouchedFields = [];
+  let aiCount = 0;
+  let profileCount = 0;
 
   for (const f of fields) {
     const id = f.id || f.fieldId;
@@ -2017,6 +2048,14 @@ export function summarizeFieldResults(fields, results) {
     } else {
       untouchedFields.push({ field: f, result: res });
     }
+
+    if (res && res.status !== FILL_STATUS.UNTOUCHED && (res.value !== '' && res.value != null)) {
+      if (res.source === 'ai' || (res.inferred && res.source !== 'profile' && res.source !== 'saved')) {
+        aiCount++;
+      } else {
+        profileCount++;
+      }
+    }
   }
 
   return {
@@ -2026,6 +2065,8 @@ export function summarizeFieldResults(fields, results) {
     untouched: untouchedFields,
     filled: verifiedFields.length + inferredFields.length,
     total: fields.length,
+    aiCount,
+    profileCount,
   };
 }
 
@@ -2035,7 +2076,10 @@ function renderFieldReviewSection() {
     inferred: inferredFields,
     failed: failedFields,
     untouched: untouchedFields,
+    filled,
     total,
+    aiCount,
+    profileCount,
   } = summarizeFieldResults(getAllDetectedFields(), fieldResultsCache);
 
   const renderItem = (item, badgeClass, badgeLabel) => {
@@ -2043,6 +2087,20 @@ function renderFieldReviewSection() {
     const label = item.field.label || item.result?.label || fieldId;
     const val = item.result?.value ?? item.field.currentValue ?? '';
     const displayVal = val !== '' ? String(val) : 'Empty';
+
+    let sourceBadge = '';
+    if (val !== '' && item.result?.status !== FILL_STATUS.UNTOUCHED) {
+      const src = item.result?.source;
+      const inferred = item.result?.inferred;
+      if (src === 'ai' || (inferred && src !== 'profile' && src !== 'saved')) {
+        sourceBadge = '<span class="kr-badge kr-badge-ai" title="Filled using an AI call">AI</span>';
+      } else if (src === 'saved') {
+        sourceBadge = '<span class="kr-badge kr-badge-saved" title="Reused exact saved answer">SAVED</span>';
+      } else {
+        sourceBadge = '<span class="kr-badge kr-badge-profile" title="Deterministically filled from profile">PROFILE</span>';
+      }
+    }
+
     return `
       <div class="kr-review-item">
         <div class="kr-review-info">
@@ -2050,6 +2108,7 @@ function renderFieldReviewSection() {
           <div class="kr-review-value" title="${escapeHtml(displayVal)}">${escapeHtml(displayVal)}</div>
         </div>
         <div class="kr-review-meta">
+          ${sourceBadge}
           <span class="kr-badge ${badgeClass}">${badgeLabel}</span>
           <button type="button" class="kr-btn kr-btn-secondary kr-btn-small kr-locate-field-btn" data-field-id="${escapeHtml(fieldId)}" title="Scroll to and highlight field">
             ${ICONS.locate}
@@ -2071,6 +2130,10 @@ function renderFieldReviewSection() {
         <span class="kr-badge kr-badge-amber">${inferredFields.length} INFERRED</span>
         <span class="kr-badge kr-badge-red">${failedFields.length} FAILED</span>
         <span class="kr-badge" style="background: var(--kr-bg-3); color: var(--kr-text-3);">${untouchedFields.length} UNTOUCHED</span>
+        ${filled > 0 ? `
+          <span class="kr-badge kr-badge-profile" title="Deterministically filled from profile">${profileCount} PROFILE</span>
+          <span class="kr-badge kr-badge-ai" title="Filled using AI call">${aiCount} AI</span>
+        ` : ''}
       </div>
       <div class="kr-review-list" style="margin-top: 6px;">
         ${total === 0 ? '<div style="font-size: 12px; color: var(--kr-text-3); text-align: center; padding: 12px;">No form fields detected on this page.</div>' : ''}
@@ -2082,6 +2145,7 @@ function renderFieldReviewSection() {
     </div>
   `;
 }
+
 
 function renderHomeTab() {
   const status = getStatusInfo();

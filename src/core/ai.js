@@ -548,8 +548,15 @@ export async function generateAutofillAnswers(normalizedFields, { allowSearch = 
 
   const fieldsById = new Map(normalizedFields.map((f) => [f.fieldId, f]));
   const seenIds = new Set();
-  const fixedAnswers = new Map(normalizedFields.map(field => [field.fieldId, fixedProfileAnswer(field, profile, { allowSearch })]).filter(([, answer]) => answer));
-  const candidateAnswers = [...combinedRawAnswers.filter(ans => !fixedAnswers.has(ans?.fieldId)), ...fixedAnswers.values()];
+  const fixedAnswers = new Map(normalizedFields.map(field => {
+    const ans = fixedProfileAnswer(field, profile, { allowSearch });
+    if (ans && !ans.source) ans.source = 'profile';
+    return [field.fieldId, ans];
+  }).filter(([, answer]) => answer));
+  const candidateAnswers = [
+    ...combinedRawAnswers.filter(ans => !fixedAnswers.has(ans?.fieldId)).map(ans => ({ ...ans, source: 'ai' })),
+    ...fixedAnswers.values()
+  ];
   const validatedAnswers = candidateAnswers.filter((ans) => {
     if (!ans || !fieldsById.has(ans.fieldId) || seenIds.has(ans.fieldId)) {
       logger.warn('AI returned an unknown or duplicate field ID (omitted)');
@@ -594,9 +601,17 @@ async function generateAdapterAnswers(fields, { adapter, settings, profile, allo
     const resolver = currentAdapter?.resolveAnswer || (field.ats?.adapter === 'workday' ? workdayAnswer : null);
     const deterministic = (resolver ? resolver(field, profile) : null) || fixedProfileAnswer(field, profile, { allowSearch });
     const saved = profile.savedAnswers?.[field.label];
-    if (deterministic) answers.push(deterministic);
-    else if (saved !== undefined && (!['combobox', 'select', 'radio'].includes(field.type) || findExactOption(field.options || [], saved))) {
-      answers.push({ fieldId: field.fieldId, value: saved, inferred: false, provenance: 'saved' });
+    const deterministicHasValue = deterministic && (Array.isArray(deterministic.value)
+      ? deterministic.value.length > 0
+      : deterministic.value !== '' && deterministic.value !== null && deterministic.value !== undefined);
+    if (deterministic && (deterministicHasValue || deterministic.searchQuery)) {
+      if (!deterministic.source) deterministic.source = 'profile';
+      answers.push(deterministic);
+    } else if (saved !== undefined && (!['combobox', 'select', 'radio'].includes(field.type) || findExactOption(field.options || [], saved))) {
+      answers.push({ fieldId: field.fieldId, value: saved, inferred: false, provenance: 'saved', source: 'saved' });
+    } else if (deterministic) {
+      if (!deterministic.source) deterministic.source = 'profile';
+      answers.push(deterministic);
     } else unresolved.push(field);
   }
   const model = settings.model || 'google/gemini-2.0-flash';
@@ -623,6 +638,7 @@ async function generateAdapterAnswers(fields, { adapter, settings, profile, allo
       answer.value = Array.isArray(answer.value) ? options.map(option => option.label) : (field.type === 'combobox' ? options[0].label : options[0].value);
     }
     if (!allowSearch || field.type !== 'combobox' || answer.value !== '' || typeof answer.searchQuery !== 'string' || answer.searchQuery.length > 200) delete answer.searchQuery;
+    answer.source = 'ai';
     answer.provenance = answer.provenance === 'guessed' ? 'guessed' : 'inferred';
     answer.inferred = true;
     if (!OPTION_FIELD_TYPES.has(field.type)) answer.value = stripModelDashes(answer.value);

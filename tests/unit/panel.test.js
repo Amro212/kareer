@@ -51,6 +51,32 @@ test('field report correctly summarizes cross-frame fields identified by fieldId
   assert.equal(report.untouched[0].field.fieldId, 'jcf1::phone');
 });
 
+test('field report distinguishes AI calls vs deterministic profile fills', () => {
+  const fields = [
+    { id: 'full_name', label: 'Full Name' },
+    { id: 'email', label: 'Email' },
+    { id: 'custom_essay', label: 'Why do you want this role?' },
+    { id: 'saved_question', label: 'Years of Experience' },
+    { id: 'notes', label: 'Additional comments' },
+  ];
+  const results = new Map([
+    ['full_name', { status: 'verified', value: 'Alex Morgan', source: 'profile' }],
+    ['email', { status: 'verified', value: 'alex@example.com', source: 'profile' }],
+    ['custom_essay', { status: 'verified', value: 'I have 8 years...', source: 'ai', inferred: true }],
+    ['saved_question', { status: 'verified', value: '8', source: 'saved' }],
+    ['notes', { status: 'untouched' }],
+  ]);
+
+  const report = summarizeFieldResults(fields, results);
+
+  assert.equal(report.total, 5);
+  assert.equal(report.filled, 4);
+  assert.equal(report.profileCount, 3);
+  assert.equal(report.aiCount, 1);
+  assert.equal(report.untouched.length, 1);
+});
+
+
 test('workflow shows verified completion count and retained structural diagnostic', async () => {
   const bundle = await build({ entryPoints: ['src/targets/userscript/entry.js'], bundle: true, format: 'iife', write: false });
   const dom = new JSDOM('<body></body>', { url: 'https://example.com/apply', runScripts: 'dangerously' });

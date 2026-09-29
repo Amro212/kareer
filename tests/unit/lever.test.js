@@ -141,6 +141,15 @@ test('Lever custom question cards are heuristically classified into canonical ke
   assert.match(meta.label, /desired total compensation/i);
 });
 
+test('Lever does not classify narrative text as a demographic disclosure', () => {
+  const field = {
+    type: 'textarea',
+    label: 'Describe your experience building products for people with disabilities',
+  };
+
+  assert.equal(leverCanonicalKey(field), '');
+});
+
 test('Lever deterministic answer resolution binds candidate profile values', () => {
   const profile = {
     fullName: 'Jane Doe',
@@ -170,6 +179,74 @@ test('Lever deterministic answer resolution binds candidate profile values', () 
   const ans = leverAnswer({ id: 'full_name', ats: { canonicalKey: 'full_name' } }, profile);
   assert.equal(ans.value, 'Jane Doe');
   assert.equal(ans.provenance, 'saved');
+});
+
+test('Lever deterministic salary keeps the saved pay period', () => {
+  const value = leverValue({ ats: { canonicalKey: 'salary' } }, {
+    expectedSalary: '60',
+    salaryCurrency: 'USD',
+    salaryPeriod: 'Hourly',
+  });
+
+  assert.equal(value, '60 USD Hourly');
+});
+
+test('Lever eligibility answers use the question country and combined sponsorship timing', () => {
+  const options = [
+    { value: 'Yes', label: 'Yes' },
+    { value: 'No', label: 'No' },
+  ];
+  const profile = {
+    workAuthorization: 'Yes',
+    sponsorshipNow: 'No',
+    sponsorshipFuture: 'No',
+    workEligibilities: [
+      { enabled: true, country: 'Canada', workAuthorization: 'Yes', sponsorshipNow: 'No', sponsorshipFuture: 'No' },
+      { enabled: true, country: 'United States', workAuthorization: 'No', sponsorshipNow: 'Yes', sponsorshipFuture: 'No' },
+    ],
+  };
+
+  const usAuthorization = leverAnswer({
+    id: 'us-auth',
+    label: 'Are you legally authorized to work in the United States?',
+    type: 'select',
+    ats: { canonicalKey: 'work_auth' },
+    options,
+  }, profile);
+  assert.equal(usAuthorization.value, 'No');
+
+  const missingCountry = leverAnswer({
+    id: 'mx-auth',
+    label: 'Are you legally authorized to work in Mexico?',
+    type: 'select',
+    ats: { canonicalKey: 'work_auth' },
+    options,
+  }, profile);
+  assert.equal(missingCountry, null);
+
+  const unsetUsAuthorization = leverAnswer({
+    id: 'unset-us-auth',
+    label: 'Are you legally authorized to work in the United States?',
+    type: 'select',
+    ats: { canonicalKey: 'work_auth' },
+    options,
+  }, {
+    ...profile,
+    workEligibilities: [
+      profile.workEligibilities[0],
+      { enabled: true, country: 'United States', workAuthorization: '', sponsorshipNow: '', sponsorshipFuture: '' },
+    ],
+  });
+  assert.equal(unsetUsAuthorization, null);
+
+  const combinedSponsorship = leverAnswer({
+    id: 'us-sponsorship',
+    label: 'Will you now or in the future require visa sponsorship in the United States?',
+    type: 'select',
+    ats: { canonicalKey: 'sponsorship' },
+    options,
+  }, profile);
+  assert.equal(combinedSponsorship.value, 'Yes');
 });
 
 test('Lever EEO disclosures leave optional unset fields blank and fill required with Decline', () => {
@@ -204,6 +281,34 @@ test('Lever EEO disclosures leave optional unset fields blank and fill required 
   const filledAns = leverAnswer(requiredGender, { gender: 'Woman' });
   assert.equal(filledAns.value, 'female');
   assert.equal(filledAns.provenance, 'saved');
+});
+
+test('Lever exact saved answers replace empty deterministic answers', async () => {
+  boot('<form></form>');
+  saveProfile({ savedAnswers: { Gender: 'Female' } });
+  saveApiKey('');
+
+  const { answers } = await generateAutofillAnswers([{
+    fieldId: 'gender',
+    type: 'select',
+    label: 'Gender',
+    required: false,
+    currentValue: '',
+    isAlreadyFilled: false,
+    ats: { adapter: 'lever', canonicalKey: 'gender' },
+    options: [
+      { value: 'female', label: 'Female' },
+      { value: 'male', label: 'Male' },
+    ],
+  }]);
+
+  assert.deepEqual(answers[0], {
+    fieldId: 'gender',
+    value: 'Female',
+    inferred: false,
+    provenance: 'saved',
+    source: 'saved',
+  });
 });
 
 test('Lever pronouns widget reads and fills custom and standard choices', () => {

@@ -206,8 +206,10 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         status: verified.verified ? 'verified' : 'failed',
         value: verified.actualValue || '',
         inferred: false,
+        source: 'profile',
         error: verified.verified ? '' : (verified.error || 'Resume was not attached.'),
       });
+
       emit();
     }
     const remote = await applyRemoteResumeUploads({ overwriteExisting: getSettings().overwriteExisting });
@@ -293,7 +295,15 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       let exact = field.ats?.adapter === 'workday' || !['text', 'textarea', 'email', 'tel', 'url', 'number', 'contenteditable'].includes(field.type) || String(verified.actualValue ?? '').trim() === String(entry.value).trim();
       if (['select', 'radio'].includes(field.type)) exact = field.options.some(o => (String(o.value) === String(entry.value) || o.label === String(entry.value)) && String(o.value) === String(verified.actualValue));
       const valid = verified.verified && exact && !inspectValidation([live]).some(error => error.fieldId === live.id);
-      results.set(field.id, { status: valid ? entry.provenance === 'guessed' ? 'guessed' : entry.inferred ? 'inferred' : 'verified' : 'failed', provenance: entry.provenance || (entry.inferred ? 'inferred' : 'saved'), value: verified.actualValue ?? '', inferred: Boolean(entry.inferred), error: valid ? '' : 'Value rejected or failed verification.' });
+      results.set(field.id, {
+        status: valid ? entry.provenance === 'guessed' ? 'guessed' : entry.inferred ? 'inferred' : 'verified' : 'failed',
+        provenance: entry.provenance || (entry.inferred ? 'inferred' : 'saved'),
+        value: verified.actualValue ?? '',
+        inferred: Boolean(entry.inferred),
+        source: entry.source || (entry.inferred ? 'ai' : 'profile'),
+        error: valid ? '' : 'Value rejected or failed verification.',
+      });
+
       if (valid) rememberAnswer(session, field, entry);
       saveSession(session);
       emit();

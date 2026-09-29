@@ -5,6 +5,9 @@ import {
   canonicalNorm,
   canonicalProfileValue,
   canonicalOptionMatches,
+  countryCode,
+  countryCodes,
+  countryNames,
   isDeclineOption,
   OPTIONAL_DISCLOSURE_KEYS,
 } from './canonical.js';
@@ -29,6 +32,34 @@ const URL_MAPPINGS = [
   ['twitter', /twitter/i],
   ['website', /other|website|urls/i],
 ];
+
+function questionCountryCode(field) {
+  const raw = `${field.label || ''} ${field.description || ''}`;
+  const normalized = ` ${canonicalNorm(raw).replace(/[^\p{L}\p{N}]+/gu, ' ')} `;
+  if (/\b(?:u s|u s a|usa)\b/.test(normalized)) return 'US';
+  if (/\b(?:u k|uk)\b/.test(normalized)) return 'GB';
+  for (const code of countryCodes) {
+    const name = canonicalNorm(countryNames.of(code)).replace(/[^\p{L}\p{N}]+/gu, ' ');
+    if (name && normalized.includes(` ${name} `)) return code;
+  }
+  return '';
+}
+
+function eligibilityRecord(field, profile) {
+  const records = (profile.workEligibilities || []).filter(record => record?.enabled !== false && record.country);
+  if (!records.length) return null;
+  const target = questionCountryCode(field);
+  if (target) return records.find(record => countryCode(record.country) === target);
+  return records.length === 1 ? records[0] : undefined;
+}
+
+function combinedSponsorship(record, profile) {
+  const now = record ? record.sponsorshipNow : profile.sponsorshipNow;
+  const future = record ? record.sponsorshipFuture : profile.sponsorshipFuture;
+  if (now === 'Yes' || future === 'Yes') return 'Yes';
+  if (now === 'No' && future === 'No') return 'No';
+  return undefined;
+}
 
 export function leverCanonicalKey(element, container) {
   const name = element?.name || '';
@@ -68,6 +99,12 @@ export function leverCanonicalKey(element, container) {
   if (/portfolio|website/i.test(labelText)) return 'portfolio';
 
   // Demographics / EEO heuristics
+  const isChoice = Boolean(
+    element.widget ||
+    ['select', 'select-one', 'select-multiple', 'radio', 'checkbox', 'combobox'].includes(element.type) ||
+    element.matches?.('select, input[type="radio"], input[type="checkbox"], [role="combobox"], button[aria-haspopup="listbox"]')
+  );
+  if (!isChoice) return '';
   if (/\b(?:gender|sex)\b/i.test(labelText) && !/pronoun/i.test(labelText)) return 'gender';
   if (/\b(?:race|ethnicity)\b/i.test(labelText)) return 'ethnicity';
   if (/sexual orientation|lgbt/i.test(labelText)) return 'lgbt_v2';
@@ -138,6 +175,14 @@ export function leverFieldMetadata(element) {
 export function leverValue(field, profile) {
   const canonical = field.ats?.canonicalKey || leverCanonicalKey(field.element || field);
   if (!canonical) return undefined;
+  if (['work_auth', 'sponsorship', 'sponsorship_now', 'sponsorship_future'].includes(canonical)) {
+    const record = eligibilityRecord(field, profile);
+    if (record === undefined) return undefined;
+    if (canonical === 'sponsorship' && /\bnow\b.*\bfuture\b|\bfuture\b.*\bnow\b/i.test(field.label || '')) {
+      return combinedSponsorship(record, profile);
+    }
+    if (record) return canonicalProfileValue(canonical, profile, record);
+  }
   return canonicalProfileValue(canonical, profile);
 }
 
@@ -155,6 +200,7 @@ export function leverAnswer(field, profile) {
         value: field.type === 'combobox' ? declineOption.label : declineOption.value,
         inferred: true,
         provenance: 'inferred',
+        source: 'profile',
       };
     }
   }
@@ -166,7 +212,9 @@ export function leverAnswer(field, profile) {
     value,
     inferred: false,
     provenance: 'saved',
+    source: 'profile',
   };
+
 
   const choice = field.widget || ['combobox', 'select', 'radio'].includes(field.type) || (field.type === 'checkbox' && field.ats?.multiple);
   if (!choice || value === '') return answer;

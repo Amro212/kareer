@@ -148,21 +148,28 @@ export function canonicalProfileValue(canonical, profile, record) {
   }
 
   if (canonical === 'work_auth') {
-    return profile.workAuthorization || undefined;
+    return record ? record.workAuthorization || undefined : profile.workAuthorization || undefined;
   }
 
-  if (canonical === 'sponsorship' || canonical === 'sponsorship_future') {
-    return profile.sponsorshipFuture || profile.sponsorshipNow || undefined;
+  if (canonical === 'sponsorship') {
+    return record
+      ? record.sponsorshipFuture || record.sponsorshipNow || undefined
+      : profile.sponsorshipFuture || profile.sponsorshipNow || undefined;
+  }
+
+  if (canonical === 'sponsorship_future') {
+    return record ? record.sponsorshipFuture || undefined : profile.sponsorshipFuture || undefined;
   }
 
   if (canonical === 'sponsorship_now') {
-    return profile.sponsorshipNow || profile.sponsorshipFuture || undefined;
+    return record ? record.sponsorshipNow || undefined : profile.sponsorshipNow || undefined;
   }
 
   if (canonical === 'salary') {
     if (profile.expectedSalary) {
       const curr = profile.salaryCurrency ? ` ${profile.salaryCurrency}` : '';
-      return `${profile.expectedSalary}${curr}`;
+      const period = profile.salaryPeriod ? ` ${profile.salaryPeriod}` : '';
+      return `${profile.expectedSalary}${curr}${period}`;
     }
   }
 
