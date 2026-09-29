@@ -1792,4 +1792,18 @@ Narrative voice prompt updated and verified.
 - Verification: focused CBC unit and real Chromium extension regressions passed. Full unit/browser totals and final build version recorded below after the final source change. A test run without browser/temp-file sandbox escalation failed in the existing build-watch fixture; rerun with required permissions is pending.
 - Remaining acceptance: capture the live CBC page with the panel Debug tab's Save page fixture for exact popup DOM and post-selection confirmation, then replay it. Do not infer demographic equivalence from broad descriptions.
 - Final verification: `npm test` — **261 passed, 0 failed**; `npm run test:e2e` — **57 passed, 0 failed (4.7 minutes)** using the real Chromium extension. The focused CBC browser replay also passed independently. Final local build is **v0.4.77** for Chrome, Firefox, and Tampermonkey. No commit, push, or publication was performed.
+# Turn: 2026-09-29 — Codex review feedback: name synchronization and review gate collapse
 
+- Target: shared extension/userscript core, profile storage, and application workflow engine.
+- Bugs/findings addressed:
+  1. Profile name synchronization: editing `fullName` via the panel previously kept stale `firstName` and `lastName` because `saveProfile` only split `fullName` when both component fields were empty. Workday prioritized the stale explicit parts, filling obsolete names into applications.
+  2. Dual review gate on Workday: when `autoContinue: false`, Gate 1 paused before `step.reviewed` was marked true. Clicking "Next Step" resumed with `forceContinue: true`, but the resumed tick cleared that flag and immediately entered Gate 2 (`stepReviewPause && !step.reviewed`), requiring two clicks to advance.
+- Resolution:
+  1. Added `splitFullName` helper in `src/core/storage.js`. `saveProfile` now detects when `fullName` changed or was edited independently from the component parts and reparses/synchronizes `firstName`, `middleName`, and `lastName` (or clears them when `fullName` is emptied). Direct edits to component parts also synchronize `fullName`.
+  2. Updated `src/core/application.js` to set `step.reviewed = true` when the initial autoContinue pause triggers or when `forceContinue` is active on resume, collapsing both review gates into a single user action.
+- Files modified:
+  - `src/core/storage.js`: added `splitFullName` export, synchronized name parts on `fullName` changes in `saveProfile` and `getProfile`.
+  - `src/core/application.js`: set `step.reviewed = true` on autoContinue pause and when `forceContinue` is active to bypass redundant `stepReviewPause`.
+  - `tests/unit/profile.test.js`: added unit tests for `splitFullName` and name part synchronization across panel and options edit flows.
+  - `tests/unit/application.test.js`: added unit test verifying Workday with `autoContinue: false` advances past both review gates on a single `continueStep()` call.
+- Verification: `npm test` — **264 passed, 0 failed** (3 new unit regressions). `npx playwright test tests/e2e/workday-prompts.spec.js` — **4 passed, 0 failed**. Merge compatibility verified against the downstream `lever` branch.

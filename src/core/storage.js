@@ -43,6 +43,18 @@ export function parseLegacyLocation(locationStr) {
   return {};
 }
 
+export function splitFullName(fullName) {
+  const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { firstName: '', middleName: '', lastName: '' };
+  if (parts.length === 1) return { firstName: parts[0], middleName: '', lastName: '' };
+  if (parts.length === 2) return { firstName: parts[0], middleName: '', lastName: parts[1] };
+  return {
+    firstName: parts[0],
+    middleName: parts.slice(1, -1).join(' '),
+    lastName: parts.at(-1),
+  };
+}
+
 export function getProfile() {
   const stored = gmGet(STORAGE_KEYS.PROFILE, {});
   const legacyAddress = (!stored.city && !stored.country && stored.location)
@@ -73,14 +85,10 @@ export function getProfile() {
   if (!merged.fullName && (merged.firstName || merged.lastName)) {
     merged.fullName = [merged.firstName, merged.middleName, merged.lastName].filter(Boolean).join(' ');
   } else if (merged.fullName && !merged.firstName && !merged.lastName) {
-    const parts = merged.fullName.trim().split(/\s+/);
-    merged.firstName = parts[0] || '';
-    if (parts.length === 2) {
-      merged.lastName = parts[1];
-    } else if (parts.length > 2) {
-      merged.middleName = parts.slice(1, -1).join(' ');
-      merged.lastName = parts.at(-1);
-    }
+    const parts = splitFullName(merged.fullName);
+    merged.firstName = parts.firstName;
+    merged.middleName = parts.middleName;
+    merged.lastName = parts.lastName;
   }
   if (!merged.location) {
     merged.location = [merged.city, merged.stateProvince, merged.country].filter(Boolean).join(', ');
@@ -114,22 +122,40 @@ export function saveProfile(profile) {
   const sponsorshipNow = primaryElig?.sponsorshipNow !== undefined ? primaryElig.sponsorshipNow : (profile?.sponsorshipNow || '');
   const sponsorshipFuture = primaryElig?.sponsorshipFuture !== undefined ? primaryElig.sponsorshipFuture : (profile?.sponsorshipFuture || '');
 
+  const stored = gmGet(STORAGE_KEYS.PROFILE, {});
   let fullName = profile?.fullName?.trim() || '';
   let firstName = profile?.firstName?.trim() || '';
   let middleName = profile?.middleName?.trim() || '';
   let lastName = profile?.lastName?.trim() || '';
 
-  if (!fullName && (firstName || lastName)) {
-    fullName = [firstName, middleName, lastName].filter(Boolean).join(' ');
-  } else if (fullName && !firstName && !lastName) {
-    const parts = fullName.split(/\s+/);
-    firstName = parts[0] || '';
-    if (parts.length === 2) {
-      lastName = parts[1];
-    } else if (parts.length > 2) {
-      middleName = parts.slice(1, -1).join(' ');
-      lastName = parts.at(-1);
+  const storedFullName = (stored?.fullName || '').trim();
+  const storedFirstName = (stored?.firstName || '').trim();
+  const storedMiddleName = (stored?.middleName || '').trim();
+  const storedLastName = (stored?.lastName || '').trim();
+
+  const fullNameChanged = fullName !== storedFullName;
+  const partsChanged = firstName !== storedFirstName || middleName !== storedMiddleName || lastName !== storedLastName;
+
+  if (fullNameChanged && !partsChanged) {
+    if (!fullName) {
+      firstName = '';
+      middleName = '';
+      lastName = '';
+    } else {
+      const parsed = splitFullName(fullName);
+      firstName = parsed.firstName;
+      middleName = parsed.middleName;
+      lastName = parsed.lastName;
     }
+  } else if (partsChanged && !fullNameChanged) {
+    fullName = [firstName, middleName, lastName].filter(Boolean).join(' ');
+  } else if (!fullName && (firstName || lastName)) {
+    fullName = [firstName, middleName, lastName].filter(Boolean).join(' ');
+  } else if (fullName && (!firstName && !lastName || [firstName, middleName, lastName].filter(Boolean).join(' ') !== fullName)) {
+    const parsed = splitFullName(fullName);
+    firstName = parsed.firstName;
+    middleName = parsed.middleName;
+    lastName = parsed.lastName;
   }
 
   const cleanProfile = {

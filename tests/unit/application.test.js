@@ -1097,3 +1097,42 @@ test('native on-page Continue click is detected and resumes autofill when stepRe
     assert.equal(engine.session.completedSteps, 1);
   } finally { engine.destroy(); }
 });
+
+test('Workday with autoContinue disabled advances past both review gates on a single continueStep click', async () => {
+  if (dom) dom.window.close();
+  dom = new JSDOM('<body><main></main></body>', { url: 'https://acme.myworkdayjobs.com/en-US/job/apply' });
+  for (const key of ['window', 'document', 'location', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement', 'Element', 'Event', 'KeyboardEvent', 'MouseEvent', 'MutationObserver']) globalThis[key] = dom.window[key];
+  globalThis.CSS = { escape: value => value };
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { get: () => 200 });
+  HTMLElement.prototype.scrollIntoView = () => {};
+
+  saveSettings({ autoContinue: false });
+  render(`<h2>My Information</h2>${input('city', 'City')}<button data-automation-id="bottom-navigation-next-button">Next</button>`);
+  let continueClicked = false;
+  document.querySelector('[data-automation-id="bottom-navigation-next-button"]').onclick = () => {
+    continueClicked = true;
+    render(`<h2>My Experience</h2>${input('title', 'Job Title')}<button data-automation-id="bottom-navigation-next-button">Next</button>`);
+  };
+
+  const engine = createApplicationEngine({ settleMs: 0, transitionMs: 0, answer: workflowAnswers });
+  try {
+    await engine.start();
+    // After step 1 is filled, autoContinue=false triggers the first review pause
+    assert.equal(document.querySelector('#city').value, 'Applicant');
+    assert.equal(engine.session.status, 'paused');
+    assert.equal(engine.session.reason, 'Page filled. Auto Continue is off.');
+    assert.equal(engine.stepReview, true);
+    assert.equal(continueClicked, false);
+
+    // A single continueStep() must advance past the Workday review gate to Next without requiring a second click
+    await engine.continueStep();
+    assert.equal(continueClicked, true, 'Continue button must be clicked on first continueStep()');
+    // Step 2 has been reached and filled
+    assert.equal(document.querySelector('#title').value, 'Applicant');
+    assert.equal(engine.session.status, 'paused');
+    assert.equal(engine.stepReview, true);
+  } finally {
+    saveSettings({ autoContinue: true });
+    engine.destroy();
+  }
+});

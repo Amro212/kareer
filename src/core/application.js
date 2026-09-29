@@ -457,13 +457,17 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         }
         if (await attemptAutoSubmit(token, step)) return;
         if (!getSettings().autoContinue && !step.forceContinue) {
+          step.reviewed = true;
           session.stepReview = true;
           saveSession(session);
           status('paused', 'Page filled. Auto Continue is off.');
           return;
         }
+        const wasForced = Boolean(step.forceContinue);
         step.forceContinue = false;
-        if (detectAdapter().quirks?.stepReviewPause && !step.reviewed) {
+        if (wasForced) {
+          step.reviewed = true;
+        } else if (detectAdapter().quirks?.stepReviewPause && !step.reviewed) {
           step.reviewed = true;
           session.stepReview = true;
           saveSession(session);
