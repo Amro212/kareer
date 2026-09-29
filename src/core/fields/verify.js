@@ -19,7 +19,12 @@ export async function verifyField(field, expectedValue) {
   const expectedStr = String(expectedValue || '').trim().toLowerCase();
   if (field.widget) {
     const actual = detectAdapter().readChoice?.(field) || [];
-    const option = findExactOption(field.options || [], expectedValue);
+    if (field.ats?.multiple) {
+      const values = Array.isArray(expectedValue) ? expectedValue : [expectedValue];
+      const verified = values.length > 0 && values.every(value => field.options.some(option => option.value === value) && actual.includes(value));
+      return { verified, actualValue: actual.join(', '), error: verified ? undefined : 'Expected choices were not accepted' };
+    }
+    const option = findExactOption(field.options || [], expectedValue, field);
     const verified = Boolean(option && actual.length === 1 && optionKey(actual[0]) === optionKey(option.value));
     return { verified, actualValue: actual.join(', '), error: verified ? undefined : 'The expected single choice was not accepted' };
   }
@@ -32,7 +37,7 @@ export async function verifyField(field, expectedValue) {
         return { verified: false, actualValue: '', error: 'No option selected' };
       }
       const actualVal = checkedRadio.value || checkedRadio.closest('label')?.textContent?.trim() || '';
-      const option = findExactOption(field.options || [], expectedValue);
+      const option = findExactOption(field.options || [], expectedValue, field);
       const verified = Boolean(option && radios.filter(r => r.checked).length === 1 && optionKey(actualVal) === optionKey(option.value));
       return { verified, actualValue: actualVal, error: verified ? undefined : 'Selected radio does not match the expected option' };
     }
@@ -66,7 +71,7 @@ export async function verifyField(field, expectedValue) {
         };
       }
 
-      const option = findExactOption(field.options || [], expectedValue);
+      const option = findExactOption(field.options || [], expectedValue, field);
       const verified = Boolean(option && optionKey(actualVal) === optionKey(option.value));
       return {
         verified,
@@ -77,7 +82,7 @@ export async function verifyField(field, expectedValue) {
 
     case FIELD_TYPES.CONTENTEDITABLE: {
       const actualVal = (field.element.textContent || '').trim();
-      const verified = actualVal.length > 0;
+      const verified = field.ats?.adapter === 'workday' ? sameWorkdayValue(field, actualVal, expectedStr) : actualVal.length > 0;
       return {
         verified,
         actualValue: actualVal,
@@ -86,10 +91,22 @@ export async function verifyField(field, expectedValue) {
     }
 
     case FIELD_TYPES.COMBOBOX: {
+      if (Array.isArray(expectedValue)) {
+        if (!field.ats?.multiple) return { verified: false, error: 'This field accepts one value' };
+        const results = [];
+        for (const value of expectedValue) results.push(await verifyCombobox(field.element, value));
+        return { verified: results.every(result => result.verified), actualValue: readComboboxSelection(field.element).join(', '), error: results.find(result => !result.verified)?.error };
+      }
       return await verifyCombobox(field.element, expectedValue);
     }
 
     case FIELD_TYPES.FILE: {
+      const upload = detectAdapter().uploadState?.(field.element);
+      if (upload) {
+        const expected = String(expectedValue || field.element.files?.[0]?.name || '').trim();
+        const verified = upload.accepted && Boolean(upload.name) && (!expected || upload.name === expected);
+        return { verified, actualValue: upload.name, error: verified ? undefined : 'Workday has not accepted the uploaded file' };
+      }
       const actualVal = field.element.files?.[0]?.name || '';
       const expectedName = String(expectedValue || '').trim();
       const verified = Boolean(actualVal) && (!expectedName || actualVal.toLowerCase() === expectedName.toLowerCase());
@@ -111,7 +128,7 @@ export async function verifyField(field, expectedValue) {
       if (!expectedStr) {
         return { verified: true, actualValue: actualVal };
       }
-      const verified = actualVal.length > 0;
+      const verified = field.ats?.adapter === 'workday' ? sameWorkdayValue(field, actualVal, expectedStr) : actualVal.length > 0;
       return {
         verified,
         actualValue: actualVal,
@@ -119,6 +136,11 @@ export async function verifyField(field, expectedValue) {
       };
     }
   }
+}
+
+function sameWorkdayValue(field, actual, expected) {
+  if (/_(?:year|month|day)$/.test(field.ats?.canonicalKey || '') && /^\d+$/.test(actual) && /^\d+$/.test(expected)) return Number(actual) === Number(expected);
+  return optionKey(actual) === optionKey(expected);
 }
 
 export async function verifyCombobox(element, expectedValue) {
@@ -134,7 +156,12 @@ export async function verifyCombobox(element, expectedValue) {
 function _checkComboboxState(element, expectedValue) {
   const values = readComboboxSelection(element);
   const expected = optionKey(expectedValue);
-  const verified = values.some(value => optionKey(value) === expected);
+  const adapter = detectAdapter();
+  const meta = adapter.fieldMetadata?.(element);
+  const verified = values.some(value =>
+    optionKey(value) === expected ||
+    Boolean(meta && adapter.optionMatches?.(meta, value, expectedValue))
+  );
   return {
     verified,
     actualValue: values.join(', '),

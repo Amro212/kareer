@@ -92,7 +92,9 @@ test.describe('extension shell', () => {
     await page.locator('#save-model').click();
     await expect(page.locator('#model-feedback')).toHaveText('Model saved.');
 
-    await page.locator('#pf-fullName').fill('Test Applicant');
+    await page.locator('#pf-firstName').fill('Test');
+    await page.locator('#pf-lastName').fill('Applicant');
+    await page.locator('#eligibility-list .card-header').first().click();
     await page.locator('#pf-workCountry').fill('Canada');
     await page.locator('#pf-workAuthorization').selectOption('Yes');
     await page.locator('#applicantNotes').fill('Ships production software.');
@@ -116,7 +118,9 @@ test.describe('extension shell', () => {
     const page = await kr.context.newPage();
     await page.goto(kr.optionsUrl());
 
-    await page.locator('#pf-fullName').fill('Dual Citizen');
+    await page.locator('#pf-firstName').fill('Dual');
+    await page.locator('#pf-lastName').fill('Citizen');
+    await page.locator('#eligibility-list .card-header').first().click();
     await page.locator('#pf-workCountry').fill('United States');
     await page.locator('#pf-workAuthorization').selectOption('Yes');
 
@@ -150,7 +154,8 @@ test.describe('extension shell', () => {
 
     const options = await kr.context.newPage();
     await options.goto(kr.optionsUrl());
-    await options.locator('#pf-fullName').fill('Broadcast Applicant');
+    await options.locator('#pf-firstName').fill('Broadcast');
+    await options.locator('#pf-lastName').fill('Applicant');
     await options.locator('#profile-form button[type=submit]').click();
     await expect(options.locator('#profile-feedback')).toHaveText('Profile saved.');
 

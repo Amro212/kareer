@@ -1,0 +1,62 @@
+<!doctype html>
+<!-- Synthetic replay of reported Workday mechanics. Not a live CBC capture. -->
+<html lang="en"><meta charset="utf-8"><title>Workday prompt regression</title>
+<style>body{font:16px system-ui;margin:24px}main{max-width:700px}.field,[data-automation-id^="formField"]{margin:12px 0}label{display:block}input{font:inherit;padding:6px}[data-automation-id="selectedItem"]{display:inline-block;background:#ddd;padding:4px;margin:4px}[data-automation-id="activeListContainer"]{position:fixed;top:20px;left:750px;background:white;border:1px solid;padding:10px}[data-automation-id="promptLeafNode"]{padding:10px;cursor:pointer}</style>
+<main><div data-automation-id="progressBar"><span aria-current="step">My Information</span></div><h1>My Information</h1>
+<form>
+<div data-automation-id="formField-firstName"><label for="legalName--firstName">First name *</label><input id="legalName--firstName" required></div>
+<div data-automation-id="formField-lastName"><label for="legalName--lastName">Last name *</label><input id="legalName--lastName" required></div>
+<div data-automation-id="sourceSection"><div data-automation-id="formField-source"><label for="source--source">How did you hear about us? *</label><div data-automation-id="multiSelectContainer"><input id="source--source" placeholder="Search" data-uxi-widget-type="selectinput"></div></div></div>
+<div data-automation-id="formField-countryPhoneCode"><label for="phoneNumber--countryPhoneCode">Country phone code *</label><div data-automation-id="multiselectInputContainer"><input id="phoneNumber--countryPhoneCode" placeholder="Search"></div></div>
+<div data-automation-id="formField-phoneNumber"><label for="phoneNumber--phoneNumber">Phone number *</label><input id="phoneNumber--phoneNumber" data-automation-id="phone-number" required></div>
+<div data-automation-id="formField-skills"><label for="skills">Skills</label><div data-automation-id="multiSelectContainer"><div data-automation-id="selectedItem" title="Python">Python</div><input id="skills" placeholder="Search"></div></div>
+<div data-automation-id="ethnicityMulti"><fieldset><legend>Race / ethnicity</legend><label><input type="checkbox" value="old" checked>Other</label><label><input type="checkbox" value="black-code">Black</label><label><input type="checkbox" value="asian-code">Asian</label></fieldset></div>
+<div data-automation-id="workExperienceSection"><h2>Work experience</h2><div data-automation-id="workExperience-1"><div data-automation-id="formField-jobTitle"><label for="workExperience-1--jobTitle">Job title</label><input id="workExperience-1--jobTitle" value="Engineer"></div><div data-automation-id="formField-company"><label for="workExperience-1--company">Company</label><input id="workExperience-1--company" value="Acme"></div><div data-automation-id="formField-roleDescription"><label for="workExperience-1--roleDescription">Role description</label><textarea id="workExperience-1--roleDescription"></textarea></div></div><button type="button" data-automation-id="add-button">Add experience</button></div>
+<button type="button" data-automation-id="bottom-navigation-next-button">Continue</button></form></main>
+<div data-automation-id="activeListContainer" hidden></div>
+<script>
+window.fixture = { enters: {}, submits: 0, adds: 0, continues: 0, selections: {} };
+const menu = document.querySelector('[data-automation-id="activeListContainer"]');
+document.querySelector('form').onsubmit = event => { event.preventDefault(); window.fixture.submits++; };
+const choices = { 'source--source': ['LinkedIn', 'Referral'], 'phoneNumber--countryPhoneCode': ['Canada (+1)', 'United Kingdom (+44)'], skills: ['Python', 'JavaScript', 'Rust'] };
+for (const input of document.querySelectorAll('input[placeholder="Search"]')) {
+  input.oninput = () => { menu.hidden = true; };
+  input.onkeydown = event => {
+    if (event.key !== 'Enter') return;
+    // This deliberately makes implicit Enter submission observable.
+    if (!event.defaultPrevented) document.querySelector('form').requestSubmit();
+    event.preventDefault();
+    window.fixture.enters[input.id] = (window.fixture.enters[input.id] || 0) + 1;
+    const matches = choices[input.id].filter(label => label.toLowerCase().includes(input.value.toLowerCase()));
+    menu.replaceChildren(); menu.hidden = false;
+    const message = document.createElement('div'); message.dataset.automationId = 'promptMessage'; message.textContent = matches.length ? 'Search results' : 'No Items'; menu.append(message);
+    for (const label of matches) {
+      const leaf = document.createElement('div'); leaf.dataset.automationId = 'promptLeafNode';
+      const option = document.createElement('div'); option.dataset.automationId = 'promptOption'; option.dataset.automationLabel = label; option.textContent = label; leaf.append(option);
+      leaf.onmousedown = event => event.preventDefault();
+      leaf.onclick = () => {
+        const multiple = input.id === 'skills';
+        if (!multiple) input.parentElement.querySelectorAll('[data-automation-id="selectedItem"]').forEach(node => node.remove());
+        const values = [...input.parentElement.querySelectorAll('[data-automation-id="selectedItem"]')].map(node => node.title);
+        if (!values.includes(label)) { const token = document.createElement('div'); token.dataset.automationId = 'selectedItem'; token.title = label; token.textContent = label; input.before(token); }
+        window.fixture.selections[input.id] = [...input.parentElement.querySelectorAll('[data-automation-id="selectedItem"]')].map(node => node.title);
+        input.value = ''; menu.hidden = true;
+      };
+      menu.append(leaf);
+    }
+  };
+}
+document.body.addEventListener('mousedown', event => { if (!menu.contains(event.target) && !event.target.matches('input[placeholder="Search"]')) menu.hidden = true; });
+document.querySelector('[data-automation-id="add-button"]').onclick = event => {
+  window.fixture.adds++; const number = window.fixture.adds + 1;
+  const row = document.createElement('div'); row.dataset.automationId = `workExperience-${number}`;
+  for (const [key, label] of [['jobTitle', 'Job title'], ['company', 'Company'], ['roleDescription', 'Role description']]) {
+    const field = document.createElement('div'); field.dataset.automationId = `formField-${key}`;
+    const caption = document.createElement('label'); caption.textContent = label;
+    const input = document.createElement(key === 'roleDescription' ? 'textarea' : 'input'); input.id = `workExperience-${number}--${key}`; caption.htmlFor = input.id;
+    field.append(caption, input); row.append(field);
+  }
+  event.target.before(row);
+};
+document.querySelector('[data-automation-id="bottom-navigation-next-button"]').onclick = () => { window.fixture.continues++; };
+</script></html>

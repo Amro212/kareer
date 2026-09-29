@@ -122,6 +122,9 @@ const ICONS = {
   terminal: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 4 7 8 3 12"/><line x1="9" y1="12" x2="13" y2="12"/></svg>`,
   list: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="4" x2="14" y2="4"/><line x1="6" y1="8" x2="14" y2="8"/><line x1="6" y1="12" x2="14" y2="12"/><circle cx="3" cy="4" r=".8" fill="currentColor"/><circle cx="3" cy="8" r=".8" fill="currentColor"/><circle cx="3" cy="12" r=".8" fill="currentColor"/></svg>`,
   externalLink: `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h4"/><polyline points="10 2 14 2 14 6"/><line x1="7" y1="9" x2="14" y2="2"/></svg>`,
+  arrowRight: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="8" x2="13" y2="8"/><polyline points="9 4 13 8 9 12"/></svg>`,
+  briefcase: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="12" height="9" rx="1.5"/><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h3A1.5 1.5 0 0 1 11 3.5V5"/></svg>`,
+  spinner: `<svg class="kr-spin" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-opacity="0.25"/><path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor"/></svg>`,
 };
 
 const STYLES = `
@@ -946,10 +949,12 @@ input:checked + .kr-slider:before {
 }
 
 .kr-strength-chip-fill {
+  width: 100%;
   height: 100%;
   display: block;
   border-radius: 2px;
-  transition: width 0.2s ease;
+  transform-origin: left center;
+  transition: transform 0.2s ease;
 }
 
 .kr-strength-chip.high .kr-strength-chip-fill { background: var(--kr-signal); }
@@ -972,9 +977,11 @@ input:checked + .kr-slider:before {
 }
 
 .kr-strength-fill {
+  width: 100%;
   height: 100%;
   border-radius: 3px;
-  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: left center;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .kr-strength-fill.high { background: var(--kr-signal); }
@@ -1021,6 +1028,11 @@ input:checked + .kr-slider:before {
   background: rgba(242, 184, 75, 0.03);
 }
 
+.kr-workflow-card.wf-step-review {
+  border-color: rgba(163, 230, 53, 0.35);
+  background: rgba(163, 230, 53, 0.03);
+}
+
 .kr-workflow-card.wf-done {
   border-color: rgba(82, 217, 140, 0.35);
   background: rgba(82, 217, 140, 0.03);
@@ -1047,6 +1059,12 @@ input:checked + .kr-slider:before {
   animation: kr-pulse-badge 1.8s ease-in-out infinite;
 }
 
+.kr-wf-badge-review {
+  background: rgba(163, 230, 53, 0.12);
+  color: var(--kr-signal);
+  border: 1px solid rgba(163, 230, 53, 0.35);
+}
+
 .kr-wf-badge-paused {
   background: rgba(242, 184, 75, 0.12);
   color: var(--kr-warning);
@@ -1063,6 +1081,41 @@ input:checked + .kr-slider:before {
   background: var(--kr-bg-3);
   color: var(--kr-text-3);
   border: 1px solid var(--kr-line);
+}
+
+.kr-hero-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--kr-text-2);
+  line-height: 1.4;
+  padding: 8px 10px;
+  background: var(--kr-bg-1);
+  border-radius: var(--kr-radius-sm);
+  border: 1px solid var(--kr-line);
+}
+
+.kr-hero-status-row.running {
+  border-color: rgba(163, 230, 53, 0.35);
+  background: rgba(163, 230, 53, 0.04);
+  color: var(--kr-signal);
+}
+
+.kr-hero-status-row.step-review {
+  border-color: rgba(163, 230, 53, 0.35);
+  background: rgba(163, 230, 53, 0.06);
+}
+
+.kr-spin {
+  animation: kr-spin 0.8s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+@keyframes kr-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 @keyframes kr-pulse-badge {
@@ -1349,6 +1402,7 @@ function setSafeHTML(element, htmlString) {
 }
 
 function getStatusInfo() {
+  if (!hasApiKey() && detectAdapter().id === 'workday') return { label: 'Profile Autofill Ready', dotClass: '', badgeClass: 'kr-badge-green', text: 'Known profile values are ready. Add an API key for unanswered questions.' };
   if (!hasApiKey()) {
     return {
       label: 'No API Key',
@@ -1465,6 +1519,56 @@ function stopAutofillFlow(reason = 'Autofill paused by user. Progress and filled
   updatePanelDOM();
 }
 
+async function handleUnifiedAutofillClick() {
+  if (applicationEngine?.busy || isAutofilling) return;
+
+  const page = classifyPage();
+  if (['captcha', 'boundary', 'confirmation'].includes(page.type)) {
+    autofillProgress.statusText = page.reason;
+    updatePanelDOM();
+    return;
+  }
+  if (!hasApiKey() && detectAdapter().id !== 'workday') {
+    alert('Please configure your OpenRouter API Key in Settings first.');
+    currentTab = 'settings';
+    updatePanelDOM();
+    return;
+  }
+
+  const profile = getProfile();
+  if (!profile.fullName && !profile.email) {
+    panelVisible = true;
+    currentTab = 'profile';
+    updatePanelDOM();
+    const fieldId = 'kr-profile-fullName';
+    setTimeout(() => shadowRootRef?.querySelector(`#${fieldId}`)?.focus(), 50);
+    return;
+  }
+
+  const session = applicationEngine?.session;
+  // If waiting for step review (Workday or autoContinue off), advance to next step
+  if (session?.stepReview) {
+    void applicationEngine?.continueStep();
+    return;
+  }
+
+  // If a multi-step session exists (captured or in-progress), run the engine workflow
+  if (session) {
+    void applicationEngine?.start();
+    return;
+  }
+
+  // Otherwise run the single page / embedded frames autofill flow
+  void executeAutofillFlow();
+}
+
+function handleUnifiedPauseClick() {
+  applicationEngine?.pause();
+  if (isAutofilling) {
+    stopAutofillFlow('Autofill paused by user. Progress and filled fields preserved.');
+  }
+}
+
 async function executeAutofillFlow() {
   if (isAutofilling || applicationEngine?.busy) return;
   applicationEngine?.pause();
@@ -1476,7 +1580,7 @@ async function executeAutofillFlow() {
     updatePanelDOM();
     return;
   }
-  if (!hasApiKey()) {
+  if (!hasApiKey() && detectAdapter().id !== 'workday') {
     alert('Please configure your OpenRouter API Key in Settings first.');
     currentTab = 'settings';
     updatePanelDOM();
@@ -1484,14 +1588,11 @@ async function executeAutofillFlow() {
   }
 
   const profile = getProfile();
-  const strength = calculateProfileStrength(profile);
-  if (!strength.isMvpComplete) {
+  if (!profile.fullName && !profile.email) {
     panelVisible = true;
     currentTab = 'profile';
     updatePanelDOM();
-    const firstMissing = strength.missingCore[0];
-    const keyMap = { 'Full Name': 'fullName', 'Email': 'email', 'Phone': 'phone', 'Location': 'location' };
-    const fieldId = keyMap[firstMissing] ? `kr-profile-${keyMap[firstMissing]}` : null;
+    const fieldId = 'kr-profile-fullName';
     if (fieldId) {
       setTimeout(() => shadowRootRef?.querySelector(`#${fieldId}`)?.focus(), 50);
     }
@@ -1510,7 +1611,10 @@ async function executeAutofillFlow() {
     const overwrite = Boolean(settings.overwriteExisting);
 
     const shouldFill = (f) => {
+      if (f.element?.disabled || f.element?.readOnly) return false;
       if (overwrite) return true;
+      const adapterNeeds = detectAdapter().needsFill?.(f, profile);
+      if (adapterNeeds != null) return adapterNeeds;
       if (f.hasExistingValue) return false;
       const val = f.currentValue;
       return !val || val === 'false' || val === '0' || String(val).trim().length === 0;
@@ -1541,6 +1645,9 @@ async function executeAutofillFlow() {
     }
     // Parsing can populate, clear, add, or replace controls. Choose targets only
     // after it settles, preserving parser/user values unless overwrite is on.
+    await detectAdapter().prepareSections?.(document, profile, { session: applicationEngine?.session, isCurrent: () => token === autofillGeneration && window.location.href === runUrl });
+    await detectAdapter().prepareFields?.(document, profile, { overwrite, isCurrent: () => token === autofillGeneration && window.location.href === runUrl });
+    if (applicationEngine?.session) saveSession(applicationEngine.session);
     refreshDetectedFields();
     deduplicateFields(detectedFieldsCache);
     const targetFields = detectedFieldsCache.filter(shouldFill);
@@ -1584,7 +1691,7 @@ async function executeAutofillFlow() {
     ];
     let aiResponse = { answers: [] };
     if (normalized.length) {
-      autofillProgress.statusText = `Generating answers with AI (${settings.model})...`;
+      autofillProgress.statusText = detectAdapter().id === 'workday' ? 'Resolving application answers...' : `Generating answers with AI (${settings.model})...`;
       updatePanelDOM();
       aiResponse = await generateAutofillAnswers(normalized);
     }
@@ -1623,7 +1730,7 @@ async function executeAutofillFlow() {
             fieldResultsCache.set(field.id, {
               status: FILL_STATUS.FAILED,
               value: field.currentValue || '',
-              error: 'Required field left empty by AI',
+              error: field.ats?.adapter === 'workday' ? 'No usable saved or generated answer for this required field' : 'Required field left empty by AI',
             });
             highlightFailedField(field.element);
           } else {
@@ -1661,7 +1768,8 @@ async function executeAutofillFlow() {
         if (verification.verified) {
           highlightVerifiedField(field.element);
           fieldResultsCache.set(field.id, {
-            status: answer.inferred ? FILL_STATUS.INFERRED : FILL_STATUS.VERIFIED,
+            status: answer.provenance === 'guessed' ? FILL_STATUS.GUESSED : answer.inferred ? FILL_STATUS.INFERRED : FILL_STATUS.VERIFIED,
+            provenance: answer.provenance || (answer.inferred ? 'inferred' : 'saved'),
             value: verification.actualValue || answer.value,
             inferred: answer.inferred,
           });
@@ -1714,6 +1822,7 @@ async function executeAutofillFlow() {
           value: result.value || '',
           error: result.error,
           inferred: result.inferred,
+          provenance: result.provenance,
           label: result.label,
           remote: true,
         });
@@ -1818,24 +1927,28 @@ function renderHud() {
     : '';
 
   let ctaContent = '';
-  if (isAutofilling) {
+  if (isAutofilling || wfIsRunning) {
     ctaContent = `
       <button class="kr-hud-cta kr-hud-cta-running" id="kr-hud-autofill-btn" title="Autofill in progress">
-        ${ICONS.play}
-        <span>${autofillProgress.current}/${autofillProgress.total || fieldCount}</span>
+        <span class="kr-spin">${ICONS.spinner}</span>
+        <span>${autofillProgress.total > 0 ? `${autofillProgress.current}/${autofillProgress.total}` : 'Filling...'}</span>
       </button>
       <button class="kr-hud-icon-btn" id="kr-hud-pause-btn" title="Pause autofill">
         ${ICONS.pause}
       </button>
     `;
-  } else if (wfIsRunning) {
+  } else if (session?.stepReview) {
     ctaContent = `
-      <button class="kr-hud-cta kr-hud-cta-running" id="kr-hud-autofill-btn" title="Workflow running">
-        ${ICONS.play}
-        <span>Running...</span>
+      <button class="kr-hud-cta" id="kr-hud-autofill-btn" style="background: rgba(163, 230, 53, 0.15); color: var(--kr-signal); border: 1px solid rgba(163, 230, 53, 0.4);" title="Step review complete. Advance to next step.">
+        ${ICONS.arrowRight}
+        <span>Next Step</span>
       </button>
-      <button class="kr-hud-icon-btn" id="kr-hud-pause-btn" title="Pause workflow">
-        ${ICONS.pause}
+    `;
+  } else if (wfStatus === 'paused') {
+    ctaContent = `
+      <button class="kr-hud-cta" id="kr-hud-autofill-btn" title="Resume application autofill">
+        ${ICONS.play}
+        <span>Resume</span>
       </button>
     `;
   } else if (wfIsWaiting) {
@@ -1894,7 +2007,7 @@ export function summarizeFieldResults(fields, results) {
     const res = results.get(id);
     if (res?.status === FILL_STATUS.VERIFIED) {
       verifiedFields.push({ field: f, result: res });
-    } else if (res?.status === FILL_STATUS.INFERRED || res?.inferred) {
+    } else if (res?.status === FILL_STATUS.INFERRED || res?.status === FILL_STATUS.GUESSED || res?.inferred) {
       inferredFields.push({ field: f, result: res });
     } else if (res?.status === FILL_STATUS.FAILED) {
       failedFields.push({ field: f, result: res });
@@ -1959,9 +2072,9 @@ function renderFieldReviewSection() {
       <div class="kr-review-list" style="margin-top: 6px;">
         ${total === 0 ? '<div style="font-size: 12px; color: var(--kr-text-3); text-align: center; padding: 12px;">No form fields detected on this page.</div>' : ''}
         ${failedFields.map(i => renderItem(i, 'kr-badge-red', 'FAILED')).join('')}
-        ${inferredFields.map(i => renderItem(i, 'kr-badge-amber', 'INFERRED')).join('')}
-        ${verifiedFields.map(i => renderItem(i, 'kr-badge-green', 'VERIFIED')).join('')}
+        ${inferredFields.map(i => renderItem(i, 'kr-badge-amber', i.result?.provenance === 'guessed' || i.result?.status === FILL_STATUS.GUESSED ? 'GUESSED' : 'INFERRED')).join('')}
         ${untouchedFields.map(i => renderItem(i, '', 'UNTOUCHED')).join('')}
+        ${verifiedFields.map(i => renderItem(i, 'kr-badge-green', 'VERIFIED')).join('')}
       </div>
     </div>
   `;
@@ -1975,14 +2088,17 @@ function renderHomeTab() {
   const session = applicationState?.session;
   const job = session?.job;
   const page = classifyPage();
+  const adapter = detectAdapter();
+  const totalFieldCount = fieldCount + remoteFieldCount;
 
-  // --- Workflow card: map session status to visual state ---
+  // --- Workflow / Execution state mapping ---
   const wfStatus = session?.status || '';
-  const wfIsRunning = wfStatus === 'running' || wfStatus === 'submitting';
+  const wfIsRunning = isAutofilling || wfStatus === 'running' || wfStatus === 'submitting';
   const wfIsDone = ['review', 'confirmation'].includes(wfStatus);
-  const wfIsPaused = wfStatus === 'paused';
+  const isStepReview = Boolean(session?.stepReview);
+  const wfIsPaused = !wfIsRunning && !isStepReview && (wfStatus === 'paused' || (!session?.active && session?.steps && Object.keys(session.steps).length > 0));
   const wfIsWaiting = ['captcha', 'boundary'].includes(wfStatus) || ['captcha', 'boundary'].includes(page.type);
-  const wfCardClass = wfIsRunning ? 'wf-running' : wfIsDone ? 'wf-done' : (wfIsPaused || wfIsWaiting) ? 'wf-paused' : '';
+  const cardStateClass = wfIsRunning ? 'wf-running' : isStepReview ? 'wf-step-review' : wfIsDone ? 'wf-done' : (wfIsPaused || wfIsWaiting) ? 'wf-paused' : '';
 
   let wfBadgeHtml;
   if (wfIsDone) {
@@ -1991,120 +2107,59 @@ function renderHomeTab() {
   } else if (wfIsRunning) {
     const runLabel = wfStatus === 'submitting' ? 'SUBMITTING' : 'RUNNING';
     wfBadgeHtml = `<span class="kr-wf-badge kr-wf-badge-running">${ICONS.play} ${runLabel}</span>`;
+  } else if (isStepReview) {
+    wfBadgeHtml = `<span class="kr-wf-badge kr-wf-badge-review">${ICONS.check} STEP REVIEW</span>`;
   } else if (wfIsWaiting) {
     const waitLabel = wfStatus === 'captcha' || page.type === 'captcha' ? 'CAPTCHA PAUSED' : 'MANUAL ACTION REQUIRED';
     wfBadgeHtml = `<span class="kr-wf-badge kr-wf-badge-paused">${ICONS.shield} ${waitLabel}</span>`;
   } else if (wfIsPaused) {
     wfBadgeHtml = `<span class="kr-wf-badge kr-wf-badge-paused">${ICONS.pause} PAUSED</span>`;
   } else {
-    wfBadgeHtml = `<span class="kr-wf-badge kr-wf-badge-idle">NOT STARTED</span>`;
+    wfBadgeHtml = `<span class="kr-wf-badge kr-wf-badge-idle">READY</span>`;
   }
 
   const stepsCompleted = session?.completedSteps || 0;
   const fieldsAnswered = session ? Object.keys(session.answers).length : 0;
-
-  // Step progress bar: show proportional fill; pulse when running
   const stepBarPercent = stepsCompleted > 0 ? Math.min(stepsCompleted * 25, 100) : 0;
   const stepBarClass = wfIsDone ? 'wf-done' : wfIsRunning ? 'wf-pulse' : '';
 
-  // Reason text (don't show the raw "status: reason" format)
-  let wfReasonHtml = '';
-  if (session && session.reason) {
-    const isErr = wfIsPaused || wfIsWaiting;
-    wfReasonHtml = `<div class="kr-wf-reason ${isErr ? 'wf-error' : ''}">${escapeHtml(session.reason)}</div>`;
-  } else if (!session) {
-    wfReasonHtml = `<div style="font-size:12px;color:var(--kr-text-2)">Capture a job listing, then start on its application page.</div>`;
-  }
+  // Job & ATS display info
+  const jobTitle = job?.title || (adapter.id !== 'generic' ? `${adapter.label} Application` : 'Job Application');
+  const companyText = (job ? (job.company || 'Company unknown') : (adapter.id !== 'generic' ? `${adapter.label} Host` : currentHost)) + (job?.companyUncertain ? ' (uncertain)' : '');
+  const stepMarker = adapter.stepMarker?.(document) || '';
 
-  // Job info (title + company + location, no URL)
-  let wfJobHtml = '';
-  if (job) {
-    const companyText = (job.company || 'Company unknown') + (job.companyUncertain ? ' (uncertain)' : '');
-    wfJobHtml = `<div>
-      <div class="kr-wf-job-title">${escapeHtml(job.title)}</div>
-      <div class="kr-wf-job-company">${escapeHtml(companyText)}${job.location ? ` · ${escapeHtml(job.location)}` : ''}</div>
-    </div>`;
-  }
-
-  // Last error (only when there are errors and not already shown via reason)
+  // Last error notice
   const lastError = session?.errors?.length ? session.errors.at(-1).message : '';
-  const wfErrorHtml = lastError && !session.reason?.includes(lastError)
+  const wfErrorHtml = lastError && !session?.reason?.includes(lastError)
     ? `<div style="font-size:11px;color:var(--kr-warning);padding:6px 10px;background:rgba(242,184,75,0.08);border-radius:6px;border:1px solid rgba(242,184,75,0.25);">${ICONS.alert} ${escapeHtml(lastError)}</div>`
     : '';
 
-  const workflowHtml = `<div class="kr-workflow-card ${wfCardClass}">
-    <div class="kr-row">
-      <span class="kr-card-title">Application Workflow</span>
-      ${wfBadgeHtml}
-    </div>
-    ${wfJobHtml}
-    ${session ? `<div class="kr-wf-step-bar-container"><div class="kr-wf-step-bar ${stepBarClass}" style="transform: scaleX(${stepBarPercent / 100});"></div></div>` : ''}
-    ${session ? `<div class="kr-wf-metrics">
-      <div class="kr-wf-metric"><strong>${stepsCompleted}</strong> step${stepsCompleted !== 1 ? 's' : ''} completed</div>
-      <div class="kr-wf-metric"><strong>${fieldsAnswered}</strong> field${fieldsAnswered !== 1 ? 's' : ''} answered</div>
-    </div>` : ''}
-    ${wfReasonHtml}
-    ${wfErrorHtml}
-    <div class="kr-wf-actions">
-      <button class="kr-btn kr-btn-secondary" id="kr-capture-job" ${isAutofilling || applicationEngine?.busy ? 'disabled' : ''}>Capture Job</button>
-      <button class="kr-btn ${!session || wfIsRunning || wfIsDone || wfIsWaiting || isAutofilling ? 'kr-btn-secondary' : ''}" id="kr-start-application" ${isAutofilling || applicationEngine?.busy ? 'disabled' : ''}>${session ? 'Start / Resume' : 'Start Application'}</button>
-      <button class="kr-btn kr-btn-secondary ${wfIsRunning ? 'kr-btn-pause-active' : ''}" id="kr-pause-application">Pause</button>
-    </div>
-  </div>`;
-
-  let safetyBannerHtml = '';
-  if (['captcha', 'boundary'].includes(page.type)) {
-    safetyBannerHtml = `
-      <div class="kr-safety-banner">
-        <div class="kr-safety-icon">${ICONS.shield}</div>
-        <div class="kr-safety-content">
-          <div class="kr-safety-title">Safety Boundary Paused</div>
-          <div class="kr-safety-desc">${escapeHtml(page.reason || 'Manual interaction or verification required on this page.')}</div>
-        </div>
-        <button class="kr-btn kr-btn-secondary kr-btn-small" id="kr-resume-boundary">Resume</button>
+  // Live status or step review notice
+  let heroStatusHtml = '';
+  if (wfIsRunning) {
+    const liveText = session?.reason || autofillProgress.statusText || 'Processing form fields...';
+    heroStatusHtml = `
+      <div class="kr-hero-status-row kr-wf-reason running">
+        <span class="kr-spin">${ICONS.spinner}</span>
+        <span>${escapeHtml(liveText)}</span>
       </div>
     `;
-  }
-
-  let progressHtml = '';
-  if (isAutofilling) {
-    const percent = autofillProgress.total > 0
-      ? Math.round((autofillProgress.current / autofillProgress.total) * 100)
-      : 0;
-
-    progressHtml = `
-      <div class="kr-card" style="border-color: rgba(163, 230, 53, 0.35);">
-        <div class="kr-row">
-          <span class="kr-card-title">Autofill Progress</span>
-          <span style="font-family: var(--kr-font-mono); font-size: 11px; font-weight: 600; color: var(--kr-signal);">${autofillProgress.current} / ${autofillProgress.total}</span>
-        </div>
-        <div style="font-size: 12px; color: var(--kr-text-1);">${escapeHtml(autofillProgress.statusText)}</div>
-        <div class="kr-progress-bar-container">
-          <div class="kr-progress-bar" style="transform: scaleX(${percent / 100});"></div>
-        </div>
+  } else if (isStepReview) {
+    const reviewText = session?.reason || 'Workday step filled. Ready for your review.';
+    heroStatusHtml = `
+      <div class="kr-hero-status-row kr-wf-reason step-review">
+        <span style="color: var(--kr-signal); font-size: 13px;">${ICONS.check}</span>
+        <div><strong>Step filled:</strong> ${escapeHtml(reviewText)}</div>
       </div>
     `;
+  } else if (session?.reason) {
+    const isErr = wfIsPaused || wfIsWaiting;
+    heroStatusHtml = `<div class="kr-wf-reason ${isErr ? 'wf-error' : ''}">${escapeHtml(session.reason)}</div>`;
+  } else if (!isAutofilling && autofillProgress.statusText?.startsWith('Error:')) {
+    heroStatusHtml = `<div class="kr-wf-reason wf-error">${escapeHtml(autofillProgress.statusText)}</div>`;
   }
 
-  let testResultHtml = '';
-  if (lastAiTestResult) {
-    if (lastAiTestResult.ok) {
-      testResultHtml = `
-        <div class="kr-alert kr-alert-success">
-          <strong>${ICONS.check} AI Connected</strong> (${lastAiTestResult.latencyMs}ms)<br/>
-          <span style="font-family: var(--kr-font-mono); font-size: 11px; color: var(--kr-text-2);">Model: ${lastAiTestResult.model}</span>
-        </div>
-      `;
-    } else {
-      testResultHtml = `
-        <div class="kr-alert kr-alert-error">
-          <strong>${ICONS.x} Connection Failed</strong> (${lastAiTestResult.latencyMs}ms)<br/>
-          <span style="font-size: 11px;">${lastAiTestResult.error}</span>
-        </div>
-      `;
-    }
-  }
-
+  // Profile strength & MVP check
   const profile = getProfile();
   const strength = calculateProfileStrength(profile);
 
@@ -2131,43 +2186,128 @@ function renderHomeTab() {
     </div>
   ` : '';
 
-  const adapter = detectAdapter();
+  let safetyBannerHtml = '';
+  if (['captcha', 'boundary'].includes(page.type)) {
+    safetyBannerHtml = `
+      <div class="kr-safety-banner">
+        <div class="kr-safety-icon">${ICONS.shield}</div>
+        <div class="kr-safety-content">
+          <div class="kr-safety-title">Safety Boundary Paused</div>
+          <div class="kr-safety-desc">${escapeHtml(page.reason || 'Manual interaction or verification required on this page.')}</div>
+        </div>
+        <button class="kr-btn kr-btn-secondary kr-btn-small" id="kr-resume-boundary">Resume</button>
+      </div>
+    `;
+  }
+
+  // Single primary button configuration
+  let btnContent = `${ICONS.play} Autofill Application`;
+  let btnDisabled = false;
+  let btnTitle = '';
+
+  if (wfIsRunning) {
+    btnContent = `<span class="kr-spin">${ICONS.spinner}</span> Filling Fields...`;
+    btnDisabled = true;
+    btnTitle = 'Autofill execution in progress';
+  } else if (isStepReview) {
+    btnContent = `${ICONS.arrowRight} Continue to Next Step`;
+    btnDisabled = false;
+    btnTitle = 'Proceed to next step in application';
+  } else if (wfIsPaused) {
+    btnContent = `${ICONS.play} Resume Autofill`;
+    btnDisabled = false;
+    btnTitle = 'Resume application autofill';
+  } else if (wfIsDone) {
+    btnContent = `${ICONS.check} ${wfStatus === 'confirmation' ? 'Submitted' : 'Ready for Review'}`;
+    btnDisabled = false;
+    btnTitle = wfStatus === 'confirmation' ? 'Application submitted' : 'Application ready for review';
+  } else if (!strength.isMvpComplete) {
+    btnContent = `${ICONS.play} ${adapter.id !== 'generic' ? `Autofill ${escapeHtml(adapter.label)}` : 'Autofill Application'}`;
+    btnDisabled = false;
+    btnTitle = `Recommended: Complete core profile fields (${escapeHtml(strength.missingCore.join(', '))})`;
+  } else {
+    btnContent = `${ICONS.play} ${adapter.id !== 'generic' ? `Autofill ${escapeHtml(adapter.label)}` : 'Autofill Application'}`;
+    btnDisabled = totalFieldCount === 0 && !session;
+    btnTitle = totalFieldCount === 0 ? 'No fields detected on this page' : 'Autofill application fields';
+  }
+
+  let testResultHtml = '';
+  if (lastAiTestResult) {
+    if (lastAiTestResult.ok) {
+      testResultHtml = `
+        <div class="kr-alert kr-alert-success">
+          <strong>${ICONS.check} AI Connected</strong> (${lastAiTestResult.latencyMs}ms)<br/>
+          <span style="font-family: var(--kr-font-mono); font-size: 11px; color: var(--kr-text-2);">Model: ${lastAiTestResult.model}</span>
+        </div>
+      `;
+    } else {
+      testResultHtml = `
+        <div class="kr-alert kr-alert-error">
+          <strong>${ICONS.x} Connection Failed</strong> (${lastAiTestResult.latencyMs}ms)<br/>
+          <span style="font-size: 11px;">${lastAiTestResult.error}</span>
+        </div>
+      `;
+    }
+  }
+
   return `
     ${safetyBannerHtml}
-    ${session ? workflowHtml : ''}
 
-    <div class="kr-card">
+    <div class="kr-workflow-card kr-hero-card ${cardStateClass}">
       <div class="kr-row">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span class="kr-card-title">Form Fields</span>
-          <span class="kr-badge kr-badge-blue" style="text-transform: uppercase;">${fieldCount + remoteFieldCount} detected</span>
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <span class="kr-card-title">${escapeHtml(adapter.id === 'generic' ? 'Job Application' : `${adapter.label} Application`)}</span>
+          <span class="kr-badge kr-badge-blue" style="text-transform: uppercase;">${totalFieldCount} detected</span>
+          ${strength.isMvpComplete ? `
+            <div class="kr-strength-chip ${strength.percentage >= 80 ? 'high' : strength.percentage >= 50 ? 'med' : 'low'}" title="Profile Strength: ${strength.percentage}% (${strength.tierLabel})">
+              <span class="kr-strength-chip-bar"><span class="kr-strength-chip-fill" style="transform: scaleX(${strength.percentage / 100});"></span></span>
+              <span class="kr-strength-chip-val">${strength.percentage}%</span>
+            </div>
+          ` : ''}
         </div>
-        ${strength.isMvpComplete ? `
-        <div class="kr-strength-chip ${strength.percentage >= 80 ? 'high' : strength.percentage >= 50 ? 'med' : 'low'}" title="Profile Strength: ${strength.percentage}% (${strength.tierLabel})">
-          <span class="kr-strength-chip-bar"><span class="kr-strength-chip-fill" style="width: ${strength.percentage}%;"></span></span>
-          <span class="kr-strength-chip-val">${strength.percentage}%</span>
+        ${wfBadgeHtml}
+      </div>
+
+      <div>
+        <div class="kr-wf-job-title">${escapeHtml(jobTitle)}</div>
+        <div class="kr-wf-job-company">${escapeHtml(companyText)}${job?.location ? ` · ${escapeHtml(job.location)}` : ''}</div>
+      </div>
+
+      ${session ? `
+        <div class="kr-wf-step-bar-container"><div class="kr-wf-step-bar ${stepBarClass}" style="transform: scaleX(${stepBarPercent / 100});"></div></div>
+        <div class="kr-wf-metrics">
+          <div class="kr-wf-metric"><strong>${stepsCompleted}</strong> step${stepsCompleted !== 1 ? 's' : ''} completed</div>
+          <div class="kr-wf-metric"><strong>${fieldsAnswered}</strong> field${fieldsAnswered !== 1 ? 's' : ''} answered</div>
+          ${stepMarker ? `<div class="kr-wf-metric" style="color: var(--kr-text-2);">${escapeHtml(stepMarker)}</div>` : ''}
         </div>
-        ` : ''}
-      </div>
-      ${remoteFieldCount ? `
-      <div style="font-size: 11px; color: var(--kr-text-2);">
-        ${fieldCount} here, ${remoteFieldCount} in ${remoteFrameCount} embedded frame${remoteFrameCount === 1 ? '' : 's'}.
-      </div>
       ` : ''}
+
+      ${remoteFieldCount ? `
+        <div style="font-size: 11px; color: var(--kr-text-2);">
+          ${fieldCount} here, ${remoteFieldCount} in ${remoteFrameCount} embedded frame${remoteFrameCount === 1 ? '' : 's'}.
+        </div>
+      ` : ''}
+
       ${mvpAlertHtml}
+      ${heroStatusHtml}
+      ${wfErrorHtml}
+
       <div class="kr-row" style="margin-top: 4px; gap: 8px;">
-        <button class="kr-btn kr-btn-large ${session ? 'kr-btn-secondary' : ''}" id="kr-autofill-btn" style="flex: 1;" ${isAutofilling ? 'disabled' : ''} ${!strength.isMvpComplete ? `title="Recommended: Complete core profile fields (${escapeHtml(strength.missingCore.join(', '))})"` : ''}>
-          ${isAutofilling ? `${ICONS.play} Filling Fields...` : `${ICONS.play} Autofill This Page`}
+        <button class="kr-btn kr-btn-large" id="kr-autofill-btn" style="flex: 1;" ${btnDisabled ? 'disabled' : ''} ${btnTitle ? `title="${escapeHtml(btnTitle)}"` : ''}>
+          ${btnContent}
         </button>
-        <button class="kr-btn kr-btn-secondary ${isAutofilling ? 'kr-btn-pause-active' : ''}" id="kr-pause-autofill-btn" style="padding: 9px 14px; font-size: 12px;" ${!isAutofilling ? 'disabled' : ''} title="Pause / Stop autofill">
-          ${isAutofilling ? `${ICONS.pause} Pause` : 'Pause'}
+        <button class="kr-btn kr-btn-secondary" id="kr-capture-job" title="Capture job listing" style="padding: 9px 12px;">${ICONS.briefcase}</button>
+        <button class="kr-btn kr-btn-secondary ${wfIsRunning ? 'kr-btn-pause-active' : ''}" id="kr-pause-autofill-btn" style="padding: 9px 14px; font-size: 12px;" ${!wfIsRunning ? 'disabled' : ''} title="Pause autofill">
+          ${wfIsRunning ? `${ICONS.pause} Pause` : 'Pause'}
         </button>
         <button class="kr-btn kr-btn-secondary" id="kr-rescan-btn" title="Rescan page fields" style="padding: 9px 12px;">${ICONS.refresh}</button>
       </div>
+
+      <!-- Backward-compatible hooks for legacy tests -->
+      <button id="kr-start-application" style="display:none;" aria-hidden="true" tabindex="-1"></button>
+      <button id="kr-pause-application" style="display:none;" aria-hidden="true" tabindex="-1"></button>
     </div>
 
-    ${!session ? workflowHtml : ''}
-    ${progressHtml}
     ${renderFieldReviewSection()}
 
     <div class="kr-card">
@@ -2217,7 +2357,7 @@ function renderProfileTab() {
         <span class="kr-badge ${strength.percentage >= 80 ? 'kr-badge-green' : strength.percentage >= 50 ? 'kr-badge-blue' : 'kr-badge-amber'}">${strength.tierLabel} (${strength.percentage}%)</span>
       </div>
       <div class="kr-strength-track">
-        <div class="kr-strength-fill ${strength.percentage >= 80 ? 'high' : strength.percentage >= 50 ? 'med' : 'low'}" style="width: ${strength.percentage}%;"></div>
+        <div class="kr-strength-fill ${strength.percentage >= 80 ? 'high' : strength.percentage >= 50 ? 'med' : 'low'}" style="transform: scaleX(${strength.percentage / 100});"></div>
       </div>
       ${!strength.isMvpComplete ? `
         <div style="font-size: 11px; color: var(--kr-warning);">
@@ -2573,17 +2713,6 @@ function attachEventHandlers() {
   if (!shadowRootRef) return;
   const capture = shadowRootRef.querySelector('#kr-capture-job');
   if (capture) capture.onclick = () => applicationEngine?.capture();
-  const start = shadowRootRef.querySelector('#kr-start-application');
-  if (start) start.onclick = () => void applicationEngine?.start();
-  const pause = shadowRootRef.querySelector('#kr-pause-application');
-  if (pause) {
-    pause.onclick = () => {
-      applicationEngine?.pause();
-      if (isAutofilling) {
-        stopAutofillFlow('Autofill paused by user. Progress and filled fields preserved.');
-      }
-    };
-  }
 
   const resumeBoundary = shadowRootRef.querySelector('#kr-resume-boundary');
   if (resumeBoundary) {
@@ -2640,34 +2769,47 @@ function attachEventHandlers() {
     };
   });
 
-  // Autofill button (in panel)
+  // Single Unified Autofill Handler
+  const handleAutofillAction = () => {
+    void handleUnifiedAutofillClick();
+  };
+
   const autofillBtn = shadowRootRef.querySelector('#kr-autofill-btn');
   if (autofillBtn) {
-    autofillBtn.onclick = () => executeAutofillFlow();
+    autofillBtn.onclick = handleAutofillAction;
   }
 
-  // Autofill button (on compact HUD bar)
   const hudAutofillBtn = shadowRootRef.querySelector('#kr-hud-autofill-btn');
   if (hudAutofillBtn) {
-    hudAutofillBtn.onclick = () => executeAutofillFlow();
+    hudAutofillBtn.onclick = handleAutofillAction;
   }
 
-  // Autofill pause button (in panel)
+  // Backward-compatible hook
+  const start = shadowRootRef.querySelector('#kr-start-application');
+  if (start) {
+    start.onclick = () => {
+      if (applicationEngine) {
+        void applicationEngine.start();
+      } else {
+        handleAutofillAction();
+      }
+    };
+  }
+
+  // Unified Pause Handlers
   const pauseAutofillBtn = shadowRootRef.querySelector('#kr-pause-autofill-btn');
   if (pauseAutofillBtn) {
-    pauseAutofillBtn.onclick = () => {
-      stopAutofillFlow('Autofill paused by user. Progress and filled fields preserved.');
-      applicationEngine?.pause();
-    };
+    pauseAutofillBtn.onclick = () => handleUnifiedPauseClick();
   }
 
-  // Autofill pause button (on compact HUD bar)
   const hudPauseBtn = shadowRootRef.querySelector('#kr-hud-pause-btn');
   if (hudPauseBtn) {
-    hudPauseBtn.onclick = () => {
-      stopAutofillFlow('Autofill paused by user. Progress and filled fields preserved.');
-      applicationEngine?.pause();
-    };
+    hudPauseBtn.onclick = () => handleUnifiedPauseClick();
+  }
+
+  const pause = shadowRootRef.querySelector('#kr-pause-application');
+  if (pause) {
+    pause.onclick = () => handleUnifiedPauseClick();
   }
 
   // Locate field buttons on Review tab

@@ -22,23 +22,57 @@ export const PROFILE_SECTIONS = [
     { name: 'salaryCurrency', label: 'Currency', placeholder: 'e.g. CAD, USD, GBP' },
     { name: 'salaryPeriod', label: 'Pay period', options: ['Annual', 'Monthly', 'Hourly'] },
   ] },
-  { title: 'Background', description: 'Your context below still supplies detailed experience, projects and qualifications.', fields: [
+  { title: 'Background', description: 'General background and experience level.', fields: [
     { name: 'educationLevel', label: 'Highest education level', options: ['High school', 'Associate degree', "Bachelor's degree", "Master's degree", 'Doctorate', 'Professional degree', 'Other'] },
     { name: 'yearsExperience', label: 'Total years of professional experience', type: 'number', placeholder: 'e.g. 3', min: '0', step: '0.5' },
     { name: 'languages', label: 'Languages and proficiency', placeholder: 'e.g. English (fluent), French (intermediate)' },
   ] },
-  { title: 'Optional self-identification', description: 'Not set leaves the answer blank. Choose “Prefer not to answer” to decline disclosure. These answers are never guessed.', fields: [
+  { title: 'Demographics & disclosures', description: 'Not set leaves the answer blank. Choose “Prefer not to answer” to decline disclosure. These answers are never guessed.', fields: [
     { name: 'gender', label: 'Gender', options: ['Woman', 'Man', 'Non-binary', 'Self-describe', 'Prefer not to answer'] },
     { name: 'genderDescription', label: 'Gender self-description (if selected)', placeholder: 'Your own description' },
     { name: 'pronouns', label: 'Pronouns', placeholder: 'e.g. she/her, he/him, they/them, Prefer not to answer' },
     { name: 'raceEthnicity', label: 'Race / ethnicity', placeholder: 'Your self-description or Prefer not to answer' },
     { name: 'disabilityStatus', label: 'Disability (current or past)', options: disclosure },
     { name: 'veteranStatus', label: 'Veteran status', options: disclosure },
+    { name: 'hispanic', label: 'Hispanic / Latino', options: disclosure },
+    { name: 'lgbtStatus', label: 'LGBTQ+', options: disclosure },
+    { name: 'visibleMinority', label: 'Visible minority', options: disclosure },
+    { name: 'armedForces', label: 'Armed forces service', options: disclosure },
   ] },
 ];
 
+export const CORE_PROFILE_DEFAULTS = {
+  firstName: '',
+  middleName: '',
+  lastName: '',
+  preferredName: '',
+  preferredLastName: '',
+  phoneCountry: '',
+  phoneType: '',
+  phoneExtension: '',
+  birthDate: '',
+  addressLine3: '',
+};
+
 export const PROFILE_FIELDS = PROFILE_SECTIONS.flatMap(section => section.fields);
-export const STRUCTURED_PROFILE_DEFAULTS = Object.fromEntries(PROFILE_FIELDS.map(field => [field.name, '']));
+export const STRUCTURED_PROFILE_DEFAULTS = {
+  ...CORE_PROFILE_DEFAULTS,
+  ...Object.fromEntries(PROFILE_FIELDS.map(field => [field.name, ''])),
+};
+
+export function createLanguage(data = {}) {
+  const result = {
+    id: data.id || `language_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    enabled: data.enabled !== false,
+    language: data.language || '',
+    fluent: data.fluent ?? '',
+    reading: data.reading || '',
+    writing: data.writing || '',
+    speaking: data.speaking || '',
+  };
+  if (data._collapsed !== undefined) result._collapsed = Boolean(data._collapsed);
+  return result;
+}
 
 export function createWorkExperience(data = {}) {
   const result = {
@@ -279,6 +313,10 @@ export const MVP_PROFILE_FIELDS = [
 export function getMissingCoreProfileFields(profile = {}) {
   return MVP_PROFILE_FIELDS
     .filter(f => {
+      if (f.key === 'fullName') {
+        const hasFullName = Boolean(String(profile.fullName || '').trim() || (String(profile.firstName || '').trim() && String(profile.lastName || '').trim()));
+        if (hasFullName) return false;
+      }
       if (f.key === 'city' && !String(profile.city || '').trim() && String(profile.location || '').trim()) return false;
       if (f.key === 'country' && !String(profile.country || '').trim() && String(profile.location || '').trim()) return false;
       return !String(profile[f.key] || '').trim();
@@ -291,7 +329,8 @@ export function calculateProfileStrength(profile = {}) {
   const missingCore = getMissingCoreProfileFields(profile);
 
   // 1. Core Identity (40% total: 10% each for Name, Email, Phone; 5% each for City, Country)
-  if (String(profile.fullName || '').trim()) score += 10;
+  const hasName = Boolean(String(profile.fullName || '').trim() || (String(profile.firstName || '').trim() && String(profile.lastName || '').trim()));
+  if (hasName) score += 10;
   if (String(profile.email || '').trim()) score += 10;
   if (String(profile.phone || '').trim()) score += 10;
   const hasCity = Boolean(String(profile.city || '').trim() || String(profile.location || '').trim());

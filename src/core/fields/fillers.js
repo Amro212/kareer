@@ -242,8 +242,8 @@ export function fillCheckbox(element, targetValue) {
 
 export async function fillCombobox(element, targetValue, knownOptions) {
   if (!element || !optionKey(targetValue)) return false;
-  const known = knownOptions ? findExactOption(knownOptions, targetValue) : null;
-  if (knownOptions && !known) {
+  const known = knownOptions ? findExactOption(knownOptions, targetValue, element) : null;
+  if (knownOptions?.length && !known) {
     logger.warn(`Fill[${element.id}]: rejected answer outside this field's options`);
     return false;
   }
@@ -251,25 +251,25 @@ export async function fillCombobox(element, targetValue, knownOptions) {
   const { input } = resolveComboboxParts(element);
   let ownsSearch;
   try {
-    if (readComboboxSelection(element).some(value => optionKey(value) === optionKey(target))) {
+    if (readComboboxSelection(element).some(value => optionKey(value) === optionKey(target) || detectAdapter().optionMatches?.(detectAdapter().fieldMetadata?.(element) || {}, value, target))) {
       closeCombobox(element);
       return await waitForComboboxSelection(element, target);
     }
     await openCombobox(element);
     const location = isLeverLocation(element) || isPlacesLocation(element) || known && isResidenceLabel(extractLabel(element));
-    ownsSearch = setComboboxSearch(input, location ? target.split(',')[0].trim() : '');
-    let options = await waitForComboboxOptions(element, undefined, location ? target : undefined);
+    ownsSearch = setComboboxSearch(input, location ? target.split(',')[0].trim() : detectAdapter().id === 'workday' && input ? (detectAdapter().searchQuery?.(element, target) || target) : '');
+    let options = await waitForComboboxOptions(element, undefined, location || detectAdapter().id === 'workday' ? target : undefined);
     if (!ownsSearch()) return false;
-    let match = findExactOption(options.map(option => ({ ...optionData(option), element: option })), target);
+    let match = findExactOption(options.map(option => ({ ...optionData(option), element: option })), target, element);
     // Search only for an option already harvested from this field (async/virtual menus).
     if (!match && known && input) {
       ownsSearch = setComboboxSearch(input, known.label);
       options = await waitForComboboxOptions(element);
       if (!ownsSearch()) return false;
-      match = findExactOption(options.map(option => ({ ...optionData(option), element: option })), target);
+      match = findExactOption(options.map(option => ({ ...optionData(option), element: option })), target, element);
     }
     // Resolve the option again after waiting; async menus can replace nodes.
-    if (match) match = findExactOption(discoverComboboxOptions(element).map(option => ({ ...optionData(option), element: option })), target);
+    if (match) match = findExactOption(discoverComboboxOptions(element).map(option => ({ ...optionData(option), element: option })), target, element);
     if (!match || !element.isConnected) {
       logger.warn(`Fill[${element.id}]: no exact owned option for "${target}"`);
       return false;
@@ -279,6 +279,16 @@ export async function fillCombobox(element, targetValue, knownOptions) {
     match.element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
     match.element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 0 }));
     clickFieldControl(match.element);
+    const checkbox = match.element.querySelector?.('input[type="checkbox"], [role="checkbox"]');
+    if (checkbox && checkbox.checked !== true) {
+      try { checkbox.focus?.(); } catch {}
+      checkbox.click?.();
+      if (checkbox.checked !== true) {
+        checkbox.checked = true;
+        checkbox.dispatchEvent(new Event('input', { bubbles: true }));
+        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
     recordLocationActivation(element, match.label);
     if (!await waitForComboboxSelection(element, target)) return false;
     closeCombobox(element);
@@ -344,6 +354,7 @@ export async function fillFileInput(element) {
 
 export async function fillField(field, targetValue) {
   if (!field || !field.element) return false;
+  if (field.widget === 'workday-choice') return detectAdapter().fillChoice(field, targetValue, { checkbox: fillCheckbox }) === true;
   if (['select', 'radio'].includes(field.type)) {
     const option = findExactOption(field.options || [], targetValue);
     if (!option) return false;
@@ -368,6 +379,11 @@ export async function fillField(field, targetValue) {
       return fillCheckbox(field.element, targetValue);
 
     case FIELD_TYPES.COMBOBOX:
+      if (Array.isArray(targetValue)) {
+        if (!field.ats?.multiple) return false;
+        for (const value of targetValue) if (!await fillCombobox(field.element, value, field.options || [])) return false;
+        return true;
+      }
       return await fillCombobox(field.element, targetValue, field.options || []);
 
     case FIELD_TYPES.CONTENTEDITABLE:

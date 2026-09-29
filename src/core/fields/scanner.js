@@ -8,6 +8,7 @@ import { isLeverLocation, isCustomCombobox } from './combobox.js';
 import { COMBO, discoverComboboxOptions, optionData, readComboboxSelection, resolveComboboxParts, openCombobox, closeCombobox, setComboboxSearch, waitForComboboxOptions } from './combobox.js';
 
 let fieldCounter = 0;
+const scanStates = new WeakMap();
 
 function isVisible(el) {
   if (!el || !(el instanceof HTMLElement)) return false;
@@ -59,7 +60,11 @@ function buildFieldSelector(el) {
 function extractComboboxOptionsAndValue(el) {
   const options = discoverComboboxOptions(el).map(optionData);
   const currentValue = readComboboxSelection(el).join(', ');
-  logger.info(`Scan[${el.id || '(combobox)'}]: ${options.length} owned options, committed=${Boolean(currentValue)}`);
+  const state = JSON.stringify([options, currentValue]);
+  if (scanStates.get(el) !== state) {
+    scanStates.set(el, state);
+    logger.info(`Scan[${el.id || '(combobox)'}]: ${options.length} owned options, committed=${Boolean(currentValue)}`);
+  }
   return { options, currentValue };
 }
 
@@ -86,6 +91,11 @@ export function scanFormFields(root = document) {
 
   for (const el of candidates) {
     if (processedElements.has(el)) continue;
+    if (adapter.id === 'workday' && el.closest('[data-automation-id="signInContent"], [data-automation-id="activeListContainer"], [data-automation-activepopup="true"]')) continue;
+    if (adapter.id === 'workday' && el.matches('button') && el.closest('[data-automation-id="multiSelectContainer"], [data-automation-id="multiselectInputContainer"]')?.querySelector('input:not([type="hidden"])')) continue;
+    // Workday single-select buttons can carry an unlabelled sibling input for
+    // filtering. The button owns the question; the sibling is not a second field.
+    if (adapter.id === 'workday' && el.matches('input:not([id]):not([name])') && !el.closest('[data-automation-id="multiSelectContainer"], [data-automation-id="multiselectInputContainer"]') && el.closest('[data-automation-id^="formField"]')?.querySelector('button[aria-haspopup="listbox"]')) continue;
 
     const tagName = el.tagName.toLowerCase();
     const typeAttr = (el.getAttribute('type') || '').toLowerCase();
@@ -101,7 +111,8 @@ export function scanFormFields(root = document) {
       processedElements.add(el);
       const label = extractLabel(el);
       const description = extractDescription(el);
-      const currentName = el.files?.[0]?.name || '';
+      const upload = adapter.uploadState?.(el);
+      const currentName = upload ? upload.accepted ? upload.name : '' : el.files?.[0]?.name || '';
       detectedFields.push({
         id: el.id || el.name || `jc_field_${++fieldCounter}`,
         name: el.name || '',
@@ -293,7 +304,7 @@ export function scanFormFields(root = document) {
         currentValue,
         // Preserve user text even when the widget exposes no proof of commitment.
         // This is an overwrite guard, never evidence used by verification.
-        hasExistingValue: Boolean(String(el.value || '').trim()),
+        hasExistingValue: adapter.id === 'workday' ? Boolean(currentValue) : Boolean(String(el.value || '').trim()),
         options,
         constraints: {},
         isNarrative: false,
@@ -335,9 +346,21 @@ export function scanFormFields(root = document) {
     const metadata = adapter.fieldMetadata?.(field.element);
     // Ordinary checkboxes retain their own option identity and label. Only
     // adapter-declared single-choice widgets consume a whole question container.
-    if (field.type === FIELD_TYPES.CHECKBOX) return field;
+    if (field.type === FIELD_TYPES.CHECKBOX && adapter.id !== 'workday') return field;
     return { ...field, ...metadata };
-  });
+  }).sort(compareDocumentOrder);
+}
+
+function compareDocumentOrder(a, b) {
+  const elA = a?.element;
+  const elB = b?.element;
+  if (!elA || !elB || elA === elB) return 0;
+  if (typeof elA.compareDocumentPosition === 'function') {
+    const pos = elA.compareDocumentPosition(elB);
+    if (pos & 4 /* Node.DOCUMENT_POSITION_FOLLOWING */) return -1;
+    if (pos & 2 /* Node.DOCUMENT_POSITION_PRECEDING */) return 1;
+  }
+  return 0;
 }
 
 export function deduplicateFields(fields) {
@@ -388,29 +411,41 @@ export async function harvestComboboxOptions(fields, searchQueries = new Map()) 
   for (const field of fields.filter(field => field.type === FIELD_TYPES.COMBOBOX)) {
     const element = field.element;
     if (!element) continue;
-    if (readComboboxSelection(element).length) continue;
+    if (readComboboxSelection(element).length && !field.ats?.multiple) continue;
     const { input } = resolveComboboxParts(element);
     let ownsSearch;
     try {
       await openCombobox(element);
-      const query = searchQueries.get(field.id) || (isResidenceLabel(field.label) ? profileLocation : '') || '';
-      // Search by city so provider formatting/abbreviations do not suppress
-      // suggestions; retain every supplied region/country for final matching.
-      const locationField = isLeverLocation(element) || isCustomCombobox(element) && isResidenceLabel(field.label) || isResidenceLabel(field.label);
-      const search = locationField ? query.split(',')[0].trim() : query;
-      ownsSearch = setComboboxSearch(input, search);
-      field.options = (await waitForComboboxOptions(element, undefined, isResidenceLabel(field.label) ? query : undefined)).map(optionData);
-      if (query && isResidenceLabel(field.label)) field.options = field.options.filter(option => locationMatches(option.label, query));
+      const saved = detectAdapter().profileValue?.(field, getProfile());
+      const rawQueries = searchQueries.has(field.id) ? [searchQueries.get(field.id)] : Array.isArray(saved) ? saved : [typeof saved === 'string' ? saved : ''];
+      const queries = rawQueries.map(q => detectAdapter().searchQuery?.(field, q) || q);
+      const discovered = [];
+      for (const savedQuery of queries) {
+        const query = savedQuery || (isResidenceLabel(field.label) ? profileLocation : '') || '';
+        // Search by city so provider formatting/abbreviations do not suppress
+        // suggestions; retain every supplied region/country for final matching.
+        const locationField = isLeverLocation(element) || isCustomCombobox(element) && isResidenceLabel(field.label) || isResidenceLabel(field.label);
+        const search = locationField ? query.split(',')[0].trim() : query;
+        ownsSearch = setComboboxSearch(input, search);
+        let options = (await waitForComboboxOptions(element, undefined, adapterQuery(field, query))).map(optionData);
+        if (query && isResidenceLabel(field.label)) options = options.filter(option => locationMatches(option.label, query));
+        discovered.push(...options);
+      }
+      field.options = [...new Map(discovered.map(option => [JSON.stringify(option), option])).values()];
       logger.info(`Harvest[${field.id}]: ${field.options.length} owned options`);
     } catch (err) {
       field.options = [];
       logger.warn(`Harvest[${field.id}]: ${err.message}`);
     } finally {
       if (ownsSearch?.()) {
-        if (!readComboboxSelection(element).length) setComboboxSearch(input, '');
+        if (!readComboboxSelection(element).length || field.ats?.adapter === 'workday' && input?.closest('[data-automation-id="multiSelectContainer"], [data-automation-id="multiselectInputContainer"]')) setComboboxSearch(input, '');
         closeCombobox(element);
       }
     }
   }
   return fields;
+}
+
+function adapterQuery(field, query) {
+  return field.ats?.adapter === 'workday' || isResidenceLabel(field.label) ? query : undefined;
 }

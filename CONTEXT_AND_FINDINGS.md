@@ -3,6 +3,190 @@
 Running log of changes, bugs, and platform findings for the dual-target
 (extension + userscript) Kareer.
 
+## Turn: 2026-09-27 — Workday Disclosure Combobox Autofill & Selection Action Fix
+
+### Findings
+- **Target**: Extension & Userscript Workday Autofill Engine (`src/core/fields/fillers.js`, `src/core/fields/combobox.js`, `src/core/adapters/workday-fields.js`, `src/core/adapters/workday.js`, `tests/e2e/workday-prompts.spec.js`, `tests/unit/workday.test.js`).
+- **Platform / ATS**: Workday live questionnaire (CBC / Radio-Canada candidate personal information questionnaire).
+- **Symptoms & User Feedback**:
+  - The autofill engine correctly typed the search query into the disclosure prompt fields (Ethnicity, Pronoun, Disability, Gender), but failed to commit/click the corresponding choice options in the dropdown.
+  - In contrast, the "How Did You Hear About Us?*" prompt field worked seamlessly and committed the `[X LinkedIn]` chip.
+- **Root-Cause Analysis**:
+  1. *Divergent Action Dispatch in `fillCombobox`*:
+     - In "How Did You Hear About Us?", prompt option leaf nodes (`div[data-automation-id="promptLeafNode"]`) do not contain child checkboxes (`input[type="checkbox"]`). `fillCombobox` dispatched the full mouse event sequence (`mousedown` -> `mouseup` -> `clickFieldControl(match.element)`) directly to `match.element`. Workday's Canvas UI/React container listens on `promptLeafNode` for selection, so this cleanly selected the item and added the token chip.
+     - In the disclosure prompt fields (Ethnicity, Pronoun, Disability), Workday rows render with child checkboxes (`input[type="checkbox"]`). A previous change branched on `if (checkbox && checkbox.checked !== true)`, invoking `checkbox.click()` directly while skipping `mousedown`, `mouseup`, and `clickFieldControl` on `match.element`. In Workday Canvas UI, checkbox inputs are internal elements with `pointer-events: none` and `tabIndex={-1}`, and the click handler is on `promptLeafNode`. Consequently, Workday completely ignored the synthetic checkbox click and never committed the chip.
+  2. *Missing `.label` on DOM Element in `waitForComboboxOptions`*:
+     - Line 273 of `src/core/fields/combobox.js` checked `Boolean(meta && adapter.optionMatches?.(meta, option.label, targetQuery))`. Because `option` is a DOM element returned by `querySelectorAll`, `option.label` was `undefined`. As a result, `adapter.optionMatches` was always called with `undefined` and returned `false`, causing `waitForComboboxOptions` to filter out options whose literal text did not contain all words in `targetQuery`.
+  3. *Workday Option & Canonical Gaps*:
+     - Ethnicity: Workday tenant uses verbose localized strings (`Arab and/or Maghrebi Heritage (e.g.: Moroccan, Algerian, Egyptian, Saudi, etc.) (Canada)`) which returned "No matches found" when searching "Middle Eastern". Grounding search to `'Arab'` enables Workday's remote search to return the option.
+     - Pronouns: Live Workday prompt options are split into individual tokens (`he`, `him`) rather than compound strings (`He/him`), requiring token splitting when `field.ats.multiple` is true.
+     - Disability: Canadian Workday uses `No - I don't have any disability (Canada)` instead of standard US wording.
+     - Gender: CBC Workday presents Gender as a single-select button listbox with a hidden/filter text input sibling; the button owns the field.
+- **Resolution**:
+  1. Standardized `fillCombobox` action dispatch: always dispatch `mousedown` -> `mouseup` -> `clickFieldControl(match.element)` on `match.element` (the `promptLeafNode` row), ensuring Workday's React event listener fires identically to "How Did You Hear About Us?", and only then safely verify child checkbox state.
+  2. Updated `waitForComboboxOptions` to use `optionData(option).label` instead of `option.label`.
+  3. Grounded Workday search queries through `searchQuery` (`Arab` for Middle Eastern / MENA).
+  4. Broadened `workdayFieldMetadata` selector for multiselect fields to match both singular and plural automation IDs.
+  5. Resolved Code Review P1 Demographic Integrity issue (`src/core/adapters/workday-fields.js`): broad non-exact ethnicity mappings (e.g. `Middle Eastern` matching `Arab and/or Maghrebi Heritage (Canada)`) are explicitly tagged with `provenance: 'guessed'` and `inferred: true` per `AGENTS.md` Rule 10, alerting the applicant with a yellow `GUESSED` badge in the Kareer panel instead of silently treating it as an exact `saved` fact.
+  6. Added comprehensive test coverage: unit test suite passes with 28/28 Workday tests (and 260/261 full suite tests), and Playwright E2E suite passes all 4 tests in `tests/e2e/workday-prompts.spec.js` including real browser fixture verification. Build compiled at `v0.4.81`.
+
+
+## Turn: 2026-09-27 — Repeatable Cards Default Collapse Standardization (Languages & Work Authorization)
+
+### Findings
+- **Target**: Extension Options page (`src/targets/extension/options/index.js`, `tests/e2e/shell.spec.js`).
+- **Symptoms & User Feedback**:
+  - Repeatable fields for Languages and Work Authorization auto-expanded their cards on initial load, while Work Experience, Education, and Projects defaulted to collapsed (`_collapsed: true`).
+  - This visual inconsistency caused cluttered options page loads where some repeatable cards were open and others were closed.
+- **Root-Cause Analysis**:
+  - In `src/targets/extension/options/index.js`:
+    - `renderLanguagesList` used `if (item._collapsed === undefined) item._collapsed = false;`, defaulting language cards to open.
+    - `renderEligibilityList` used `if (item._collapsed === undefined) item._collapsed = (index > 0);`, forcing index 0 open.
+    - `renderProfile` mapped `currentLanguages` and `currentEligibilities` with `_collapsed: idx === 0 ? false : (l._collapsed ?? true)` and `_collapsed: false` for empty eligibility fallback, explicitly opening the first card.
+- **Resolution**:
+  - Standardized all repeatable card sections (Work Experience, Education, Projects, Languages, and Work Authorization) to `_collapsed: true` by default on initial hydration and render.
+  - User-initiated additions (`+ Add language`, `+ Add eligible country`) continue to open expanded (`_collapsed: false`) so newly added items are immediately editable.
+  - Updated `tests/e2e/shell.spec.js` to click the card header before filling fields in the collapsed eligibility card.
+  - Verified with full unit tests (259 passing) and Playwright E2E tests (11 passing).
+
+### Turn Changes
+- `src/targets/extension/options/index.js`:
+  - Standardized `renderLanguagesList` and `renderEligibilityList` to default `_collapsed = true`.
+  - Updated `renderProfile` hydration for `currentLanguages` and `currentEligibilities` (including empty fallback) to set `_collapsed: true`.
+- `tests/e2e/shell.spec.js`:
+  - Updated tests to click the card header before filling `#pf-workCountry` in collapsed cards.
+
+### Verification / Status
+- `npm test`: 259 unit tests pass (100% pass, 0 fail).
+- `npx playwright test tests/e2e/workday-prompts.spec.js tests/e2e/shell.spec.js`: 11 E2E tests pass (100% pass, 0 fail).
+
+## Turn: 2026-09-27 — Profile Options Harmonization, Structured Languages Repeatable Cards & Save Dock Polish
+
+### Findings
+- **Target**: Options page & profile data model (`src/core/profile.js`, `src/core/storage.js`, `src/core/constants.js`, `src/targets/extension/options/index.html`, `src/targets/extension/options/index.js`).
+- **Symptoms & User Feedback**:
+  1. The previously added "Application identity" section created severe redundancy with "Identity & contact" (both asking for name and phone details). Furthermore, it was rendered inside the "Job preferences" section, causing confusion and visual clutter.
+  2. The "Structured languages" section was rendered using ad-hoc, unstyled buttons ("Remove language" / "Add language") that did not follow the design system of the other repeatable card sections (Work experience, Education, Projects, Work eligibility).
+  3. Miscellaneous sections (Work preferences, Compensation, Background, Optional self-identification) were dumped haphazardly under a single "Job preferences" container without distinct navigation affordances.
+  4. There was a redundant static "Save profile" button at the bottom of the form when the options page already features a responsive floating save dock (`#profile-floating-dock`).
+- **Root-Cause Analysis**:
+  1. `PROFILE_SECTIONS` included `Application identity` as its first entry, causing both the extension Options page and the floating extension panel to display duplicate name and phone fields right after standard contact fields.
+  2. `renderProfile` dynamically rendered `Structured languages` into a plain fieldset with basic `<button>` elements that were styled as loud primary green buttons without accordion cards, active toggles, reordering controls, or proficiency summaries.
+  3. `addressLine3` was misplaced in the identity section instead of residential address.
+  4. The form retained an old static submit button block in addition to the floating save dock.
+- **Resolution**:
+  1. **Consolidated Identity & Contact**: Removed `Application identity` from `PROFILE_SECTIONS`. Replaced the single `fullName` input with clean, structured legal and preferred name fields (`firstName`, `middleName`, `lastName`, `preferredName`, `preferredLastName`), phone details (`phoneCountry`, `phoneType`, `phoneExtension`), and `birthDate` directly in "Identity & contact". Added bidirectional synchronization for `fullName` across storage, form rendering, and input listeners for 100% backward compatibility.
+  2. **Residential Address**: Moved `addressLine3` into `ADDRESS_FIELDS` alongside `addressLine2`.
+  3. **First-Class Languages Section**: Created a dedicated `#section-languages` section in the options page and sidebar navigation (with dynamic live badge count `Languages [N]`). Redesigned language items using the standard `.repeatable-card` system: accordion headers with title (`${language} • Fluent`), proficiency subtitle (`Reading: Advanced • Writing: ...`), active checkbox toggle (`lang-enabled-toggle`), move up (↑), move down (↓), delete (✕), and card body grid with helper text.
+  4. **Section Demographics & Disclosures**: Elevated self-identification questionnaires into a dedicated `#section-demographics` section with its own sidebar subnav item, leaving `#section-preferences` focused cleanly on job preferences, compensation, and general background.
+  5. **Floating Save Dock as Single Source of Truth**: Removed the bottom static "Save profile" button from the form. Made `#floating-save-btn` a native `type="submit"` button within `#profile-form` in the floating save dock, preserving Enter-key form submits and instant accessibility while eliminating visual duplication.
+  6. **Tests & Verification**: Updated E2E tests (`shell.spec.js`, `visual-system.spec.js`, `workday-prompts.spec.js`) to assert against the harmonized fields and floating save dock. All 259 unit tests and all 14 E2E tests pass.
+
+### Turn Changes
+- `src/core/profile.js`:
+  - Removed `Application identity` section from `PROFILE_SECTIONS`.
+  - Added `CORE_PROFILE_DEFAULTS` preserving defaults for `firstName`, `middleName`, `lastName`, `preferredName`, `preferredLastName`, `phoneCountry`, `phoneType`, `phoneExtension`, `birthDate`, and `addressLine3`.
+  - Updated `createLanguage` to support `_collapsed` property.
+  - Updated `getMissingCoreProfileFields` and `calculateProfileStrength` to recognize `firstName` and `lastName`.
+- `src/core/storage.js`:
+  - Imported `createLanguage`.
+  - Added bidirectional `fullName` sync with `firstName`, `middleName`, and `lastName` in `sanitizeProfile` and `saveProfile`.
+- `src/core/constants.js`:
+  - Explicitly added `addressLine3: ''` in `DEFAULT_PROFILE`.
+- `src/targets/extension/options/index.html`:
+  - Added `Languages` and `Demographics & disclosures` items to sidebar subnav.
+  - Added `#section-languages` repeatable section with `Add language` header button and `#languages-list`.
+  - Added `#section-demographics` fieldset.
+  - Removed duplicate bottom "Save profile" button container.
+  - Embedded `#profile-floating-dock` with `button type="submit" id="floating-save-btn"`.
+- `src/targets/extension/options/index.js`:
+  - Updated `CORE_CONTACT_FIELDS` with structured name, phone, and DOB fields.
+  - Added `addressLine3` to `ADDRESS_FIELDS`.
+  - Implemented `renderLanguagesList()` using `.repeatable-card` system.
+  - Updated `updateSubnavBadges()` to count active languages.
+  - Updated `getLiveProfileForStrength()` and `serializeCurrentProfile()`.
+  - Updated `renderProfile()` to map to preferences and demographics containers, and removed the old ad-hoc languages renderer.
+  - Updated `onWindowScroll()` scroll spy for `#section-languages` and `#section-demographics`.
+- `tests/e2e/shell.spec.js`:
+  - Updated tests to fill `pf-firstName` and `pf-lastName`.
+- `tests/e2e/visual-system.spec.js`:
+  - Updated options locator check from `pf-fullName` to `pf-firstName`.
+
+### Verification / Status
+- `npm test`: 259 unit tests pass (100% pass, 0 fail).
+- `npx playwright test tests/e2e/workday-prompts.spec.js tests/e2e/shell.spec.js tests/e2e/visual-system.spec.js`: 14 E2E tests pass (100% pass, 0 fail).
+
+### Findings
+- **Platform/ATS**: Workday, Lever, Ashby, and all supported ATS targets.
+- **Target**: Extension and userscript shared core (`src/core/fields/scanner.js`, `src/core/adapters/workday-sections.js`, `src/core/ui.js`).
+- **Symptoms**: In the "Field Verification & Review" section, fields appeared in an apparently "random" or counter-intuitive order instead of matching the physical top-to-bottom layout of the web page. For example, on Workday, "How Did You Hear About Us?" and "Have you previously worked for CBC/Radio-Canada?" sit at the top of the form, but "Country" and "I have a preferred name" appeared at the top of the review list. On Lever, "Pronouns" appeared ahead of "Resume/CV" and "Full name". On Ashby, the bottom Yes/No question ("Are you open to working 5 days a week in-office?") appeared at index 0.
+- **Root-Cause Analysis**:
+  1. `scanFormFields` scanned `adapter.choiceGroups?.(root)` and pushed them into `detectedFields` *before* scanning standard input/textarea/select candidates. As a result, custom choice groups (Ashby Yes/No buttons, Lever pronouns checkboxes) were always positioned at index 0 regardless of their physical page location.
+  2. `scanFormFields` had an artificial sort `.sort((a, b) => adapter.id === 'workday' ? workdayOrder(a) - workdayOrder(b) : 0)` that forced `country` to `-3`, `preferred_check` to `-2`, and `current` to `-1`, dragging those fields to the top in Workday.
+  3. Workday's dependency handling (`prepareWorkdayDependencies`) legitimately requires `country` to resolve before address/state fields and `preferred_check` before preferred name, but this dependency priority belongs strictly within `prepareWorkdayDependencies()`, not within the global scanner.
+  4. In `renderFieldReviewSection()`, post-autofill fields were grouped into `failed -> inferred -> verified -> untouched`. The user requested the post-autofill ordering to prioritize attention: `failed -> inferred -> untouched -> verified`.
+- **Resolution**:
+  1. Replaced `workdayOrder` in `src/core/fields/scanner.js` with DOM tree position comparison using `compareDocumentPosition` (`Node.DOCUMENT_POSITION_FOLLOWING` / `PRECEDING`). All fields (candidate inputs, comboboxes, file uploads, choice groups) are now returned in exact top-to-bottom document order.
+  2. Isolated Workday's dependency control priority (`country` -> `preferred_check` -> `current`) to `prepareWorkdayDependencies` in `src/core/adapters/workday-sections.js` by sorting its local `controls` array.
+  3. Updated `renderFieldReviewSection()` in `src/core/ui.js` to render `failedFields`, then `inferredFields`, then `untouchedFields`, then `verifiedFields`.
+  4. Added unit tests in `tests/unit/workday.test.js` and `tests/unit/ats-hardening.test.js` verifying that Workday, Lever, and Ashby fields are scanned in DOM document order.
+
+### Turn Changes
+- `src/core/fields/scanner.js`:
+  - Removed `workdayOrder`.
+  - Added `compareDocumentOrder` using `compareDocumentPosition` to sort all scanned fields in native document tree order.
+- `src/core/adapters/workday-sections.js`:
+  - Sorted `controls` inside `prepareWorkdayDependencies()` by dependency priority (`country: 1, preferred_check: 2, current: 3`).
+- `src/core/ui.js`:
+  - Updated `renderFieldReviewSection()` to render `failedFields` -> `inferredFields` -> `untouchedFields` -> `verifiedFields`.
+- `tests/unit/workday.test.js`:
+  - Added test `Workday scanned fields follow chronological DOM document order instead of artificial key priority`.
+- `tests/unit/ats-hardening.test.js`:
+  - Added test `Ashby and Lever choice groups preserve chronological DOM document order`.
+
+### Verification / Status
+- `npm test`: 259 unit tests pass (100% pass, 0 fail).
+- `npm run test:e2e`: 56 E2E tests pass in real Chromium browser (100% pass, 0 fail).
+
+## Turn: 2026-09-26 — Workday Hardening & Unified Application Hero Card (Impeccable Design)
+
+### Findings
+- **Dual Autofill Button Confusion**: Kareer previously showed two separate primary actions on the Home tab: "Start Application" (`#kr-start-application`) for multi-step workflow execution and "Autofill This Page" (`#kr-autofill-btn`) for single-page DOM/iframe autofill. Per `docs/plans/simplify-research.md`, users and Simplify expect a single authoritative primary button ("Autofill Application") where the runtime detects ATS nuances and adapts dynamically.
+- **Workday Aggressive Stepping & Validation**: Workday applications advance between multi-page steps ("My Information", "My Experience", "Application Questions", "Review"). Previous automated stepping could jump past user review or trigger field re-scans before user inspection.
+- **Premature Review Page Classification**: Single-page application forms containing interactive input fields alongside a submit button were erroneously classified as `'review'` rather than `'application'` due to `final && doc.querySelector('form,input,textarea')`, prematurely pausing single-step workflows.
+- **Playwright Visibility & Legacy Hooks**: Playwright `locator.click()` requires element visibility. Secondary hooks like `#kr-capture-job` were retained as visible secondary icon buttons (`${ICONS.briefcase}`) to avoid test timeouts while unifying the visual hierarchy.
+- **Zero-Layout-Thrash Animation & Visual System**: Micro-animations on profile strength and workflow progress meters were refactored from `width` transitions to GPU-accelerated `transform: scaleX(...)`, adhering to `/impeccable` mechanical standards and eliminating layout thrashing.
+
+### Turn Changes
+- **`src/core/adapters/workday.js`**:
+  - Added `stepReviewPause: true` to Workday adapter quirks.
+  - Added camelCase and kebab-case button/step selectors (`saveAndContinueButton`, `save-and-continue-button`, `pageFooterNextButton`, `page-footer-next-button`, `activeStep`, `stepTitle`, `promptInput`, `roleComboboxSearch`).
+- **`src/core/application.js`**:
+  - Implemented `stepReviewPause` in `tick()` to halt multi-step workflows when a step is filled, awaiting user confirmation before advancing.
+  - Implemented `continueStep()` allowing users to force-advance past step review pauses via panel CTA.
+  - Added native on-page step advance detection in `schedule()` via `comparePages()`, resuming the engine if the user manually clicks the on-page Continue/Save and Continue button.
+  - Exposed `get stepReview()` on the application engine.
+- **`src/core/pageClassifier.js`**:
+  - Removed erroneous `|| final && doc.querySelector('form,input,textarea')` so active forms with form inputs and submit controls correctly evaluate as `application` instead of premature `review`.
+- **`src/core/ui.js`**:
+  - Consolidated Home tab into the Unified Application Hero Card with single dominant primary button (`#kr-autofill-btn`), secondary job capture (`#kr-capture-job`), pause (`#kr-pause-autofill-btn`), and rescan (`#kr-rescan-btn`).
+  - Added `briefcase` icon to `ICONS`.
+  - Transformed `#kr-autofill-btn` statefully: "Autofill Application" -> "Filling Fields..." -> "Continue to Next Step" -> "Submitted" / "Ready for Review".
+  - Softened MVP gating in `handleUnifiedAutofillClick` and `executeAutofillFlow` to only redirect when both `fullName` and `email` are missing, avoiding false blocking when optional core fields are omitted.
+  - Replaced layout-thrashing `transition: width` with GPU-accelerated `transform: scaleX(...)` on `.kr-strength-chip-fill` and `.kr-strength-fill`.
+  - Supported dual-mode routing in `handleUnifiedAutofillClick`: advances on `stepReview`, continues active workflow on `session`, or executes comprehensive page/remote frame autofill.
+  - Preserved backward-compatible hidden hooks for `#kr-start-application` and `#kr-pause-application`.
+- **`tests/unit/adapters.test.js` & `tests/unit/application.test.js`**:
+  - Added unit test coverage for Workday quirk selectors.
+  - Added unit test coverage for `stepReviewPause`, `continueStep()`, and native Continue click detection.
+- **`tests/e2e/`**:
+  - Verified all ATS adapters, auto-submit, cross-frame, migration, multi-step, shell, upload, and visual-system suites.
+
+### Verification / Status
+- `npm test`: 232 unit tests pass (100% pass, 0 fail).
+- `npm run test:e2e`: 53 E2E tests pass in real Chromium browser (100% pass, 0 fail).
+- Extension build: v0.4.65 packaged for Chrome and Firefox; Tampermonkey userscript packaged.
+
 ## Turn: 2026-09-26 — Floating profile save dock asset regression
 
 ### Findings
@@ -1580,4 +1764,32 @@ Narrative voice prompt updated and verified.
 
 
 
+
+# Turn: 2026-09-27 — Workday adapter accuracy
+
+- Target: shared core, extension and userscript, Workday (CBC reported application).
+- Reported bugs: referral and phone-country prompts require Enter before results appear; current scanner and actuator miss this mechanic. Attached log contains 99 unchanged scans in the 100-entry buffer, displacing useful diagnostics.
+- Investigation: representative DOM reproductions prove prompt inputs can be classified as text, Workday query text can be treated as committed selection, and manual text verification accepts wrong nonempty values. The CBC DOM itself has not been captured; these are confirmed code defects, not a claim of verified CBC reproduction.
+- Public reference: https://sabre.simplify.jobs/?v=2.4.5 read on 2026-09-27, SHA-256 ab121f97d114831ece64573b6f4563f929c25b45e9ddf63530e0824066ba3d4b; 44 Workday mappings. Research is used to author small local recipes; no runtime dependency on Simplify.
+- Authorized implementation: full application coverage, bundled maps, optional evidenced profile additions. User prioritizes simplicity and efficiency. Extend existing hooks rather than add a generic executor framework.
+- Root causes confirmed by regressions: plain prompt inputs were scanned as text; search dispatch did not include Enter; query text and nonempty text could be mistaken for accepted values; selected chips were not read consistently. The generic path asked AI before applying deterministic Workday values. Repeaters had no saved-record coordination. Additional audit regressions exposed stale global popup attribution, loss of row bindings on replacement, stale bindings after identity changes, missing `inputError` ownership, unchecked upload acceptance, and narrative questions incorrectly treated as disclosures.
+- Adapter changes: expanded `src/core/adapters/workday.js`; added `workday-fields.js` for local canonical mappings/profile resolution/phone parsing and `workday-sections.js` for row matching, creation, progress, and dependency preparation. All four record families (experience, education, languages, websites) use existing interfaces. No runtime Simplify dependency, broad action executor, page storage, or browser controller was added.
+- Shared integration changes: `fields/combobox.js`, `scanner.js`, `normalize.js`, `fillers.js`, and `verify.js` add small adapter hooks, array-token handling, metadata, exact Workday verification, and state-change logging. `ai.js` resolves known Workday values first and bundles unresolved questions into one primary request; `autofill.js` resolves Workday search results locally. `application.js`, `agent.js`, and `ui.js` prepare dependency fields and rows, preserve guessed provenance, allow known Workday values without an API key, and retain the step review pause. `resume.js` waits for Workday parser/upload state; `validation.js` incorporates owned Workday errors; `memory.js` preserves provenance.
+- Profile changes: `profile.js`, `constants.js`, `storage.js`, and `src/targets/extension/options/index.js` add optional legal/preferred name parts, phone country/type/extension, birth date, address line 3, additional explicit disclosures, and structured language records. Existing profiles remain compatible; full-name splitting is marked guessed. `package.json` and `package-lock.json` add `libphonenumber-js/min`; its full MIT notice is retained inline in both extension bundles and the userscript.
+- Test/document additions: `tests/unit/workday.test.js`, `tests/e2e/workday-prompts.spec.js`, `fixtures/workday-prompts-fixture.html`, `fixtures/workday-fields-fixture.html`, and `docs/plans/2026-09-27-workday-coverage.md`. The fixtures are explicitly synthetic, not live captures. The inventory covers representative selectors for all 44 public entries and four nested record families.
+- Build changes: the existing build script automatically advanced the local version from 0.4.65 to 0.4.71 during verified iterations and synchronized `package.json`, `firefox-updates.json`, `site/firefox-updates.json`, `site/index.html`, and `site/version.json`. Chrome, Firefox, and Tampermonkey artifacts were rebuilt locally; nothing was committed, pushed, signed, or published.
+- Verification status: initial seven regressions failed before production changes. Subsequent targeted failures were fixed. Final unit and browser totals are recorded below after completion. Full browser runs before the last narrow disclosure correction passed all 56 tests. The new prompt E2E asserts zero AI requests, exact accepted tokens, the phone's country instead of residence, preserved user skills, completed parsed rows, one missing row, no duplicate row on retry, and no implicit submission or navigation.
+- Remaining acceptance: the reported CBC page was not available as a captured fixture. Debug → Save page fixture is still required for CBC-specific replay and live acceptance. Actual localized tenant variants, institution/major display qualifiers, accepted-file layouts, and `promptAriaInstruction`-only selection layouts remain live-validation targets. Unknown/ambiguous values remain unresolved; no guarantee of all future Workday fields is claimed. See the coverage document for the precise boundaries.
+- Final unit verification: `npm test` — **257 passed, 0 failed**, including 25 new Workday regressions. Additional coverage protects narrative questions from disclosure matching and verifies normalized multi-checkbox option values without removing prior choices. `git diff --check` passes. Final build is **0.4.71**, with retained third-party license notices verified in both extension content bundles and the userscript.
+- Final browser verification: `npm run test:e2e` — **56 passed, 0 failed (4.2 minutes)** against the real extension build, including Enter-only prompts, preserved multi-checkbox selections, repeatable experience rows, profile autofill without an API key, and persisted language records. Implementation is complete for the documented coverage; CBC live capture and tenant-specific acceptance remain outstanding.
+
+# Turn: 2026-09-27 — CBC Workday disclosure controls
+
+- Target: shared extension/userscript core, CBC Workday voluntary disclosures. User provided raw HTML for Gender, Ethnicity, Pronoun, and Disability and screenshots of their menus. The panel typed a plausible value but failed to confirm selection for these controls.
+- Root causes: the Gender button's unlabelled sibling input was scanned as a second field; button-listbox harvesting filtered visible `Male` against saved `Man` before semantic alias matching; `personalInfoPerson--pronouns` lacked a Workday canonical mapping; CBC's `No - I don't have any disability (Canada)` was outside the narrow disability alias. Browser replay confirmed Pronoun and Disability committed while Gender remained untouched until button-listbox filtering was fixed.
+- Resolution: skip only the unlabelled Workday button-filter sibling; harvest visible options from Workday button listboxes without search-term filtering; map Pronoun and declared multi prompts; extend exact disability, decline, and non-binary aliases. Keep `Middle Eastern` unresolved because it is not equivalent to the displayed `Arab and/or Maghrebi Heritage (Canada)` choice.
+- Files changed: `src/core/fields/scanner.js`, `src/core/fields/combobox.js`, `src/core/adapters/workday-fields.js`; `tests/unit/workday.test.js`, `tests/e2e/workday-prompts.spec.js`; `fixtures/workday-cbc-disclosures-fixture.html`; `docs/plans/2026-09-27-workday-coverage.md`; generated version manifests and `package.json` through the existing build script. Fixture controls come from user HTML; popup behavior is synthetic from screenshots, not a live page capture.
+- Verification: focused CBC unit and real Chromium extension regressions passed. Full unit/browser totals and final build version recorded below after the final source change. A test run without browser/temp-file sandbox escalation failed in the existing build-watch fixture; rerun with required permissions is pending.
+- Remaining acceptance: capture the live CBC page with the panel Debug tab's Save page fixture for exact popup DOM and post-selection confirmation, then replay it. Do not infer demographic equivalence from broad descriptions.
+- Final verification: `npm test` — **261 passed, 0 failed**; `npm run test:e2e` — **57 passed, 0 failed (4.7 minutes)** using the real Chromium extension. The focused CBC browser replay also passed independently. Final local build is **v0.4.77** for Chrome, Firefox, and Tampermonkey. No commit, push, or publication was performed.
 

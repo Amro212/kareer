@@ -37,6 +37,7 @@ export function isCustomCombobox(element) {
 }
 
 export function recordLocationActivation(element, label) {
+  detectAdapter().recordComboboxSelection?.(element, label);
   if (isLeverLocation(element) || detectAdapter().id === 'ashby') {
     activatedLocations.set(element, label);
     element.addEventListener('input', () => activatedLocations.delete(element), { once: true });
@@ -54,6 +55,8 @@ export const optionKey = value => String(value ?? '').normalize('NFKC').replace(
 export const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 export function resolveComboboxParts(element) {
+  const adapterParts = detectAdapter().comboboxParts?.(element);
+  if (adapterParts) return adapterParts;
   if (isLeverLocation(element) || isPlacesLocation(element)) {
     return { container: element.parentElement, input: element, controlBox: element, toggleBtn: null };
   }
@@ -113,24 +116,33 @@ export function discoverComboboxOptions(element) {
 }
 
 export function optionData(option) {
-  const label = option.textContent.trim();
+  const label = detectAdapter().id === 'workday' ? option.getAttribute('data-automation-label') || option.querySelector('[data-automation-label]')?.getAttribute('data-automation-label') || option.textContent.trim() : option.textContent.trim();
   return { value: option.getAttribute('data-value') || option.getAttribute('value') || label, label };
 }
 
-export function findExactOption(options, target) {
+export function findExactOption(options, target, field) {
   const key = optionKey(target);
   if (!key) return null;
   const matches = options.filter(option => optionKey(option.label) === key || optionKey(option.value) === key);
-  return matches.length === 1 ? matches[0] : null;
+  if (matches.length === 1) return matches[0];
+  const adapter = detectAdapter();
+  if (adapter.optionMatches) {
+    const meta = field?.ats ? field : adapter.fieldMetadata?.(field?.element || field) || {};
+    const adapterMatches = options.filter(option => adapter.optionMatches(meta, option.label, target) || adapter.optionMatches(meta, option.value, target));
+    if (adapterMatches.length === 1) return adapterMatches[0];
+  }
+  return null;
 }
 
 export function readComboboxSelection(element) {
   if (!element?.isConnected) return [];
+  const adapterSelection = detectAdapter().readComboboxSelection?.(element);
+  if (adapterSelection) return adapterSelection;
   if (isPlacesLocation(element)) {
     const value = String(element.value || '').trim();
     return value ? [value] : [];
   }
-  if (detectAdapter().quirks.selectionInInput || detectAdapter().quirks.comboboxEscapeRollback) {
+  if (detectAdapter().quirks.selectionInInput) {
     const { input } = resolveComboboxParts(element);
     const value = String((input || element).value || '').trim();
     if (value) return [value];
@@ -176,12 +188,15 @@ export function setComboboxSearch(input, value) {
   const search = { query: value, started: Date.now(), priorOptions: new Set(discoverComboboxOptions(input)) };
   searchesByInput.set(input, search);
   const ownsSearch = () => input.isConnected && searchesByInput.get(input) === search && input.value === value;
-  if (input.value === value && !isLeverLocation(input)) return ownsSearch;
+  if (input.value === value && !isLeverLocation(input)) {
+    detectAdapter().afterComboboxSearch?.(input, value);
+    return ownsSearch;
+  }
   activatedLocations.delete(input);
   const setter = Object.getOwnPropertyDescriptor(input.ownerDocument.defaultView.HTMLInputElement.prototype, 'value')?.set;
   if (setter) setter.call(input, value);
   else input.value = value;
-  input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+  input.dispatchEvent(new input.ownerDocument.defaultView.InputEvent('input', { bubbles: true, composed: true, inputType: 'insertText', data: value }));
   input.dispatchEvent(new KeyboardEvent('keyup', { key: value ? value.slice(-1) : 'Backspace', bubbles: true, composed: true }));
   detectAdapter().afterComboboxSearch?.(input, value);
   return ownsSearch;
@@ -208,6 +223,7 @@ export function clickFieldControl(element) {
 }
 
 export async function openCombobox(element) {
+  detectAdapter().beforeComboboxOpen?.(element);
   if (element.getAttribute('aria-expanded') === 'true' && getComboboxMenus(element).length) return;
   const active = element.ownerDocument.activeElement;
   if (active && active !== element && active !== element.ownerDocument.body) {
@@ -227,7 +243,10 @@ export async function waitForComboboxOptions(element, timeoutMs, locationQuery) 
   const { input } = resolveComboboxParts(element);
   const search = input && searchesByInput.get(input);
   const query = input?.value || '';
-  const words = optionKey(query).match(/[\p{L}\p{N}]+/gu) || [];
+  // Workday button listboxes have no searchable input. Their visible options
+  // must reach exact/alias matching even when the saved label differs.
+  const targetQuery = detectAdapter().id === 'workday' ? input ? locationQuery || query : '' : query;
+  const words = optionKey(targetQuery).match(/[\p{L}\p{N}]+/gu) || [];
   const deadline = Date.now() + (timeoutMs ?? (query ? 8000 : 3000));
   let previous = '', stableSince = Date.now();
   do {
@@ -247,11 +266,16 @@ export async function waitForComboboxOptions(element, timeoutMs, locationQuery) 
     const options = discoverComboboxOptions(element).filter(option => {
       if (isLeverLocation(element) && search && (Date.now() - search.started < 500 || search.priorOptions.has(option))) return false;
       const text = optionKey(option.textContent);
-      return location && query ? locationMatches(text, locationQuery || query) : words.every(word => text.includes(word));
+      const adapter = detectAdapter();
+      const meta = adapter.fieldMetadata?.(element);
+      return location && query
+        ? locationMatches(text, locationQuery || query)
+        : words.every(word => text.includes(word)) || Boolean(meta && adapter.optionMatches?.(meta, optionData(option).label, targetQuery));
     });
     const signature = JSON.stringify(options.map(optionData));
     if (loading || signature !== previous) { stableSince = Date.now(); previous = signature; }
     if (!loading && options.length && Date.now() - stableSince >= 200) return options;
+    if (!loading && !options.length) detectAdapter().advanceComboboxSearch?.(element, targetQuery, menus);
     // Async menus can briefly display "No options" before the debounce starts.
     await delay(100);
   } while (Date.now() < deadline);
@@ -261,10 +285,14 @@ export async function waitForComboboxOptions(element, timeoutMs, locationQuery) 
 export async function waitForComboboxSelection(element, target, timeoutMs = 2500) {
   const deadline = Date.now() + timeoutMs;
   let stableSince = null;
+  const adapter = detectAdapter();
+  const meta = adapter.fieldMetadata?.(element);
   do {
     if (!element?.isConnected) return false;
     const valid = element.getAttribute('aria-invalid') !== 'true' && element.validity?.valid !== false;
-    const matches = valid && readComboboxSelection(element).some(value => optionKey(value) === optionKey(target));
+    const matches = valid && readComboboxSelection(element).some(value =>
+      optionKey(value) === optionKey(target) || Boolean(meta && adapter.optionMatches?.(meta, value, target))
+    );
     if (!matches) stableSince = null;
     else if (stableSince === null) stableSince = Date.now();
     else if (Date.now() - stableSince >= 200) return true;

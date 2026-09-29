@@ -1033,3 +1033,67 @@ test('Resume with a shared heading fills a replacement form without recapture', 
     assert.equal(engine.session.completedSteps, 0);
   } finally { engine.destroy(); }
 });
+
+test('Workday stepReviewPause pauses filled step for user review and continueStep advances', async () => {
+  if (dom) dom.window.close();
+  dom = new JSDOM('<body><main></main></body>', { url: 'https://acme.myworkdayjobs.com/en-US/job/apply' });
+  for (const key of ['window', 'document', 'location', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement', 'Element', 'Event', 'KeyboardEvent', 'MouseEvent', 'MutationObserver']) globalThis[key] = dom.window[key];
+  globalThis.CSS = { escape: value => value };
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { get: () => 200 });
+  HTMLElement.prototype.scrollIntoView = () => {};
+
+  render(`<h2>My Information</h2>${input('city', 'City')}<button data-automation-id="bottom-navigation-next-button">Next</button>`);
+  let continueClicked = false;
+  document.querySelector('[data-automation-id="bottom-navigation-next-button"]').onclick = () => {
+    continueClicked = true;
+    render(`<h2>My Experience</h2>${input('title', 'Job Title')}<button data-automation-id="bottom-navigation-next-button">Next</button>`);
+    document.querySelector('[data-automation-id="bottom-navigation-next-button"]').onclick = () => render('<h1>Review application</h1>');
+  };
+
+  const engine = createApplicationEngine({ settleMs: 0, transitionMs: 0, answer: workflowAnswers });
+  try {
+    await engine.start();
+    // After step 1 is filled, Workday pauses for review
+    assert.equal(document.querySelector('#city').value, 'Applicant');
+    assert.equal(engine.session.status, 'paused');
+    assert.equal(engine.session.reason, 'Workday step filled. Ready for your review.');
+    assert.equal(engine.stepReview, true);
+    assert.equal(continueClicked, false);
+
+    // Calling continueStep() triggers Continue and proceeds
+    await engine.continueStep();
+    assert.equal(continueClicked, true);
+    // After step 2 is filled, it pauses again for review
+    assert.equal(document.querySelector('#title').value, 'Applicant');
+    assert.equal(engine.session.status, 'paused');
+    assert.equal(engine.stepReview, true);
+  } finally { engine.destroy(); }
+});
+
+test('native on-page Continue click is detected and resumes autofill when stepReview is active', async () => {
+  if (dom) dom.window.close();
+  dom = new JSDOM('<body><main></main></body>', { url: 'https://acme.myworkdayjobs.com/en-US/job/apply' });
+  for (const key of ['window', 'document', 'location', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement', 'Element', 'Event', 'KeyboardEvent', 'MouseEvent', 'MutationObserver']) globalThis[key] = dom.window[key];
+  globalThis.CSS = { escape: value => value };
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { get: () => 200 });
+  HTMLElement.prototype.scrollIntoView = () => {};
+
+  render(`<h2>My Information</h2>${input('city', 'City')}<button data-automation-id="bottom-navigation-next-button">Next</button>`);
+
+  const engine = createApplicationEngine({ settleMs: 0, transitionMs: 0, answer: workflowAnswers });
+  try {
+    await engine.initialize();
+    await engine.start();
+    assert.equal(engine.stepReview, true);
+
+    // Simulate user clicking on-page Continue button directly, causing DOM to transition to next step
+    render(`<h2>My Experience</h2>${input('title', 'Job Title')}<button data-automation-id="bottom-navigation-next-button">Next</button>`);
+
+    // Trigger mutation observer and allow scheduler + tick to run
+    await new Promise(resolve => setTimeout(resolve, 700));
+
+    // The engine should detect the step advance, clear stepReview, fill the new fields, and pause on review for the new step
+    assert.equal(document.querySelector('#title').value, 'Applicant');
+    assert.equal(engine.session.completedSteps, 1);
+  } finally { engine.destroy(); }
+});

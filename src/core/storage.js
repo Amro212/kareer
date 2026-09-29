@@ -1,6 +1,6 @@
 import { STORAGE_KEYS, DEFAULT_SETTINGS, DEFAULT_PROFILE, APP_VERSION } from './constants.js';
 import { platform } from './platform.js';
-import { createWorkEligibility } from './profile.js';
+import { createWorkEligibility, createLanguage } from './profile.js';
 
 export function gmGet(key, defaultValue = null) {
   return platform.storage.get(key, defaultValue);
@@ -68,7 +68,20 @@ export function getProfile() {
     education: Array.isArray(stored?.education) ? stored.education : [],
     projects: Array.isArray(stored?.projects) ? stored.projects : [],
     skills: Array.isArray(stored?.skills) ? stored.skills : [],
+    languageRecords: (Array.isArray(stored?.languageRecords) ? stored.languageRecords : []).map(createLanguage),
   };
+  if (!merged.fullName && (merged.firstName || merged.lastName)) {
+    merged.fullName = [merged.firstName, merged.middleName, merged.lastName].filter(Boolean).join(' ');
+  } else if (merged.fullName && !merged.firstName && !merged.lastName) {
+    const parts = merged.fullName.trim().split(/\s+/);
+    merged.firstName = parts[0] || '';
+    if (parts.length === 2) {
+      merged.lastName = parts[1];
+    } else if (parts.length > 2) {
+      merged.middleName = parts.slice(1, -1).join(' ');
+      merged.lastName = parts.at(-1);
+    }
+  }
   if (!merged.location) {
     merged.location = [merged.city, merged.stateProvince, merged.country].filter(Boolean).join(', ');
   }
@@ -101,9 +114,31 @@ export function saveProfile(profile) {
   const sponsorshipNow = primaryElig?.sponsorshipNow !== undefined ? primaryElig.sponsorshipNow : (profile?.sponsorshipNow || '');
   const sponsorshipFuture = primaryElig?.sponsorshipFuture !== undefined ? primaryElig.sponsorshipFuture : (profile?.sponsorshipFuture || '');
 
+  let fullName = profile?.fullName?.trim() || '';
+  let firstName = profile?.firstName?.trim() || '';
+  let middleName = profile?.middleName?.trim() || '';
+  let lastName = profile?.lastName?.trim() || '';
+
+  if (!fullName && (firstName || lastName)) {
+    fullName = [firstName, middleName, lastName].filter(Boolean).join(' ');
+  } else if (fullName && !firstName && !lastName) {
+    const parts = fullName.split(/\s+/);
+    firstName = parts[0] || '';
+    if (parts.length === 2) {
+      lastName = parts[1];
+    } else if (parts.length > 2) {
+      middleName = parts.slice(1, -1).join(' ');
+      lastName = parts.at(-1);
+    }
+  }
+
   const cleanProfile = {
     ...DEFAULT_PROFILE,
     ...profile,
+    fullName,
+    firstName,
+    middleName,
+    lastName,
     workCountry,
     workAuthorization,
     sponsorshipNow,
@@ -114,6 +149,7 @@ export function saveProfile(profile) {
     education: Array.isArray(profile?.education) ? profile.education : [],
     projects: Array.isArray(profile?.projects) ? profile.projects : [],
     skills: Array.isArray(profile?.skills) ? profile.skills : [],
+    languageRecords: (Array.isArray(profile?.languageRecords) ? profile.languageRecords : []).map(createLanguage),
   };
   gmSet(STORAGE_KEYS.PROFILE, cleanProfile);
   return getProfile();

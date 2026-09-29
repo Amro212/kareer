@@ -15,7 +15,7 @@ test('local typography, internal options navigation, and responsive console', as
   await popup.locator('#open-options').click();
   const page = await opened;
   await page.waitForURL(kr.optionsUrl());
-  await expect(page.locator('#pf-fullName')).toBeVisible();
+  await expect(page.locator('#pf-firstName')).toBeVisible();
   const loaded = await fonts(page);
   expect(loaded).toHaveLength(2);
   expect(loaded.every(face => face.status === 'loaded')).toBe(true);
@@ -46,8 +46,8 @@ test('HUD and every panel tab use Geist without overflow', async ({ kr }, info) 
   }
   await page.locator('[data-tab=home]').click();
   await page.locator('#kr-capture-job').click();
-  await expect(page.locator('#kr-start-application')).not.toHaveClass(/kr-btn-secondary/);
-  await expect(page.locator('#kr-autofill-btn')).toHaveClass(/kr-btn-secondary/);
+  await expect(page.locator('#kr-autofill-btn')).toBeVisible();
+  await expect(page.locator('#kr-autofill-btn')).not.toHaveClass(/kr-btn-secondary/);
   await page.locator('#kr-main-panel').screenshot({ path: info.outputPath('panel-paused.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.locator('.kr-content').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);

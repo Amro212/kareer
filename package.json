@@ -1,6 +1,6 @@
 {
   "name": "kareer",
-  "version": "0.4.56",
+  "version": "0.4.81",
   "description": "Kareer — AI job application autofill for Chrome, Firefox, and Tampermonkey",
   "type": "module",
   "scripts": {
@@ -29,5 +29,8 @@
     "jsdom": "^30.0.1",
     "selfsigned": "^5.5.0",
     "web-ext": "^10.7.0"
+  },
+  "dependencies": {
+    "libphonenumber-js": "^1.13.14"
   }
 }
