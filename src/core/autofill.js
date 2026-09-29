@@ -3,6 +3,7 @@ import { harvestComboboxOptions } from './fields/scanner.js';
 import { normalizeFieldsForAI } from './fields/normalize.js';
 import { logger } from './debug.js';
 import { getProfile } from './storage.js';
+import { detectAdapter } from './adapters/index.js';
 import { workdayAnswer } from './adapters/workday-fields.js';
 import { findExactOption } from './fields/combobox.js';
 
@@ -17,11 +18,12 @@ export async function resolveComboboxSearchAnswers(fields, response) {
   await harvestComboboxOptions(searchFields, queries);
   const discovered = searchFields.filter(field => field.options.length);
   if (!discovered.length) return response;
-  if (discovered.every(field => field.ats?.adapter === 'workday')) {
+  const adapter = detectAdapter();
+  if (typeof adapter.resolveAnswer === 'function' || discovered.every(field => field.ats?.adapter === 'workday')) {
     return { ...response, answers: response.answers.map(answer => {
       const field = discovered.find(field => field.id === answer.fieldId);
       if (!field) return answer;
-      const fixed = workdayAnswer(field, getProfile());
+      const fixed = adapter.resolveAnswer?.(field, getProfile()) || workdayAnswer(field, getProfile());
       if (fixed) return fixed;
       const option = findExactOption(field.options, answer.searchQuery, field);
       return option ? { ...answer, value: option.label, searchQuery: undefined } : answer;

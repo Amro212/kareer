@@ -1402,7 +1402,8 @@ function setSafeHTML(element, htmlString) {
 }
 
 function getStatusInfo() {
-  if (!hasApiKey() && detectAdapter().id === 'workday') return { label: 'Profile Autofill Ready', dotClass: '', badgeClass: 'kr-badge-green', text: 'Known profile values are ready. Add an API key for unanswered questions.' };
+  const adapter = detectAdapter();
+  if (!hasApiKey() && (typeof adapter.resolveAnswer === 'function' || adapter.id === 'workday')) return { label: 'Profile Autofill Ready', dotClass: '', badgeClass: 'kr-badge-green', text: 'Known profile values are ready. Add an API key for unanswered questions.' };
   if (!hasApiKey()) {
     return {
       label: 'No API Key',
@@ -1528,7 +1529,8 @@ async function handleUnifiedAutofillClick() {
     updatePanelDOM();
     return;
   }
-  if (!hasApiKey() && detectAdapter().id !== 'workday') {
+  const adapter = detectAdapter();
+  if (!hasApiKey() && typeof adapter.resolveAnswer !== 'function' && adapter.id !== 'workday') {
     alert('Please configure your OpenRouter API Key in Settings first.');
     currentTab = 'settings';
     updatePanelDOM();
@@ -1580,7 +1582,8 @@ async function executeAutofillFlow() {
     updatePanelDOM();
     return;
   }
-  if (!hasApiKey() && detectAdapter().id !== 'workday') {
+  const flowAdapter = detectAdapter();
+  if (!hasApiKey() && typeof flowAdapter.resolveAnswer !== 'function' && flowAdapter.id !== 'workday') {
     alert('Please configure your OpenRouter API Key in Settings first.');
     currentTab = 'settings';
     updatePanelDOM();
@@ -1691,7 +1694,7 @@ async function executeAutofillFlow() {
     ];
     let aiResponse = { answers: [] };
     if (normalized.length) {
-      autofillProgress.statusText = detectAdapter().id === 'workday' ? 'Resolving application answers...' : `Generating answers with AI (${settings.model})...`;
+      autofillProgress.statusText = typeof detectAdapter().resolveAnswer === 'function' || detectAdapter().id === 'workday' ? 'Resolving application answers...' : `Generating answers with AI (${settings.model})...`;
       updatePanelDOM();
       aiResponse = await generateAutofillAnswers(normalized);
     }

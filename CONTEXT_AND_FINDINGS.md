@@ -3,6 +3,120 @@
 Running log of changes, bugs, and platform findings for the dual-target
 (extension + userscript) Kareer.
 
+## Turn: 2026-09-28 — Lever Resume Processing Settling Fix & Live Fixture Verification
+
+### Findings
+- **Platform/ATS**: Lever (`jobs.lever.co`).
+- **Fixture**: `fixtures/jobs.lever.co-2026-09-28-05-26.html` (Xsolla Solutions Engineer application on Lever).
+- **Target**: Extension and userscript shared core (`src/core/adapters/lever.js`, `src/core/fields/verify.js`, `tests/unit/lever.test.js`).
+- **Symptoms**:
+  - Live Lever autofill execution halted with console error: `Autofill execution failed: Error: Resume processing did not settle. Wait for the board to finish parsing, then retry Autofill.`
+  - In the panel UI: `Error: Resume processing did not settle. Wait for the board to finish parsing, then retry Autofill.`
+  - Resume upload was marked `Success!` by Lever on the page with pre-filled candidate information, but Kareer autofill was blocked from filling remaining fields (Location, LinkedIn URL, etc.).
+- **Root-Cause Analysis**:
+  1. *Hidden Indicator Visibility in Lever DOM*:
+     - Lever pages permanently contain `<span class="resume-upload-working" style="display: none;"><div class="loading-indicator"></div><div class="resume-upload-label">Analyzing resume...</div></span>` in the DOM, even after resume analysis is finished and `<span class="resume-upload-success" style="display: inline;">` appears.
+     - `uploadBusy(doc)` in `src/core/adapters/lever.js` evaluated `Boolean(doc?.querySelector?.('.analyzing-resume, .resume-upload-working, [aria-busy="true"]'))` without checking element visibility. Because `.resume-upload-working` was always present in the DOM, `uploadBusy(doc)` always returned `true`.
+     - In `src/core/resume.js`, `waitForResumeParsing()` called `detectAdapter().uploadBusy?.(doc)`. Because `uploadBusy` remained `true` indefinitely, the quiet-period timer kept resetting until the 15-second timeout expired, throwing an unhandled error and aborting the fill run.
+  2. *Status vs Filename in `uploadState`*:
+     - In `uploadState(element)`, `status` queried `.resume-upload-status, .resume-upload-success, .resume-upload-filename`. In Lever's DOM, `.resume-upload-success` contains the label `"Success!"`, while the uploaded filename is housed in `<a class="visible-resume-upload has-file"><span class="filename">resume.pdf</span></a>`.
+     - Matching `.resume-upload-success` caused `uploadState.name` to be evaluated as `'Success!'` rather than `'resume.pdf'`.
+     - Furthermore, `busy` in `uploadState` also checked `container?.querySelector('.resume-upload-working')` without visibility checking, causing `uploadState.accepted` to remain `false` even after parsing completed.
+  3. *Hardcoded Verification Error Message*:
+     - In `src/core/fields/verify.js`, file verification returned a hardcoded error `'Workday has not accepted the uploaded file'`, misleading users on non-Workday ATSs.
+- **Resolution**:
+  1. Implemented a robust `visible(element)` helper in `src/core/adapters/lever.js` that checks for `hidden`, `aria-hidden="true"`, inline styles, and computed `display: 'none'` / `visibility: 'hidden'` up the DOM hierarchy (compatible with both real browser cascade and JSDOM).
+  2. Updated `uploadBusy(doc)` in `lever.js` to only consider busy indicators that are visibly rendered (`busyEls.some(visible)`), and check in-flight file inputs.
+  3. Updated `uploadState(element)` in `lever.js` to query `.filename, .resume-upload-filename` for the file name, check for `.resume-upload-failure` / `.resume-upload-oversize`, verify visible `.resume-upload-success` / `.visible-resume-upload.has-file`, and ensure busy indicators are not visible before marking `accepted: true`.
+  4. Updated `verify.js` line 108 to return `'Upload was not accepted by the application'`.
+  5. Added unit tests in `tests/unit/lever.test.js` covering both hidden/visible working indicators and validating the live captured fixture `fixtures/jobs.lever.co-2026-09-28-05-26.html` directly (verifying `uploadBusy === false` and `uploadState === { name: 'resume.pdf', accepted: true }`).
+
+### Turn Changes
+- `src/core/adapters/lever.js`:
+  - Added `visible(element)` helper function.
+  - Updated `uploadState(element)` to accurately extract filename from `.filename` and check visibility of success, working, and failure states.
+  - Updated `uploadBusy(doc)` to check visibility of working indicators and file input acceptance.
+- `src/core/fields/verify.js`:
+  - Updated file verification error message from Workday-specific to application-generic `'Upload was not accepted by the application'`.
+- `tests/unit/lever.test.js`:
+  - Added unit test: `Lever uploadState and uploadBusy handle hidden indicators correctly`.
+  - Added unit test: `Lever live fixture (jobs.lever.co-2026-09-28-05-26.html) does not hang on uploadBusy and accepts parsed resume`.
+
+### Verification / Status
+- `npm test`: 271/271 unit tests pass (100% pass, 0 fail).
+- `tests/unit/lever.test.js`: 10/10 pass (including live Xsolla fixture test).
+- Playwright E2E (`tests/e2e/adapters.spec.js`, `tests/e2e/ats-hardening.spec.js`, `tests/e2e/upload.spec.js`): 18/18 pass (100% pass, 0 fail).
+- Build: v0.4.84 built and packaged for Chrome, Firefox, and Userscript.
+- Next Steps: Proceed with Phase 2 (Ashby full compatibility).
+
+## Turn: 2026-09-28 — Phase 1: Lever Full Compatibility & Test Verification
+
+### Findings
+- **Target**: Lever ATS Compatibility & Shared Canonical Engine (`src/core/adapters/canonical.js`, `src/core/adapters/lever.js`, `src/core/adapters/lever-fields.js`, `src/core/adapters/workday-fields.js`, `src/core/ai.js`, `src/core/autofill.js`, `src/core/ui.js`, `tests/unit/lever.test.js`, `tests/unit/ats-hardening.test.js`, `tests/unit/autofill.test.js`, `tests/e2e/adapters.spec.js`, `tests/e2e/ats-hardening.spec.js`, `tests/e2e/upload.spec.js`).
+- **Platform / ATS**: Lever (`jobs.lever.co`).
+- **Root Cause Analyses & Resolutions**:
+  1. *Location Matching in Canonical Resolver*:
+     - `canonicalOptionMatches` in `canonical.js` lacked `location` matching logic. When comparing Lever location typeahead options (e.g. `'Toronto, ON, CAN'`) against candidate profile location (e.g. `'Toronto, Ontario, Canada'`), equality failed and caused empty values.
+     - Resolution: Imported `locationMatches` in `canonical.js` and added `if (canonical === 'location') return locationMatches(actual, expected)`.
+  2. *Lever Label Extraction Fallback*:
+     - `leverFieldMetadata` in `lever-fields.js` defaulted `label` to `element.name` (`'location'`) when `.application-question` was absent (e.g. wrapped in simple `<label>`). This caused `extractLabel` to bypass its normal DOM tree inspection and prevented `isResidenceLabel` from recognizing the field.
+     - Resolution: Extended container discovery to `.application-question, .custom-question, label` and avoided premature fallback to `element.name`/`element.id`, preserving clean label extraction.
+  3. *Overwrite Guard (`leverNeedsFill`)*:
+     - `leverNeedsFill` previously checked `!leverOptionMatches(field, current, expected)` for all canonical fields, causing already-filled values (e.g. user-supplied residence text or parsed resume fields) to be marked as unfilled and overwritten when `overwriteExisting: false`.
+     - Resolution: Restricted `leverNeedsFill` to return `true` only when the pronouns widget has multiple conflicting checkboxes checked (needing repair), and `null` otherwise to preserve `field.hasExistingValue`.
+  4. *Tiered Resolution & AI Payload Integration*:
+     - Deterministic profile fields (such as Name, Email, LinkedIn, Location/Residence, and Pronouns) resolved by `lever.resolveAnswer` are now handled in Tier 1 and bypass AI requests.
+     - Updated `ats-hardening.spec.js` and `ats-hardening.test.js` to reflect that deterministic profile fields are fulfilled directly from profile data without reaching OpenRouter.
+  5. *Windows Tempdir Lock in Watch Tests*:
+     - Added retry and error tolerance to `rmSync` in `build-watch.test.js` to prevent transient Windows file-handle lock failures.
+
+### Turn Changes
+- **`src/core/adapters/canonical.js`**: Created shared canonical engine (`canonicalNorm`, `countryCode`, `canonicalProfileValue`, `canonicalOptionMatches`, `isDeclineOption`).
+- **`src/core/adapters/workday-fields.js`**: Refactored to delegate normalization, country codes, and option matching to `canonical.js` with 100% backward compatibility.
+- **`src/core/adapters/lever-fields.js`**: Implemented canonical mappings, heuristic custom card classification, and `leverAnswer`.
+- **`src/core/adapters/lever.js`**: Wired full adapter contract (`fieldMetadata`, `profileValue`, `resolveAnswer`, `optionMatches`, `needsFill`, `choiceGroups`, `uploadState`, `uploadBusy`).
+- **`src/core/ai.js`, `src/core/autofill.js`, `src/core/ui.js`**: Generalized adapter resolution dispatch and offline zero-AI autofill readiness.
+- **`tests/unit/lever.test.js`**: Created 8 comprehensive unit tests covering canonical mappings, custom cards, pronouns, EEO disclosures, and zero-AI offline fill.
+- **`tests/unit/ats-hardening.test.js` & `tests/e2e/ats-hardening.spec.js`**: Updated assertions to verify deterministic profile resolution bypasses AI.
+
+### Verification / Status
+- `npm test`: 269/269 unit tests pass (100% pass, 0 fail).
+- `tests/unit/lever.test.js`: 8/8 pass.
+- `tests/unit/workday.test.js`: 28/28 pass.
+- `tests/unit/adapters.test.js`: 8/8 pass.
+- `tests/unit/ats-hardening.test.js`: 19/19 pass.
+- `tests/unit/autofill.test.js`: 49/49 pass.
+- `tests/e2e/adapters.spec.js`: 6/6 pass in real browser.
+- `tests/e2e/ats-hardening.spec.js`: 5/5 pass in real browser.
+- `tests/e2e/upload.spec.js`: 7/7 pass in real browser.
+- Build: v0.4.83 built and packaged for Chrome, Firefox, and Userscript.
+
+## Turn: 2026-09-28 — Lever & Ashby Full Compatibility Planning & Architecture Alignment (/grill-me)
+
+### Findings
+- **Target**: ATS Compatibility Engine (`src/core/adapters/canonical.js`, `src/core/adapters/lever.js`, `src/core/adapters/lever-fields.js`, `src/core/adapters/ashby.js`, `src/core/adapters/ashby-fields.js`, `src/core/ai.js`, `src/core/autofill.js`, `src/core/ui.js`, `tests/unit/lever.test.js`, `tests/unit/ashby.test.js`).
+- **Platform / ATS**: Lever (`jobs.lever.co`) & Ashby (`jobs.ashbyhq.com`, embedded `#ashby_embed`).
+- **Context & Objectives**:
+  - The user requested Workday-grade compatibility for Lever and Ashby using the reverse-engineered Simplify blueprint in `docs/plans/simplify-research.md`.
+  - Conducted `/grill-me` design alignment across ATS scope, architecture, tiered resolution, EEO policies, custom card heuristics, test structure, and phasing.
+- **Architectural Decisions**:
+  1. *Scope*: Lever and Ashby depth-first implementation.
+  2. *Shared Canonical Resolver*: Extract cross-ATS demographic/EEO synonym matching (disability, veteran, gender, ethnicity, pronouns), phone formatting, country codes, and answer provenance formatting (`saved`, `guessed`, `inferred`) into `src/core/adapters/canonical.js`. Lever and Ashby supply precise DOM selectors, container patterns, and custom widget actuators.
+  3. *Tiered Resolution & Offline Profile Autofill*: Generalize adapter dispatch in `ai.js`, `autofill.js`, and `ui.js` so any adapter providing `resolveAnswer` enables "Profile Autofill Ready" without requiring an OpenRouter API key when fields match known profile values.
+  4. *EEO Disclosures*: Unset disclosures remain blank unless explicitly required by the ATS, in which case "Prefer not to say" / "Decline to self-identify" is selected.
+  5. *Custom Question Cards*: Deterministic heuristic classification for common cards (salary expectations, work authorization, visa sponsorship, earliest start date, notice period, residence city/state) before AI fallback.
+  6. *Two-Phase Implementation*: Phase 1 = Shared Canonical Resolver + Lever full compatibility & tests; Phase 2 = Ashby full compatibility & tests.
+  7. *Verification*: Dedicated unit test suites (`tests/unit/lever.test.js` and `tests/unit/ashby.test.js`) plus Playwright E2E fixture specs, with all tests passing.
+
+### Turn Changes
+- `lever_ashby_compatibility_plan.md`: Created comprehensive implementation plan artifact detailing technical specifications and verification gates.
+- `CONTEXT_AND_FINDINGS.md`: Logged planning findings and architectural decisions.
+
+### Verification / Status
+- Baseline `npm test`: 261/261 passing (100% green).
+- Architectural plan approved and ready for Phase 1 execution.
+
+
 ## Turn: 2026-09-27 — Workday Disclosure Combobox Autofill & Selection Action Fix
 
 ### Findings
