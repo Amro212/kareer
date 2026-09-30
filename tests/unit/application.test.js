@@ -16,7 +16,7 @@ import { saveProfile, saveSettings } from '../../src/core/storage.js';
 let dom;
 beforeEach(() => {
   dom = new JSDOM('<body><main></main></body>', { url: 'https://example.com/jobs/42/apply' });
-  for (const key of ['window', 'document', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement', 'Element', 'Event', 'KeyboardEvent', 'MouseEvent', 'MutationObserver']) globalThis[key] = dom.window[key];
+  for (const key of ['window', 'document', 'location', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement', 'Element', 'Event', 'KeyboardEvent', 'MouseEvent', 'MutationObserver']) globalThis[key] = dom.window[key];
   globalThis.CSS = { escape: value => value };
   Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { get: () => 200 });
   HTMLElement.prototype.scrollIntoView = () => {};
@@ -34,6 +34,36 @@ const input = (id = 'name', label = 'Full name') => `<label for="${id}">${label}
 const job = () => ({ title: 'Engineer', company: 'Example', listingUrl: 'https://example.com/jobs/42', applicationUrl: window.location.href });
 
 const workflowAnswers = async fields => ({ answers: fields.map(f => ({ fieldId: f.fieldId, value: 'Applicant' })) });
+
+for (const workday of [false, true]) {
+  test(`continuation preserves review edits with overwrite enabled (${workday ? 'Workday' : 'generic'})`, async () => {
+    saveSettings({ autoContinue: false, overwriteExisting: true });
+    if (workday) {
+      dom.reconfigure({ url: 'https://acme.myworkdayjobs.com/job/apply' });
+      globalThis.location = dom.window.location;
+      saveProfile({ workExperiences: [{ id: 'saved', title: 'Engineer', company: 'Acme', description: 'Saved description' }] });
+      render('<h2>My Experience</h2><div data-automation-id="workExperienceSection"><div data-automation-id="workExperience-1"><input id="a--jobTitle" value="Engineer"><input id="a--company" value="Acme"><label for="a--roleDescription">Description</label><textarea id="a--roleDescription"></textarea></div></div><button>Continue</button>');
+    } else {
+      render(`${input()}<button>Continue</button>`);
+    }
+    const selector = workday ? '#a--roleDescription' : '#name';
+    let continuedValue;
+    document.querySelector('button').onclick = () => {
+      continuedValue = document.querySelector(selector).value;
+      render('<h1>Review application</h1>');
+    };
+    const engine = createApplicationEngine({ settleMs: 0, transitionMs: 0, answer: async fields => ({ answers: fields.map(f => ({ fieldId: f.fieldId, value: workday ? 'Saved description' : 'Applicant' })) }) });
+    try {
+      await engine.start(job());
+      assert.equal(engine.stepReview, true);
+      assert.equal(document.querySelector(selector).value, workday ? 'Saved description' : 'Applicant');
+      document.querySelector(selector).value = 'User correction';
+      await engine.continueStep();
+      assert.equal(continuedValue, 'User correction');
+      assert.equal(engine.session.status, 'review');
+    } finally { engine.destroy(); }
+  });
+}
 
 // Structure observed on RBC's Phenom Apply frontend, without applicant data.
 const phenomProgress = '<div role="toolbar"><li role="button" atm-id="applicationReview"><a tabindex="-1"><span stepnum="applicationReview"></span><span>Review</span></a></li></div>';

@@ -23,6 +23,7 @@ export const PROMPT = '[data-automation-id="multiSelectContainer"], [data-automa
 export const ROW = '[data-automation-id^="workExperience-"], [data-automation-id^="education-"], [data-automation-id^="language-"], [data-automation-id^="websitePanelSet-"], [aria-labelledby$="-panel"]';
 export const rowRecords = new WeakMap();
 export const rowBindings = new WeakMap();
+export const workdayPromptContainer = element => element.closest('[data-automation-id="multiSelectContainer"], [data-uxi-widget-type="multiselect"]') || element.closest(PROMPT);
 const mappings = [
   ['first_name', 'legalName--firstName,legalName-firstName,firstName'],
   ['last_name', 'legalName--lastName,legalName-lastName,lastName'],
@@ -108,7 +109,7 @@ export function workdayFieldMetadata(element) {
   const row = element.closest(ROW);
   const rowKey = row?.getAttribute('data-automation-id') || row?.getAttribute('aria-labelledby');
   let binding = row && (rowRecords.get(row) || rowBindings.get(element.ownerDocument)?.get(rowKey));
-  if (binding && !recordStillMatches(row, binding.record)) {
+  if (binding && !recordStillMatches(row, binding)) {
     rowRecords.delete(row); rowBindings.get(element.ownerDocument)?.delete(rowKey); binding = null;
   }
   let canonical = canonicalKey(element, container);
@@ -132,23 +133,37 @@ export function workdayFieldMetadata(element) {
   return metadata;
 }
 
-function recordStillMatches(row, record) {
+function recordStillMatches(row, { record, original = {} }) {
   for (const element of row.querySelectorAll('input:not([type="hidden"]),select,button[aria-haspopup="listbox"]')) {
     const canonical = canonicalKey(element, element.closest('[data-automation-id^="formField"],.field,fieldset'));
     if (!['title', 'company', 'institution', 'degree', 'language', 'url'].includes(canonical)) continue;
-    const prompt = element.closest(PROMPT);
-    const actual = prompt ? prompt.querySelector('[data-automation-id="selectedItem"]')?.getAttribute('title') : element.tagName === 'SELECT' ? element.selectedOptions[0]?.textContent : element.value || element.textContent;
+    const prompt = workdayPromptContainer(element);
+    const token = prompt?.querySelector('[data-automation-id="selectedItem"]');
+    const actual = prompt ? token?.getAttribute('title') || token?.textContent : element.tagName === 'SELECT' ? element.value && element.selectedOptions[0]?.textContent : element.value || element.textContent;
     if (!actual || /^(select(?: one)?|choose)$/i.test(actual.trim())) continue;
-    if (!record[canonical] || !workdayOptionMatches({ ats: { canonicalKey: canonical } }, actual, record[canonical])) return false;
+    const field = { ats: { canonicalKey: canonical } };
+    if (!workdayOptionMatches(field, actual, record[canonical]) && !workdayOptionMatches(field, actual, original[canonical])) return false;
   }
   return true;
 }
 
 export function workdayNeedsFill(field, profile) {
+  if (field.ats?.rowId) {
+    if (!field.ats.record) return false;
+    if (!field.ats.canonicalKey) return field.hasExistingValue || field.currentValue ? false : null;
+    const expected = workdayValue(field, profile);
+    if (expected == null || expected === '' || typeof expected === 'string' && !expected.trim()) return false;
+    if (field.type === 'checkbox' && !field.widget) return field.element.checked !== (expected === true || /^(true|yes|1)$/i.test(String(expected)));
+    if (!Array.isArray(expected)) {
+      const actual = field.type === 'select' ? field.element.value && field.element.selectedOptions[0]?.textContent : field.currentValue;
+      if (/_(year|month|day)$/.test(field.ats.canonicalKey) && /^\d+$/.test(String(actual)) && /^\d+$/.test(String(expected))) return Number(actual) !== Number(expected);
+      return !workdayOptionMatches(field, actual, expected);
+    }
+  }
   if (!field.ats?.multiple) return null;
   const expected = workdayValue(field, profile);
   if (!Array.isArray(expected)) return null;
-  const container = field.element.closest(PROMPT);
+  const container = workdayPromptContainer(field.element);
   const actual = field.widget === 'workday-choice' ? field.elements.filter(element => element.checked).map(element => field.options.find(option => option.value === element.value)?.label || element.value) : [...(container?.querySelectorAll('[data-automation-id="selectedItem"]') || [])].map(node => node.getAttribute('title') || node.textContent);
   return expected.some(value => !actual.some(label => workdayOptionMatches(field, label, value)));
 }
@@ -157,6 +172,7 @@ export function workdayValue(field, profile) {
   const canonical = field.ats?.canonicalKey;
   const record = field.ats?.record;
   if (!canonical) return undefined;
+  if (field.ats?.rowId && !record) return undefined;
   const date = /^(startDate|endDate|birthday|current_date)_(year|month|day)$/.exec(canonical);
   if (date) {
     const value = date[1] === 'birthday' ? profile.birthDate : date[1] === 'current_date' ? new Date().toLocaleDateString('en-CA') : record?.[date[1]];
@@ -213,7 +229,7 @@ export function workdayAnswer(field, profile) {
   if (field.ats?.canonicalKey === 'source' || field.ats?.canonicalKey?.startsWith('current_date')) answer.provenance = 'inferred';
   if (field.ats?.canonicalKey?.match(/_(?:month|day)$/) && /^\d+$/.test(String(value)) && ['number', 'text'].includes(field.type)) answer.value = String(Number(value));
   const choice = field.widget || ['combobox', 'select', 'radio'].includes(field.type) || field.type === 'checkbox' && field.ats?.multiple;
-  if (!choice || value === '') return answer;
+  if (!choice || value === '' || field.type === 'checkbox' && !field.widget && !field.ats?.multiple) return answer;
   const values = Array.isArray(value) ? value : [value];
   const matched = values.map(target => {
     const matches = (field.options || []).filter(option => workdayOptionMatches(field, option.label, target) || key(option.value) === key(target));
