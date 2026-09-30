@@ -2,7 +2,7 @@
  * Workday: step identity from the progress bar, Continue that stays disabled
  * while a slow save finishes, and custom dropdowns that roll back on Escape.
  */
-import { PROMPT, workdayFieldMetadata, workdayValue, workdayAnswer, workdayNeedsFill, workdayOptionMatches } from './workday-fields.js';
+import { PROMPT, workdayPromptContainer, workdayFieldMetadata, workdayValue, workdayAnswer, workdayNeedsFill, workdayOptionMatches } from './workday-fields.js';
 import { prepareWorkdaySections, prepareWorkdayDependencies } from './workday-sections.js';
 import { extractOptionLabel } from '../fields/labels.js';
 
@@ -110,7 +110,7 @@ export const workdayAdapter = {
     return true;
   },
   comboboxParts(element) {
-    const container = element.closest(PROMPT);
+    const container = workdayPromptContainer(element);
     if (container) {
       const input = element.matches('input') ? element : container.querySelector('input:not([type="hidden"])');
       return { container, input, controlBox: input || element, toggleBtn: container.querySelector('button[aria-label*="open" i]') };
@@ -127,7 +127,7 @@ export const workdayAdapter = {
     owners.set(element.ownerDocument, { element, before: new Map([...element.ownerDocument.querySelectorAll(POPUPS)].filter(visible).map(menu => [menu, menu.innerHTML])) });
   },
   comboboxMenus(element) {
-    const container = element.closest(PROMPT) || element.closest('[data-automation-id^="formField"],.field');
+    const container = workdayPromptContainer(element) || element.closest('[data-automation-id^="formField"],.field');
     const local = container && [...container.querySelectorAll('[role="listbox"], [data-automation-id="activeListContainer"]')];
     if (local?.length) return local;
     const owner = owners.get(element.ownerDocument);
@@ -143,7 +143,7 @@ export const workdayAdapter = {
     return '[data-automation-id="promptLeafNode"], [role="option"]:not([data-automation-id="promptLeafNode"] [role="option"]), [data-automation-id="promptOption"]:not([data-automation-id="promptLeafNode"] [data-automation-id="promptOption"]), [data-automation-id$="ListItem"], [data-automation-id="select-item"]';
   },
   readComboboxSelection(element) {
-    const container = element.closest(PROMPT);
+    const container = workdayPromptContainer(element);
     if (container) {
       const values = [...container.querySelectorAll('[data-automation-id="selectedItem"]')].map(node => clean(node.getAttribute('title') || node.textContent)).filter(value => value && !placeholder(value));
       return [...new Set(values)];

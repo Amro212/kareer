@@ -1,6 +1,6 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { getProfile, saveProfile, saveApiKey, gmSet, parseLegacyLocation } from '../../src/core/storage.js';
+import { getProfile, saveProfile, saveApiKey, gmSet, parseLegacyLocation, splitFullName } from '../../src/core/storage.js';
 import { generateAutofillAnswers, rewriteNarrativeField } from '../../src/core/ai.js';
 import { fixedProfileAnswer } from '../../src/core/profile.js';
 
@@ -495,4 +495,40 @@ test('fixedProfileAnswer deterministically resolves decomposed address fields', 
   assert.equal(residence?.value, 'Springfield, Oregon, United States');
 });
 
+test('splitFullName parses single, two-part, and multi-part names', () => {
+  assert.deepEqual(splitFullName(''), { firstName: '', middleName: '', lastName: '' });
+  assert.deepEqual(splitFullName('Madonna'), { firstName: 'Madonna', middleName: '', lastName: '' });
+  assert.deepEqual(splitFullName('Jane Doe'), { firstName: 'Jane', middleName: '', lastName: 'Doe' });
+  assert.deepEqual(splitFullName('Mary Jane Watson'), { firstName: 'Mary', middleName: 'Jane', lastName: 'Watson' });
+  assert.deepEqual(splitFullName('John Philip Sousa III'), { firstName: 'John', middleName: 'Philip Sousa', lastName: 'III' });
+});
 
+test('saveProfile synchronizes name parts when fullName changes with existing parts', () => {
+  // Initial save establishes explicit firstName and lastName
+  saveProfile({ firstName: 'Alice', middleName: 'Marie', lastName: 'Smith', fullName: 'Alice Marie Smith' });
+  let current = getProfile();
+  assert.equal(current.firstName, 'Alice');
+  assert.equal(current.middleName, 'Marie');
+  assert.equal(current.lastName, 'Smith');
+
+  // Panel edit: updates only fullName, preserving stale parts in object
+  const panelEdit = { ...current, fullName: 'Bob Jones' };
+  const updated = saveProfile(panelEdit);
+  assert.equal(updated.fullName, 'Bob Jones');
+  assert.equal(updated.firstName, 'Bob');
+  assert.equal(updated.middleName, '');
+  assert.equal(updated.lastName, 'Jones');
+
+  // Clearing fullName clears component parts
+  const cleared = saveProfile({ ...updated, fullName: '' });
+  assert.equal(cleared.fullName, '');
+  assert.equal(cleared.firstName, '');
+  assert.equal(cleared.middleName, '');
+  assert.equal(cleared.lastName, '');
+
+  // Updating parts directly in Options updates fullName
+  const partsEdit = saveProfile({ ...cleared, firstName: 'Charlie', lastName: 'Brown' });
+  assert.equal(partsEdit.fullName, 'Charlie Brown');
+  assert.equal(partsEdit.firstName, 'Charlie');
+  assert.equal(partsEdit.lastName, 'Brown');
+});

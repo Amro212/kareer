@@ -11,7 +11,7 @@ import { saveProfile, saveApiKey } from '../../src/core/storage.js';
 import { generateAutofillAnswers } from '../../src/core/ai.js';
 import { findContinue } from '../../src/core/navigation.js';
 import { prepareWorkdaySections, prepareWorkdayDependencies } from '../../src/core/adapters/workday-sections.js';
-import { workdayAnswer, workdayValue, workdayOptionMatches } from '../../src/core/adapters/workday-fields.js';
+import { workdayAnswer, workdayValue, workdayOptionMatches, workdayNeedsFill } from '../../src/core/adapters/workday-fields.js';
 import { inspectValidation } from '../../src/core/validation.js';
 import { normalizeFieldsForAI } from '../../src/core/fields/normalize.js';
 
@@ -94,6 +94,45 @@ test('Workday committed token is read even when search is empty and placeholders
   input.parentElement.firstElementChild.textContent = 'No Items';
   input.parentElement.firstElementChild.removeAttribute('title');
   assert.deepEqual(readComboboxSelection(input), []);
+});
+
+test('Workday harvests and corrects a populated custom degree dropdown', async () => {
+  boot('<main><div data-automation-id="educationSection"><div data-automation-id="education-1"><input id="a--school" value="University"><div data-automation-id="formField-degree"><label for="a--degree">Degree</label><button type="button" id="a--degree" data-automation-id="degree" aria-haspopup="listbox">Bachelor of Arts</button></div></div></div><div data-automation-id="activeListContainer" hidden><div data-automation-id="promptLeafNode">Master of Science</div></div></main>');
+  const profile = { education: [{ id: 'edu', institution: 'University', degree: "Master's degree" }] };
+  saveProfile(profile);
+  const button = document.querySelector('button');
+  const menu = document.querySelector('[data-automation-id="activeListContainer"]');
+  button.onclick = () => { menu.hidden = false; };
+  menu.firstElementChild.onclick = () => { button.textContent = 'Master of Science'; menu.hidden = true; };
+  await prepareWorkdaySections(document, profile);
+  const field = scanFormFields().find(field => field.ats.canonicalKey === 'degree');
+  assert.equal(workdayNeedsFill(field, profile), true);
+  await harvestComboboxOptions([field]);
+  assert.equal(button.textContent, 'Bachelor of Arts', 'harvesting must not change the selection');
+  assert.equal(workdayAnswer(field, profile).value, 'Master of Science');
+  assert.equal(await fillField(field, workdayAnswer(field, profile).value), true);
+  assert.equal((await verifyField(field, 'Master of Science')).verified, true);
+  assert.equal(workdayNeedsFill(scanFormFields().find(field => field.ats.canonicalKey === 'degree'), profile), false);
+});
+
+test('Workday reuses a nested school prompt with its selected token beside the input container', async () => {
+  boot('<div data-automation-id="educationSection"><div data-automation-id="education-1"><div data-automation-id="formField-school"><label for="school">School</label><div data-automation-id="multiSelectContainer"><div data-automation-id="selectedItem" title="University">University</div><div data-automation-id="multiselectInputContainer"><input id="school" data-automation-id="schoolName" placeholder="Search" value="Uncommitted search"></div></div></div><input id="gpa" value="3.8"></div><button type="button" data-automation-id="add-button">Add</button></div>');
+  let adds = 0;
+  document.querySelector('button').onclick = () => {
+    adds++;
+    document.querySelector('button').insertAdjacentHTML('beforebegin', '<div data-automation-id="education-2"><input id="school2" data-automation-id="schoolName"></div>');
+  };
+  const profile = { education: [{ id: 'edu', institution: 'University' }] };
+  await prepareWorkdaySections(document, profile);
+  assert.equal(adds, 0);
+  const field = scanFormFields().find(field => field.element.id === 'school');
+  assert.equal(field.ats.record.id, 'edu');
+  assert.deepEqual(readComboboxSelection(field.element), ['University']);
+  assert.equal(workdayNeedsFill(field, profile), false);
+  await prepareWorkdaySections(document, profile);
+  assert.equal(adds, 0);
+  field.element.closest('[data-automation-id="multiSelectContainer"]').querySelector('[data-automation-id="selectedItem"]').title = 'Other school';
+  assert.equal(scanFormFields().find(field => field.element.id === 'school').ats.record, undefined);
 });
 
 test('Workday accepts myworkdaysite and never reports Submit as Continue', () => {
@@ -280,6 +319,123 @@ test('Workday public selector inventory discovers flat, segmented date, and all 
   assert.equal(byElement.get('language').ats.record.id, 'lang');
   assert.equal(workdayValue(byElement.get('website'), profile), profile.linkedin);
   assert.equal(fields.some(field => field.element.matches('[data-automation-id="dateIcon"]')), false, 'calendar buttons are not answer fields');
+});
+
+function experienceRow(number, title, company, year = '', month = '') {
+  return `<div data-automation-id="workExperience-${number}"><div class="field"><label>Job title</label><input id="workExperience-${number}--jobTitle" value="${title}"></div><div class="field"><label>Company</label><input id="workExperience-${number}--company" value="${company}"></div><div data-automation-id="formField-startDate"><label>From</label><input data-automation-id="dateSectionMonth-input" aria-label="Month" value="${month}"><input data-automation-id="dateSectionYear-input" aria-label="Year" value="${year}"></div></div>`;
+}
+
+test('Workday reconciliation reuses a unique employer despite wrong title and date through rerender and correction', async () => {
+  boot(`<div data-automation-id="workExperienceSection">${experienceRow(1, 'Developer', ' ACME ', '2020', '01')}<button data-automation-id="add-button" disabled>Add</button></div>`);
+  const profile = { workExperiences: [{ id: 'saved', company: 'Acme', title: 'Senior Developer', startDate: '2023-09' }] };
+  await prepareWorkdaySections(document, profile);
+  const row = document.querySelector('[data-automation-id="workExperience-1"]');
+  row.replaceWith(row.cloneNode(true));
+  for (const field of scanFormFields()) {
+    assert.equal(field.ats.record?.id, 'saved');
+    if (!workdayNeedsFill(field, profile)) continue;
+    const answer = workdayAnswer(field, profile);
+    assert.equal(await fillField(field, answer.value), true);
+    assert.equal((await verifyField(field, answer.value)).verified, true);
+  }
+  assert.equal(document.querySelector('[id$="--jobTitle"]').value, 'Senior Developer');
+  assert.equal(document.querySelector('[aria-label="Year"]').value, '2023');
+  assert.equal(document.querySelector('[aria-label="Month"]').value, '9');
+  await prepareWorkdaySections(document, profile);
+  assert.equal(scanFormFields().every(field => workdayNeedsFill(field, profile) === false), true);
+});
+
+test('Workday reconciliation reserves complete matches before assigning partial rows regardless of profile order', async () => {
+  boot(`<div data-automation-id="workExperienceSection">${experienceRow(1, '', 'Acme')}${experienceRow(2, 'Engineer', 'Acme')}<button data-automation-id="add-button" disabled>Add</button></div>`);
+  const profile = { workExperiences: [{ id: 'tutor', title: 'Tutor', company: 'Acme' }, { id: 'engineer', title: 'Engineer', company: 'Acme' }] };
+  await prepareWorkdaySections(document, profile);
+  const titles = scanFormFields().filter(field => field.ats.canonicalKey === 'title');
+  assert.deepEqual(titles.map(field => field.ats.record?.id), ['tutor', 'engineer']);
+});
+
+test('Workday reconciliation distinguishes reordered identical roles using dates', async () => {
+  boot(`<div data-automation-id="workExperienceSection">${experienceRow(1, 'Engineer', 'Acme', '2023', '09')}${experienceRow(2, 'Engineer', 'Acme', '2021', '02')}<button data-automation-id="add-button" disabled>Add</button></div>`);
+  const profile = { workExperiences: [{ id: 'old', title: 'Engineer', company: 'Acme', startDate: '2021-02' }, { id: 'new', title: 'Engineer', company: 'Acme', startDate: '2023-09' }] };
+  await prepareWorkdaySections(document, profile);
+  assert.deepEqual(scanFormFields().filter(field => field.ats.canonicalKey === 'title').map(field => field.ats.record?.id), ['new', 'old']);
+});
+
+test('Workday reconciliation survives Add replacing every existing row', async () => {
+  boot(`<div data-automation-id="workExperienceSection">${experienceRow(1, 'Engineer', 'Acme')}<button data-automation-id="add-button">Add</button></div>`);
+  let adds = 0;
+  document.querySelector('button').onclick = () => {
+    adds++;
+    for (const row of document.querySelectorAll('[data-automation-id^="workExperience-"]')) row.replaceWith(row.cloneNode(true));
+    document.querySelector('button').insertAdjacentHTML('beforebegin', experienceRow(2, '', ''));
+  };
+  const profile = { workExperiences: [{ id: 'missing', title: 'Tutor', company: 'Paper' }, { id: 'existing', title: 'Engineer', company: 'Acme' }] };
+  await prepareWorkdaySections(document, profile);
+  await prepareWorkdaySections(document, profile);
+  assert.equal(adds, 1);
+  assert.deepEqual(scanFormFields().filter(field => field.ats.canonicalKey === 'title').map(field => field.ats.record?.id), ['existing', 'missing']);
+});
+
+test('Workday reconciliation stops on a tied employer before adding any other records', async () => {
+  boot(`<div data-automation-id="workExperienceSection">${experienceRow(1, 'Parsed title', 'Acme')}<button data-automation-id="add-button">Add</button></div>`);
+  let adds = 0;
+  document.querySelector('button').onclick = () => { adds++; document.querySelector('button').insertAdjacentHTML('beforebegin', experienceRow(2, '', '')); };
+  const profile = { workExperiences: [{ id: 'missing', title: 'Tutor', company: 'Other' }, { id: 'a', title: 'Engineer', company: 'Acme' }, { id: 'b', title: 'Manager', company: 'Acme' }] };
+  await assert.rejects(prepareWorkdaySections(document, profile), /ambiguous|review/i);
+  assert.equal(adds, 0);
+});
+
+test('Workday reconciliation corrects a unique school degree but preserves blank saved values and unmatched rows', async () => {
+  boot('<div data-automation-id="educationSection"><div data-automation-id="education-1"><div class="field"><label>School</label><input id="a--school" value="University"></div><div class="field"><label>Degree</label><select id="a--degree"><option>Bachelor of Arts</option><option>Master of Science</option></select></div><div class="field"><label>GPA</label><input id="a--gpa" value="3.8"></div></div></div><div data-automation-id="websiteSection"><div data-automation-id="websitePanelSet-1"><div class="field"><label>Website</label><input id="a--url" value="https://user.example"></div></div><div data-automation-id="websitePanelSet-2"><div class="field"><label>Website</label><input id="b--url"></div></div></div>');
+  const profile = { education: [{ id: 'edu', institution: 'University', degree: "Master's degree", gpa: '' }], linkedin: 'https://linkedin.com/in/test' };
+  await prepareWorkdaySections(document, profile);
+  const fields = scanFormFields();
+  const degree = fields.find(field => field.ats.canonicalKey === 'degree');
+  assert.equal(workdayNeedsFill(degree, profile), true);
+  const answer = workdayAnswer(degree, profile);
+  assert.equal(await fillField(degree, answer.value), true);
+  assert.equal((await verifyField(degree, answer.value)).verified, true);
+  assert.equal(workdayNeedsFill(fields.find(field => field.ats.canonicalKey === 'gpa'), profile), false);
+  const unmatched = fields.find(field => field.element.id === 'a--url');
+  assert.equal(workdayNeedsFill(unmatched, profile), false);
+  assert.equal(workdayValue(unmatched, profile), undefined);
+});
+
+test('Workday reconciliation drops previous bindings when a saved record is disabled', async () => {
+  boot(`<div data-automation-id="workExperienceSection">${experienceRow(1, 'Engineer', 'Acme')}</div>`);
+  const record = { id: 'saved', title: 'Engineer', company: 'Acme' };
+  await prepareWorkdaySections(document, { workExperiences: [record] });
+  await prepareWorkdaySections(document, { workExperiences: [{ ...record, enabled: false }] });
+  const field = scanFormFields().find(field => field.ats.canonicalKey === 'title');
+  assert.equal(field.ats.record, undefined);
+  assert.equal(workdayNeedsFill(field, { workExperiences: [] }), false);
+});
+
+test('Workday reconciliation keeps empty custom questions on bound rows available for contextual AI', async () => {
+  boot(`<div data-automation-id="workExperienceSection">${experienceRow(1, 'Engineer', 'Acme')}</div>`);
+  document.querySelector('[data-automation-id="workExperience-1"]').insertAdjacentHTML('beforeend', '<div class="field"><label for="impact">Explain your impact</label><textarea id="impact" required></textarea></div>');
+  const profile = { workExperiences: [{ id: 'saved', title: 'Engineer', company: 'Acme' }] };
+  await prepareWorkdaySections(document, profile);
+  const custom = scanFormFields().find(field => field.element.id === 'impact');
+  assert.equal(custom.ats.record.id, 'saved');
+  assert.equal(workdayNeedsFill(custom, profile), null);
+  custom.element.value = 'User-written impact';
+  assert.equal(workdayNeedsFill(scanFormFields().find(field => field.element.id === 'impact'), profile), false);
+});
+
+test('Workday reconciliation changes current-job state before discovering missing end dates', async () => {
+  boot(`<div data-automation-id="workExperienceSection">${experienceRow(1, 'Engineer', 'Acme')}<div id="current-field"></div></div>`);
+  const row = document.querySelector('[data-automation-id="workExperience-1"]');
+  row.insertAdjacentHTML('beforeend', '<div class="field"><label>Currently work here</label><input id="a--currentlyWorkHere" type="checkbox" checked></div><div id="end"></div>');
+  document.querySelector('[type="checkbox"]').onchange = () => { row.querySelector('#end').innerHTML = '<div data-automation-id="formField-endDate"><label>To</label><input data-automation-id="dateSectionMonth-input" aria-label="Month"><input data-automation-id="dateSectionYear-input" aria-label="Year"></div>'; };
+  const profile = { workExperiences: [{ id: 'saved', title: 'Engineer', company: 'Acme', current: false, endDate: '2024-12' }] };
+  await prepareWorkdaySections(document, profile);
+  const current = scanFormFields().find(field => field.ats.canonicalKey === 'current');
+  assert.equal(workdayNeedsFill(current, profile), true);
+  assert.equal(workdayAnswer(current, profile).value, false);
+  await prepareWorkdayDependencies(document, profile);
+  assert.equal(document.querySelector('[type="checkbox"]').checked, false);
+  const endYear = scanFormFields().find(field => field.ats.canonicalKey === 'endDate_year');
+  assert.equal(workdayValue(endYear, profile), '2024');
 });
 
 test('Workday no longer applies a saved record when a rerendered row changes identity', async () => {

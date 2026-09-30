@@ -1612,9 +1612,9 @@ async function executeAutofillFlow() {
 
     const shouldFill = (f) => {
       if (f.element?.disabled || f.element?.readOnly) return false;
-      if (overwrite) return true;
       const adapterNeeds = detectAdapter().needsFill?.(f, profile);
       if (adapterNeeds != null) return adapterNeeds;
+      if (overwrite) return true;
       if (f.hasExistingValue) return false;
       const val = f.currentValue;
       return !val || val === 'false' || val === '0' || String(val).trim().length === 0;
@@ -1644,7 +1644,7 @@ async function executeAutofillFlow() {
       fieldResultsCache.set(result.fieldId, result);
     }
     // Parsing can populate, clear, add, or replace controls. Choose targets only
-    // after it settles, preserving parser/user values unless overwrite is on.
+    // after it settles, reconciling bound rows with saved profile values.
     await detectAdapter().prepareSections?.(document, profile, { session: applicationEngine?.session, isCurrent: () => token === autofillGeneration && window.location.href === runUrl });
     await detectAdapter().prepareFields?.(document, profile, { overwrite, isCurrent: () => token === autofillGeneration && window.location.href === runUrl });
     if (applicationEngine?.session) saveSession(applicationEngine.session);

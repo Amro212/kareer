@@ -11,6 +11,23 @@ const PROFILE = {
 };
 
 test.describe('multi-step application workflow', () => {
+  test('Next step preserves review edits with overwrite enabled', async ({ kr }) => {
+    await kr.seed({ profile: PROFILE, settings: { autoContinue: false, overwriteExisting: true } });
+    const page = await kr.context.newPage();
+    await page.goto(kr.fixtureUrl('phase3-application-fixture.html', undefined, '?step=1'));
+    await kr.openPanel(page);
+    await page.locator('#kr-capture-job').click();
+    await page.locator('#kr-autofill-btn').click();
+    await expect(page.locator('#kr-autofill-btn')).toHaveText(/next step/i, { timeout: 60000 });
+    await page.locator('#fullName').fill('User corrected name');
+    await page.evaluate(() => document.querySelector('main button').addEventListener('click', () => {
+      window.continuedName = document.querySelector('#fullName').value;
+    }, { capture: true }));
+    await page.locator('#kr-autofill-btn').click();
+    await expect(page.locator('#experience')).toBeVisible();
+    expect(await page.evaluate(() => window.continuedName)).toBe('User corrected name');
+  });
+
   test('walks the fixture to review using real navigation events', async ({ kr }) => {
     await kr.seed({ profile: PROFILE, settings: { autoContinue: true, autoSubmit: false } });
 

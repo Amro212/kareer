@@ -20,7 +20,9 @@ import { applyRemoteResumeUploads } from './remote.js';
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const scanPageFields = () => scanAllFields().filter(f => isVisible(f.element) && !f.element.closest('[role=listbox],.select__menu')).map(f => ({ ...f, label: workflowLabel(f) }));
 const scanFormFields = () => scanPageFields().filter(f => !f.element.disabled && !f.element.readOnly);
-const empty = field => detectAdapter().needsFill?.(field, getProfile()) ?? (field.hasExistingValue ? false : field.type === 'checkbox' && !field.widget ? !field.element.checked : !String(field.currentValue ?? '').trim());
+const unfilled = field => field.hasExistingValue ? false : field.type === 'checkbox' && !field.widget ? !field.element.checked : !String(field.currentValue ?? '').trim();
+const empty = field => detectAdapter().needsFill?.(field, getProfile()) ?? unfilled(field);
+const shouldFill = field => detectAdapter().needsFill?.(field, getProfile()) ?? (getSettings().overwriteExisting || empty(field));
 const runnable = new Set(['running', 'captcha', 'waiting', 'submitting']);
 
 export function createApplicationEngine({ answer = generateAutofillAnswers, onChange = () => {}, settleMs = 180, transitionMs = 1200, navigationTimeoutMs = transitionMs === 0 ? 0 : 10000, submitCountdownMs = 5000 } = {}) {
@@ -402,7 +404,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
           signature = observePage(scanPageFields());
           step.observation = signature;
           for (const field of scanFormFields()) step.questions[field.id] = questionIdentity(field);
-          const targets = scanFormFields().filter(f => f.type !== 'file' && (getSettings().overwriteExisting || empty(f)));
+          const targets = scanFormFields().filter(f => f.type !== 'file' && shouldFill(f));
           const missing = [];
           for (const field of targets) {
             const cached = recallAnswer(session, field);
@@ -424,7 +426,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         } else {
           // Recover persisted answers after a full document reload without another primary request.
           if (!await applyResumeUploads(fields.filter(f => f.type === 'file' && isResumeField(f, fields) && empty(f)), token, signature)) return;
-          const missing = fields.filter(f => f.type !== 'file' && empty(f));
+          const missing = fields.filter(f => f.type !== 'file' && unfilled(f));
           if (missing.length && !await applyAnswers(missing, Object.values(step.answers), token, signature)) return;
         }
         if (!checkPage(signature, token, 'fill completion')) return;
@@ -434,7 +436,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
           if (step.lateRequests >= 2) { status('paused', 'Dynamic field limit reached (2/2). Inspect the page before resuming.'); return; }
           step.lateRequests++;
           saveSession(session);
-          const targets = late.filter(f => f.type !== 'file' && (getSettings().overwriteExisting || empty(f)));
+          const targets = late.filter(f => f.type !== 'file' && shouldFill(f));
           if (!await applyResumeUploads(late.filter(f => f.type === 'file' && isResumeField(f, late)), token, signature)) return;
           if (targets.length) {
             const answers = await request(targets, { allowSearch: false }, token, signature);
@@ -457,13 +459,17 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         }
         if (await attemptAutoSubmit(token, step)) return;
         if (!getSettings().autoContinue && !step.forceContinue) {
+          step.reviewed = true;
           session.stepReview = true;
           saveSession(session);
           status('paused', 'Page filled. Auto Continue is off.');
           return;
         }
+        const wasForced = Boolean(step.forceContinue);
         step.forceContinue = false;
-        if (detectAdapter().quirks?.stepReviewPause && !step.reviewed) {
+        if (wasForced) {
+          step.reviewed = true;
+        } else if (detectAdapter().quirks?.stepReviewPause && !step.reviewed) {
           step.reviewed = true;
           session.stepReview = true;
           saveSession(session);

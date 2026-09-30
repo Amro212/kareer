@@ -411,7 +411,7 @@ export async function harvestComboboxOptions(fields, searchQueries = new Map()) 
   for (const field of fields.filter(field => field.type === FIELD_TYPES.COMBOBOX)) {
     const element = field.element;
     if (!element) continue;
-    if (readComboboxSelection(element).length && !field.ats?.multiple) continue;
+    if (readComboboxSelection(element).length && !field.ats?.multiple && detectAdapter().needsFill?.(field, getProfile()) !== true) continue;
     const { input } = resolveComboboxParts(element);
     let ownsSearch;
     try {
