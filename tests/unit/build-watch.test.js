@@ -47,6 +47,10 @@ test('watch builds refresh copied CSS and HTML for both browsers', { timeout: 20
       child.kill();
       await exited;
     }
-    fs.rmSync(dir, { recursive: true, force: true });
+    try {
+      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch {
+      // Windows tempdir file handles may take time to release
+    }
   }
 });

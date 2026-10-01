@@ -105,7 +105,7 @@ export async function verifyField(field, expectedValue) {
       if (upload) {
         const expected = String(expectedValue || field.element.files?.[0]?.name || '').trim();
         const verified = upload.accepted && Boolean(upload.name) && (!expected || upload.name === expected);
-        return { verified, actualValue: upload.name, error: verified ? undefined : 'Workday has not accepted the uploaded file' };
+        return { verified, actualValue: upload.name, error: verified ? undefined : 'Upload was not accepted by the application' };
       }
       const actualVal = field.element.files?.[0]?.name || '';
       const expectedName = String(expectedValue || '').trim();

@@ -1,5 +1,5 @@
 import { TOKENS, VISUAL_NAME, installPanelFonts } from './theme.js';
-import { APP_VERSION, APP_NAME, POPULAR_MODELS, UI_IDS, FILL_STATUS } from './constants.js';
+import { APP_VERSION, APP_NAME, POPULAR_MODELS, UI_IDS, FILL_STATUS, STORAGE_KEYS } from './constants.js';
 import { PROFILE_SECTIONS, PROFILE_FIELDS, calculateProfileStrength } from './profile.js';
 import {
   getSettings,
@@ -9,6 +9,7 @@ import {
   hasApiKey,
   saveApiKey,
   getSanitizedState,
+  gmGet,
 } from './storage.js';
 import { platform, getHostName } from './platform.js';
 import { collectPortableData, exportPayload } from './migration.js';
@@ -37,6 +38,7 @@ import { classifyPage } from './pageClassifier.js';
 import { detectAdapter } from './adapters/index.js';
 import { rememberAnswer } from './memory.js';
 import { saveSession } from './sessions.js';
+import { captureJob } from './jobs.js';
 
 let applicationEngine = null;
 let applicationState = null;
@@ -812,6 +814,25 @@ input:checked + .kr-slider:before {
   border: 1px solid rgba(98, 200, 255, 0.3);
 }
 
+.kr-badge-ai {
+  background: rgba(168, 85, 247, 0.12);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.kr-badge-profile {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.kr-badge-saved {
+  background: rgba(98, 200, 255, 0.12);
+  color: var(--kr-info);
+  border: 1px solid rgba(98, 200, 255, 0.3);
+}
+
+
 /* Alerts & Banners */
 .kr-alert {
   padding: 10px 12px;
@@ -1402,7 +1423,8 @@ function setSafeHTML(element, htmlString) {
 }
 
 function getStatusInfo() {
-  if (!hasApiKey() && detectAdapter().id === 'workday') return { label: 'Profile Autofill Ready', dotClass: '', badgeClass: 'kr-badge-green', text: 'Known profile values are ready. Add an API key for unanswered questions.' };
+  const adapter = detectAdapter();
+  if (!hasApiKey() && (typeof adapter.resolveAnswer === 'function' || adapter.id === 'workday')) return { label: 'Profile Autofill Ready', dotClass: '', badgeClass: 'kr-badge-green', text: 'Known profile values are ready. Add an API key for unanswered questions.' };
   if (!hasApiKey()) {
     return {
       label: 'No API Key',
@@ -1528,7 +1550,8 @@ async function handleUnifiedAutofillClick() {
     updatePanelDOM();
     return;
   }
-  if (!hasApiKey() && detectAdapter().id !== 'workday') {
+  const adapter = detectAdapter();
+  if (!hasApiKey() && typeof adapter.resolveAnswer !== 'function' && adapter.id !== 'workday') {
     alert('Please configure your OpenRouter API Key in Settings first.');
     currentTab = 'settings';
     updatePanelDOM();
@@ -1580,7 +1603,8 @@ async function executeAutofillFlow() {
     updatePanelDOM();
     return;
   }
-  if (!hasApiKey() && detectAdapter().id !== 'workday') {
+  const flowAdapter = detectAdapter();
+  if (!hasApiKey() && typeof flowAdapter.resolveAnswer !== 'function' && flowAdapter.id !== 'workday') {
     alert('Please configure your OpenRouter API Key in Settings first.');
     currentTab = 'settings';
     updatePanelDOM();
@@ -1633,10 +1657,11 @@ async function executeAutofillFlow() {
       field.element = resolveLiveFileElement(field);
       const verification = didFill ? await verifyField(field, '') : { verified: false, error: 'No stored resume' };
       if (verification.verified) {
-        fieldResultsCache.set(field.id, { status: FILL_STATUS.VERIFIED, value: verification.actualValue || '' });
+        fieldResultsCache.set(field.id, { status: FILL_STATUS.VERIFIED, value: verification.actualValue || '', source: 'profile' });
       } else {
-        fieldResultsCache.set(field.id, { status: FILL_STATUS.FAILED, value: '', error: verification.error || 'Resume was not attached' });
+        fieldResultsCache.set(field.id, { status: FILL_STATUS.FAILED, value: '', error: verification.error || 'Resume was not attached', source: 'profile' });
       }
+
     }
     const remoteUploads = await applyRemoteResumeUploads({ overwriteExisting: overwrite });
     if (token !== autofillGeneration) return;
@@ -1689,11 +1714,20 @@ async function executeAutofillFlow() {
       ...normalizeFieldsForAI(aiTargetFields, { overwriteExisting: overwrite }),
       ...remoteFields,
     ];
+    let currentJob = applicationEngine?.session?.job || gmGet(STORAGE_KEYS.JOB);
+    if (!currentJob || (currentJob.listingUrl !== window.location.href && currentJob.applicationUrl !== window.location.href)) {
+      try {
+        currentJob = captureJob();
+      } catch { /* Ignore early DOM access */ }
+    }
+    if (currentJob?.pendingHydration) {
+      await currentJob.pendingHydration;
+    }
     let aiResponse = { answers: [] };
     if (normalized.length) {
-      autofillProgress.statusText = detectAdapter().id === 'workday' ? 'Resolving application answers...' : `Generating answers with AI (${settings.model})...`;
+      autofillProgress.statusText = typeof detectAdapter().resolveAnswer === 'function' || detectAdapter().id === 'workday' ? 'Resolving application answers...' : `Generating answers with AI (${settings.model})...`;
       updatePanelDOM();
-      aiResponse = await generateAutofillAnswers(normalized);
+      aiResponse = await generateAutofillAnswers(normalized, { jobContext: currentJob });
     }
     if (token !== autofillGeneration) return;
     if (window.location.href !== runUrl) throw new Error('Page changed during autofill. Inspect the current step before retrying.');
@@ -1725,22 +1759,27 @@ async function executeAutofillFlow() {
         field.element = resolveLiveElement(field);
 
         const answer = answersMap.get(field.id);
+        const source = answer?.source || (answer?.inferred ? 'ai' : 'profile');
         if (!answer || answer.value === '' || answer.value === null || answer.value === undefined) {
           if (field.required || field.element?.getAttribute('data-reject-fill') === 'true') {
             fieldResultsCache.set(field.id, {
               status: FILL_STATUS.FAILED,
               value: field.currentValue || '',
               error: field.ats?.adapter === 'workday' ? 'No usable saved or generated answer for this required field' : 'Required field left empty by AI',
+              source,
             });
             highlightFailedField(field.element);
           } else {
             fieldResultsCache.set(field.id, {
               status: FILL_STATUS.SKIPPED,
               value: field.currentValue,
+              source,
             });
           }
           continue;
         }
+
+        logger.info(`Field action [${source === 'ai' ? 'AI' : source === 'saved' ? 'Saved' : 'Profile'}]: id=${field.id}, label="${field.label}"`);
 
         scrollToField(field.element);
         highlightActiveField(field.element);
@@ -1772,6 +1811,7 @@ async function executeAutofillFlow() {
             provenance: answer.provenance || (answer.inferred ? 'inferred' : 'saved'),
             value: verification.actualValue || answer.value,
             inferred: answer.inferred,
+            source,
           });
           // Preserve memory and session continuity without overwriting
           if (applicationEngine?.session) {
@@ -1786,6 +1826,7 @@ async function executeAutofillFlow() {
             status: FILL_STATUS.FAILED,
             value: verification.actualValue || '',
             error: verification.error || 'Value did not stick in DOM',
+            source,
           });
           logger.warn(`Verification failed for "${field.label}": ${verification.error}`);
         }
@@ -1823,12 +1864,14 @@ async function executeAutofillFlow() {
           error: result.error,
           inferred: result.inferred,
           provenance: result.provenance,
+          source: result.source || (result.inferred ? 'ai' : 'profile'),
           label: result.label,
           remote: true,
         });
       }
       autofillProgress.current = autofillProgress.total;
     }
+
 
     refreshDetectedFields();
     const report = summarizeFieldResults(getAllDetectedFields(), fieldResultsCache);
@@ -2001,6 +2044,8 @@ export function summarizeFieldResults(fields, results) {
   const inferredFields = [];
   const failedFields = [];
   const untouchedFields = [];
+  let aiCount = 0;
+  let profileCount = 0;
 
   for (const f of fields) {
     const id = f.id || f.fieldId;
@@ -2014,6 +2059,14 @@ export function summarizeFieldResults(fields, results) {
     } else {
       untouchedFields.push({ field: f, result: res });
     }
+
+    if (res && res.status !== FILL_STATUS.UNTOUCHED && (res.value !== '' && res.value != null)) {
+      if (res.source === 'ai' || (res.inferred && res.source !== 'profile' && res.source !== 'saved')) {
+        aiCount++;
+      } else {
+        profileCount++;
+      }
+    }
   }
 
   return {
@@ -2023,6 +2076,8 @@ export function summarizeFieldResults(fields, results) {
     untouched: untouchedFields,
     filled: verifiedFields.length + inferredFields.length,
     total: fields.length,
+    aiCount,
+    profileCount,
   };
 }
 
@@ -2032,7 +2087,10 @@ function renderFieldReviewSection() {
     inferred: inferredFields,
     failed: failedFields,
     untouched: untouchedFields,
+    filled,
     total,
+    aiCount,
+    profileCount,
   } = summarizeFieldResults(getAllDetectedFields(), fieldResultsCache);
 
   const renderItem = (item, badgeClass, badgeLabel) => {
@@ -2040,6 +2098,20 @@ function renderFieldReviewSection() {
     const label = item.field.label || item.result?.label || fieldId;
     const val = item.result?.value ?? item.field.currentValue ?? '';
     const displayVal = val !== '' ? String(val) : 'Empty';
+
+    let sourceBadge = '';
+    if (val !== '' && item.result?.status !== FILL_STATUS.UNTOUCHED) {
+      const src = item.result?.source;
+      const inferred = item.result?.inferred;
+      if (src === 'ai' || (inferred && src !== 'profile' && src !== 'saved')) {
+        sourceBadge = '<span class="kr-badge kr-badge-ai" title="Filled using an AI call">AI</span>';
+      } else if (src === 'saved') {
+        sourceBadge = '<span class="kr-badge kr-badge-saved" title="Reused exact saved answer">SAVED</span>';
+      } else {
+        sourceBadge = '<span class="kr-badge kr-badge-profile" title="Deterministically filled from profile">PROFILE</span>';
+      }
+    }
+
     return `
       <div class="kr-review-item">
         <div class="kr-review-info">
@@ -2047,6 +2119,7 @@ function renderFieldReviewSection() {
           <div class="kr-review-value" title="${escapeHtml(displayVal)}">${escapeHtml(displayVal)}</div>
         </div>
         <div class="kr-review-meta">
+          ${sourceBadge}
           <span class="kr-badge ${badgeClass}">${badgeLabel}</span>
           <button type="button" class="kr-btn kr-btn-secondary kr-btn-small kr-locate-field-btn" data-field-id="${escapeHtml(fieldId)}" title="Scroll to and highlight field">
             ${ICONS.locate}
@@ -2068,6 +2141,10 @@ function renderFieldReviewSection() {
         <span class="kr-badge kr-badge-amber">${inferredFields.length} INFERRED</span>
         <span class="kr-badge kr-badge-red">${failedFields.length} FAILED</span>
         <span class="kr-badge" style="background: var(--kr-bg-3); color: var(--kr-text-3);">${untouchedFields.length} UNTOUCHED</span>
+        ${filled > 0 ? `
+          <span class="kr-badge kr-badge-profile" title="Deterministically filled from profile">${profileCount} PROFILE</span>
+          <span class="kr-badge kr-badge-ai" title="Filled using AI call">${aiCount} AI</span>
+        ` : ''}
       </div>
       <div class="kr-review-list" style="margin-top: 6px;">
         ${total === 0 ? '<div style="font-size: 12px; color: var(--kr-text-3); text-align: center; padding: 12px;">No form fields detected on this page.</div>' : ''}
@@ -2079,6 +2156,7 @@ function renderFieldReviewSection() {
     </div>
   `;
 }
+
 
 function renderHomeTab() {
   const status = getStatusInfo();
@@ -2593,6 +2671,20 @@ function renderDebugTab() {
   const logs = logger.getLogs();
   const lastPageChange = applicationState?.session?.lastPageChange;
 
+  let currentJob = applicationState?.session?.job || gmGet(STORAGE_KEYS.JOB);
+  if (!currentJob || (currentJob.listingUrl !== window.location.href && currentJob.applicationUrl !== window.location.href)) {
+    try {
+      currentJob = captureJob();
+    } catch { /* Ignore early DOM access */ }
+  }
+
+  if (currentJob?.pendingHydration && !currentJob._hydrationHooked) {
+    currentJob._hydrationHooked = true;
+    currentJob.pendingHydration.then(() => {
+      updatePanelDOM();
+    }).catch(() => {});
+  }
+
   const logsHtml = logs.length === 0
     ? '<span style="color: var(--kr-text-3);">No debug logs recorded yet.</span>'
     : logs.slice().reverse().map((l) => {
@@ -2622,6 +2714,37 @@ function renderDebugTab() {
         <span class="kr-label">Current Host</span>
         <span class="kr-val" style="font-size: 11px;">${state.host}</span>
       </div>
+    </div>
+
+    <div class="kr-card">
+      <div class="kr-row">
+        <span class="kr-card-title">Captured Job & Description</span>
+        <button class="kr-btn kr-btn-secondary" id="kr-recapture-job-btn" style="padding: 4px 8px; font-size: 10px;">Re-capture</button>
+      </div>
+      <div class="kr-row">
+        <span class="kr-label">Title</span>
+        <span class="kr-val" style="font-size: 11px;">${escapeHtml(currentJob?.title || 'None detected')}</span>
+      </div>
+      <div class="kr-row">
+        <span class="kr-label">Company</span>
+        <span class="kr-val" style="font-size: 11px;">${escapeHtml(currentJob?.company || 'None detected')}</span>
+      </div>
+      <div class="kr-row">
+        <span class="kr-label">Description Status</span>
+        <span class="kr-badge ${currentJob?.description ? 'kr-badge-green' : 'kr-badge-amber'}">
+          ${currentJob?.description ? `${currentJob.description.length} chars (${currentJob.description.trim().split(/\s+/).filter(Boolean).length} words)` : 'None / Empty'}
+        </span>
+      </div>
+      ${currentJob?.description ? `
+        <div style="margin-top: 8px;">
+          <div style="font-size: 10px; color: var(--kr-text-3); margin-bottom: 4px;">Captured Description Preview:</div>
+          <pre style="margin: 0; font-family: var(--kr-font-mono); font-size: 11px; max-height: 160px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; color: var(--kr-text-2); background: rgba(11, 15, 25, 0.7); padding: 8px; border-radius: var(--kr-radius-sm); border: 1px solid var(--kr-line);">${escapeHtml(currentJob.description)}</pre>
+        </div>
+      ` : `
+        <div style="font-size: 11px; color: var(--kr-text-3); margin-top: 6px;">
+          No description captured from this page DOM. Click "Re-capture" to try scanning now.
+        </div>
+      `}
     </div>
 
     <div class="kr-card">
@@ -3002,6 +3125,29 @@ function attachEventHandlers() {
   const captureFixtureBtn = shadowRootRef.querySelector('#kr-capture-fixture');
   if (captureFixtureBtn) {
     captureFixtureBtn.onclick = () => void saveFixtureSnapshot();
+  }
+
+  const recaptureJobBtn = shadowRootRef.querySelector('#kr-recapture-job-btn');
+  if (recaptureJobBtn) {
+    recaptureJobBtn.onclick = async () => {
+      try {
+        recaptureJobBtn.textContent = 'Capturing...';
+        recaptureJobBtn.disabled = true;
+        const job = captureJob();
+        if (job?.pendingHydration) {
+          await job.pendingHydration;
+        }
+        if (applicationState?.session) {
+          applicationState.session.job = job;
+          saveSession(applicationState.session);
+        }
+        logger.info(`Re-captured job: "${job.title || 'Untitled'}" at "${job.company || 'Unknown'}" (${(job.description || '').length} chars)`);
+        updatePanelDOM();
+      } catch (err) {
+        logger.error(`Re-capture failed: ${err.message}`);
+        updatePanelDOM();
+      }
+    };
   }
 
   // Debug: Clear logs

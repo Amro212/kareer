@@ -4,6 +4,7 @@ import { extractLabel, extractGroupLabel, extractOptionLabel, extractDescription
 import { logger } from '../debug.js';
 import { getProfile } from '../storage.js';
 import { isResidenceLabel, locationMatches } from '../location.js';
+import { isVisible as isPageVisible } from '../pageClassifier.js';
 import { isLeverLocation, isCustomCombobox } from './combobox.js';
 import { COMBO, discoverComboboxOptions, optionData, readComboboxSelection, resolveComboboxParts, openCombobox, closeCombobox, setComboboxSearch, waitForComboboxOptions } from './combobox.js';
 
@@ -13,6 +14,7 @@ const scanStates = new WeakMap();
 function isVisible(el) {
   if (!el || !(el instanceof HTMLElement)) return false;
   if (el.hidden || el.closest('[hidden]')) return false;
+  if (el.tagName === 'SELECT') return isPageVisible(el);
   if (el.getAttribute('aria-hidden') === 'true') return false;
   if (el.offsetWidth === 0 && el.offsetHeight === 0 && el.getClientRects().length === 0) {
     if (el.tagName === 'SELECT' || el.type === 'radio' || el.type === 'checkbox') {
@@ -87,7 +89,7 @@ export function scanFormFields(root = document) {
     [contenteditable="true"],
     [role="combobox"],
     button[aria-haspopup="listbox"]
-  `)).filter((el) => !isInsideCopilot(el) && !el.closest('header,nav,footer,[role="banner"],[role="navigation"],[role="contentinfo"],.g-recaptcha,.h-captcha,[data-captcha]') && !/^(g-recaptcha-response|h-captcha-response|cf-turnstile-response)(?:$|-)/i.test(el.name || el.id || ''));
+  `)).filter((el) => !isInsideCopilot(el) && !el.closest('.select2-container') && !el.closest('header,nav,footer,[role="banner"],[role="navigation"],[role="contentinfo"],.g-recaptcha,.h-captcha,[data-captcha]') && !/^(g-recaptcha-response|h-captcha-response|cf-turnstile-response)(?:$|-)/i.test(el.name || el.id || ''));
 
   for (const el of candidates) {
     if (processedElements.has(el)) continue;
@@ -130,7 +132,7 @@ export function scanFormFields(root = document) {
       continue;
     }
 
-    if (!isVisible(el) && !['select', 'radio', 'checkbox'].includes(typeAttr)) {
+    if (!isVisible(el) && !['radio', 'checkbox'].includes(typeAttr)) {
       continue;
     }
 
@@ -347,7 +349,7 @@ export function scanFormFields(root = document) {
     // Ordinary checkboxes retain their own option identity and label. Only
     // adapter-declared single-choice widgets consume a whole question container.
     if (field.type === FIELD_TYPES.CHECKBOX && adapter.id !== 'workday') return field;
-    return { ...field, ...metadata };
+    return { ...field, ...metadata, id: metadata?.id || field.id };
   }).sort(compareDocumentOrder);
 }
 

@@ -1,9 +1,12 @@
-import { hasApiKey, getSettings, getProfile } from './storage.js';
+import { hasApiKey, getSettings, getProfile, gmGet } from './storage.js';
+import { STORAGE_KEYS } from './constants.js';
 import { logger } from './debug.js';
 import { platform } from './platform.js';
 import { findExactOption } from './fields/combobox.js';
 import { profileForAI, fixedProfileAnswer, formatStructuredBackground } from './profile.js';
+import { detectAdapter } from './adapters/index.js';
 import { workdayAnswer } from './adapters/workday-fields.js';
+import { OPTIONAL_DISCLOSURE_KEYS } from './adapters/canonical.js';
 
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 const AUTOFILL_TIMEOUT_MS = 120000;
@@ -420,8 +423,10 @@ export async function testConnection() {
 export async function generateAutofillAnswers(normalizedFields, { allowSearch = true, jobContext = null, repairErrors = [] } = {}) {
   const settings = getSettings();
   const profile = getProfile();
-  if (normalizedFields.some(field => field.ats?.adapter === 'workday')) {
-    return generateWorkdayAnswers(normalizedFields, { settings, profile, allowSearch, jobContext, repairErrors });
+  const adapter = detectAdapter();
+  const resolvedJob = jobContext || gmGet(STORAGE_KEYS.JOB) || null;
+  if (typeof adapter.resolveAnswer === 'function' || normalizedFields.some(field => field.ats?.adapter === 'workday' || field.ats?.adapter === 'lever')) {
+    return generateAdapterAnswers(normalizedFields, { adapter, settings, profile, allowSearch, jobContext: resolvedJob, repairErrors });
   }
   const defaultModel = settings.model || 'google/gemini-2.0-flash';
   const structuredModel = settings.structuredModel || defaultModel;
@@ -445,7 +450,7 @@ export async function generateAutofillAnswers(normalizedFields, { allowSearch = 
       url: window.location.href,
       host: window.location.hostname,
     },
-    jobContext,
+    jobContext: resolvedJob,
     repairErrors,
   };
 
@@ -546,8 +551,15 @@ export async function generateAutofillAnswers(normalizedFields, { allowSearch = 
 
   const fieldsById = new Map(normalizedFields.map((f) => [f.fieldId, f]));
   const seenIds = new Set();
-  const fixedAnswers = new Map(normalizedFields.map(field => [field.fieldId, fixedProfileAnswer(field, profile, { allowSearch })]).filter(([, answer]) => answer));
-  const candidateAnswers = [...combinedRawAnswers.filter(ans => !fixedAnswers.has(ans?.fieldId)), ...fixedAnswers.values()];
+  const fixedAnswers = new Map(normalizedFields.map(field => {
+    const ans = fixedProfileAnswer(field, profile, { allowSearch });
+    if (ans && !ans.source) ans.source = 'profile';
+    return [field.fieldId, ans];
+  }).filter(([, answer]) => answer));
+  const candidateAnswers = [
+    ...combinedRawAnswers.filter(ans => !fixedAnswers.has(ans?.fieldId)).map(ans => ({ ...ans, source: 'ai' })),
+    ...fixedAnswers.values()
+  ];
   const validatedAnswers = candidateAnswers.filter((ans) => {
     if (!ans || !fieldsById.has(ans.fieldId) || seenIds.has(ans.fieldId)) {
       logger.warn('AI returned an unknown or duplicate field ID (omitted)');
@@ -583,22 +595,36 @@ export async function generateAutofillAnswers(normalizedFields, { allowSearch = 
   };
 }
 
-// Workday sends only unresolved questions in one page request. Known record
-// values and owned option labels never need a model or a voice-edit pass.
-async function generateWorkdayAnswers(fields, { settings, profile, allowSearch, jobContext, repairErrors }) {
+// Adapters with resolveAnswer send only unresolved questions in one page request.
+// Known record values and owned option labels never need a model or a voice-edit pass.
+async function generateAdapterAnswers(fields, { adapter, settings, profile, allowSearch, jobContext, repairErrors }) {
   const answers = [], unresolved = [];
+  const currentAdapter = adapter || detectAdapter();
   for (const field of fields) {
-    const deterministic = workdayAnswer(field, profile) || fixedProfileAnswer(field, profile, { allowSearch });
+    const resolver = currentAdapter?.resolveAnswer || (field.ats?.adapter === 'workday' ? workdayAnswer : null);
+    const deterministic = (resolver ? resolver(field, profile) : null) || fixedProfileAnswer(field, profile, { allowSearch });
     const saved = profile.savedAnswers?.[field.label];
-    if (deterministic) answers.push(deterministic);
-    else if (saved !== undefined && (!['combobox', 'select', 'radio'].includes(field.type) || findExactOption(field.options || [], saved))) {
-      answers.push({ fieldId: field.fieldId, value: saved, inferred: false, provenance: 'saved' });
+    const deterministicHasValue = deterministic && (Array.isArray(deterministic.value)
+      ? deterministic.value.length > 0
+      : deterministic.value !== '' && deterministic.value !== null && deterministic.value !== undefined);
+    if (deterministic && (deterministicHasValue || deterministic.searchQuery)) {
+      if (!deterministic.source) deterministic.source = 'profile';
+      answers.push(deterministic);
+    } else if (saved !== undefined && (!['combobox', 'select', 'radio'].includes(field.type) || findExactOption(field.options || [], saved))) {
+      answers.push({ fieldId: field.fieldId, value: saved, inferred: false, provenance: 'saved', source: 'saved' });
+    } else if (deterministic && OPTIONAL_DISCLOSURE_KEYS.has(field.ats?.canonicalKey)) {
+      if (!deterministic.source) deterministic.source = 'profile';
+      answers.push(deterministic);
     } else unresolved.push(field);
   }
   const model = settings.model || 'google/gemini-2.0-flash';
   if (!unresolved.length) return { answers, latencyMs: 0, model };
   if (!hasApiKey()) return { answers, latencyMs: 0, model };
-  const result = await requestAiJson({ model, tag: 'Workday page', messages: [
+  const tag = currentAdapter?.label ? `${currentAdapter.label} page` : 'Application page';
+  if (jobContext?.description) {
+    logger.info(`Grounding ${unresolved.length} questions in job context: "${jobContext.title || 'Untitled'}" at "${jobContext.company || 'Unknown'}" (${jobContext.description.length} chars)`);
+  }
+  const result = await requestAiJson({ model, tag, messages: [
     { role: 'system', content: `${buildStructuredSystemPrompt({ allowSearch })}\n${NARRATIVE_VOICE_RULES}\n${getNarrativeStyleExamples(profile, settings)}\nFor declared multiple-choice fields only, value may be an array of exact owned option labels. Ground answers in profile and record context first. For ambiguous factual or open-ended questions, best-effort factual guessing is enabled: label unsupported facts with provenance=guessed and inferred=true. Label grounded contextual answers provenance=inferred. Never guess disclosures or select a label outside owned options. Never complete assessments, identity verification, recorded interviews, e-signatures, or legal attestations.` },
     { role: 'user', content: JSON.stringify({ applicantProfile: profileForAI(profile), resumeContext: formatStructuredBackground(profile) || profile.resumeContext, applicantNotes: profile.applicantNotes, jobContext, repairErrors, fieldsToFill: unresolved }) },
   ] });
@@ -608,16 +634,17 @@ async function generateWorkdayAnswers(fields, { settings, profile, allowSearch, 
     const field = byId.get(answer?.fieldId);
     if (!field || seen.has(answer.fieldId)) continue;
     seen.add(answer.fieldId);
-    if (answer.value == null || typeof answer.value === 'object' && !Array.isArray(answer.value)) continue;
+    if (answer.value == null || (typeof answer.value === 'object' && !Array.isArray(answer.value))) continue;
     if (Array.isArray(answer.value) && (!field.ats?.multiple || !answer.value.length || answer.value.some(value => typeof value !== 'string'))) continue;
     if (!Array.isArray(answer.value) && !['string', 'boolean', 'number'].includes(typeof answer.value)) continue;
     if (['combobox', 'select', 'radio'].includes(field.type) && answer.value !== '') {
       const values = Array.isArray(answer.value) ? answer.value : [answer.value];
       const options = values.map(value => findExactOption(field.options || [], value));
       if (options.some(option => !option)) continue;
-      answer.value = Array.isArray(answer.value) ? options.map(option => option.label) : field.type === 'combobox' ? options[0].label : options[0].value;
+      answer.value = Array.isArray(answer.value) ? options.map(option => option.label) : (field.type === 'combobox' ? options[0].label : options[0].value);
     }
     if (!allowSearch || field.type !== 'combobox' || answer.value !== '' || typeof answer.searchQuery !== 'string' || answer.searchQuery.length > 200) delete answer.searchQuery;
+    answer.source = 'ai';
     answer.provenance = answer.provenance === 'guessed' ? 'guessed' : 'inferred';
     answer.inferred = true;
     if (!OPTION_FIELD_TYPES.has(field.type)) answer.value = stripModelDashes(answer.value);
@@ -657,6 +684,10 @@ Rules:
 
   const structuredBg = formatStructuredBackground(profile);
   const combinedResumeContext = structuredBg || profile.resumeContext || '';
+  const job = gmGet(STORAGE_KEYS.JOB);
+  const jobContextStr = job?.description
+    ? `\n\nTarget Job Context:\n${job.title ? `Title: ${job.title}\n` : ''}${job.company ? `Company: ${job.company}\n` : ''}Description:\n${job.description.slice(0, 4000)}`
+    : '';
 
   const userPrompt = `Question Label: ${fieldLabel}
 Current Answer:
@@ -669,7 +700,7 @@ Candidate Resume Highlights:
 ${combinedResumeContext}
 
 Applicant Notes / Rules:
-${profile.applicantNotes}
+${profile.applicantNotes}${jobContextStr}
 
 User Revision Instructions:
 ${feedback || 'Make it clearer and more specific to this job.'}

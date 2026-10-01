@@ -58,7 +58,7 @@ test.describe('cross-origin embedded application', () => {
     expect(await frame.locator('input[name=work_auth]:checked').count()).toBe(1);
   });
 
-  test('embedded fields ride along in the single primary AI request', async ({ kr }) => {
+  test('embedded fields share one structured request regardless of narrative request order', async ({ kr }) => {
     await kr.seed({ profile: PROFILE });
 
     const page = await kr.context.newPage();
@@ -69,8 +69,10 @@ test.describe('cross-origin embedded application', () => {
     await page.locator('#kr-autofill-btn').click();
     await expect(page.locator('#kr-main-panel')).toContainText('Autofill complete. Review field statuses below.', { timeout: 60000 });
 
-    const primary = kr.openrouter.requests[0];
-    const fields = JSON.parse(primary.body.messages.at(-1).content).fieldsToFill;
+    // Structured and narrative requests run concurrently; arrival order varies.
+    const structured = kr.openrouter.requests.filter(({ body }) => body.temperature === 0.2);
+    expect(structured).toHaveLength(1);
+    const fields = JSON.parse(structured[0].body.messages.at(-1).content).fieldsToFill;
 
     // Frame-namespaced ids prove the embedded controls were part of this request.
     const remote = fields.filter((field) => /^jcf\d+::/.test(field.fieldId));

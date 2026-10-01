@@ -33,8 +33,8 @@ test('Lever uses real questions, commits location JSON, and selects one pronoun'
   await expect(page.locator('[name="cards[linkedin][field0]"]')).toHaveValue(profile.linkedin);
   await expect(page.locator('[name="cards[salary][field0]"]')).toHaveValue(/CAD 90000/);
   const fields = JSON.parse(kr.openrouter.requests[0].body.messages.at(-1).content).fieldsToFill;
-  // LinkedIn is filled from the structured profile and is not sent to the model.
-  expect(fields.map(f => f.label)).toEqual(expect.arrayContaining(['Pronouns', 'Where do you live? (City and State/Province)', 'What is your desired total compensation range for this role?']));
+  // Deterministic profile fields (LinkedIn, Residence, Pronouns) are resolved by the adapter and not sent to the model.
+  expect(fields.map(f => f.label)).toEqual(expect.arrayContaining(['What is your desired total compensation range for this role?']));
   expect(new Set(fields.map(f => f.fieldId)).size).toBe(fields.length);
   expect(kr.openrouter.requests.length).toBeGreaterThanOrEqual(1);
   await expect(page.locator('body')).toHaveAttribute('data-submissions', '0');

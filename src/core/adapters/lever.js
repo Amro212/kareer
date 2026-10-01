@@ -1,8 +1,17 @@
 /**
- * Lever: uppercase section headers (LOCATION, PERSONAL INFORMATION) sit in the
- * DOM above the real question and used to win extractLabel. Location uses
- * `.dropdown-location` options with no ARIA.
+ * Lever ATS adapter: uppercase section headers (LOCATION, PERSONAL INFORMATION),
+ * `.dropdown-location` typeahead with backing JSON hidden input, pronouns checkbox widget,
+ * and canonical profile field matching.
  */
+import {
+  leverFieldMetadata,
+  leverValue,
+  leverAnswer,
+  leverOptionMatches,
+  leverNeedsFill,
+  leverCanonicalKey,
+} from './lever-fields.js';
+
 function hostnameOf(loc) {
   return String(loc?.hostname || '');
 }
@@ -19,6 +28,18 @@ export function isAllCapsHeading(text) {
   return letters === letters.toUpperCase();
 }
 
+function visible(element) {
+  if (!element || !(element instanceof element.ownerDocument?.defaultView?.Element || element instanceof Element)) return false;
+  if (element.closest?.('[hidden], [aria-hidden="true"]')) return false;
+  for (let node = element; node && node.nodeType === 1; node = node.parentElement) {
+    const view = node.ownerDocument?.defaultView;
+    const style = view?.getComputedStyle ? view.getComputedStyle(node) : node.style;
+    if (style?.display === 'none' || style?.visibility === 'hidden') return false;
+  }
+  return true;
+}
+
+
 export const leverAdapter = {
   id: 'lever',
   label: 'Lever',
@@ -34,17 +55,15 @@ export const leverAdapter = {
     comboboxEscapeRollback: false,
     placesLocation: false,
   },
-  fieldMetadata(element) {
-    const container = element?.closest?.('.application-question');
-    const title = container?.querySelector('.application-label');
-    if (!title) return null;
-    return {
-      label: title.textContent.replace(/[✱*:]+\s*$/, '').trim(),
-      description: container.querySelector('.description')?.textContent.trim() || '',
-      required: Boolean(element.required || container.querySelector('.required, .required-field')),
-    };
+  fieldMetadata: leverFieldMetadata,
+  profileValue: leverValue,
+  resolveAnswer: leverAnswer,
+  optionMatches: leverOptionMatches,
+  needsFill: leverNeedsFill,
+  searchQuery(field, value) {
+    return value;
   },
-  choiceGroups(root, profile) {
+  choiceGroups(root, profile = {}) {
     return Array.from(root.querySelectorAll('#candidatePronounsCheckboxes')).map(container => {
       const elements = Array.from(container.querySelectorAll('input[type="checkbox"]'));
       const customInput = container.querySelector('#customPronounsTextField');
@@ -57,6 +76,7 @@ export const leverAdapter = {
         element: container, elements, customInput, customValue,
         label: 'Pronouns', description: container.querySelector('.description')?.textContent.trim() || '',
         required: false, constraints: {}, isNarrative: false,
+        ats: { adapter: 'lever', canonicalKey: 'pronouns' },
         options: elements.map(el => ({ value: el.id === 'customPronounsOption' && customValue ? customValue : el.value,
           label: el.id === 'customPronounsOption' && customValue ? customValue : el.value })),
       };
@@ -97,6 +117,19 @@ export const leverAdapter = {
       element.parentElement?.querySelector('input[type="hidden"][name="selectedLocation"]'),
     );
   },
+  readComboboxSelection(element) {
+    if (this.isCombobox(element)) {
+      const hidden = element.parentElement?.querySelector('input[type="hidden"][name="selectedLocation"]');
+      if (hidden?.value) {
+        try {
+          const parsed = JSON.parse(hidden.value);
+          if (parsed?.name) return [parsed.name];
+        } catch {}
+      }
+      return [];
+    }
+    return [];
+  },
   continueControl() {
     return null;
   },
@@ -111,4 +144,28 @@ export const leverAdapter = {
   comboboxOptionSelector() {
     return '.dropdown-results > .dropdown-location';
   },
+  uploadState(element) {
+    if (element?.type !== 'file') return null;
+    const attached = element.files?.[0]?.name || '';
+    const container = element.closest('.application-question, .custom-question, form') || element.parentElement;
+    const nameEl = container?.querySelector('.filename, .resume-upload-filename');
+    const statusEl = container?.querySelector('.resume-upload-status');
+    const name = nameEl?.textContent?.trim() || statusEl?.textContent?.trim() || attached;
+    const busyEls = Array.from(container?.querySelectorAll('.analyzing-resume, .resume-upload-working, [aria-busy="true"]') || []);
+    const busy = busyEls.some(visible);
+    const failureEls = Array.from(container?.querySelectorAll('.resume-upload-failure, .resume-upload-oversize, [aria-invalid="true"]') || []);
+    const failure = failureEls.some(visible);
+    const successEls = Array.from(container?.querySelectorAll('.resume-upload-success') || []);
+    const success = successEls.some(visible) || Boolean(container?.querySelector('.visible-resume-upload.has-file'));
+    const accepted = Boolean(name && !busy && !failure && (success || !successEls.length));
+    return { name, accepted };
+  },
+  uploadBusy(doc) {
+    const busyEls = Array.from(doc?.querySelectorAll?.('.analyzing-resume, .resume-upload-working, [aria-busy="true"]') || []);
+    if (busyEls.some(visible)) return true;
+    return Array.from(doc?.querySelectorAll?.('input[type="file"]') || []).some(
+      el => el.files?.length && this.uploadState(el)?.accepted === false
+    );
+  },
 };
+

@@ -258,21 +258,21 @@ export function fixedProfileAnswer(field, profile, { allowSearch = true } = {}) 
       addressKey = 'country';
     }
     if (addressKey && profile[addressKey]?.trim()) {
-      return { fieldId: field.fieldId, value: profile[addressKey].trim(), inferred: false };
+      return { fieldId: field.fieldId, value: profile[addressKey].trim(), inferred: false, source: 'profile' };
     }
 
     if (isResidenceLabel(field.label) && synthesizedLocation) {
-      return { fieldId: field.fieldId, value: synthesizedLocation, inferred: false };
+      return { fieldId: field.fieldId, value: synthesizedLocation, inferred: false, source: 'profile' };
     }
 
     const key = /^(?:your )?linkedin(?: (?:url|link|profile|profile url|profile link))?$/.test(label) ? 'linkedin' : null;
-    if (key && profile[key]?.trim()) return { fieldId: field.fieldId, value: profile[key].trim(), inferred: false };
+    if (key && profile[key]?.trim()) return { fieldId: field.fieldId, value: profile[key].trim(), inferred: false, source: 'profile' };
   }
 
   // Only explicit residence questions: bare "Location" can refer to an employer.
   if (field.type === 'combobox' && isResidenceLabel(field.label) && synthesizedLocation) {
     const matches = (field.options || []).filter(option => locationMatches(option.label, synthesizedLocation));
-    return { fieldId: field.fieldId, value: matches.length === 1 ? matches[0].label : '', inferred: false,
+    return { fieldId: field.fieldId, value: matches.length === 1 ? matches[0].label : '', inferred: false, source: 'profile',
       ...(!matches.length && allowSearch ? { searchQuery: synthesizedLocation } : {}) };
   }
   const source = /^(?:how (?:did|do) you (?:hear|learn) about\b|where did you (?:hear about|find|learn about|see) (?:us|this (?:job|role|position|opportunity|opening)|(?:the|our) (?:job|company|role|position|opportunity|opening))\b|(?:application|applicant|referral|recruitment|job) source$|source$)/.test(label);
@@ -288,7 +288,7 @@ export function fixedProfileAnswer(field, profile, { allowSearch = true } = {}) 
   if (!source && !key) return null;
   let value = source ? 'LinkedIn' : profile[key] || '';
   if (key === 'gender' && value === 'Self-describe') value = profile.genderDescription || '';
-  const answer = { fieldId: field.fieldId, value, inferred: false };
+  const answer = { fieldId: field.fieldId, value, inferred: false, source: 'profile' };
   if (!value || !['select', 'combobox', 'radio', 'checkbox'].includes(field.type)) return answer;
   const options = field.options || [];
   const matches = options.filter(option => normalize(option.label) === normalize(value) || normalize(option.value) === normalize(value) ||
@@ -300,6 +300,7 @@ export function fixedProfileAnswer(field, profile, { allowSearch = true } = {}) 
   answer.value = match ? field.type === 'combobox' ? match.label : match.value : '';
   if (source && !match && field.type === 'combobox' && allowSearch) answer.searchQuery = 'LinkedIn';
   return answer;
+
 }
 
 export const MVP_PROFILE_FIELDS = [
