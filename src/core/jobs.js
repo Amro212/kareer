@@ -3,6 +3,8 @@ import { STORAGE_KEYS } from './constants.js';
 import { isVisible, visibleText } from './pageClassifier.js';
 import { logger } from './debug.js';
 
+const JOB_HYDRATION_TIMEOUT_MS = 5000;
+
 export function safeUrl(value, base = window.location.href) {
   try { const url = new URL(value, base); return /^https?:$/.test(url.protocol) ? url.href : ''; } catch { return ''; }
 }
@@ -15,11 +17,24 @@ export async function hydrateJob(job, doc = document) {
   const isLeverApply = isLever && /\/apply(?:\/|\?|#|$)/i.test(path);
   const postingUrl = isLeverApply && doc.location?.href ? doc.location.href.replace(/\/apply(?:\/.*|\?.*|#.*)?$/i, '') : '';
   if (postingUrl && typeof fetch === 'function') {
+    const controller = new AbortController();
+    let timer;
     try {
       logger.info(`Hydrating job description from parent posting: ${postingUrl}`);
-      const res = await fetch(postingUrl);
+      // Bound both the request and body read; late results cannot mutate the fallback job.
+      const { res, html } = await Promise.race([
+        (async () => {
+          const res = await fetch(postingUrl, { signal: controller.signal });
+          return { res, html: res.ok ? await res.text() : '' };
+        })(),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => {
+            controller.abort();
+            reject(new Error('Parent job posting timed out after 5 seconds. Using captured job.'));
+          }, JOB_HYDRATION_TIMEOUT_MS);
+        }),
+      ]);
       if (res.ok) {
-        const html = await res.text();
         const DOMParserClass = doc.defaultView?.DOMParser || globalThis.DOMParser;
         const postingDoc = DOMParserClass ? new DOMParserClass().parseFromString(html, 'text/html') : null;
         if (postingDoc) {
@@ -45,6 +60,8 @@ export async function hydrateJob(job, doc = document) {
       }
     } catch (err) {
       logger.warn(`Job hydration failed: ${err?.message || err}`);
+    } finally {
+      clearTimeout(timer);
     }
   }
   return job;
@@ -93,7 +110,8 @@ export function captureJob(doc = document) {
   };
   gmSet(STORAGE_KEYS.JOB, job);
   if (isLeverApply && postingUrl && typeof fetch === 'function') {
-    job.pendingHydration = hydrateJob(job, doc);
+    // Runtime coordination only: storage and extension messages must contain plain job data.
+    Object.defineProperty(job, 'pendingHydration', { value: hydrateJob(job, doc) });
   }
   return job;
 }

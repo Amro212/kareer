@@ -1779,7 +1779,7 @@ async function executeAutofillFlow() {
           continue;
         }
 
-        logger.info(`Field action [${source === 'ai' ? 'AI' : source === 'saved' ? 'Saved' : 'Profile'}]: id=${field.id}, label="${field.label}", value="${String(answer.value).slice(0, 40)}"`);
+        logger.info(`Field action [${source === 'ai' ? 'AI' : source === 'saved' ? 'Saved' : 'Profile'}]: id=${field.id}, label="${field.label}"`);
 
         scrollToField(field.element);
         highlightActiveField(field.element);

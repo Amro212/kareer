@@ -77,6 +77,35 @@ test('field report distinguishes AI calls vs deterministic profile fills', () =>
 });
 
 
+test('panel autofill keeps field/source diagnostics without persisting applicant answers', async () => {
+  const bundle = await build({ entryPoints: ['src/targets/userscript/entry.js'], bundle: true, format: 'iife', write: false });
+  const email = 'privacy.applicant@example.com';
+  const dom = new JSDOM('<body><h1>Engineer</h1><form><label for="email">Email</label><input id="email" name="email" type="email" required></form></body>', { url: 'https://jobs.lever.co/example/43/apply', runScripts: 'dangerously', pretendToBeVisual: true });
+  const storage = new Map([['kr:profile', { fullName: 'Test Applicant', email, phone: '+1 555 0100' }]]);
+  const messages = [];
+  dom.window.GM_getValue = (key, fallback) => storage.get(key) ?? fallback;
+  dom.window.GM_setValue = (key, value) => storage.set(key, structuredClone(value));
+  dom.window.CSS = { escape: value => value };
+  dom.window.fetch = async () => ({ ok: false, status: 404 });
+  dom.window.console.log = (...args) => messages.push(args.join(' '));
+  Object.defineProperty(dom.window.HTMLElement.prototype, 'offsetWidth', { get: () => 200 });
+  dom.window.HTMLElement.prototype.scrollIntoView = () => {};
+  try {
+    dom.window.eval(bundle.outputFiles[0].text);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    const root = dom.window.document.querySelector('#kareer-root').shadowRoot;
+    root.querySelector('#kr-toggle-btn').click();
+    root.querySelector('#kr-autofill-btn').click();
+    for (let i = 0; i < 50 && !documentFilled(); i++) await new Promise(resolve => setTimeout(resolve, 100));
+    function documentFilled() { return dom.window.document.querySelector('#email').value === email; }
+    assert.equal(documentFilled(), true);
+    const logs = storage.get('kr:debug') || [];
+    assert.ok(logs.some(entry => /Field action \[Profile\]: id=email/.test(entry.message)));
+    assert.equal(JSON.stringify(logs).includes(email), false);
+    assert.equal(messages.some(message => message.includes(email)), false);
+  } finally { dom.window.close(); }
+});
+
 test('workflow shows verified completion count and retained structural diagnostic', async () => {
   const bundle = await build({ entryPoints: ['src/targets/userscript/entry.js'], bundle: true, format: 'iife', write: false });
   const dom = new JSDOM('<body></body>', { url: 'https://example.com/apply', runScripts: 'dangerously' });

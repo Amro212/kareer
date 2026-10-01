@@ -1,5 +1,40 @@
 # Context and Findings
 
+## Turn: 2026-10-01 - Fix validated Lever review findings
+
+- Target: shared extension/userscript job capture and hydration, plus panel autofill diagnostics. User authorized fixing all three previously validated screenshot findings.
+- P1 resolution: `src/core/jobs.js` now defines `pendingHydration` as a non-enumerable runtime property. Existing await callers retain coordination while structured-clone/JSON storage and extension messaging omit the Promise. Regression verifies job/session persistence before and after hydration, correct application URLs, enriched descriptions, and absence of the Promise in stored records.
+- P2 timeout resolution: hydration races the parent fetch and complete response-body read against a five-second deadline, aborts the request on expiry, clears the timer, and returns captured metadata. Processing is outside the raced request, so a late result cannot mutate or persist the fallback job. Separate stalled-fetch/body regressions failed before the fix and passed afterward.
+- P2 logging resolution: `src/core/ui.js` field-action logs retain field/source diagnostics while omitting answer values. Actual bundled panel regression failed with a synthetic email in storage, then passed with the email absent from stored/console logs and filling preserved.
+- Test changes: `tests/unit/application.test.js`, `tests/unit/panel.test.js`, `tests/e2e/lever-hydration.spec.js`, and `fixtures/lever-hydration-fixture.html`. The new fixture is explicitly synthetic; browser tests cover plain persisted job/session data across reload and standalone autofill with a stalled parent request and no answer logging.
+- Build changes: existing `npm run build` rebuilt Chrome, Firefox, and Tampermonkey at **v0.4.95**, automatically updating `package.json`, `firefox-updates.json`, `site/firefox-updates.json`, `site/index.html`, and `site/version.json`.
+- Verification: three focused hydration unit cases and the bundled panel privacy regression pass after their expected pre-fix failures. `npm test`: **305 passed, 0 failed**. Focused real-extension Lever browser suite: **2 passed, 0 failed**, including session persistence through reload and stalled-parent fallback. Full `npm run test:e2e`: **66 passed, 0 failed (6.0 minutes)** using the real Chromium extension. Both extension manifests and the userscript report v0.4.95; `git diff --check` passes. All three fixes complete. No commits, pushes, or publication performed; prior findings-log edits preserved.
+
+## Turn: 2026-10-01 - Validate Lever Codex review findings
+
+- Scope: validation of the three screenshot findings against local commit `902d9c8` (current branch `lever`); no production fixes requested or applied.
+- P1, shared extension/userscript core, Lever `/apply`: confirmed `captureJob` attaches an enumerable Promise as `job.pendingHydration`; `hydrateJob` persists that same object and `createSession` embeds it unchanged. An isolated reproduction using the repository's structured-clone GM storage harness produced `DataCloneError` on the hydrated job write and initial/repeated session writes even after hydration resolved. JSON serialization produced `pendingHydration: {}`. Firefox's documented structured-clone messaging makes the extension failure applicable there; an actual Firefox run was not performed. The screenshot's blanket claim about userscript storage is broader than the evidence: actual Tampermonkey behavior was not tested. Recommendation: keep hydration state outside persisted job records or strip it consistently at persistence boundaries.
+- P2, shared core, Lever parent fetch: confirmed `fetch(postingUrl)` has no timeout or abort signal. A controlled unresolved fetch blocked `engine.start` before answer generation or filling; releasing it with an HTTP failure allowed filling from captured metadata. Initialization, workflow ticks, recapture, and standalone autofill also await the same hydration Promise. Recommendation: bound the whole fetch/body read and fall back to the captured job on expiry.
+- P2, extension/userscript panel, all ATS: confirmed `ui.js` logs the first 40 answer characters. Running the actual in-memory userscript bundle's panel autofill with a synthetic email persisted the complete email in `kr:debug` and printed it to the console. `debug.js` redacts API credentials/tokens but not applicant answers; this logging is unconditional. Recommendation: retain field/source diagnostics while removing answer values.
+- Verification: all three controlled reproductions passed their defect assertions. Initial `npm test`: 301 passed, 1 failed because sandbox access denied esbuild reads of the build-watch temporary fixture. Full suite rerun with required permissions: **302 passed, 0 failed**. `git diff --check` passed. No runtime source changes, live ATS captures, or browser E2E changes were made; browser E2E was not run for this audit.
+- Turn changes: this findings log only; reproduced using an inline Node/JSDOM script and an esbuild bundle held in memory. Existing concurrent findings-log edits preserved. All three production fixes remain deferred.
+- Serialization references: https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Chrome_incompatibilities#data_cloning_algorithm and https://www.tampermonkey.net/documentation.php?q=GM_values.
+
+## Turn: 2026-10-01 — Fix IDE Commit Message Generation (worktreeConfig Extension Incompatibility)
+
+### Findings
+- **Target / platform**: IDE Source Control integration (Antigravity commit message generator / libgit2).
+- **Symptoms**: Clicking the "Generate commit message" sparkle button failed with error:
+  `Error generating commit message: [unknown] core.repositoryformatversion does not support extension: worktreeconfig (error ID: 7acfbb87d76d4df793f5198ef485719b) Source: Antigravity`.
+- **Root-Cause Analysis**:
+  - In `.git/config`, `core.repositoryformatversion` was `0`, while `[extensions] worktreeConfig = true` was configured (injected by an external tool / worktree setup).
+  - Git repository format version `0` does not permit extensions (which require version `1`).
+  - Furthermore, `libgit2` (used by VS Code / Antigravity git backend) does not support the `worktreeConfig` extension even in repository version 1, causing any libgit2-based operation (such as commit message diff generation) to fail when opening the repository.
+- **Resolution**:
+  - Removed the unsupported extension via `git config --unset extensions.worktreeConfig`.
+  - Normal Git CLI worktrees (`git worktree list`) continue to work seamlessly without per-worktree configuration files.
+  - Verified `git status`, `git worktree list`, and all 302 test cases (`npm test`).
+
 ## Turn: 2026-10-01 — Merge master into lever (Reconnect Workday & Verify Unified Test Suites)
 
 ### Findings
