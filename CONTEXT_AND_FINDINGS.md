@@ -1,5 +1,18 @@
 # Context and Findings
 
+## Turn: 2026-10-01 — Merge master into lever (Reconnect Workday & Verify Unified Test Suites)
+
+### Findings
+- **Target / platform**: Extension + userscript git branch synchronization: merging `master` (containing Workday PR #2 and PR #3) into `lever`.
+- **Merge analysis**:
+  - Core code files merged with zero conflicts: `src/core/application.js`, `src/core/fields/scanner.js`, `src/core/ui.js`, `src/core/agent.js`, `src/core/adapters/workday-fields.js`.
+  - Conflict in `tests/unit/application.test.js` resolved by preserving both appended tests (`unfillable required field` on `lever` and `Workday review gate collapse` on `master`).
+  - Documentation and plan files (`CONTEXT_AND_FINDINGS.md`, `docs/plans/2026-09-30-review-fixes.md`) reconciled cleanly.
+  - Distribution and manifest versions aligned to `0.4.94`.
+- **Verification**:
+  - `npm test`: **302 passed, 0 failed** across all unit test suites.
+  - `npm run test:e2e`: **64 passed, 0 failed (5.6 minutes)** across the full Playwright browser test suite with the real Chromium extension, including all Workday parsed rows, Lever university Select2, cross-frame iframe forms, and multi-step workflows.
+
 ## Turn: 2026-09-30 - Sequential review fixes with TDD
 
 - Target: shared extension/userscript workflow and Workday adapter. User authorized fixing the three reproduced review findings sequentially, with simplicity first and test-driven development; work remains in the current checkout without subagents or commits.
