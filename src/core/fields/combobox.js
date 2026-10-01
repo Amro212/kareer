@@ -125,11 +125,21 @@ export function findExactOption(options, target, field) {
   if (!key) return null;
   const matches = options.filter(option => optionKey(option.label) === key || optionKey(option.value) === key);
   if (matches.length === 1) return matches[0];
+  if (matches.length > 1) {
+    const exact = matches.filter(option => optionKey(option.value) === key && optionKey(option.label) === key);
+    if (exact.length === 1) return exact[0];
+    const exactValue = matches.filter(option => optionKey(option.value) === key);
+    if (exactValue.length === 1) return exactValue[0];
+  }
   const adapter = field?.ats?.adapter ? adapterById(field.ats.adapter) : detectAdapter();
   if (adapter.optionMatches) {
     const meta = field?.ats ? field : field ? adapter.fieldMetadata?.(field.element || field) || {} : {};
     const adapterMatches = options.filter(option => adapter.optionMatches(meta, option.label, target) || adapter.optionMatches(meta, option.value, target));
     if (adapterMatches.length === 1) return adapterMatches[0];
+    if (adapterMatches.length > 1) {
+      const exact = adapterMatches.filter(option => optionKey(option.value) === key);
+      if (exact.length === 1) return exact[0];
+    }
   }
   return null;
 }

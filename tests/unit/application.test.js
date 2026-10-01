@@ -5,13 +5,13 @@ import { readFile } from 'node:fs/promises';
 import { captureJob } from '../../src/core/jobs.js';
 import { createSession, restoreSession, saveSession } from '../../src/core/sessions.js';
 import { rememberAnswer, recallAnswer } from '../../src/core/memory.js';
-import { classifyPage } from '../../src/core/pageClassifier.js';
+import { classifyPage, isVisible } from '../../src/core/pageClassifier.js';
 import { inspectValidation } from '../../src/core/validation.js';
 import { findContinue } from '../../src/core/navigation.js';
 import { pageSignature } from '../../src/core/navigation.js';
 import { createApplicationEngine } from '../../src/core/application.js';
 import { scanFormFields } from '../../src/core/fields/scanner.js';
-import { saveProfile, saveSettings } from '../../src/core/storage.js';
+import { saveProfile, saveSettings, gmGet } from '../../src/core/storage.js';
 
 let dom;
 beforeEach(() => {
@@ -524,6 +524,93 @@ test('captures JSON-LD JobPosting and an explicit application link', () => {
   assert.equal(captured.company, 'Example');
   assert.equal(captured.description, 'Build useful software.');
   assert.equal(captured.applicationUrl, 'https://example.com/apply/42');
+});
+test('Lever /apply captures postingUrl as listingUrl and avoids form text in description', () => {
+  const leverDom = new JSDOM('<!DOCTYPE html><html><head><meta property="og:description" content="Build spacecraft software."></head><body><div class="posting-header"><h2>Embedded Engineer</h2></div><form><input id="name" /></form></body></html>', { url: 'https://jobs.lever.co/kepler/42/apply' });
+  const captured = captureJob(leverDom.window.document);
+  assert.equal(captured.listingUrl, 'https://jobs.lever.co/kepler/42');
+  assert.equal(captured.applicationUrl, 'https://jobs.lever.co/kepler/42/apply');
+  assert.equal(captured.description, 'Build spacecraft software.');
+  leverDom.window.close();
+});
+test('Lever /apply hydrates full description asynchronously when parent page has JSON-LD', async () => {
+  const leverDom = new JSDOM('<!DOCTYPE html><html><head><meta property="og:description" content="Short summary."></head><body><div class="posting-header"><h2>Embedded Engineer</h2></div><form><input id="name" /></form></body></html>', { url: 'https://jobs.lever.co/kepler/42/apply' });
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (url === 'https://jobs.lever.co/kepler/42') {
+      return {
+        ok: true,
+        text: async () => '<html><head><script type="application/ld+json">{"@type":"JobPosting","title":"Embedded Engineer","hiringOrganization":{"name":"Kepler"},"description":"Full detailed responsibilities and qualifications."}</script></head><body><div class="posting-headline"><h2>Embedded Engineer</h2></div><a class="postings-btn" href="/kepler/42/apply">Apply for this job</a><a href="https://kepler.space">Company site</a></body></html>',
+      };
+    }
+    return { ok: false };
+  };
+  try {
+    const captured = captureJob(leverDom.window.document);
+    assert.equal(captured.description, 'Short summary.');
+    assert.ok(captured.pendingHydration);
+    assert.doesNotThrow(() => structuredClone(captured));
+    const session = createSession(captured);
+    assert.equal(gmGet(`kr:sessions:${session.id}`).job.applicationUrl, captured.applicationUrl);
+    await captured.pendingHydration;
+    assert.equal(captured.description, 'Full detailed responsibilities and qualifications.');
+    assert.equal(captured.company, 'Kepler');
+    assert.equal(captured.companyUncertain, false);
+    assert.doesNotThrow(() => structuredClone(captured));
+    saveSession(session);
+    const savedJob = gmGet('kr:job');
+    const savedSession = gmGet(`kr:sessions:${session.id}`);
+    assert.equal(savedJob.applicationUrl, captured.applicationUrl);
+    assert.equal(savedJob.description, captured.description);
+    assert.equal(savedSession.job.description, captured.description);
+    assert.equal(Object.hasOwn(savedJob, 'pendingHydration'), false);
+    assert.equal(Object.hasOwn(savedSession.job, 'pendingHydration'), false);
+  } finally {
+    globalThis.fetch = origFetch;
+    leverDom.window.close();
+  }
+});
+for (const stalledStage of ['fetch', 'body']) {
+  test(`Lever hydration times out during ${stalledStage} and ignores late results`, async t => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const leverDom = new JSDOM('<head><meta property="og:description" content="Captured summary."></head><body><h1>Engineer</h1></body>', { url: 'https://jobs.lever.co/example/42/apply' });
+    const origFetch = globalThis.fetch;
+    let release;
+    let signal;
+    const stalled = new Promise(resolve => { release = resolve; });
+    const html = '<script type="application/ld+json">{"@type":"JobPosting","title":"Engineer","description":"Late parent description must never replace the captured fallback job."}</script>';
+    globalThis.fetch = (_url, options) => {
+      signal = options?.signal;
+      return stalledStage === 'fetch' ? stalled : Promise.resolve({ ok: true, text: () => stalled });
+    };
+    try {
+      const captured = captureJob(leverDom.window.document);
+      let completed = false;
+      captured.pendingHydration.then(() => { completed = true; });
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+      assert.equal(completed, false);
+      t.mock.timers.tick(5000);
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+      assert.equal(completed, true, 'hydration must settle within five seconds');
+      assert.equal(signal.aborted, true);
+      assert.equal(captured.description, 'Captured summary.');
+      release(stalledStage === 'fetch' ? { ok: true, text: async () => html } : html);
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+      assert.equal(captured.description, 'Captured summary.');
+      assert.equal(gmGet('kr:job').description, 'Captured summary.');
+      assert.equal(gmGet('kr:job').applicationUrl, captured.applicationUrl);
+    } finally {
+      globalThis.fetch = origFetch;
+      leverDom.window.close();
+    }
+  });
+}
+
+test('isVisible safely evaluates nodes in DOMParser parsed documents without defaultView', () => {
+  const parsed = new dom.window.DOMParser().parseFromString('<div><a href="#test">Link</a></div>', 'text/html');
+  const link = parsed.querySelector('a');
+  assert.equal(parsed.defaultView, null);
+  assert.equal(isVisible(link), true);
 });
 test('session restores exact known URLs, not unrelated applications on the same host', async () => {
   const session = createSession(job());
@@ -1128,6 +1215,25 @@ test('native on-page Continue click is detected and resumes autofill when stepRe
   } finally { engine.destroy(); }
 });
 
+test('unfillable required field is recorded with status failed in results', async () => {
+  render(`<h2>My Information</h2><label for="reqField">Required Question *</label><select id="reqField" required><option value="">Select...</option><option value="opt1">Option 1</option></select><button>Continue</button>`);
+  let lastResults;
+  const engine = createApplicationEngine({
+    settleMs: 0,
+    transitionMs: 0,
+    onChange: ({ results }) => { lastResults = results; },
+    answer: async () => ({ answers: [{ fieldId: 'reqField', value: '' }] }),
+  });
+  try {
+    await engine.start(job());
+    assert.equal(engine.session.status, 'paused');
+    assert.ok(lastResults);
+    const res = lastResults.get('reqField');
+    assert.ok(res, 'Result must exist for required field');
+    assert.equal(res.status, 'failed', 'Result status must be failed');
+  } finally { engine.destroy(); }
+});
+
 test('Workday with autoContinue disabled advances past both review gates on a single continueStep click', async () => {
   if (dom) dom.window.close();
   dom = new JSDOM('<body><main></main></body>', { url: 'https://acme.myworkdayjobs.com/en-US/job/apply' });
@@ -1166,3 +1272,4 @@ test('Workday with autoContinue disabled advances past both review gates on a si
     engine.destroy();
   }
 });
+

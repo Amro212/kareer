@@ -208,8 +208,10 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         status: verified.verified ? 'verified' : 'failed',
         value: verified.actualValue || '',
         inferred: false,
+        source: 'profile',
         error: verified.verified ? '' : (verified.error || 'Resume was not attached.'),
       });
+
       emit();
     }
     const remote = await applyRemoteResumeUploads({ overwriteExisting: getSettings().overwriteExisting });
@@ -275,7 +277,20 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       if (!await settleFields(signature, token, 'before field action', original.id)) return false;
       const field = scanFormFields().find(f => f.id === original.id && f.label === original.label && f.type === original.type);
       const entry = byId.get(original.id);
-      if (!entry || entry.value === '' || entry.value == null) continue;
+      if (!entry || entry.value === '' || entry.value == null) {
+        if (original.required && entry && entry.value === '') {
+          results.set(original.id, {
+            status: 'failed',
+            provenance: entry.provenance || 'unresolved',
+            value: '',
+            inferred: Boolean(entry.inferred),
+            source: entry.source || 'profile',
+            error: 'No matching option found for required field.',
+          });
+          emit();
+        }
+        continue;
+      }
       const replacement = scanFormFields().find(f => f.id === original.id);
       const question = session.steps[session.currentStep]?.questions[original.id];
       if (replacement && (!field || question && question !== questionIdentity(replacement))) {
@@ -295,7 +310,15 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       let exact = Boolean(field.ats?.adapter) || !['text', 'textarea', 'email', 'tel', 'url', 'number', 'contenteditable'].includes(field.type) || String(verified.actualValue ?? '').trim() === String(entry.value).trim();
       if (['select', 'radio'].includes(field.type) && !field.widget) exact = field.options.some(o => (String(o.value) === String(entry.value) || o.label === String(entry.value)) && String(o.value) === String(verified.actualValue));
       const valid = verified.verified && exact && !inspectValidation([live]).some(error => error.fieldId === live.id);
-      results.set(field.id, { status: valid ? entry.provenance === 'guessed' ? 'guessed' : entry.inferred ? 'inferred' : 'verified' : 'failed', provenance: entry.provenance || (entry.inferred ? 'inferred' : 'saved'), value: verified.actualValue ?? '', inferred: Boolean(entry.inferred), error: valid ? '' : 'Value rejected or failed verification.' });
+      results.set(field.id, {
+        status: valid ? entry.provenance === 'guessed' ? 'guessed' : entry.inferred ? 'inferred' : 'verified' : 'failed',
+        provenance: entry.provenance || (entry.inferred ? 'inferred' : 'saved'),
+        value: verified.actualValue ?? '',
+        inferred: Boolean(entry.inferred),
+        source: entry.source || (entry.inferred ? 'ai' : 'profile'),
+        error: valid ? '' : 'Value rejected or failed verification.',
+      });
+
       if (valid) rememberAnswer(session, field, entry);
       saveSession(session);
       emit();
@@ -304,6 +327,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
   }
   async function request(fields, context, token, signature) {
     if (!guard(token)) return [];
+    if (session?.job?.pendingHydration) await session.job.pendingHydration;
     await harvestComboboxOptions(fields);
     if (!await settleFields(signature, token, 'option harvesting')) return [];
     let response = await answer(normalizeFieldsForAI(fields), { jobContext: session.job, ...context });
@@ -606,6 +630,19 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         const errors = validation(scanFormFields());
         if (errors.length) {
           if (await repair(errors, step, token, signature)) continue;
+          for (const err of errors) {
+            if (err.fieldId && results.get(err.fieldId)?.status !== 'verified') {
+              results.set(err.fieldId, {
+                status: 'failed',
+                provenance: 'unresolved',
+                value: '',
+                inferred: false,
+                source: 'validation',
+                error: err.message || 'Required field missing or rejected.',
+              });
+            }
+          }
+          emit();
           return;
         }
         if (await attemptAutoSubmit(token, step)) return;
@@ -698,7 +735,10 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
           if (page.type === 'application') session.currentStep = '';
         }
       } else if (!session) {
-        try { captureJob(); } catch { /* Ignore early DOM access */ }
+        try {
+          const job = captureJob();
+          if (job?.pendingHydration) await job.pendingHydration;
+        } catch { /* Ignore early DOM access */ }
       }
       emit();
       const checkNativeStepAdvance = () => {
@@ -733,16 +773,27 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       interval = setInterval(() => void tick(), 1500);
       await tick();
     },
-    capture() {
+    async capture() {
       if (busy) return;
       generation++;
-      session = createSession(captureJob());
+      const job = captureJob();
+      session = createSession(job);
       emit();
+      if (session?.job?.pendingHydration) {
+        await session.job.pendingHydration;
+        saveSession(session);
+        emit();
+      }
     },
     async start(job) {
       if (busy) return;
       generation++;
       if (job || !session) session = createSession(job || captureJob());
+      if (session?.job?.pendingHydration) {
+        await session.job.pendingHydration;
+        saveSession(session);
+        emit();
+      }
       if (!compatibleSession()) return;
       session.stepReview = false;
       const step=session.steps[session.currentStep];

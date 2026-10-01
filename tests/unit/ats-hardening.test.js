@@ -147,10 +147,35 @@ test('correct questions reach AI and explicit short profile answers replace irre
   const fields = normalizeFieldsForAI(scanFormFields().filter(f => f.type !== 'combobox'));
   const { answers } = await generateAutofillAnswers(fields);
   for (const [label, expected] of [['Where do you live? (City and State/Province)', 'Toronto, Ontario, Canada'], ['LinkedIn Link', 'https://linkedin.com/in/example'], ['Pronouns', 'He/him']]) {
-    const field = sent.find(f => f.label === label);
+    const field = fields.find(f => f.label === label);
     assert.ok(field, label);
     assert.equal(answers.find(a => a.fieldId === field.fieldId)?.value, expected);
   }
+});
+
+test('generic AI answers cannot override their AI source metadata', async () => {
+  attachDom('<form></form>', 'https://example.com/apply');
+  globalThis.GM_xmlhttpRequest = options => {
+    options.onload({
+      status: 200,
+      responseText: JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({
+          answers: [{ fieldId: 'framework', value: 'React', inferred: true, provenance: 'inferred', source: 'profile' }],
+        }) } }],
+      }),
+    });
+  };
+
+  const { answers } = await generateAutofillAnswers([{
+    fieldId: 'framework',
+    type: 'text',
+    label: 'Preferred JavaScript framework',
+    required: true,
+    currentValue: '',
+    isAlreadyFilled: false,
+  }]);
+
+  assert.equal(answers[0].source, 'ai');
 });
 
 test('frame agent rejects duplicate IDs before requesting answers', async () => {

@@ -16,8 +16,10 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-import { parsePhoneNumberFromString, getCountries } from 'libphonenumber-js/min';
+import { parsePhoneNumberFromString } from 'libphonenumber-js/min';
+import { canonicalNorm as key, countryCode, countryNames, canonicalOptionMatches } from './canonical.js';
 
+export { countryCode };
 export const WORKDAY_RECIPE_VERSION = 1;
 export const PROMPT = '[data-automation-id="multiSelectContainer"], [data-automation-id="multiselectInputContainer"], [data-uxi-widget-type="multiselect"]';
 export const ROW = '[data-automation-id^="workExperience-"], [data-automation-id^="education-"], [data-automation-id^="language-"], [data-automation-id^="websitePanelSet-"], [aria-labelledby$="-panel"]';
@@ -51,19 +53,6 @@ const profileKeys = {
   hispanic: 'hispanic', lgbt_v2: 'lgbtStatus', visible_minority: 'visibleMinority', armed_forces: 'armedForces', birthday: 'birthDate',
   linkedin: 'linkedin', languages_text: 'languages',
 };
-const key = value => String(value || '').normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
-const countryNames = new Intl.DisplayNames(['en'], { type: 'region' });
-const frenchCountries = new Intl.DisplayNames(['fr'], { type: 'region' });
-const countryCodes = new Set(getCountries());
-
-export function countryCode(name) {
-  if (!name) return '';
-  if (/^[a-z]{2}$/i.test(name)) return countryCodes.has(name.toUpperCase()) ? name.toUpperCase() : '';
-  for (const code of getCountries()) {
-    if ([countryNames.of(code), frenchCountries.of(code)].some(value => key(value) === key(name))) return code;
-  }
-  return { usa: 'US', uk: 'GB', 'united states of america': 'US' }[key(name)] || '';
-}
 
 function canonicalKey(element, container) {
   const identifiers = [element.id, element.name, element.getAttribute('data-automation-id'), container?.getAttribute('data-automation-id')]
@@ -224,7 +213,7 @@ export function workdayValue(field, profile) {
 export function workdayAnswer(field, profile) {
   const value = workdayValue(field, profile);
   if (value === undefined || Array.isArray(value) && !value.length) return null;
-  const answer = { fieldId: field.fieldId || field.id, value, inferred: false, provenance: 'saved' };
+  const answer = { fieldId: field.fieldId || field.id, value, inferred: false, provenance: 'saved', source: 'profile' };
   if (['first_name', 'last_name'].includes(field.ats?.canonicalKey) && !profile[profileKeys[field.ats.canonicalKey]]) Object.assign(answer, { inferred: true, provenance: 'guessed' });
   if (field.ats?.canonicalKey === 'source' || field.ats?.canonicalKey?.startsWith('current_date')) answer.provenance = 'inferred';
   if (field.ats?.canonicalKey?.match(/_(?:month|day)$/) && /^\d+$/.test(String(value)) && ['number', 'text'].includes(field.type)) answer.value = String(Number(value));
@@ -249,37 +238,5 @@ export function workdayAnswer(field, profile) {
 }
 
 export function workdayOptionMatches(field, actual, expected) {
-  if (key(actual) === key(expected)) return true;
-  const canonical = field.ats?.canonicalKey;
-  if (canonical === 'source') return key(expected) === 'linkedin' && /^(?:linkedin jobs|linkedin\.com)$/.test(key(actual));
-  if (canonical === 'phone_country') actual = actual.replace(/\s*\(?\+\d+\)?\s*$/, '');
-  if (key(actual) === key(expected)) return true;
-  if (canonical === 'country' || canonical === 'phone_country') return countryCode(actual) && countryCode(actual) === countryCode(expected);
-  if (canonical === 'disability_v2') {
-    if (key(expected) === 'no') return /^no(?:\s*[-,]\s*|\s+)i (?:do not|don't) have (?:a|any) disabilit(?:y|ies)(?:\s*\(.*\))?$/i.test(actual);
-    if (key(expected) === 'yes') return /^yes(?:\s*[-,]\s*|\s+)i have (?:a|any) disabilit(?:y|ies)(?:\s*\(.*\))?$/i.test(actual);
-  }
-  if (canonical === 'gender') {
-    if (key(expected).replace(/[\s-]/g, '') === 'nonbinary' && key(actual).replace(/[\s-]/g, '') === 'nonbinary') return true;
-    const aliases = { female: 'woman', male: 'man' };
-    if (aliases[key(actual)] === key(expected) || aliases[key(expected)] === key(actual)) return true;
-  }
-  if (canonical === 'ethnicity') {
-    if (/middle eastern|mena/i.test(key(expected))) return /arab|maghrebi|middle eastern/i.test(actual);
-    if (/black|african/i.test(key(expected))) return /black|african/i.test(actual);
-    if (/asian/i.test(key(expected))) return /asian|chinese|filipino|japanese|korean/i.test(actual);
-    if (/white|caucasian/i.test(key(expected))) return /white|caucasian/i.test(actual);
-    if (/hispanic|latino/i.test(key(expected))) return /hispanic|latino/i.test(actual);
-    if (/indigenous|first nation|native/i.test(key(expected))) return /first nation|inuk|inuit|indigenous|aboriginal|native/i.test(actual);
-  }
-  if (canonical === 'pronouns') {
-    if (key(actual) === key(expected)) return true;
-    const parts = key(expected).split(/[\/\s,]+/);
-    if (parts.includes(key(actual))) return true;
-    const actualParts = key(actual).split(/[\/\s,]+/);
-    if (actualParts.includes(key(expected))) return true;
-  }
-  if (key(expected) === 'prefer not to answer') return /^(?:(?:i )?(?:do not wish to answer|don't wish to answer|prefer not to (?:answer|say|disclose)|decline to (?:answer|disclose))|rather not answer)(?:\s*\([^)]*\))?$/i.test(actual);
-  const aliases = { female: 'woman', male: 'man', 'bachelor of science': "bachelor's degree", 'bachelor of arts': "bachelor's degree", 'master of science': "master's degree", 'master of arts': "master's degree", 'ph.d.': 'doctorate' };
-  return aliases[key(actual)] === key(expected);
+  return canonicalOptionMatches(field?.ats?.canonicalKey, actual, expected);
 }

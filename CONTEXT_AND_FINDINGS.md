@@ -1,5 +1,53 @@
 # Context and Findings
 
+## Turn: 2026-10-01 - Fix validated Lever review findings
+
+- Target: shared extension/userscript job capture and hydration, plus panel autofill diagnostics. User authorized fixing all three previously validated screenshot findings.
+- P1 resolution: `src/core/jobs.js` now defines `pendingHydration` as a non-enumerable runtime property. Existing await callers retain coordination while structured-clone/JSON storage and extension messaging omit the Promise. Regression verifies job/session persistence before and after hydration, correct application URLs, enriched descriptions, and absence of the Promise in stored records.
+- P2 timeout resolution: hydration races the parent fetch and complete response-body read against a five-second deadline, aborts the request on expiry, clears the timer, and returns captured metadata. Processing is outside the raced request, so a late result cannot mutate or persist the fallback job. Separate stalled-fetch/body regressions failed before the fix and passed afterward.
+- P2 logging resolution: `src/core/ui.js` field-action logs retain field/source diagnostics while omitting answer values. Actual bundled panel regression failed with a synthetic email in storage, then passed with the email absent from stored/console logs and filling preserved.
+- Test changes: `tests/unit/application.test.js`, `tests/unit/panel.test.js`, `tests/e2e/lever-hydration.spec.js`, and `fixtures/lever-hydration-fixture.html`. The new fixture is explicitly synthetic; browser tests cover plain persisted job/session data across reload and standalone autofill with a stalled parent request and no answer logging.
+- Build changes: existing `npm run build` rebuilt Chrome, Firefox, and Tampermonkey at **v0.4.95**, automatically updating `package.json`, `firefox-updates.json`, `site/firefox-updates.json`, `site/index.html`, and `site/version.json`.
+- Verification: three focused hydration unit cases and the bundled panel privacy regression pass after their expected pre-fix failures. `npm test`: **305 passed, 0 failed**. Focused real-extension Lever browser suite: **2 passed, 0 failed**, including session persistence through reload and stalled-parent fallback. Full `npm run test:e2e`: **66 passed, 0 failed (6.0 minutes)** using the real Chromium extension. Both extension manifests and the userscript report v0.4.95; `git diff --check` passes. All three fixes complete. No commits, pushes, or publication performed; prior findings-log edits preserved.
+
+## Turn: 2026-10-01 - Validate Lever Codex review findings
+
+- Scope: validation of the three screenshot findings against local commit `902d9c8` (current branch `lever`); no production fixes requested or applied.
+- P1, shared extension/userscript core, Lever `/apply`: confirmed `captureJob` attaches an enumerable Promise as `job.pendingHydration`; `hydrateJob` persists that same object and `createSession` embeds it unchanged. An isolated reproduction using the repository's structured-clone GM storage harness produced `DataCloneError` on the hydrated job write and initial/repeated session writes even after hydration resolved. JSON serialization produced `pendingHydration: {}`. Firefox's documented structured-clone messaging makes the extension failure applicable there; an actual Firefox run was not performed. The screenshot's blanket claim about userscript storage is broader than the evidence: actual Tampermonkey behavior was not tested. Recommendation: keep hydration state outside persisted job records or strip it consistently at persistence boundaries.
+- P2, shared core, Lever parent fetch: confirmed `fetch(postingUrl)` has no timeout or abort signal. A controlled unresolved fetch blocked `engine.start` before answer generation or filling; releasing it with an HTTP failure allowed filling from captured metadata. Initialization, workflow ticks, recapture, and standalone autofill also await the same hydration Promise. Recommendation: bound the whole fetch/body read and fall back to the captured job on expiry.
+- P2, extension/userscript panel, all ATS: confirmed `ui.js` logs the first 40 answer characters. Running the actual in-memory userscript bundle's panel autofill with a synthetic email persisted the complete email in `kr:debug` and printed it to the console. `debug.js` redacts API credentials/tokens but not applicant answers; this logging is unconditional. Recommendation: retain field/source diagnostics while removing answer values.
+- Verification: all three controlled reproductions passed their defect assertions. Initial `npm test`: 301 passed, 1 failed because sandbox access denied esbuild reads of the build-watch temporary fixture. Full suite rerun with required permissions: **302 passed, 0 failed**. `git diff --check` passed. No runtime source changes, live ATS captures, or browser E2E changes were made; browser E2E was not run for this audit.
+- Turn changes: this findings log only; reproduced using an inline Node/JSDOM script and an esbuild bundle held in memory. Existing concurrent findings-log edits preserved. All three production fixes remain deferred.
+- Serialization references: https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Chrome_incompatibilities#data_cloning_algorithm and https://www.tampermonkey.net/documentation.php?q=GM_values.
+
+## Turn: 2026-10-01 — Fix IDE Commit Message Generation (worktreeConfig Extension Incompatibility)
+
+### Findings
+- **Target / platform**: IDE Source Control integration (Antigravity commit message generator / libgit2).
+- **Symptoms**: Clicking the "Generate commit message" sparkle button failed with error:
+  `Error generating commit message: [unknown] core.repositoryformatversion does not support extension: worktreeconfig (error ID: 7acfbb87d76d4df793f5198ef485719b) Source: Antigravity`.
+- **Root-Cause Analysis**:
+  - In `.git/config`, `core.repositoryformatversion` was `0`, while `[extensions] worktreeConfig = true` was configured (injected by an external tool / worktree setup).
+  - Git repository format version `0` does not permit extensions (which require version `1`).
+  - Furthermore, `libgit2` (used by VS Code / Antigravity git backend) does not support the `worktreeConfig` extension even in repository version 1, causing any libgit2-based operation (such as commit message diff generation) to fail when opening the repository.
+- **Resolution**:
+  - Removed the unsupported extension via `git config --unset extensions.worktreeConfig`.
+  - Normal Git CLI worktrees (`git worktree list`) continue to work seamlessly without per-worktree configuration files.
+  - Verified `git status`, `git worktree list`, and all 302 test cases (`npm test`).
+
+## Turn: 2026-10-01 — Merge master into lever (Reconnect Workday & Verify Unified Test Suites)
+
+### Findings
+- **Target / platform**: Extension + userscript git branch synchronization: merging `master` (containing Workday PR #2 and PR #3) into `lever`.
+- **Merge analysis**:
+  - Core code files merged with zero conflicts: `src/core/application.js`, `src/core/fields/scanner.js`, `src/core/ui.js`, `src/core/agent.js`, `src/core/adapters/workday-fields.js`.
+  - Conflict in `tests/unit/application.test.js` resolved by preserving both appended tests (`unfillable required field` on `lever` and `Workday review gate collapse` on `master`).
+  - Documentation and plan files (`CONTEXT_AND_FINDINGS.md`, `docs/plans/2026-09-30-review-fixes.md`) reconciled cleanly.
+  - Distribution and manifest versions aligned to `0.4.94`.
+- **Verification**:
+  - `npm test`: **302 passed, 0 failed** across all unit test suites.
+  - `npm run test:e2e`: **64 passed, 0 failed (5.6 minutes)** across the full Playwright browser test suite with the real Chromium extension, including all Workday parsed rows, Lever university Select2, cross-frame iframe forms, and multi-step workflows.
+
 ## Turn: 2026-09-30 - Sequential review fixes with TDD
 
 - Target: shared extension/userscript workflow and Workday adapter. User authorized fixing the three reproduced review findings sequentially, with simplicity first and test-driven development; work remains in the current checkout without subagents or commits.
@@ -23,6 +71,347 @@
 
 Running log of changes, bugs, and platform findings for the dual-target
 (extension + userscript) Kareer.
+
+## Turn: 2026-09-30 — Implement Uncommitted-Change Review Fixes
+
+### Findings
+- **Target / platform**: Extension + userscript shared scanner and Lever adapter; captured Lever university page `fixtures/jobs.lever.co-2026-09-30-21-49.html`.
+- **Hidden select regression**: Native selects bypassed all visibility failures, including `[hidden]`, `aria-hidden`, and CSS-hidden sections. The scanner now reuses ancestor-aware page visibility for selects. Select2 backing controls are visible only when their adjacent presentation widget is visible; hidden or missing widgets are excluded from scanning and validation.
+- **Overbroad school recognition**: Any school/university mention was interpreted as an institution-name question. GPA, graduation-year, and school-project questions consequently received the saved institution name. Lever now recognizes explicit institution-name labels and attendance questions, plus its known university widget identifiers; unrelated questions remain available for contextual resolution.
+- **Missing live-bug browser coverage**: The captured Lever university fixture had only JSDOM coverage. Added real-extension browser tests for exact school selection, hidden-field exclusion, contextual GPA answers, and an unfillable required school appearing as FAILED instead of UNTOUCHED.
+- **School substring substitution exposed by E2E**: The new required-school test selected "TED University" for saved "An unlisted university" because unrestricted substring matching accepted the trailing letters of "unlisted university". Removed school substring matching in `src/core/adapters/canonical.js`; distinct institutions/campuses no longer count as saved matches. Added a unit regression that failed before this fix.
+- **Cross-frame test failure**: The test treated the first arriving request as the structured request, but structured and narrative requests run concurrently. The assertion now selects the structured request and confirms there is exactly one, preserving the embedded-field count check without depending on arrival order. No runtime request behavior was changed.
+
+### Turn changes
+- **Created** `docs/plans/2026-09-30-review-fixes.md`: concrete task list and verification commands.
+- **Modified** `src/core/fields/scanner.js`, `src/core/pageClassifier.js`, `src/core/adapters/lever-fields.js`, `src/core/adapters/canonical.js`: visibility, institution-recognition, and exact school-matching fixes described above.
+- **Modified** `tests/unit/lever.test.js`: three regression tests covering hidden native/Select2 controls, unrelated education questions, and institution-name/widget recognition. All three failed before the production changes; all 96 targeted Lever/application tests passed afterward.
+- **Created** `tests/e2e/lever-university.spec.js`; **modified** `tests/e2e/cross-frame.spec.js`: captured-fixture browser coverage and request-order-independent verification.
+- **Build outputs**: `npm run build` rebuilt the userscript and Chrome/Firefox extensions. The initial fixes advanced version 0.4.91 -> 0.4.92; the additional exact-school fix advanced it to 0.4.93. Generated version changes are in `package.json`, `firefox-updates.json`, `site/firefox-updates.json`, `site/version.json`, and `site/index.html`.
+- **Final verification**: `npm test` passed all 286 tests; `npm run test:e2e` passed all 59 real-extension browser tests, including both captured Lever regressions and the corrected cross-frame assertion. `npm run build` succeeded for Chrome, Firefox, and the userscript at 0.4.93. `git diff --check` passed.
+- **Status / next steps**: Task list complete. Changes remain uncommitted; the user's staged changes are preserved and the fixes are ready for review.
+
+## Turn: 2026-09-30 — Fix Lever University Select2 Recognition, Option Disambiguation, & Failed Field Accounting
+
+### Findings
+- **Target**: Extension + Userscript core scanning, Lever adapter fields, canonical profile resolution, option matching, and application result tracking (`src/core/fields/scanner.js`, `src/core/pageClassifier.js`, `src/core/adapters/lever-fields.js`, `src/core/adapters/canonical.js`, `src/core/fields/combobox.js`, `src/core/fields/fillers.js`, `src/core/ai.js`, `src/core/application.js`).
+- **Platform / ATS / Fixture**: Lever (`fixtures/jobs.lever.co-2026-09-30-21-49.html`).
+- **Symptoms**:
+  - Lever application's required school dropdown ("What Post-Secondary institution do you attend? *") with Select2 styling was not filled.
+  - The extension panel reported "0 FAILED, 8 UNTOUCHED" instead of flagging the failed required field as FAILED.
+  - The tool failed to select the right university option.
+- **Root-Cause Analysis**:
+  1. *Scanner skipping backing select & scanning broken combobox*: Select2 decorates the native `<select>` with `class="select2-hidden-accessible" aria-hidden="true" tabindex="-1"`. In `scanner.js`, `isVisible()` returned `false` due to `aria-hidden="true"`, and the candidate loop skipped `<select>` because it checked `!['select', 'radio', 'checkbox'].includes(typeAttr)` where `typeAttr` was `""` (native select has no `type` attribute). The scanner then scanned the presentation `<span class="select2-selection" role="combobox">` as a combobox with 0 options and `id: undefined` (because span lacks `id`/`name`, and `metadata.id` was `undefined` which overwrote `field.id`).
+  2. *Unaccounted canonical key*: `leverCanonicalKey` in `lever-fields.js` did not account for university, school, or post-secondary labels (`/institution|university|school|college|post-secondary/i` or `data-qa="university-dropdown"`), returning `""`.
+  3. *Unaccounted profile resolution*: `CANONICAL_PROFILE_KEYS` and `canonicalProfileValue` lacked `school` / `institution` mapping to `profile.education[0].institution`.
+  4. *Option matching deadlock on duplicate options*: In Lever's 2,965-option list, some universities (like University of Waterloo) appear twice: one with an exact value and one with redacted suffix. `leverAnswer` and `findExactOption` strictly checked `matches.length === 1`, so 2 matches returned `null` instead of selecting the uniquely matching exact value.
+  5. *Unresolved AI fallback blocked by empty deterministic answer*: `generateAdapterAnswers` pushed `{ fieldId, value: '' }` to `answers` instead of `unresolved`, preventing AI fallback for non-disclosure fields when deterministic option matching failed.
+  6. *Failed fields masked as untouched*: When an answer had empty value for a required field, or when a required field was rejected in validation and could not be repaired, `applyAnswers` skipped recording it in `results`. Consequently, `results` had no entry, causing `summarizeFieldResults` in `ui.js` to report it as `UNTOUCHED` and report `0 FAILED`.
+- **Resolution**:
+  - `src/core/fields/scanner.js` & `src/core/pageClassifier.js`:
+    - Updated `isVisible()` to allow `<select class="select2-hidden-accessible">` despite `aria-hidden="true"`.
+    - Filtered out candidate elements inside `.select2-container` so the presentation skin is not duplicated as an empty combobox.
+    - Corrected tag check (`tagName !== 'select'`) in candidate visibility skip.
+    - Ensured `metadata?.id || field.id` preserves valid field IDs when metadata id is undefined.
+  - `src/core/adapters/lever-fields.js`:
+    - Added `school` canonical key recognition for university/school/post-secondary questions and `data-qa="university-dropdown"`.
+    - Preserved `id` in `leverFieldMetadata`.
+    - In `leverAnswer`, disambiguated multiple matches by preferring exact value/label match.
+  - `src/core/adapters/canonical.js`:
+    - Added `school` and `institution` to `CANONICAL_PROFILE_KEYS` and `canonicalProfileValue` (mapping to `profile.education` institution or flat `profile.school`).
+    - Added substring/normalized matching for school names in `canonicalOptionMatches`.
+  - `src/core/fields/combobox.js` & `src/core/fields/fillers.js`:
+    - Updated `findExactOption` to select uniquely matching exact value/label when multiple options match.
+    - Passed `field` to `findExactOption` in `fillField`.
+  - `src/core/ai.js`:
+    - Only push empty deterministic answers if they are in `OPTIONAL_DISCLOSURE_KEYS`; otherwise push to `unresolved` so AI can answer/repair.
+  - `src/core/application.js`:
+    - In `applyAnswers`, when a required field has an empty answer, record `status: 'failed'` in `results`.
+    - In `validation` failure where repair cannot fix errors, record `status: 'failed'` in `results` for each unresolved error.
+  - Verification & Tests:
+    - Added comprehensive fixture test in `tests/unit/lever.test.js` validating that `jobs.lever.co-2026-09-30-21-49.html` scans the backing select, resolves the `school` canonical key from candidate education, filters out Select2 presentation combobox, and fills the exact option.
+    - Added unit test in `tests/unit/application.test.js` verifying that unfillable required fields record `status: 'failed'` in results.
+    - All 282 unit tests pass (`npm test`).
+
+
+## Turn: 2026-09-29 — Complete End-to-End Delivery of Job Context to AI & Request Visibility
+
+### Findings
+- **Target**: Job description propagation into AI autofill and inline rewrite requests (`src/core/ai.js`, `src/core/ui.js`).
+- **Platform / ATS**: All platforms, including Lever and Ashby.
+- **Symptoms**: Verification that the captured job description is strictly passed to AI requests. In `handleUnifiedAutofillClick`, `generateAutofillAnswers()` was being invoked without passing `{ jobContext }`, relying solely on callers.
+- **Resolution**:
+  - In `src/core/ai.js`:
+    - Updated `generateAutofillAnswers()` to automatically resolve `jobContext || gmGet(STORAGE_KEYS.JOB) || null`. If any caller omits `jobContext`, it guarantees fallback to the active job stored in `kr:job`.
+    - Added explicit logger statement in `generateAdapterAnswers()`: logs `Grounding X questions in job context: "<title>" at "<company>" (<len> chars)`.
+    - Updated `rewriteNarrativeField()` to include `Target Job Context` (`Title`, `Company`, `Description`) in the prompt payload for inline rewrites.
+  - In `src/core/ui.js`:
+    - In `handleUnifiedAutofillClick()`, explicitly resolve `currentJob`, await `pendingHydration`, and pass `{ jobContext: currentJob }` to `generateAutofillAnswers()`.
+- **Verification**:
+  - `npm test`: 280/280 tests pass.
+  - `npm run build`: v0.4.89 built cleanly.
+
+## Turn: 2026-09-29 — Fix Lever /apply Parent Posting Hydration Crash & Live Debug Re-render
+
+### Findings
+- **Target**: Lever `/apply` parent posting hydration (`src/core/pageClassifier.js`, `src/core/jobs.js`, `src/core/ui.js`, `tests/unit/application.test.js`).
+- **Platform / ATS**: Lever (`jobs.lever.co/<company>/<id>/apply`).
+- **Symptoms**:
+  - On Lever `/apply` pages, only the 293-character `meta[property="og:description"]` was captured and the company remained "None detected", whereas visiting the parent posting page captured the full 5,031-character description and "Kepler Communications".
+  - Manually clicking "Re-capture" on `/apply` did not resolve the full description.
+- **Root-Cause Analysis**:
+  - `hydrateJob()` fetches the parent posting URL and parses the HTML using `new DOMParser().parseFromString(html, 'text/html')`.
+  - When `captureJob(postingDoc)` was called on the parsed document, it checked `isVisible(el)` for candidate apply links.
+  - In `src/core/pageClassifier.js`, `isVisible` called `node.ownerDocument.defaultView.getComputedStyle(node)`. Documents created by `DOMParser.parseFromString()` do not have a browsing context (`defaultView === null`).
+  - Calling `.getComputedStyle` on `null` threw a `TypeError: Cannot read properties of null (reading 'getComputedStyle')`.
+  - This error was caught by the silent catch block in `hydrateJob()`, causing hydration to fail silently every single time on real pages with markup and falling back to the 293-character meta tag.
+  - Additionally, `renderDebugTab()` was not hooked into `pendingHydration` completion, so asynchronous resolution did not trigger a UI update until a manual re-render.
+- **Resolution**:
+  - Fixed `isVisible()` in `src/core/pageClassifier.js` to safely check `node.ownerDocument?.defaultView?.getComputedStyle`.
+  - Added structured logging to `hydrateJob()` in `src/core/jobs.js` (`logger.info` on start/success, `logger.warn` on failure) so hydration issues are never hidden.
+  - Added an auto-refresh hook in `renderDebugTab()` in `src/core/ui.js` that listens to `job.pendingHydration` and re-renders the panel once resolved.
+  - Added button loading state (`Capturing...` + disabled) to the "Re-capture" button so users receive clear visual feedback while async hydration is in flight.
+  - Updated unit test in `tests/unit/application.test.js` to include realistic HTML markup in parent posting mock responses and added explicit unit test for `isVisible()` with `DOMParser` documents.
+
+### Turn Changes
+- `src/core/pageClassifier.js`: Made `isVisible()` safe when `ownerDocument.defaultView` is `null`.
+- `src/core/jobs.js`: Added `logger` import and informational/warning logs to `hydrateJob()`.
+- `src/core/ui.js`: Hooked `pendingHydration` to auto-refresh DOM on resolution; added button busy state to Re-capture.
+- `tests/unit/application.test.js`: Added realistic mock body markup and explicit `DOMParser` `isVisible` test.
+
+### Verification / Status
+- Verified reproduction and fix using live Kepler Lever posting data (`node scratch/test-lever.mjs` resolved full 5,031 characters and "Kepler Communications").
+- `npm test`: 280/280 tests pass.
+- `npm run build`: v0.4.88 built cleanly.
+
+## Turn: 2026-09-29 — Automatic Job Description Capture & Lever /apply Hydration
+
+### Findings
+- **Target**: Job description extraction across ATS platforms (`src/core/jobs.js`, `src/core/application.js`, `tests/unit/application.test.js`).
+- **Platform / ATS**: Lever (`jobs.lever.co`), Ashby (`jobs.ashbyhq.com`), Workday (`myworkdayjobs.com`).
+- **Symptoms**:
+  - When landing directly on Lever application form pages (`https://jobs.lever.co/<company>/<jobId>/apply`), Lever unmounts the job posting description and drops the Schema.org JSON-LD `JobPosting` script.
+  - Because `captureJob()` fell back to `doc.body`, `session.job.description` captured form inputs, field labels, and cookie banner text (~3,600 characters of form questions) rather than the actual job description.
+  - When the AI engine was queried during autofill, this form junk was injected into `jobContext.description`, degrading model grounding on open-ended or role-specific questions.
+- **Root-Cause Analysis**:
+  - Lever segregates the full description with JSON-LD to the parent posting URL (`/<company>/<id>`), but strips it on `/apply`.
+  - `captureJob()` lacked detection for Lever's `/apply` route, lacked fallback to `<meta property="og:description">`, and lacked automatic same-origin parent posting fetching.
+- **Resolution**:
+  1. Updated `captureJob()` in `src/core/jobs.js`:
+     - Added Lever `/apply` route detection: derives clean parent `postingUrl = url.replace(/\/apply.*/, '')`, setting `listingUrl = postingUrl` and `applicationUrl = url`.
+     - Added `<meta property="og:description">` / `<meta name="twitter:description">` fallback before `doc.body`, preventing form inputs and cookie notices from polluting the description.
+  2. Implemented `hydrateJob(job, doc)`:
+     - Kicks off an automatic same-origin `fetch(postingUrl)` when on Lever `/apply`.
+     - Parses the parent page with `DOMParser` and extracts the complete Schema.org JSON-LD `JobPosting`, updating `job.description` (5,000+ characters), `company`, `title`, and `location` in-place, and saving to `STORAGE_KEYS.JOB`.
+     - Attached `job.pendingHydration` promise.
+  3. Integrated `pendingHydration` into `src/core/application.js`:
+     - Awaited in `request()` before dispatching AI answers, in `start()` before executing the application workflow, in `capture()` when the user clicks `#kr-capture-job`, and during initial engine mount.
+  4. Added unit tests in `tests/unit/application.test.js`:
+     - Validated Lever `/apply` listingUrl extraction and synchronous meta description fallback.
+     - Validated asynchronous JSON-LD hydration from parent posting page.
+
+### Turn Changes
+- `src/core/jobs.js`: Added `hydrateJob()`, Lever `/apply` detection, meta description fallback, and `pendingHydration` lifecycle.
+- `src/core/application.js`: Awaited `job.pendingHydration` in `request()`, `mountApplicationEngine()`, `capture()`, and `start()`.
+- `tests/unit/application.test.js`: Added unit tests for Lever `/apply` capture and async parent posting hydration.
+
+### Verification / Status
+- `npm test`: 279/279 tests pass (100% pass, 0 fail).
+- Live Playwright verification: Verified against live Lever page `https://jobs.lever.co/kepler/2ad02ce3-1d56-4aee-9f1d-5199c780c0c1/apply`, successfully extracting the full 5,031-character description and company name.
+- `npm run build`: v0.4.86 built cleanly for Chrome, Firefox, and Userscript.
+
+## Turn: 2026-09-29 — Code Review Fixes for Lever Determinism and Source Provenance
+
+### Findings
+- **Target**: Shared extension/userscript core, primarily Lever canonical resolution and AI answer provenance.
+- **Eligibility**: Lever collapsed country-specific authorization and sponsorship records into legacy root fields. A question for one country could receive another country's answer, and combined now-or-future sponsorship could prefer the wrong time value.
+- **Disclosure classification**: Lever label heuristics treated narrative text fields mentioning disability, gender, ethnicity, or veteran status as disclosure controls.
+- **AI provenance**: Generic model output could override the locally assigned `source: 'ai'` field because object spread order trusted a model-supplied `source` value.
+- **Saved-answer precedence**: An empty deterministic adapter answer prevented an exact saved answer from being reused.
+- **Compensation**: Deterministic salary answers omitted `salaryPeriod`, making hourly and monthly expectations ambiguous.
+
+### Resolution
+- Added country-aware Lever eligibility selection from enabled `workEligibilities`; explicit unmatched or unset countries remain unresolved instead of borrowing a legacy root answer.
+- Combined now-or-future sponsorship answers conservatively: any explicit `Yes` wins, both values must be `No` to answer `No`.
+- Limited Lever demographic heuristics to choice controls and widgets.
+- Forced generic model answers to retain `source: 'ai'` after model output is spread.
+- Reordered adapter resolution so exact saved answers can replace empty deterministic results while preserving intentional blanks when no saved answer exists.
+- Included `salaryPeriod` in deterministic salary text.
+
+### Turn Changes
+- `src/core/adapters/canonical.js`: Made eligibility record reads country-safe and preserved salary period.
+- `src/core/adapters/lever-fields.js`: Added country-aware eligibility lookup, combined sponsorship handling, and choice-only disclosure recognition.
+- `src/core/ai.js`: Hardened AI source stamping and saved-answer fallback ordering.
+- `tests/unit/lever.test.js`: Added regressions for eligibility, narrative disclosures, saved answers, and salary period.
+- `tests/unit/ats-hardening.test.js`: Added regression coverage for forged AI source metadata.
+- `docs/plans/2026-09-29-code-review-fixes.md`: Added ordered implementation checklist.
+
+### Verification / Status
+- Each regression test was observed failing before its minimal implementation change.
+- After each production change, the complete unit suite and Playwright E2E suite were run; latest pre-log run: 277/277 unit tests and 57/57 E2E tests passed.
+- Final `npm test`: 277/277 tests passed.
+- Final `npm run test:e2e`: 57/57 tests passed across Lever, Workday, Ashby, Greenhouse, generic, upload, multi-step, migration, and extension shell coverage.
+- One final E2E attempt transiently missed an options-page background response; its focused rerun passed, followed by a clean 57/57 full-suite rerun.
+
+## Turn: 2026-09-28 — Universal Autofill Source Transparency: AI vs Deterministic Profile (/impeccable)
+
+### Findings
+- **Platform/ATS**: Universal across all ATS platforms (Lever, Workday, Ashby, Greenhouse, and Generic).
+- **Target**: Extension and userscript shared core (`src/core/ui.js`, `src/core/profile.js`, `src/core/ai.js`, `src/core/application.js`, `src/core/agent.js`, `src/core/adapters/lever-fields.js`, `src/core/adapters/workday-fields.js`, `tests/unit/panel.test.js`).
+- **Symptoms / Requirement**:
+  - The tool previously displayed only post-fill status (`VERIFIED`, `INFERRED`, `GUESSED`, `FAILED`, `UNTOUCHED`) without indicating whether a field's value came deterministically from candidate profile/saved answers (zero AI tokens) or was generated via an OpenRouter AI model call.
+  - Users could not distinguish which fields were safely filled from their profile vs. generated by LLM reasoning.
+- **Root-Cause / Architecture Alignment**:
+  - Answers generated via `generateAdapterAnswers`, `generateAutofillAnswers`, `workdayAnswer`, `leverAnswer`, and `fixedProfileAnswer` did not consistently stamp an explicit `source: 'profile' | 'saved' | 'ai'` metadata attribute.
+  - `fieldResultsCache` and workflow `results` tracked `status`, `value`, `inferred`, and `provenance`, but did not surface the source provenance to the review list items.
+  - `renderFieldReviewSection()` in `ui.js` only showed a single status badge per field.
+- **Resolution**:
+  1. Stamped explicit `source: 'profile'`, `'saved'`, and `'ai'` attributes across all answer generation pipelines (`fixedProfileAnswer`, `leverAnswer`, `workdayAnswer`, `generateAdapterAnswers`, `generateAutofillAnswers`).
+  2. Preserved `source` in `fieldResultsCache`, multi-step session `results.set()`, and iframe `agent.js` results.
+  3. Added high-contrast, compact badge tokens adhering to the `/impeccable` mechanical standards:
+     - `.kr-badge-ai`: Purple tint (`rgba(168, 85, 247, 0.12)`, text `#c084fc`, border `rgba(168, 85, 247, 0.3)`) indicating AI model inference.
+     - `.kr-badge-profile`: Slate tint (`rgba(148, 163, 184, 0.12)`, text `#94a3b8`, border `rgba(148, 163, 184, 0.25)`) indicating deterministic profile data.
+     - `.kr-badge-saved`: Info blue tint (`rgba(98, 200, 255, 0.12)`, text `var(--kr-info)`) indicating exact saved question reuse.
+  4. Updated `summarizeFieldResults()` to calculate `aiCount` and `profileCount`, and displayed provenance counts in the summary chips (`X PROFILE · Y AI`) when fields are filled.
+  5. In `renderFieldReviewSection()`: rendered a dedicated source pill (`[PROFILE]`, `[AI]`, or `[SAVED]`) preceding the status badge (`[VERIFIED]`) for every filled field.
+  6. Added fill action logging in `executeAutofillFlow` (`logger.info('Field action [Profile/AI]: ...')`) for console and Debug tab transparency.
+  7. Added unit test in `tests/unit/panel.test.js` validating that `summarizeFieldResults` accurately computes `profileCount` and `aiCount`.
+
+### Turn Changes
+- `src/core/profile.js`: Stamped `source: 'profile'` across all deterministic branches in `fixedProfileAnswer`.
+- `src/core/adapters/lever-fields.js` & `workday-fields.js`: Stamped `source: 'profile'` on adapter-resolved answers.
+- `src/core/ai.js`: Added explicit `source: 'ai'` to generated model answers and `source: 'profile'` to deterministic candidates.
+- `src/core/application.js` & `agent.js`: Preserved `source` attribute in workflow results and iframe message replies.
+- `src/core/ui.js`:
+  - Added `.kr-badge-ai`, `.kr-badge-profile`, and `.kr-badge-saved` styles.
+  - Updated `executeAutofillFlow` to log action source and store `source` in `fieldResultsCache`.
+  - Updated `summarizeFieldResults` to compute `aiCount` and `profileCount`.
+  - Updated `renderItem` to render source pill alongside status badge.
+  - Added `PROFILE` and `AI` count chips to the Field Verification & Review header.
+- `tests/unit/panel.test.js`: Added unit test `field report distinguishes AI calls vs deterministic profile fills`.
+
+### Verification / Status
+- `npm test`: 272/272 unit tests pass (100% pass, 0 fail).
+- `tests/unit/panel.test.js`: 8/8 pass.
+- `tests/unit/lever.test.js`: 10/10 pass.
+- `tests/unit/workday.test.js`: 28/28 pass.
+- Playwright E2E: 18/18 pass in real Chromium.
+- Impeccable Detector: 0 mechanical defects (`[]`).
+- Build: v0.4.85 built and packaged for Chrome, Firefox, and Userscript.
+
+## Turn: 2026-09-28 — Lever Resume Processing Settling Fix & Live Fixture Verification
+
+### Findings
+- **Platform/ATS**: Lever (`jobs.lever.co`).
+- **Fixture**: `fixtures/jobs.lever.co-2026-09-28-05-26.html` (Xsolla Solutions Engineer application on Lever).
+- **Target**: Extension and userscript shared core (`src/core/adapters/lever.js`, `src/core/fields/verify.js`, `tests/unit/lever.test.js`).
+- **Symptoms**:
+  - Live Lever autofill execution halted with console error: `Autofill execution failed: Error: Resume processing did not settle. Wait for the board to finish parsing, then retry Autofill.`
+  - In the panel UI: `Error: Resume processing did not settle. Wait for the board to finish parsing, then retry Autofill.`
+  - Resume upload was marked `Success!` by Lever on the page with pre-filled candidate information, but Kareer autofill was blocked from filling remaining fields (Location, LinkedIn URL, etc.).
+- **Root-Cause Analysis**:
+  1. *Hidden Indicator Visibility in Lever DOM*:
+     - Lever pages permanently contain `<span class="resume-upload-working" style="display: none;"><div class="loading-indicator"></div><div class="resume-upload-label">Analyzing resume...</div></span>` in the DOM, even after resume analysis is finished and `<span class="resume-upload-success" style="display: inline;">` appears.
+     - `uploadBusy(doc)` in `src/core/adapters/lever.js` evaluated `Boolean(doc?.querySelector?.('.analyzing-resume, .resume-upload-working, [aria-busy="true"]'))` without checking element visibility. Because `.resume-upload-working` was always present in the DOM, `uploadBusy(doc)` always returned `true`.
+     - In `src/core/resume.js`, `waitForResumeParsing()` called `detectAdapter().uploadBusy?.(doc)`. Because `uploadBusy` remained `true` indefinitely, the quiet-period timer kept resetting until the 15-second timeout expired, throwing an unhandled error and aborting the fill run.
+  2. *Status vs Filename in `uploadState`*:
+     - In `uploadState(element)`, `status` queried `.resume-upload-status, .resume-upload-success, .resume-upload-filename`. In Lever's DOM, `.resume-upload-success` contains the label `"Success!"`, while the uploaded filename is housed in `<a class="visible-resume-upload has-file"><span class="filename">resume.pdf</span></a>`.
+     - Matching `.resume-upload-success` caused `uploadState.name` to be evaluated as `'Success!'` rather than `'resume.pdf'`.
+     - Furthermore, `busy` in `uploadState` also checked `container?.querySelector('.resume-upload-working')` without visibility checking, causing `uploadState.accepted` to remain `false` even after parsing completed.
+  3. *Hardcoded Verification Error Message*:
+     - In `src/core/fields/verify.js`, file verification returned a hardcoded error `'Workday has not accepted the uploaded file'`, misleading users on non-Workday ATSs.
+- **Resolution**:
+  1. Implemented a robust `visible(element)` helper in `src/core/adapters/lever.js` that checks for `hidden`, `aria-hidden="true"`, inline styles, and computed `display: 'none'` / `visibility: 'hidden'` up the DOM hierarchy (compatible with both real browser cascade and JSDOM).
+  2. Updated `uploadBusy(doc)` in `lever.js` to only consider busy indicators that are visibly rendered (`busyEls.some(visible)`), and check in-flight file inputs.
+  3. Updated `uploadState(element)` in `lever.js` to query `.filename, .resume-upload-filename` for the file name, check for `.resume-upload-failure` / `.resume-upload-oversize`, verify visible `.resume-upload-success` / `.visible-resume-upload.has-file`, and ensure busy indicators are not visible before marking `accepted: true`.
+  4. Updated `verify.js` line 108 to return `'Upload was not accepted by the application'`.
+  5. Added unit tests in `tests/unit/lever.test.js` covering both hidden/visible working indicators and validating the live captured fixture `fixtures/jobs.lever.co-2026-09-28-05-26.html` directly (verifying `uploadBusy === false` and `uploadState === { name: 'resume.pdf', accepted: true }`).
+
+### Turn Changes
+- `src/core/adapters/lever.js`:
+  - Added `visible(element)` helper function.
+  - Updated `uploadState(element)` to accurately extract filename from `.filename` and check visibility of success, working, and failure states.
+  - Updated `uploadBusy(doc)` to check visibility of working indicators and file input acceptance.
+- `src/core/fields/verify.js`:
+  - Updated file verification error message from Workday-specific to application-generic `'Upload was not accepted by the application'`.
+- `tests/unit/lever.test.js`:
+  - Added unit test: `Lever uploadState and uploadBusy handle hidden indicators correctly`.
+  - Added unit test: `Lever live fixture (jobs.lever.co-2026-09-28-05-26.html) does not hang on uploadBusy and accepts parsed resume`.
+
+### Verification / Status
+- `npm test`: 271/271 unit tests pass (100% pass, 0 fail).
+- `tests/unit/lever.test.js`: 10/10 pass (including live Xsolla fixture test).
+- Playwright E2E (`tests/e2e/adapters.spec.js`, `tests/e2e/ats-hardening.spec.js`, `tests/e2e/upload.spec.js`): 18/18 pass (100% pass, 0 fail).
+- Build: v0.4.84 built and packaged for Chrome, Firefox, and Userscript.
+- Next Steps: Proceed with Phase 2 (Ashby full compatibility).
+
+## Turn: 2026-09-28 — Phase 1: Lever Full Compatibility & Test Verification
+
+### Findings
+- **Target**: Lever ATS Compatibility & Shared Canonical Engine (`src/core/adapters/canonical.js`, `src/core/adapters/lever.js`, `src/core/adapters/lever-fields.js`, `src/core/adapters/workday-fields.js`, `src/core/ai.js`, `src/core/autofill.js`, `src/core/ui.js`, `tests/unit/lever.test.js`, `tests/unit/ats-hardening.test.js`, `tests/unit/autofill.test.js`, `tests/e2e/adapters.spec.js`, `tests/e2e/ats-hardening.spec.js`, `tests/e2e/upload.spec.js`).
+- **Platform / ATS**: Lever (`jobs.lever.co`).
+- **Root Cause Analyses & Resolutions**:
+  1. *Location Matching in Canonical Resolver*:
+     - `canonicalOptionMatches` in `canonical.js` lacked `location` matching logic. When comparing Lever location typeahead options (e.g. `'Toronto, ON, CAN'`) against candidate profile location (e.g. `'Toronto, Ontario, Canada'`), equality failed and caused empty values.
+     - Resolution: Imported `locationMatches` in `canonical.js` and added `if (canonical === 'location') return locationMatches(actual, expected)`.
+  2. *Lever Label Extraction Fallback*:
+     - `leverFieldMetadata` in `lever-fields.js` defaulted `label` to `element.name` (`'location'`) when `.application-question` was absent (e.g. wrapped in simple `<label>`). This caused `extractLabel` to bypass its normal DOM tree inspection and prevented `isResidenceLabel` from recognizing the field.
+     - Resolution: Extended container discovery to `.application-question, .custom-question, label` and avoided premature fallback to `element.name`/`element.id`, preserving clean label extraction.
+  3. *Overwrite Guard (`leverNeedsFill`)*:
+     - `leverNeedsFill` previously checked `!leverOptionMatches(field, current, expected)` for all canonical fields, causing already-filled values (e.g. user-supplied residence text or parsed resume fields) to be marked as unfilled and overwritten when `overwriteExisting: false`.
+     - Resolution: Restricted `leverNeedsFill` to return `true` only when the pronouns widget has multiple conflicting checkboxes checked (needing repair), and `null` otherwise to preserve `field.hasExistingValue`.
+  4. *Tiered Resolution & AI Payload Integration*:
+     - Deterministic profile fields (such as Name, Email, LinkedIn, Location/Residence, and Pronouns) resolved by `lever.resolveAnswer` are now handled in Tier 1 and bypass AI requests.
+     - Updated `ats-hardening.spec.js` and `ats-hardening.test.js` to reflect that deterministic profile fields are fulfilled directly from profile data without reaching OpenRouter.
+  5. *Windows Tempdir Lock in Watch Tests*:
+     - Added retry and error tolerance to `rmSync` in `build-watch.test.js` to prevent transient Windows file-handle lock failures.
+
+### Turn Changes
+- **`src/core/adapters/canonical.js`**: Created shared canonical engine (`canonicalNorm`, `countryCode`, `canonicalProfileValue`, `canonicalOptionMatches`, `isDeclineOption`).
+- **`src/core/adapters/workday-fields.js`**: Refactored to delegate normalization, country codes, and option matching to `canonical.js` with 100% backward compatibility.
+- **`src/core/adapters/lever-fields.js`**: Implemented canonical mappings, heuristic custom card classification, and `leverAnswer`.
+- **`src/core/adapters/lever.js`**: Wired full adapter contract (`fieldMetadata`, `profileValue`, `resolveAnswer`, `optionMatches`, `needsFill`, `choiceGroups`, `uploadState`, `uploadBusy`).
+- **`src/core/ai.js`, `src/core/autofill.js`, `src/core/ui.js`**: Generalized adapter resolution dispatch and offline zero-AI autofill readiness.
+- **`tests/unit/lever.test.js`**: Created 8 comprehensive unit tests covering canonical mappings, custom cards, pronouns, EEO disclosures, and zero-AI offline fill.
+- **`tests/unit/ats-hardening.test.js` & `tests/e2e/ats-hardening.spec.js`**: Updated assertions to verify deterministic profile resolution bypasses AI.
+
+### Verification / Status
+- `npm test`: 269/269 unit tests pass (100% pass, 0 fail).
+- `tests/unit/lever.test.js`: 8/8 pass.
+- `tests/unit/workday.test.js`: 28/28 pass.
+- `tests/unit/adapters.test.js`: 8/8 pass.
+- `tests/unit/ats-hardening.test.js`: 19/19 pass.
+- `tests/unit/autofill.test.js`: 49/49 pass.
+- `tests/e2e/adapters.spec.js`: 6/6 pass in real browser.
+- `tests/e2e/ats-hardening.spec.js`: 5/5 pass in real browser.
+- `tests/e2e/upload.spec.js`: 7/7 pass in real browser.
+- Build: v0.4.83 built and packaged for Chrome, Firefox, and Userscript.
+
+## Turn: 2026-09-28 — Lever & Ashby Full Compatibility Planning & Architecture Alignment (/grill-me)
+
+### Findings
+- **Target**: ATS Compatibility Engine (`src/core/adapters/canonical.js`, `src/core/adapters/lever.js`, `src/core/adapters/lever-fields.js`, `src/core/adapters/ashby.js`, `src/core/adapters/ashby-fields.js`, `src/core/ai.js`, `src/core/autofill.js`, `src/core/ui.js`, `tests/unit/lever.test.js`, `tests/unit/ashby.test.js`).
+- **Platform / ATS**: Lever (`jobs.lever.co`) & Ashby (`jobs.ashbyhq.com`, embedded `#ashby_embed`).
+- **Context & Objectives**:
+  - The user requested Workday-grade compatibility for Lever and Ashby using the reverse-engineered Simplify blueprint in `docs/plans/simplify-research.md`.
+  - Conducted `/grill-me` design alignment across ATS scope, architecture, tiered resolution, EEO policies, custom card heuristics, test structure, and phasing.
+- **Architectural Decisions**:
+  1. *Scope*: Lever and Ashby depth-first implementation.
+  2. *Shared Canonical Resolver*: Extract cross-ATS demographic/EEO synonym matching (disability, veteran, gender, ethnicity, pronouns), phone formatting, country codes, and answer provenance formatting (`saved`, `guessed`, `inferred`) into `src/core/adapters/canonical.js`. Lever and Ashby supply precise DOM selectors, container patterns, and custom widget actuators.
+  3. *Tiered Resolution & Offline Profile Autofill*: Generalize adapter dispatch in `ai.js`, `autofill.js`, and `ui.js` so any adapter providing `resolveAnswer` enables "Profile Autofill Ready" without requiring an OpenRouter API key when fields match known profile values.
+  4. *EEO Disclosures*: Unset disclosures remain blank unless explicitly required by the ATS, in which case "Prefer not to say" / "Decline to self-identify" is selected.
+  5. *Custom Question Cards*: Deterministic heuristic classification for common cards (salary expectations, work authorization, visa sponsorship, earliest start date, notice period, residence city/state) before AI fallback.
+  6. *Two-Phase Implementation*: Phase 1 = Shared Canonical Resolver + Lever full compatibility & tests; Phase 2 = Ashby full compatibility & tests.
+  7. *Verification*: Dedicated unit test suites (`tests/unit/lever.test.js` and `tests/unit/ashby.test.js`) plus Playwright E2E fixture specs, with all tests passing.
+
+### Turn Changes
+- `lever_ashby_compatibility_plan.md`: Created comprehensive implementation plan artifact detailing technical specifications and verification gates.
+- `CONTEXT_AND_FINDINGS.md`: Logged planning findings and architectural decisions.
+
+### Verification / Status
+- Baseline `npm test`: 261/261 passing (100% green).
+- Architectural plan approved and ready for Phase 1 execution.
+
 
 ## Turn: 2026-09-27 — Workday Disclosure Combobox Autofill & Selection Action Fix
 
@@ -1861,3 +2250,19 @@ Narrative voice prompt updated and verified.
 - Verification status: all four failing reproductions now pass; full unit, build, real Chrome-extension E2E and Firefox smoke checks are in progress. New browser regressions use synthetic local fixtures; they are not live captures. No real application submission.
 - Intermediate verification: unit suite **314/314** passed; Chrome/Firefox/userscript build passed at **v0.4.100**; actual Firefox extension smoke passed both ATSs. Build updated `package.json`, `firefox-updates.json`, and `site/{firefox-updates.json,index.html,version.json}`. Initial Chrome run passed safety and hidden-upload checks; retry test setup bypassed the content storage cache with direct background seeding, then used an incorrect Run-tab selector. Tests now use the actual Profile Save flow and existing `data-tab="home"`; no host changes were needed.
 - Final verification: `rtk npm test` **314 passed, 0 failed**; `rtk npm run build` succeeds at **v0.4.100** for all three artifacts; `rtk npm run test:e2e` **81 passed, 0 failed (9.4 minutes)**, including all seven new browser regressions and existing Workday/Lever, cross-frame, migration/userscript and upload coverage. Actual Firefox temporary-extension smoke passes both ATSs with contacts, two education rows, one panel and zero submissions. `git diff --check` is clean. All four review tasks and final verification are complete; production changes are limited to the two existing workflow/resolver files. Existing staged changes are preserved; fixes remain unstaged. No publication, commit or real application submission.
+
+# Turn: 2026-09-28 - IDE conversation history recovery & state.vscdb repair
+
+- Target: Antigravity IDE UI conversation switcher & local chat history recovery.
+- Reported bugs: Conversation switcher modal ("Search all convos...") was bugged, not showing recent chats from yesterday or today, only showing chats from 1 week ago (Sept 20).
+- Root-cause analysis: The conversation picker in Antigravity IDE reads `antigravityUnifiedStateSync.trajectorySummaries` in `%APPDATA%\Antigravity IDE\User\globalStorage\state.vscdb`. The language server background process failed to publish new trajectory summaries after the initial migration on Sept 20, 2026, leaving the local cache frozen. All SQLite conversation databases and JSONL logs remained 100% intact on disk.
+- Resolution: Recovered full transcripts and summaries of the most recent session (`f8316967-56e5-433c-9ea5-43fcee87ad1a`, Lever ATS compatibility + Universal Source Transparency badges) and preceding sessions (`b15a1667`, `d97f5270`, `bc8c82b5`, `3631222f`). Created a safety backup and repaired `state.vscdb` by injecting all 26 recent conversations into `antigravityUnifiedStateSync.trajectorySummaries`. Authored `recovered_chats_and_ui_fix.md` in artifacts.
+# Turn: 2026-10-01 — Merge master (Lever ATS) into greenhouse-ashby branch
+
+- Target: shared extension/userscript core, ATS adapter registry, autofill resolution, and scanner/verify modules.
+- Bugs & merge conflict findings:
+  1. Conflicts across 6 core modules: `jobs.js`, `fields/combobox.js`, `fields/scanner.js`, `fields/verify.js`, `autofill.js`, and `ui.js`. Resolved cleanly by integrating `adapterById` per-field resolution from `greenhouse-ashby` with logger, timeout, and Select2 duplicate disambiguation enhancements from `master`.
+  2. Greenhouse detection false-positive on Lever fixtures: `greenhouseAdapter.detect()` used a generic `FORM` selector containing `form#application-form`, causing Lever live fixtures to be detected as Greenhouse. Resolved by scoping `detect()` to Greenhouse-specific DOM signatures and explicitly excluding other ATS hostnames (`lever.co`, `ashbyhq.com`, `myworkdayjobs.com`).
+  3. Tiered resolution conflict on empty canonical facts: In `greenhouse-ashby`, canonical disclosures (`gender`, `race`), unauthorized work authorization, and unmatchable options intentionally resolve to `value: ''` so AI does not guess or invent sensitive facts. `master`'s `generatePageAnswers` had bypassed empty deterministic values and forwarded them to `savedAnswers` or AI fallback. Resolved by handling `savedAnswers` fallback in `leverAnswer` (preserving candidate profile precedence) and restoring clean deterministic resolution in `generatePageAnswers`.
+- Files modified: `src/core/adapters/greenhouse.js`, `src/core/adapters/lever-fields.js`, `src/core/ai.js`, `src/core/autofill.js`, `src/core/fields/combobox.js`, `src/core/fields/scanner.js`, `src/core/fields/verify.js`, `src/core/jobs.js`, `src/core/ui.js`.
+- Verification: `tests/unit/greenhouse-ashby.test.js` (37/37 pass) and `tests/unit/lever.test.js` (19/19 pass). All merge conflict markers resolved.

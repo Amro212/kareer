@@ -2,11 +2,19 @@ import { UI_IDS } from './constants.js';
 import { detectAdapter } from './adapters/index.js';
 
 export function isVisible(element) {
-  if (!element || element.closest(`#${UI_IDS.CONTAINER}, #${UI_IDS.INLINE_REWRITE}, script, style, template`)) return false;
+  if (!element || element.hidden || element.closest(`#${UI_IDS.CONTAINER}, #${UI_IDS.INLINE_REWRITE}, script, style, template`)) return false;
+  if (element.matches('select.select2-hidden-accessible')) {
+    const presentation = element.nextElementSibling;
+    return Boolean(presentation?.matches('.select2-container') && isVisible(presentation));
+  }
   for (let node = element; node && node.nodeType === 1; node = node.parentElement) {
-    if (node.hidden || node.getAttribute('aria-hidden') === 'true') return false;
-    const style = node.ownerDocument.defaultView.getComputedStyle(node);
-    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    if (node.hidden) return false;
+    if (node.getAttribute('aria-hidden') === 'true') return false;
+    const view = node.ownerDocument?.defaultView;
+    if (view && typeof view.getComputedStyle === 'function') {
+      const style = view.getComputedStyle(node);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+    }
   }
   return true;
 }

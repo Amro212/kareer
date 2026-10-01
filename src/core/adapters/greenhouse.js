@@ -20,7 +20,8 @@ export const greenhouseAdapter = {
   detect(loc, doc) {
     const host = hostnameOf(loc);
     if (/(?:^|\.)greenhouse\.io$|(?:^|\.)greenhouse\.com$/i.test(host)) return true;
-    return Boolean(doc?.querySelector?.(`${FORM},#job_application_location,input[name="action"][value="gh_application_submission"],input[name="action"][value="greenhouse/applications/submit"]`));
+    if (/(?:^|\.)(?:lever\.co|ashbyhq\.com|myworkdayjobs\.com|myworkdaysite\.com)$/i.test(host)) return false;
+    return Boolean(doc?.querySelector?.('#grnhse_app, form#application_form, #job_application_location, input[name="action"][value="gh_application_submission"], input[name="action"][value="greenhouse/applications/submit"], form[action*="greenhouse.io"]'));
   },
   applicationRoot: doc => doc.querySelector(FORM),
   excludeField: element => Boolean(element.closest('.filters,[class^="filters"],.contact-modal_component')) || element.matches('select') && Boolean(element.previousElementSibling?.matches('.select2-container')),

@@ -111,8 +111,10 @@ export function createFieldAgent() {
             provenance: answer.provenance || (answer.inferred ? 'inferred' : 'saved'),
             value: verification.actualValue || answer.value,
             inferred: Boolean(answer.inferred),
+            source: answer.source || (answer.inferred ? 'ai' : 'profile'),
             label: field.label,
           });
+
         } else {
           highlightFailedField(field.element);
           results.push({
