@@ -83,6 +83,8 @@ export function leverCanonicalKey(element, container) {
 
   if (element.type === 'file') return 'resume';
 
+  if (element?.getAttribute?.('data-qa') === 'university-dropdown' || /^university-picker(?:-|$)/i.test(id)) return 'school';
+
   // Label text heuristics
   const labelText = extractQuestionText(element, container);
   if (!labelText) return '';
@@ -97,6 +99,11 @@ export function leverCanonicalKey(element, container) {
   if (/linkedin/i.test(labelText)) return 'linkedin';
   if (/github/i.test(labelText)) return 'github';
   if (/portfolio|website/i.test(labelText)) return 'portfolio';
+  const schoolLabel = canonicalNorm(labelText).replace(/[\s?*:]+$/, '');
+  if (/^(?:school|university|college|institution)(?: name)?$/.test(schoolLabel) ||
+      /^(?:university or college|college or university)$/.test(schoolLabel) ||
+      /^(?:name of|what is the name of) (?:your |the )?(?:school|university|college|institution)$/.test(schoolLabel) ||
+      /^(?:what|which) (?:post[- ]secondary |educational )?(?:school|university|college|institution)(?: (?:or|and) (?:school|university|college))? (?:do|did) you (?:attend|graduate from)$/.test(schoolLabel)) return 'school';
 
   // Demographics / EEO heuristics
   const isChoice = Boolean(
@@ -158,7 +165,7 @@ export function leverFieldMetadata(element) {
   );
 
   const metadata = {
-    id: element.id || element.name || element.fieldId,
+    id: element.id || element.name || element.fieldId || undefined,
     label: label,
     description: container?.querySelector?.('.description')?.textContent.trim() || element.description || '',
     required,
@@ -225,7 +232,17 @@ export function leverAnswer(field, profile) {
       leverOptionMatches(field, opt.label, target) ||
       canonicalNorm(opt.value) === canonicalNorm(target)
     );
-    return matches.length === 1 ? matches[0] : null;
+    if (matches.length === 1) return matches[0];
+    if (matches.length > 1) {
+      const exactValue = matches.find(opt => canonicalNorm(opt.value) === canonicalNorm(target));
+      if (exactValue) return exactValue;
+      const exactLabel = matches.filter(opt => canonicalNorm(opt.label) === canonicalNorm(target));
+      if (exactLabel.length >= 1) return exactLabel[0];
+      if (matches.every(opt => canonicalNorm(opt.label) === canonicalNorm(matches[0].label))) {
+        return matches[0];
+      }
+    }
+    return null;
   });
 
   if (matched.some(opt => !opt)) {

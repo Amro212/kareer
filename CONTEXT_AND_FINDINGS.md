@@ -3,6 +3,68 @@
 Running log of changes, bugs, and platform findings for the dual-target
 (extension + userscript) Kareer.
 
+## Turn: 2026-09-30 — Implement Uncommitted-Change Review Fixes
+
+### Findings
+- **Target / platform**: Extension + userscript shared scanner and Lever adapter; captured Lever university page `fixtures/jobs.lever.co-2026-09-30-21-49.html`.
+- **Hidden select regression**: Native selects bypassed all visibility failures, including `[hidden]`, `aria-hidden`, and CSS-hidden sections. The scanner now reuses ancestor-aware page visibility for selects. Select2 backing controls are visible only when their adjacent presentation widget is visible; hidden or missing widgets are excluded from scanning and validation.
+- **Overbroad school recognition**: Any school/university mention was interpreted as an institution-name question. GPA, graduation-year, and school-project questions consequently received the saved institution name. Lever now recognizes explicit institution-name labels and attendance questions, plus its known university widget identifiers; unrelated questions remain available for contextual resolution.
+- **Missing live-bug browser coverage**: The captured Lever university fixture had only JSDOM coverage. Added real-extension browser tests for exact school selection, hidden-field exclusion, contextual GPA answers, and an unfillable required school appearing as FAILED instead of UNTOUCHED.
+- **School substring substitution exposed by E2E**: The new required-school test selected "TED University" for saved "An unlisted university" because unrestricted substring matching accepted the trailing letters of "unlisted university". Removed school substring matching in `src/core/adapters/canonical.js`; distinct institutions/campuses no longer count as saved matches. Added a unit regression that failed before this fix.
+- **Cross-frame test failure**: The test treated the first arriving request as the structured request, but structured and narrative requests run concurrently. The assertion now selects the structured request and confirms there is exactly one, preserving the embedded-field count check without depending on arrival order. No runtime request behavior was changed.
+
+### Turn changes
+- **Created** `docs/plans/2026-09-30-review-fixes.md`: concrete task list and verification commands.
+- **Modified** `src/core/fields/scanner.js`, `src/core/pageClassifier.js`, `src/core/adapters/lever-fields.js`, `src/core/adapters/canonical.js`: visibility, institution-recognition, and exact school-matching fixes described above.
+- **Modified** `tests/unit/lever.test.js`: three regression tests covering hidden native/Select2 controls, unrelated education questions, and institution-name/widget recognition. All three failed before the production changes; all 96 targeted Lever/application tests passed afterward.
+- **Created** `tests/e2e/lever-university.spec.js`; **modified** `tests/e2e/cross-frame.spec.js`: captured-fixture browser coverage and request-order-independent verification.
+- **Build outputs**: `npm run build` rebuilt the userscript and Chrome/Firefox extensions. The initial fixes advanced version 0.4.91 -> 0.4.92; the additional exact-school fix advanced it to 0.4.93. Generated version changes are in `package.json`, `firefox-updates.json`, `site/firefox-updates.json`, `site/version.json`, and `site/index.html`.
+- **Final verification**: `npm test` passed all 286 tests; `npm run test:e2e` passed all 59 real-extension browser tests, including both captured Lever regressions and the corrected cross-frame assertion. `npm run build` succeeded for Chrome, Firefox, and the userscript at 0.4.93. `git diff --check` passed.
+- **Status / next steps**: Task list complete. Changes remain uncommitted; the user's staged changes are preserved and the fixes are ready for review.
+
+## Turn: 2026-09-30 — Fix Lever University Select2 Recognition, Option Disambiguation, & Failed Field Accounting
+
+### Findings
+- **Target**: Extension + Userscript core scanning, Lever adapter fields, canonical profile resolution, option matching, and application result tracking (`src/core/fields/scanner.js`, `src/core/pageClassifier.js`, `src/core/adapters/lever-fields.js`, `src/core/adapters/canonical.js`, `src/core/fields/combobox.js`, `src/core/fields/fillers.js`, `src/core/ai.js`, `src/core/application.js`).
+- **Platform / ATS / Fixture**: Lever (`fixtures/jobs.lever.co-2026-09-30-21-49.html`).
+- **Symptoms**:
+  - Lever application's required school dropdown ("What Post-Secondary institution do you attend? *") with Select2 styling was not filled.
+  - The extension panel reported "0 FAILED, 8 UNTOUCHED" instead of flagging the failed required field as FAILED.
+  - The tool failed to select the right university option.
+- **Root-Cause Analysis**:
+  1. *Scanner skipping backing select & scanning broken combobox*: Select2 decorates the native `<select>` with `class="select2-hidden-accessible" aria-hidden="true" tabindex="-1"`. In `scanner.js`, `isVisible()` returned `false` due to `aria-hidden="true"`, and the candidate loop skipped `<select>` because it checked `!['select', 'radio', 'checkbox'].includes(typeAttr)` where `typeAttr` was `""` (native select has no `type` attribute). The scanner then scanned the presentation `<span class="select2-selection" role="combobox">` as a combobox with 0 options and `id: undefined` (because span lacks `id`/`name`, and `metadata.id` was `undefined` which overwrote `field.id`).
+  2. *Unaccounted canonical key*: `leverCanonicalKey` in `lever-fields.js` did not account for university, school, or post-secondary labels (`/institution|university|school|college|post-secondary/i` or `data-qa="university-dropdown"`), returning `""`.
+  3. *Unaccounted profile resolution*: `CANONICAL_PROFILE_KEYS` and `canonicalProfileValue` lacked `school` / `institution` mapping to `profile.education[0].institution`.
+  4. *Option matching deadlock on duplicate options*: In Lever's 2,965-option list, some universities (like University of Waterloo) appear twice: one with an exact value and one with redacted suffix. `leverAnswer` and `findExactOption` strictly checked `matches.length === 1`, so 2 matches returned `null` instead of selecting the uniquely matching exact value.
+  5. *Unresolved AI fallback blocked by empty deterministic answer*: `generateAdapterAnswers` pushed `{ fieldId, value: '' }` to `answers` instead of `unresolved`, preventing AI fallback for non-disclosure fields when deterministic option matching failed.
+  6. *Failed fields masked as untouched*: When an answer had empty value for a required field, or when a required field was rejected in validation and could not be repaired, `applyAnswers` skipped recording it in `results`. Consequently, `results` had no entry, causing `summarizeFieldResults` in `ui.js` to report it as `UNTOUCHED` and report `0 FAILED`.
+- **Resolution**:
+  - `src/core/fields/scanner.js` & `src/core/pageClassifier.js`:
+    - Updated `isVisible()` to allow `<select class="select2-hidden-accessible">` despite `aria-hidden="true"`.
+    - Filtered out candidate elements inside `.select2-container` so the presentation skin is not duplicated as an empty combobox.
+    - Corrected tag check (`tagName !== 'select'`) in candidate visibility skip.
+    - Ensured `metadata?.id || field.id` preserves valid field IDs when metadata id is undefined.
+  - `src/core/adapters/lever-fields.js`:
+    - Added `school` canonical key recognition for university/school/post-secondary questions and `data-qa="university-dropdown"`.
+    - Preserved `id` in `leverFieldMetadata`.
+    - In `leverAnswer`, disambiguated multiple matches by preferring exact value/label match.
+  - `src/core/adapters/canonical.js`:
+    - Added `school` and `institution` to `CANONICAL_PROFILE_KEYS` and `canonicalProfileValue` (mapping to `profile.education` institution or flat `profile.school`).
+    - Added substring/normalized matching for school names in `canonicalOptionMatches`.
+  - `src/core/fields/combobox.js` & `src/core/fields/fillers.js`:
+    - Updated `findExactOption` to select uniquely matching exact value/label when multiple options match.
+    - Passed `field` to `findExactOption` in `fillField`.
+  - `src/core/ai.js`:
+    - Only push empty deterministic answers if they are in `OPTIONAL_DISCLOSURE_KEYS`; otherwise push to `unresolved` so AI can answer/repair.
+  - `src/core/application.js`:
+    - In `applyAnswers`, when a required field has an empty answer, record `status: 'failed'` in `results`.
+    - In `validation` failure where repair cannot fix errors, record `status: 'failed'` in `results` for each unresolved error.
+  - Verification & Tests:
+    - Added comprehensive fixture test in `tests/unit/lever.test.js` validating that `jobs.lever.co-2026-09-30-21-49.html` scans the backing select, resolves the `school` canonical key from candidate education, filters out Select2 presentation combobox, and fills the exact option.
+    - Added unit test in `tests/unit/application.test.js` verifying that unfillable required fields record `status: 'failed'` in results.
+    - All 282 unit tests pass (`npm test`).
+
+
 ## Turn: 2026-09-29 — Complete End-to-End Delivery of Job Context to AI & Request Visibility
 
 ### Findings

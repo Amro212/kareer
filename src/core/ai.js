@@ -6,6 +6,7 @@ import { findExactOption } from './fields/combobox.js';
 import { profileForAI, fixedProfileAnswer, formatStructuredBackground } from './profile.js';
 import { detectAdapter } from './adapters/index.js';
 import { workdayAnswer } from './adapters/workday-fields.js';
+import { OPTIONAL_DISCLOSURE_KEYS } from './adapters/canonical.js';
 
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 const AUTOFILL_TIMEOUT_MS = 120000;
@@ -611,7 +612,7 @@ async function generateAdapterAnswers(fields, { adapter, settings, profile, allo
       answers.push(deterministic);
     } else if (saved !== undefined && (!['combobox', 'select', 'radio'].includes(field.type) || findExactOption(field.options || [], saved))) {
       answers.push({ fieldId: field.fieldId, value: saved, inferred: false, provenance: 'saved', source: 'saved' });
-    } else if (deterministic) {
+    } else if (deterministic && OPTIONAL_DISCLOSURE_KEYS.has(field.ats?.canonicalKey)) {
       if (!deterministic.source) deterministic.source = 'profile';
       answers.push(deterministic);
     } else unresolved.push(field);

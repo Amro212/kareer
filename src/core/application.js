@@ -275,7 +275,20 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       if (!await settleFields(signature, token, 'before field action', original.id)) return false;
       const field = scanFormFields().find(f => f.id === original.id && f.label === original.label && f.type === original.type);
       const entry = byId.get(original.id);
-      if (!entry || entry.value === '' || entry.value == null) continue;
+      if (!entry || entry.value === '' || entry.value == null) {
+        if (original.required && entry && entry.value === '') {
+          results.set(original.id, {
+            status: 'failed',
+            provenance: entry.provenance || 'unresolved',
+            value: '',
+            inferred: Boolean(entry.inferred),
+            source: entry.source || 'profile',
+            error: 'No matching option found for required field.',
+          });
+          emit();
+        }
+        continue;
+      }
       const replacement = scanFormFields().find(f => f.id === original.id);
       const question = session.steps[session.currentStep]?.questions[original.id];
       if (replacement && (!field || question && question !== questionIdentity(replacement))) {
@@ -464,6 +477,19 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         const errors = validation(scanFormFields());
         if (errors.length) {
           if (await repair(errors, step, token, signature)) continue;
+          for (const err of errors) {
+            if (err.fieldId && results.get(err.fieldId)?.status !== 'verified') {
+              results.set(err.fieldId, {
+                status: 'failed',
+                provenance: 'unresolved',
+                value: '',
+                inferred: false,
+                source: 'validation',
+                error: err.message || 'Required field missing or rejected.',
+              });
+            }
+          }
+          emit();
           return;
         }
         if (await attemptAutoSubmit(token, step)) return;

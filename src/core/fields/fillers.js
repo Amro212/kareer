@@ -356,7 +356,7 @@ export async function fillField(field, targetValue) {
   if (!field || !field.element) return false;
   if (field.widget === 'workday-choice') return detectAdapter().fillChoice(field, targetValue, { checkbox: fillCheckbox }) === true;
   if (['select', 'radio'].includes(field.type)) {
-    const option = findExactOption(field.options || [], targetValue);
+    const option = findExactOption(field.options || [], targetValue, field);
     if (!option) return false;
     targetValue = option.value;
     if (field.widget) return detectAdapter().fillChoice?.(field, targetValue, {

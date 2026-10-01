@@ -1136,3 +1136,23 @@ test('native on-page Continue click is detected and resumes autofill when stepRe
     assert.equal(engine.session.completedSteps, 1);
   } finally { engine.destroy(); }
 });
+
+test('unfillable required field is recorded with status failed in results', async () => {
+  render(`<h2>My Information</h2><label for="reqField">Required Question *</label><select id="reqField" required><option value="">Select...</option><option value="opt1">Option 1</option></select><button>Continue</button>`);
+  let lastResults;
+  const engine = createApplicationEngine({
+    settleMs: 0,
+    transitionMs: 0,
+    onChange: ({ results }) => { lastResults = results; },
+    answer: async () => ({ answers: [{ fieldId: 'reqField', value: '' }] }),
+  });
+  try {
+    await engine.start(job());
+    assert.equal(engine.session.status, 'paused');
+    assert.ok(lastResults);
+    const res = lastResults.get('reqField');
+    assert.ok(res, 'Result must exist for required field');
+    assert.equal(res.status, 'failed', 'Result status must be failed');
+  } finally { engine.destroy(); }
+});
+

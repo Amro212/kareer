@@ -16,6 +16,7 @@ import { fillField } from '../../src/core/fields/fillers.js';
 import { generateAutofillAnswers } from '../../src/core/ai.js';
 import { saveProfile, saveApiKey } from '../../src/core/storage.js';
 import { normalizeFieldsForAI } from '../../src/core/fields/normalize.js';
+import { isVisible } from '../../src/core/pageClassifier.js';
 
 let dom;
 function boot(html, url = 'https://jobs.lever.co/acme/12345/apply') {
@@ -36,6 +37,59 @@ function boot(html, url = 'https://jobs.lever.co/acme/12345/apply') {
 }
 
 afterEach(() => dom?.window.close());
+
+test('select scanning excludes hidden controls and follows Select2 presentation visibility', () => {
+  const select = id => `<select id="${id}"><option value="">Choose</option><option>Waterloo</option></select>`;
+  const select2 = id => `<select id="${id}" class="select2-hidden-accessible" aria-hidden="true"><option>Waterloo</option></select>`;
+  boot(`<form>
+    ${select('visible')}
+    <section hidden>${select('hidden-section')}</section>
+    <section aria-hidden="true">${select('aria-hidden-section')}</section>
+    <section style="display:none">${select('css-hidden-section')}</section>
+    <select id="hidden-self" hidden><option>Waterloo</option></select>
+    <select id="aria-hidden-self" aria-hidden="true"><option>Waterloo</option></select>
+    <select id="css-hidden-self" style="visibility:hidden"><option>Waterloo</option></select>
+    ${select2('select2-visible')}<span class="select2-container"><span role="combobox"></span></span>
+    ${select2('select2-hidden')}<span class="select2-container" style="display:none"><span role="combobox"></span></span>
+    ${select2('select2-missing')}
+  </form>`);
+  assert.deepEqual(scanFormFields().map(field => field.id), ['visible', 'select2-visible']);
+  assert.equal(isVisible(document.getElementById('select2-visible')), true);
+  assert.equal(isVisible(document.getElementById('select2-hidden')), false);
+  assert.equal(isVisible(document.getElementById('select2-missing')), false);
+});
+
+test('Lever institution recognition leaves GPA, graduation, and project questions contextual', () => {
+  boot('<form></form>');
+  for (const label of ['What is your university GPA?', 'What year did you graduate from college?', 'Describe a project you completed at school']) {
+    const field = { id: 'education-question', type: 'text', label };
+    assert.equal(leverCanonicalKey(field), '', label);
+    assert.equal(leverAnswer(field, { education: [{ institution: 'University of Waterloo' }] }), null, label);
+  }
+});
+
+test('Lever recognizes institution-name questions and unlabelled university widgets', () => {
+  boot('<select id="university-picker-1" data-qa="university-dropdown"></select>');
+  for (const label of ['School', 'School name', 'University or college', 'Name of your institution', 'Which university do you attend?', 'What Post-Secondary institution do you attend? *']) {
+    assert.equal(leverCanonicalKey({ type: 'text', label }), 'school', label);
+  }
+  assert.equal(leverCanonicalKey(document.querySelector('select')), 'school');
+});
+
+test('Lever school choices do not substitute institutions sharing a substring', () => {
+  boot('<form></form>');
+  for (const [saved, offered] of [
+    ['An unlisted university', 'TED University'],
+    ['University of Toronto', 'University of Toronto Scarborough'],
+  ]) {
+    const field = {
+      id: 'school', type: 'select', label: 'School',
+      ats: { adapter: 'lever', canonicalKey: 'school' },
+      options: [{ value: offered, label: offered }],
+    };
+    assert.equal(leverAnswer(field, { education: [{ institution: saved }] }).value, '', `${saved} must not select ${offered}`);
+  }
+});
 
 test('Lever adapter detection matches hostname and DOM signature', () => {
   assert.equal(detectAdapter({ hostname: 'jobs.lever.co' }, null).id, 'lever');
@@ -482,4 +536,46 @@ test('Lever live fixture (jobs.lever.co-2026-09-28-05-26.html) does not hang on 
   const fields = scanFormFields();
   assert.ok(fields.length >= 10, `Expected at least 10 fields, scanned ${fields.length}`);
 });
+
+test('Lever university dropdown fixture (jobs.lever.co-2026-09-30-21-49.html) scans backing select, maps canonical school key, and fills exact option', async () => {
+  const html = readFileSync(new URL('../../fixtures/jobs.lever.co-2026-09-30-21-49.html', import.meta.url), 'utf8');
+  boot(html, 'https://jobs.lever.co/kepler/2ad02ce3-1d56-4aee-9f1d-5199c780c0c1/apply');
+
+  assert.equal(detectAdapter(location, document).id, 'lever');
+
+  saveProfile({
+    fullName: 'Jane Doe',
+    email: 'jane@example.com',
+    education: [
+      { institution: 'University of Waterloo', degree: "Bachelor's degree" }
+    ],
+  });
+  saveApiKey('');
+
+  const fields = scanFormFields();
+  const uniField = fields.find(f => /institution|university|school/i.test(f.label) || f.ats?.canonicalKey === 'school');
+  assert.ok(uniField, 'University field must be scanned');
+  assert.equal(uniField.type, 'select');
+  assert.equal(uniField.required, true);
+  assert.equal(uniField.ats?.canonicalKey, 'school');
+  assert.ok(uniField.options.length > 2000, `Expected thousands of university options, got ${uniField.options.length}`);
+  assert.ok(uniField.id && uniField.id !== 'undefined');
+
+  // Verify Select2 presentation combobox was not duplicated as an extra field
+  const comboboxes = fields.filter(f => f.type === 'combobox' && /institution|university/i.test(f.label));
+  assert.equal(comboboxes.length, 0, 'Select2 presentation combobox should not be scanned as a separate field');
+
+  // Deterministic answer resolution
+  const answer = leverAnswer(uniField, {
+    education: [{ institution: 'University of Waterloo' }]
+  });
+  assert.ok(answer, 'Should resolve deterministic answer for school');
+  assert.equal(answer.value, 'University of Waterloo');
+
+  // Fill and verify
+  const filled = await fillField(uniField, answer.value);
+  assert.equal(filled, true, 'fillField should succeed on backing select');
+  assert.equal(uniField.element.value, 'University of Waterloo');
+});
+
 

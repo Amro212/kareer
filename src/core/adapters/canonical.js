@@ -76,6 +76,8 @@ export const CANONICAL_PROFILE_KEYS = {
   start_date: 'startDate',
   notice_period: 'noticePeriod',
   relocation: 'willingToRelocate',
+  school: 'institution',
+  institution: 'institution',
 };
 
 export const OPTIONAL_DISCLOSURE_KEYS = new Set([
@@ -171,6 +173,14 @@ export function canonicalProfileValue(canonical, profile, record) {
       const period = profile.salaryPeriod ? ` ${profile.salaryPeriod}` : '';
       return `${profile.expectedSalary}${curr}${period}`;
     }
+  }
+
+  if (canonical === 'school' || canonical === 'institution') {
+    if (record?.institution) return record.institution;
+    if (record?.school) return record.school;
+    const edu = (profile.education || []).find(e => e?.enabled !== false && (e?.institution || e?.school));
+    if (edu) return edu.institution || edu.school;
+    return profile.institution || profile.school || profile.university || undefined;
   }
 
   const directKey = CANONICAL_PROFILE_KEYS[canonical];
