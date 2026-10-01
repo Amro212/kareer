@@ -21,9 +21,10 @@ import { getProfile } from './storage.js';
 export function createFieldAgent() {
   let cache = new Map();
 
-  function unfilled(field) {
+  function unfilled(field, overwrite = false) {
     const adapterNeeds = detectAdapter().needsFill?.(field, getProfile());
     if (adapterNeeds != null) return adapterNeeds;
+    if (overwrite) return true;
     if (field.hasExistingValue) return false;
     const value = field.currentValue;
     return !value || value === 'false' || value === '0' || String(value).trim().length === 0;
@@ -41,7 +42,7 @@ export function createFieldAgent() {
     assertUniqueFields(scanned);
     cache = new Map(scanned.map((field) => [field.id, field]));
 
-    const targets = scanned.filter((field) => field.type !== 'file' && (overwriteExisting || unfilled(field)));
+    const targets = scanned.filter((field) => field.type !== 'file' && unfilled(field, overwriteExisting));
     if (!targets.length) return { fields: [], pageType: page.type };
 
     await harvestComboboxOptions(targets);

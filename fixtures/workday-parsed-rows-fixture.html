@@ -1,0 +1,62 @@
+<!doctype html>
+<!-- Synthetic resume-parsed/manual row regression; not a captured live tenant. -->
+<html lang="en"><meta charset="utf-8"><title>Workday parsed rows</title>
+<style>body{font:16px system-ui;margin:24px}main{max-width:700px}.field{margin:10px 0}label{display:block}input,textarea,select{font:inherit;padding:5px}section{margin:20px 0}</style>
+<main><div data-automation-id="progressBar"><span aria-current="step">My Information</span></div><h1>My Information</h1><form>
+<section data-automation-id="workExperienceSection"><h2>Work experience</h2><button type="button" data-automation-id="add-button">Add experience</button></section>
+<section data-automation-id="educationSection"><h2>Education</h2><div data-automation-id="education-1">
+<div data-automation-id="formField-school" class="field"><label for="education-1--school">School</label><div data-automation-id="multiSelectContainer"><div data-automation-id="selectedItem" title="University">University</div><div data-automation-id="multiselectInputContainer"><input id="education-1--school" data-automation-id="schoolName" placeholder="Search"></div></div></div>
+<div data-automation-id="formField-degree" class="field"><label for="education-1--degree">Degree</label><button type="button" data-automation-id="degree" aria-haspopup="listbox" id="education-1--degree">Bachelor of Arts</button></div>
+<div class="field"><label for="education-1--gpa">GPA</label><input id="education-1--gpa" value="3.8"></div>
+</div></section>
+<section data-automation-id="languageSection"><h2>Languages</h2><div data-automation-id="language-1">
+<div class="field"><label for="language-1--language">Language</label><input id="language-1--language" value="English"></div>
+<div class="field"><label for="language-1--reading">Reading</label><select id="language-1--reading"><option>Beginner</option><option>Advanced</option></select></div>
+</div></section>
+<section data-automation-id="websiteSection"><h2>Websites</h2><div data-automation-id="websitePanelSet-1"><div class="field"><label for="website--url">Website</label><input id="website--url" value="https://user.example"></div></div></section>
+<button type="button" data-automation-id="bottom-navigation-next-button">Continue</button></form></main>
+<div data-automation-id="activeListContainer" hidden></div>
+<script>
+window.fixture = { adds: 0, submits: 0, continues: 0 };
+const degree = document.querySelector('#education-1--degree');
+const menu = document.querySelector('[data-automation-id="activeListContainer"]');
+degree.onclick = () => {
+  menu.replaceChildren();
+  for (const label of ['Bachelor of Arts', 'Master of Science']) {
+    const option = document.createElement('div');
+    option.dataset.automationId = 'promptLeafNode';
+    option.textContent = label;
+    option.onclick = () => { degree.textContent = label; menu.hidden = true; };
+    menu.append(option);
+  }
+  menu.hidden = false;
+};
+document.body.addEventListener('mousedown', event => { if (!menu.contains(event.target) && event.target !== degree) menu.hidden = true; });
+document.querySelector('form').onsubmit = event => { event.preventDefault(); window.fixture.submits++; };
+document.querySelector('[data-automation-id="bottom-navigation-next-button"]').onclick = () => { window.fixture.continues++; };
+const section = document.querySelector('[data-automation-id="workExperienceSection"]');
+const add = section.querySelector('button');
+function dateControls(number, key, label, value) {
+  const [year = '', month = ''] = (value || '').split('-');
+  return `<div data-automation-id="formField-${key}" class="field"><label>${label}</label><input id="work-${number}-${key}-month" data-automation-id="dateSectionMonth-input" aria-label="Month" value="${month}"><input id="work-${number}-${key}-year" data-automation-id="dateSectionYear-input" aria-label="Year" value="${year}"></div>`;
+}
+function row(number, title = '', company = '', start = '', current = false, description = '') {
+  const node = document.createElement('div');
+  node.dataset.automationId = `workExperience-${number}`;
+  node.innerHTML = `<div class="field"><label for="workExperience-${number}--jobTitle">Job title</label><input id="workExperience-${number}--jobTitle" value="${title}"></div><div class="field"><label for="workExperience-${number}--company">Company</label><input id="workExperience-${number}--company" value="${company}"></div><div class="field"><label for="workExperience-${number}--roleDescription">Description</label><textarea id="workExperience-${number}--roleDescription">${description}</textarea></div>${dateControls(number, 'startDate', 'From', start)}<div class="field"><label for="workExperience-${number}--currentlyWorkHere">Currently work here</label><input type="checkbox" id="workExperience-${number}--currentlyWorkHere" ${current ? 'checked' : ''}></div><div class="end-date">${current ? '' : dateControls(number, 'endDate', 'To', '')}</div>`;
+  return node;
+}
+for (const node of [row(1, 'Developer', 'Acme', '2020-01', true, 'Old parsed description'), row(2, 'User role', 'Other'), row(3, 'Engineer', 'ReturnCo', '2023-09'), row(4, 'Engineer', 'ReturnCo', '2021-02'), row(5)]) add.before(node);
+section.addEventListener('change', event => {
+  if (!event.target.matches('input[type="checkbox"]')) return;
+  const node = event.target.closest('[data-automation-id^="workExperience-"]');
+  const number = node.dataset.automationId.split('-').at(-1);
+  node.querySelector('.end-date').innerHTML = event.target.checked ? '' : dateControls(number, 'endDate', 'To', '');
+});
+add.onclick = () => {
+  window.fixture.adds++;
+  // React can replace earlier nodes on Add without changing their Workday keys.
+  for (const node of section.querySelectorAll('[data-automation-id^="workExperience-"]')) node.replaceWith(node.cloneNode(true));
+  add.before(row(section.querySelectorAll('[data-automation-id^="workExperience-"]').length + 1));
+};
+</script></html>
