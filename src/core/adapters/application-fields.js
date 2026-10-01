@@ -166,8 +166,11 @@ export function applicationProfileValue(field, profile, { jobContext } = {}) {
 }
 
 export function applicationAnswer(field, profile, options = {}) {
-  const value = applicationProfileValue(field, profile, options);
+  let value = applicationProfileValue(field, profile, options);
   if (value === undefined) return null;
+  if (value === '' && !field.ats.rowId && !DISCLOSURES.has(field.ats.canonicalKey) && !['work_auth','sponsorship'].includes(field.ats.canonicalKey)) {
+    value = profile.savedAnswers?.[field.label] ?? '';
+  }
   const answer = { fieldId:field.fieldId || field.id, value, inferred:false, provenance:field.ats.canonicalKey === 'source' ? 'inferred' : 'saved' };
   if (field.type === 'checkbox' && !field.widget || value === '' || !['combobox','select','radio'].includes(field.type)) return answer;
   const values = Array.isArray(value) ? value : [value];

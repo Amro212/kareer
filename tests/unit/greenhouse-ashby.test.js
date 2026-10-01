@@ -77,6 +77,21 @@ test('saved custom answers are reused without a model while factual narratives r
   assert.equal(response.answers[0].value, 'Saved response.');
 });
 
+for (const ats of ['greenhouse','ashby']) {
+  test(`${ats} uses exact saved answers for empty canonical facts and preserves profile precedence`,async()=>{
+    boot('<form><label for="preferred_first_name">Preferred First Name</label><input id="preferred_first_name"><label for="country">Country</label><select id="country"><option value="">Select</option><option value="CA">Canada</option></select></form>',ats);
+    saveProfile({...getProfile(),country:'',savedAnswers:{'Preferred First Name':'Alex',Country:'Canada'}});
+    let response=await generateAutofillAnswers(normalizeFieldsForAI(scanFormFields()));
+    assert.deepEqual(response.answers.map(answer=>answer.value),['Alex','CA']);assert.equal(response.latencyMs,0);
+    saveProfile({...getProfile(),preferredName:'Sam'});
+    response=await generateAutofillAnswers(normalizeFieldsForAI(scanFormFields()));
+    assert.equal(response.answers[0].value,'Sam');
+    saveProfile({...getProfile(),savedAnswers:{Country:'Atlantis'}});
+    response=await generateAutofillAnswers(normalizeFieldsForAI(scanFormFields()));
+    assert.equal(response.answers[1].value,'');
+  });
+}
+
 test('Greenhouse text verification rejects a wrong nonempty value', async () => {
   boot('<form id="application_form"><input id="email" value="wrong@example.com"></form>');
   assert.equal((await verifyField(scanFormFields()[0], 'test@example.com')).verified, false);
@@ -191,7 +206,7 @@ test('optional links and transgender disclosure survive profile persistence with
   for (const name of ['twitter','behance','dribbble','website','additionalUrl','transgender']) assert.ok(getProfile()[name]);
 });
 
-function embeddedHost({ambiguous=false, boundary=false, cancel=false, unanswered=false}={}) {
+function embeddedHost({ambiguous=false, boundary=false, cancel=false, unanswered=false, hostBoundary=false}={}) {
   boot('<main><h1>Application</h1><iframe></iframe></main>');
   dom.reconfigure({url:'https://careers.example.com/job'});
   const host = createGmHost(), commands=[];
@@ -206,7 +221,10 @@ function embeddedHost({ambiguous=false, boundary=false, cancel=false, unanswered
       if(command.action==='fill'){filled=true;if(command.answers.some(answer=>answer.fieldId==='why' && answer.value))questionResolved=true;return {results:[{fieldId:'email',status:'verified',value:'test@example.com'}]};}
       if(command.action==='submit'){submitted=true;return {ok:true};} return {results:[]};}});
   saveSettings({autoSubmit:true,autoContinue:true});
-  const engine=createApplicationEngine({settleMs:0,transitionMs:0,navigationTimeoutMs:30,submitCountdownMs:cancel?1000:0,onChange:({session})=>{if(cancel && session?.status==='submitting') queueMicrotask(()=>engine.pause());}});
+  const engine=createApplicationEngine({settleMs:0,transitionMs:0,navigationTimeoutMs:30,submitCountdownMs:cancel?1000:0,onChange:({session})=>{
+    if(cancel && session?.status==='submitting') queueMicrotask(()=>engine.pause());
+    if(hostBoundary && session?.status==='submitting') document.querySelector('main').insertAdjacentHTML('beforeend','<p>I certify that all information in this application is true and accurate.</p>');
+  }});
   return {engine,commands};
 }
 
@@ -230,6 +248,12 @@ test('embedded submission countdown cancellation prevents submit', async () => {
   finally {engine.destroy();}
 });
 
+test('embedded submission stops when a legal attestation appears in the host',async()=>{
+  const {engine,commands}=embeddedHost({hostBoundary:true});
+  try {await engine.start();assert.equal(classifyPage().type,'boundary');assert.equal(commands.some(command=>command.action==='submit'),false);assert.equal(engine.session.status,'boundary');}
+  finally {engine.destroy();}
+});
+
 test('embedded unanswered questions pause for manual input without being counted as late fields',async()=>{
   const {engine,commands}=embeddedHost({unanswered:true});
   try {await engine.start();assert.match(engine.session.reason,/needs review/);assert.equal(commands.some(command=>command.action==='submit'),false);assert.equal(engine.session.steps[engine.session.currentStep].lateRequests,0);}
@@ -241,6 +265,31 @@ test('embedded user retry resolves newly saved answers within the repair budget'
   try {await engine.start();saveProfile({...getProfile(),savedAnswers:{'Why this job?':'Saved reason'}});await engine.start();assert.equal(engine.session.status,'confirmation');assert.ok(Object.values(engine.session.steps).some(step=>step.repairs===1));}
   finally {engine.destroy();}
 });
+
+for (const ats of ['greenhouse','ashby']) {
+  test(`${ats} hosted retry refreshes a missing saved email without AI or overwriting user values`,async()=>{
+    boot(`<form class="${ats==='ashby'?'ashby-application-form':''}" id="application_form"><h1>Application</h1><label for="first_name">First name</label><input id="first_name" value="User name"><label for="email">Email</label><input id="email" type="email" required><button type="button">Continue</button></form>`,ats);
+    saveProfile({...getProfile(),email:''});saveSettings({autoContinue:false,autoSubmit:false,overwriteExisting:false});
+    let aiCalls=0;globalThis.GM_xmlhttpRequest=()=>{aiCalls++;throw new Error('Unexpected AI request');};
+    const engine=createApplicationEngine({settleMs:0,transitionMs:0,navigationTimeoutMs:0});
+    try {
+      await engine.start();assert.match(engine.session.reason,/unavailable/);
+      saveProfile({...getProfile(),email:'new@example.com'});await engine.start();
+      assert.equal(document.querySelector('#email').value,'new@example.com');
+      assert.equal(document.querySelector('#first_name').value,'User name');
+      assert.match(engine.session.reason,/Page filled/);assert.equal(aiCalls,0);
+      assert.equal(engine.session.steps[engine.session.currentStep].requests,1);
+    } finally {engine.destroy();}
+  });
+  test(`${ats} hosted workflow blocks on a hidden required resume in a visible upload container`,async()=>{
+    boot(`<form class="${ats==='ashby'?'ashby-application-form':''}" id="application_form"><h1>Application</h1><label for="email">Email</label><input id="email" type="email" required><div class="field"><label for="resume">Resume</label><input id="resume" type="file" required style="display:none"><span class="filename"></span></div><button type="button">Continue</button></form>`,ats);
+    saveSettings({autoContinue:false,autoSubmit:false});
+    assert.ok(scanFormFields().some(field=>field.id==='resume'));
+    const engine=createApplicationEngine({settleMs:0,transitionMs:0,navigationTimeoutMs:0});
+    try {await engine.start();assert.match(engine.session.reason,/documents are unavailable/);assert.equal(engine.session.stepReview,false);}
+    finally {engine.destroy();}
+  });
+}
 
 test('Greenhouse Add tolerates a rerender without losing existing row bindings', async () => {
   boot('<form id="application_form"><div id="education_section"><div class="education"><label>School<input value="A"></label><label>Degree<input></label></div><button type="button" id="add_education">Add</button></div></form>');

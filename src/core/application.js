@@ -18,7 +18,7 @@ import { logger } from './debug.js';
 import { applyRemoteResumeUploads, embeddedApplicationStates, remoteFieldId } from './remote.js';
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-const scanPageFields = () => scanAllFields().filter(f => isVisible(f.element) && !f.element.closest('[role=listbox],.select__menu')).map(f => ({ ...f, label: workflowLabel(f) }));
+const scanPageFields = () => scanAllFields().filter(f => (isVisible(f.element) || f.type === 'file' && isVisible(f.element.parentElement)) && !f.element.closest('[role=listbox],.select__menu')).map(f => ({ ...f, label: workflowLabel(f) }));
 const scanFormFields = () => scanPageFields().filter(f => !f.element.disabled && !f.element.readOnly);
 const unfilled = field => field.hasExistingValue ? false : field.type === 'checkbox' && !field.widget ? !field.element.checked : !String(field.currentValue ?? '').trim();
 const empty = field => detectAdapter().needsFill?.(field, getProfile()) ?? unfilled(field);
@@ -346,7 +346,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
 
   async function embeddedWorkflow(token) {
     if (!platform.capabilities.crossFrame || scanFormFields().length || ['boundary','captcha','confirmation'].includes(classifyPage().type)) return false;
-    const current = () => token === generation && Boolean(session?.active);
+    const current = () => guard(token);
     const discover = async () => {
       const states = await embeddedApplicationStates();
       const candidates = states.filter(state => ['application','review','confirmation','boundary','captcha'].includes(state.pageType));
@@ -573,6 +573,11 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
           signature=observePage(scanPageFields());
           step.observation=signature;
           const missing = scanFormFields().filter(f => f.type !== 'file' && shouldFill(f) && unfilled(f));
+          for (const field of normalizeFieldsForAI(missing)) {
+            if (!field.ats?.canonicalKey || step.answers[field.fieldId]?.value !== '') continue;
+            const refreshed = detectAdapter().resolveAnswer?.(field, getProfile(), {jobContext:session.job,allowSearch:false});
+            if (refreshed?.value != null && refreshed.value !== '') step.answers[field.fieldId] = refreshed;
+          }
           if (missing.length && !await applyAnswers(missing, Object.values(step.answers), token, signature)) return;
         }
         if (!checkPage(signature, token, 'fill completion')) return;

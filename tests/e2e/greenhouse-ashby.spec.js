@@ -52,6 +52,46 @@ test('embedded submission countdown can be cancelled',async({kr})=>{
   await page.waitForTimeout(5500);await expect(page.frameLocator('iframe').locator('body')).toHaveAttribute('data-submissions','0');
 });
 
+test('a host legal attestation appearing during embedded countdown prevents submission',async({kr})=>{
+  await kr.seed({apiKey:'',profile:PROFILE,settings:{autoContinue:true,autoSubmit:true}});
+  const page=await kr.context.newPage();await page.goto(kr.fixtureUrl('ats-workflow-host.html',undefined,'?ats=ashby'));await kr.openPanel(page);
+  await expect(page.locator('#kr-main-panel')).toContainText('embedded frame');await page.locator('#kr-autofill-btn').click();
+  await expect(page.locator('#kr-main-panel')).toContainText('Submitting in',{timeout:60000});
+  await page.locator('main').evaluate(main=>main.insertAdjacentHTML('beforeend','<p>I certify this application is true and accurate.</p>'));
+  await expect(page.locator('#kr-main-panel')).toContainText('Manual action required');
+  await page.waitForTimeout(5500);await expect(page.frameLocator('iframe').locator('body')).toHaveAttribute('data-submissions','0');
+  expect(kr.openrouter.requests).toHaveLength(0);
+});
+
+for (const [ats,host] of [['greenhouse',GREENHOUSE_HOST],['ashby',ASHBY_HOST]]) {
+  test(`${ats} exact saved canonical answer and a newly saved email work on hosted retry`,async({kr})=>{
+    const profile={...PROFILE,email:'',preferredName:'',savedAnswers:{...PROFILE.savedAnswers,'Preferred First Name':'Alex'}};
+    await kr.seed({apiKey:'',profile,settings:{autoContinue:false,overwriteExisting:false}});
+    const page=await kr.context.newPage();await page.goto(kr.fixtureUrl('greenhouse-ashby-workflow.html',host,`?ats=${ats}`));
+    await page.locator('#first_name').fill('User name');
+    await page.locator('form').evaluate(form=>form.insertAdjacentHTML('afterbegin','<label for="preferred_first_name">Preferred First Name</label><input id="preferred_first_name" required>'));
+    await kr.openPanel(page);await page.locator('#kr-autofill-btn').click();
+    await expect(page.locator('#kr-main-panel')).toContainText('Required saved values or documents are unavailable',{timeout:60000});
+    await expect(page.locator('#preferred_first_name')).toHaveValue('Alex');await expect(page.locator('#email')).toHaveValue('');
+    await page.locator('[data-tab="profile"]').click();await page.locator('#kr-profile-email').fill('new@example.com');
+    await page.locator('#kr-profile-form button[type="submit"]').click();await page.locator('[data-tab="home"]').click();await page.locator('#kr-autofill-btn').click();
+    await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Auto Continue is off.',{timeout:60000});
+    await expect(page.locator('#email')).toHaveValue('new@example.com');await expect(page.locator('#first_name')).toHaveValue('User name');
+    await expect(page.locator('.education')).toHaveCount(2);expect(kr.openrouter.requests).toHaveLength(0);
+  });
+
+  for (const hasResume of [false,true]) {
+    test(`${ats} hidden required resume ${hasResume?'uploads and waits for acceptance':'blocks advancement when unavailable'}`,async({kr})=>{
+      await kr.seed({apiKey:'',profile:PROFILE,...(hasResume?{resume:{name:'Resume.pdf',type:'application/pdf',contents:'%PDF-1.4 test'}}:{}),settings:{autoContinue:!hasResume,autoSubmit:!hasResume,overwriteExisting:true}});
+      const page=await kr.context.newPage();await page.goto(kr.fixtureUrl('greenhouse-ashby-workflow.html',host,`?ats=${ats}&upload&hiddenResume`));await kr.openPanel(page);await page.locator('#kr-autofill-btn').click();
+      await expect(page.locator('#kr-main-panel')).toContainText(hasResume?'Page filled. Auto Continue is off.':'Required saved values or documents are unavailable',{timeout:60000});
+      await expect(page.locator('#accepted-resume')).toHaveText(hasResume?'Resume.pdf':'');await expect(page.locator('#continue')).toBeVisible();
+      await expect(page.locator('body')).toHaveAttribute('data-submissions','0');expect(await page.locator('#cover_letter').evaluate(el=>el.files.length)).toBe(0);
+      expect(kr.openrouter.requests).toHaveLength(0);
+    });
+  }
+}
+
 test('embedded ownership ambiguity pauses before filling',async({kr})=>{
   await kr.seed({apiKey:'',profile:PROFILE,settings:{autoSubmit:true}});
   const page=await kr.context.newPage();await page.goto(kr.fixtureUrl('ats-workflow-host.html',undefined,'?ambiguous'));await kr.openPanel(page);

@@ -19,6 +19,7 @@ const params=new URLSearchParams(location.search), ats=params.get('ats')||'green
 if(ats==='ashby'){form.className='ashby-application-form';form.setAttribute('data-ashby-root','');}
 else form.id=params.has('modern')?'application-form':'application_form';
 if(!params.has('upload')) document.querySelector('#resume').closest('.field').remove();
+if(params.has('hiddenResume')) document.querySelector('#resume').style.display='none';
 document.querySelector('#resume')?.addEventListener('change',()=>{
  const field=document.querySelector('#resume').closest('.field');field.setAttribute('aria-busy','true');document.querySelector('#processing').textContent='Processing resume';
  setTimeout(()=>{field.removeAttribute('aria-busy');document.querySelector('#processing').textContent='Resume uploaded successfully';document.querySelector('#accepted-resume').textContent=document.querySelector('#resume').files[0].name;document.querySelector('#first_name').value='Parsed';},350);
