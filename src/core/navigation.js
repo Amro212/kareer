@@ -88,10 +88,12 @@ export function inspectContinue(doc = document) {
 }
 
 export function inspectSubmit(doc = document) {
+  const adapterControl = detectAdapter(doc.defaultView?.location, doc).submitControl?.(doc);
   const matches = Array.from(doc.querySelectorAll('button,input[type=submit],input[type=button],a[href],[role=button]')).filter(isVisible).filter(el => {
     const label = (visibleText(el) || el.value || el.getAttribute('aria-label') || '').trim();
     return /^(?:submit(?: my | your | the )?application|submit(?: application)?|apply now|send application|final submit)$/i.test(label);
   }).filter(el => !el.closest('[role=tablist]'));
+  if (adapterControl && isVisible(adapterControl) && !matches.includes(adapterControl)) matches.push(adapterControl);
   const control = matches.length === 1 ? matches[0] : null;
   let reason = '';
   if (!matches.length) reason = 'No unambiguous Submit control. Submit manually.';

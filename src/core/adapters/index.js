@@ -10,6 +10,7 @@ import { leverAdapter } from './lever.js';
 import { ashbyAdapter } from './ashby.js';
 
 const SPECIFIC = [workdayAdapter, greenhouseAdapter, leverAdapter, ashbyAdapter];
+export const adapterById = id => SPECIFIC.find(adapter => adapter.id === id) || genericAdapter;
 
 function currentLocation() {
   try {

@@ -15,7 +15,7 @@ import { collectPortableData, exportPayload } from './migration.js';
 import { logger } from './debug.js';
 import { testConnection, generateAutofillAnswers, rewriteNarrativeField } from './ai.js';
 import { scanFormFields, harvestComboboxOptions, deduplicateFields, refreshField } from './fields/scanner.js';
-import { resolveComboboxSearchAnswers } from './autofill.js';
+import { resolveComboboxSearchAnswers, resolveDiscoveredAnswers } from './autofill.js';
 import { extractOptionLabel } from './fields/labels.js';
 import { normalizeFieldsForAI } from './fields/normalize.js';
 import { fillField } from './fields/fillers.js';
@@ -1402,7 +1402,7 @@ function setSafeHTML(element, htmlString) {
 }
 
 function getStatusInfo() {
-  if (!hasApiKey() && detectAdapter().id === 'workday') return { label: 'Profile Autofill Ready', dotClass: '', badgeClass: 'kr-badge-green', text: 'Known profile values are ready. Add an API key for unanswered questions.' };
+  if (!hasApiKey() && (detectAdapter().resolveAnswer || remoteFieldsCache.some(field => field.ats?.adapter))) return { label: 'Profile Autofill Ready', dotClass: '', badgeClass: 'kr-badge-green', text: 'Known profile values are ready. Add an API key for unanswered questions.' };
   if (!hasApiKey()) {
     return {
       label: 'No API Key',
@@ -1482,6 +1482,12 @@ async function resolveRemoteSearchAnswers(response) {
   const discovered = await searchRemoteOptions(null, pending);
   if (!discovered.length) return response;
 
+  if (discovered.every(field => ['greenhouse','ashby','workday'].includes(field.ats?.adapter))) {
+    const resolved = resolveDiscoveredAnswers(discovered, pending);
+    const byId = new Map(resolved.map(answer => [answer.fieldId,answer]));
+    return {...response,answers:response.answers.map(answer => byId.get(answer.fieldId) || answer)};
+  }
+
   try {
     const resolved = await generateAutofillAnswers(discovered, { allowSearch: false });
     const byId = new Map(resolved.answers.map((answer) => [answer.fieldId, answer]));
@@ -1528,7 +1534,7 @@ async function handleUnifiedAutofillClick() {
     updatePanelDOM();
     return;
   }
-  if (!hasApiKey() && detectAdapter().id !== 'workday') {
+  if (!hasApiKey() && !detectAdapter().resolveAnswer && !remoteFieldsCache.some(field => field.ats?.adapter)) {
     alert('Please configure your OpenRouter API Key in Settings first.');
     currentTab = 'settings';
     updatePanelDOM();
@@ -1553,7 +1559,7 @@ async function handleUnifiedAutofillClick() {
   }
 
   // If a multi-step session exists (captured or in-progress), run the engine workflow
-  if (session) {
+  if (session || ['greenhouse','ashby'].includes(detectAdapter().id) || remoteFieldsCache.some(field=>['greenhouse','ashby'].includes(field.ats?.adapter))) {
     void applicationEngine?.start();
     return;
   }
@@ -1580,7 +1586,7 @@ async function executeAutofillFlow() {
     updatePanelDOM();
     return;
   }
-  if (!hasApiKey() && detectAdapter().id !== 'workday') {
+  if (!hasApiKey() && !detectAdapter().resolveAnswer && !remoteFieldsCache.some(field => field.ats?.adapter)) {
     alert('Please configure your OpenRouter API Key in Settings first.');
     currentTab = 'settings';
     updatePanelDOM();
@@ -1691,7 +1697,7 @@ async function executeAutofillFlow() {
     ];
     let aiResponse = { answers: [] };
     if (normalized.length) {
-      autofillProgress.statusText = detectAdapter().id === 'workday' ? 'Resolving application answers...' : `Generating answers with AI (${settings.model})...`;
+      autofillProgress.statusText = detectAdapter().resolveAnswer || remoteFields.some(field => field.ats?.adapter) ? 'Resolving application answers...' : `Generating answers with AI (${settings.model})...`;
       updatePanelDOM();
       aiResponse = await generateAutofillAnswers(normalized);
     }

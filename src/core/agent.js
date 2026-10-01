@@ -11,6 +11,7 @@ import { FILL_STATUS } from './constants.js';
 import { logger } from './debug.js';
 import { detectAdapter } from './adapters/index.js';
 import { getProfile } from './storage.js';
+import { inspectContinue, inspectSubmit, observePage, isDisabled } from './navigation.js';
 
 /**
  * Field agent for a document the panel cannot reach through the DOM, i.e. a
@@ -20,6 +21,7 @@ import { getProfile } from './storage.js';
  */
 export function createFieldAgent() {
   let cache = new Map();
+  let generation = 0;
 
   function unfilled(field, overwrite = false) {
     const adapterNeeds = detectAdapter().needsFill?.(field, getProfile());
@@ -35,9 +37,12 @@ export function createFieldAgent() {
   }
 
   async function scan({ overwriteExisting = false } = {}) {
+    const token=generation, isCurrent=()=>token===generation;
     const page = classifyPage();
-    if (page.type === 'application') await detectAdapter().prepareSections?.(document, getProfile());
-    if (page.type === 'application') await detectAdapter().prepareFields?.(document, getProfile(), { overwrite: overwriteExisting });
+    if (['boundary','confirmation','captcha'].includes(page.type)) { cache.clear(); return {fields:[],pageType:page.type,reason:page.reason}; }
+    if (page.type === 'application') await detectAdapter().prepareSections?.(document, getProfile(),{isCurrent});
+    if (page.type === 'application') await detectAdapter().prepareFields?.(document, getProfile(), { overwrite: overwriteExisting,isCurrent });
+    if (!isCurrent()) return {error:'Frame operation cancelled.'};
     const scanned = scanFormFields(document);
     assertUniqueFields(scanned);
     cache = new Map(scanned.map((field) => [field.id, field]));
@@ -64,8 +69,11 @@ export function createFieldAgent() {
 
   async function fill({ answers = [] } = {}) {
     const results = [];
+    const token=generation;
 
     for (const answer of answers) {
+      if (token!==generation) return {error:'Frame fill cancelled.',results};
+      if (['boundary','confirmation','captcha'].includes(classifyPage().type)) return {error:classifyPage().reason,results};
       const field = cache.get(answer.fieldId);
       if (!field) {
         results.push({ fieldId: answer.fieldId, status: FILL_STATUS.FAILED, error: 'Field no longer present in frame' });
@@ -125,6 +133,8 @@ export function createFieldAgent() {
   }
 
   async function uploadResume({ overwriteExisting = false } = {}) {
+    const token=generation;
+    if (['boundary','confirmation','captcha'].includes(classifyPage().type)) return {error:classifyPage().reason};
     const allFileFields = scanFormFields(document).filter((field) => field.type === 'file');
     deduplicateFields(allFileFields);
     const fields = allFileFields.filter((field) => isResumeField(field, allFileFields));
@@ -133,7 +143,7 @@ export function createFieldAgent() {
       field.element = field.element?.isConnected ? field.element : (scanFormFields(document).find(f => f.id === field.id)?.element || field.element);
       if (!overwriteExisting && !unfilled(field)) continue;
       cache.set(field.id, field);
-      const didFill = await uploadResumeAndWait(field);
+      const didFill = await uploadResumeAndWait(field,{isCurrent:()=>token===generation});
       field.element = field.element?.isConnected ? field.element : (scanFormFields(document).find(f => f.id === field.id)?.element || field.element);
       const verification = didFill ? await verifyField(field, '') : { verified: false, actualValue: '', error: 'No stored resume' };
       results.push({
@@ -177,12 +187,38 @@ export function createFieldAgent() {
         type: field.type,
         required: Boolean(field.required),
         currentValue: field.currentValue || '',
+        ats: field.ats,
       })),
     };
   }
 
+  function stepState() {
+    const page = classifyPage();
+    const fields = scanFormFields(document);
+    const next = inspectContinue(), submit = inspectSubmit();
+    const observation=observePage(fields);
+    return {pageType:page.type,reason:page.reason,url:location.href,adapter:detectAdapter().id,
+      signature:JSON.stringify(observation),observation,fieldCount:fields.length,canContinue:Boolean(next.control && !isDisabled(next.control)),
+      canSubmit:Boolean(submit.control && !isDisabled(submit.control)),errors:inspectValidation(fields),
+      fields:normalizeFieldsForAI(fields),uploads:fields.filter(field => field.type === 'file').map(field => ({fieldId:field.id,required:field.required,currentValue:field.currentValue,label:field.label}))};
+  }
+
+  function navigate(command) {
+    const state = stepState();
+    if (!command.expectedSignature || command.expectedSignature !== state.signature) return {error:'Frame step changed. Inspect before continuing.'};
+    if (!['application','review'].includes(state.pageType)) return {error:state.reason};
+    if (state.errors.length) return {error:'Embedded validation needs manual input.',errors:state.errors};
+    const control = command.action === 'submit' ? inspectSubmit().control : inspectContinue().control;
+    if (!control || isDisabled(control)) return {error:'No unambiguous enabled application control.'};
+    if (command.action === 'submit' && state.canContinue) return {error:'Continue the application before submitting.'};
+    control.click();
+    return {ok:true};
+  }
+
   async function handle(command) {
+    if (command?.expectedSignature && command.expectedSignature !== stepState().signature) return {error:'Frame step changed. Inspect before continuing.'};
     switch (command?.action) {
+      case 'cancel': generation++;return {ok:true};
       case 'scan': return scan(command);
       case 'inspect': return inspect();
       case 'searchOptions': return searchOptions(command);
@@ -190,6 +226,8 @@ export function createFieldAgent() {
       case 'locate': return locate(command);
       case 'uploadResume': return uploadResume(command);
       case 'validation': return validation();
+      case 'stepState': return stepState();
+      case 'continue': case 'submit': return navigate(command);
       // An embedded frame captures its own document; the parent cannot read it.
       case 'captureFixture': return captureFixture(document, { label: command.label || '' });
       case 'ping': return { ok: true, url: window.location.href, fieldCount: scanFormFields(document).length };

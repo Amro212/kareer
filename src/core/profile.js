@@ -38,10 +38,12 @@ export const PROFILE_SECTIONS = [
     { name: 'lgbtStatus', label: 'LGBTQ+', options: disclosure },
     { name: 'visibleMinority', label: 'Visible minority', options: disclosure },
     { name: 'armedForces', label: 'Armed forces service', options: disclosure },
+    { name: 'transgender', label: 'Transgender', options: disclosure },
   ] },
 ];
 
 export const CORE_PROFILE_DEFAULTS = {
+  twitter: '', behance: '', dribbble: '', website: '', additionalUrl: '',
   firstName: '',
   middleName: '',
   lastName: '',

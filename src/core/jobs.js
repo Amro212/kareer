@@ -1,6 +1,7 @@
 import { gmSet } from './storage.js';
 import { STORAGE_KEYS } from './constants.js';
 import { isVisible, visibleText } from './pageClassifier.js';
+import { detectAdapter } from './adapters/index.js';
 
 export function safeUrl(value, base = window.location.href) {
   try { const url = new URL(value, base); return /^https?:$/.test(url.protocol) ? url.href : ''; } catch { return ''; }
@@ -19,7 +20,7 @@ export function captureJob(doc = document) {
     try { visit(JSON.parse(script.textContent)); } catch { /* Ignore unrelated malformed metadata. */ }
   }
   const plain = html => { const el = doc.createElement('div'); el.innerHTML = String(html || ''); return el.textContent.replace(/\s+/g, ' ').trim().slice(0, 30000); };
-  const apply = Array.from(doc.querySelectorAll('a[href]')).find(el => isVisible(el) && /^(?:apply|apply now|apply for (?:this )?(?:job|position)|start application)$/i.test(visibleText(el)));
+  const apply = detectAdapter(doc.defaultView?.location, doc).applyControl?.(doc) || Array.from(doc.querySelectorAll('a[href]')).find(el => isVisible(el) && /^(?:apply|apply now|apply for (?:this )?(?:job|position)|start application)$/i.test(visibleText(el)));
   const company = posting?.hiringOrganization?.name || doc.querySelector('[itemprop=hiringOrganization]')?.textContent?.trim() || '';
   const address = [posting?.jobLocation].flat()[0]?.address;
   const job = {

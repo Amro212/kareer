@@ -82,7 +82,7 @@ export async function verifyField(field, expectedValue) {
 
     case FIELD_TYPES.CONTENTEDITABLE: {
       const actualVal = (field.element.textContent || '').trim();
-      const verified = field.ats?.adapter === 'workday' ? sameWorkdayValue(field, actualVal, expectedStr) : actualVal.length > 0;
+      const verified = field.ats?.adapter ? sameWorkdayValue(field, actualVal, expectedStr) : actualVal.length > 0;
       return {
         verified,
         actualValue: actualVal,
@@ -105,7 +105,7 @@ export async function verifyField(field, expectedValue) {
       if (upload) {
         const expected = String(expectedValue || field.element.files?.[0]?.name || '').trim();
         const verified = upload.accepted && Boolean(upload.name) && (!expected || upload.name === expected);
-        return { verified, actualValue: upload.name, error: verified ? undefined : 'Workday has not accepted the uploaded file' };
+        return { verified, actualValue: upload.name, error: verified ? undefined : 'The application has not accepted the uploaded file' };
       }
       const actualVal = field.element.files?.[0]?.name || '';
       const expectedName = String(expectedValue || '').trim();
@@ -128,7 +128,7 @@ export async function verifyField(field, expectedValue) {
       if (!expectedStr) {
         return { verified: true, actualValue: actualVal };
       }
-      const verified = field.ats?.adapter === 'workday' ? sameWorkdayValue(field, actualVal, expectedStr) : actualVal.length > 0;
+      const verified = field.ats?.adapter ? sameWorkdayValue(field, actualVal, expectedStr) : actualVal.length > 0;
       return {
         verified,
         actualValue: actualVal,
@@ -139,6 +139,7 @@ export async function verifyField(field, expectedValue) {
 }
 
 function sameWorkdayValue(field, actual, expected) {
+  if (['phone_stripped','phone'].includes(field.ats?.canonicalKey)) return actual.replace(/\D/g,'') === expected.replace(/\D/g,'');
   if (/_(?:year|month|day)$/.test(field.ats?.canonicalKey || '') && /^\d+$/.test(actual) && /^\d+$/.test(expected)) return Number(actual) === Number(expected);
   return optionKey(actual) === optionKey(expected);
 }
