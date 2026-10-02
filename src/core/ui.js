@@ -16,7 +16,7 @@ import { collectPortableData, exportPayload } from './migration.js';
 import { logger } from './debug.js';
 import { testConnection, generateAutofillAnswers, rewriteNarrativeField } from './ai.js';
 import { scanFormFields, harvestComboboxOptions, deduplicateFields, refreshField } from './fields/scanner.js';
-import { resolveComboboxSearchAnswers } from './autofill.js';
+import { resolveComboboxSearchAnswers, resolveDiscoveredAnswers } from './autofill.js';
 import { extractOptionLabel } from './fields/labels.js';
 import { normalizeFieldsForAI } from './fields/normalize.js';
 import { fillField } from './fields/fillers.js';
@@ -853,7 +853,7 @@ input:checked + .kr-slider:before {
   color: #fecaca;
 }
 
-/* Safety Boundary Card */
+/* Page attention card */
 .kr-safety-banner {
   background: rgba(242, 184, 75, 0.08);
   border: 1px solid rgba(242, 184, 75, 0.3);
@@ -1423,8 +1423,7 @@ function setSafeHTML(element, htmlString) {
 }
 
 function getStatusInfo() {
-  const adapter = detectAdapter();
-  if (!hasApiKey() && (typeof adapter.resolveAnswer === 'function' || adapter.id === 'workday')) return { label: 'Profile Autofill Ready', dotClass: '', badgeClass: 'kr-badge-green', text: 'Known profile values are ready. Add an API key for unanswered questions.' };
+  if (!hasApiKey() && (detectAdapter().resolveAnswer || remoteFieldsCache.some(field => field.ats?.adapter))) return { label: 'Profile Autofill Ready', dotClass: '', badgeClass: 'kr-badge-green', text: 'Known profile values are ready. Add an API key for unanswered questions.' };
   if (!hasApiKey()) {
     return {
       label: 'No API Key',
@@ -1504,6 +1503,12 @@ async function resolveRemoteSearchAnswers(response) {
   const discovered = await searchRemoteOptions(null, pending);
   if (!discovered.length) return response;
 
+  if (discovered.every(field => ['greenhouse','ashby','workday'].includes(field.ats?.adapter))) {
+    const resolved = resolveDiscoveredAnswers(discovered, pending);
+    const byId = new Map(resolved.map(answer => [answer.fieldId,answer]));
+    return {...response,answers:response.answers.map(answer => byId.get(answer.fieldId) || answer)};
+  }
+
   try {
     const resolved = await generateAutofillAnswers(discovered, { allowSearch: false });
     const byId = new Map(resolved.answers.map((answer) => [answer.fieldId, answer]));
@@ -1545,13 +1550,12 @@ async function handleUnifiedAutofillClick() {
   if (applicationEngine?.busy || isAutofilling) return;
 
   const page = classifyPage();
-  if (['captcha', 'boundary', 'confirmation'].includes(page.type)) {
+  if (['captcha', 'confirmation'].includes(page.type)) {
     autofillProgress.statusText = page.reason;
     updatePanelDOM();
     return;
   }
-  const adapter = detectAdapter();
-  if (!hasApiKey() && typeof adapter.resolveAnswer !== 'function' && adapter.id !== 'workday') {
+  if (!hasApiKey() && !detectAdapter().resolveAnswer && !remoteFieldsCache.some(field => field.ats?.adapter)) {
     alert('Please configure your OpenRouter API Key in Settings first.');
     currentTab = 'settings';
     updatePanelDOM();
@@ -1576,7 +1580,7 @@ async function handleUnifiedAutofillClick() {
   }
 
   // If a multi-step session exists (captured or in-progress), run the engine workflow
-  if (session) {
+  if (session || ['greenhouse','ashby'].includes(detectAdapter().id) || remoteFieldsCache.some(field=>['greenhouse','ashby'].includes(field.ats?.adapter))) {
     void applicationEngine?.start();
     return;
   }
@@ -1598,13 +1602,12 @@ async function executeAutofillFlow() {
   const token = ++autofillGeneration;
   const runUrl = window.location.href;
   const page = classifyPage();
-  if (['captcha', 'boundary', 'confirmation'].includes(page.type)) {
+  if (['captcha', 'confirmation'].includes(page.type)) {
     autofillProgress.statusText = page.reason;
     updatePanelDOM();
     return;
   }
-  const flowAdapter = detectAdapter();
-  if (!hasApiKey() && typeof flowAdapter.resolveAnswer !== 'function' && flowAdapter.id !== 'workday') {
+  if (!hasApiKey() && !detectAdapter().resolveAnswer && !remoteFieldsCache.some(field => field.ats?.adapter)) {
     alert('Please configure your OpenRouter API Key in Settings first.');
     currentTab = 'settings';
     updatePanelDOM();
@@ -1725,13 +1728,13 @@ async function executeAutofillFlow() {
     }
     let aiResponse = { answers: [] };
     if (normalized.length) {
-      autofillProgress.statusText = typeof detectAdapter().resolveAnswer === 'function' || detectAdapter().id === 'workday' ? 'Resolving application answers...' : `Generating answers with AI (${settings.model})...`;
+      autofillProgress.statusText = detectAdapter().resolveAnswer || remoteFields.some(field => field.ats?.adapter) ? 'Resolving application answers...' : `Generating answers with AI (${settings.model})...`;
       updatePanelDOM();
       aiResponse = await generateAutofillAnswers(normalized, { jobContext: currentJob });
     }
     if (token !== autofillGeneration) return;
     if (window.location.href !== runUrl) throw new Error('Page changed during autofill. Inspect the current step before retrying.');
-    if (['captcha', 'boundary', 'confirmation'].includes(classifyPage().type)) throw new Error(classifyPage().reason);
+    if (['captcha', 'confirmation'].includes(classifyPage().type)) throw new Error(classifyPage().reason);
     if (aiResponse.answers.some(answer => answer.searchQuery)) {
       autofillProgress.statusText = 'Searching for missing combobox options...';
       updatePanelDOM();
@@ -1747,7 +1750,7 @@ async function executeAutofillFlow() {
     for (let i = 0; i < aiTargetFields.length; i++) {
       if (token !== autofillGeneration) break;
       if (window.location.href !== runUrl) throw new Error('Page changed during autofill. Inspect the current step before retrying.');
-      if (['captcha', 'boundary', 'confirmation'].includes(classifyPage().type)) throw new Error(classifyPage().reason);
+      if (['captcha', 'confirmation'].includes(classifyPage().type)) throw new Error(classifyPage().reason);
       const field = aiTargetFields[i];
       autofillProgress.current = i + 1;
       autofillProgress.statusText = `Filling ${i + 1} of ${aiTargetFields.length}: "${field.label}"`;
@@ -1950,7 +1953,7 @@ function renderHud() {
   const session = applicationState?.session;
   const wfStatus = session?.status || '';
   const wfIsRunning = wfStatus === 'running' || wfStatus === 'submitting';
-  const wfIsWaiting = ['captcha', 'boundary'].includes(wfStatus);
+  const wfIsWaiting = wfStatus === 'captcha';
   const profile = getProfile();
   const strength = calculateProfileStrength(profile);
 
@@ -2175,7 +2178,7 @@ function renderHomeTab() {
   const wfIsDone = ['review', 'confirmation'].includes(wfStatus);
   const isStepReview = Boolean(session?.stepReview);
   const wfIsPaused = !wfIsRunning && !isStepReview && (wfStatus === 'paused' || (!session?.active && session?.steps && Object.keys(session.steps).length > 0));
-  const wfIsWaiting = ['captcha', 'boundary'].includes(wfStatus) || ['captcha', 'boundary'].includes(page.type);
+  const wfIsWaiting = wfStatus === 'captcha' || page.type === 'captcha';
   const cardStateClass = wfIsRunning ? 'wf-running' : isStepReview ? 'wf-step-review' : wfIsDone ? 'wf-done' : (wfIsPaused || wfIsWaiting) ? 'wf-paused' : '';
 
   let wfBadgeHtml;
@@ -2265,15 +2268,15 @@ function renderHomeTab() {
   ` : '';
 
   let safetyBannerHtml = '';
-  if (['captcha', 'boundary'].includes(page.type)) {
+  if (page.type === 'captcha') {
     safetyBannerHtml = `
       <div class="kr-safety-banner">
         <div class="kr-safety-icon">${ICONS.shield}</div>
         <div class="kr-safety-content">
-          <div class="kr-safety-title">Safety Boundary Paused</div>
+          <div class="kr-safety-title">Page needs attention</div>
           <div class="kr-safety-desc">${escapeHtml(page.reason || 'Manual interaction or verification required on this page.')}</div>
         </div>
-        <button class="kr-btn kr-btn-secondary kr-btn-small" id="kr-resume-boundary">Resume</button>
+        <button class="kr-btn kr-btn-secondary kr-btn-small" id="kr-resume-page">Resume</button>
       </div>
     `;
   }
@@ -2837,9 +2840,9 @@ function attachEventHandlers() {
   const capture = shadowRootRef.querySelector('#kr-capture-job');
   if (capture) capture.onclick = () => applicationEngine?.capture();
 
-  const resumeBoundary = shadowRootRef.querySelector('#kr-resume-boundary');
-  if (resumeBoundary) {
-    resumeBoundary.onclick = () => void applicationEngine?.start();
+  const resumePage = shadowRootRef.querySelector('#kr-resume-page');
+  if (resumePage) {
+    resumePage.onclick = () => void applicationEngine?.start();
   }
 
   // Toggle button handlers

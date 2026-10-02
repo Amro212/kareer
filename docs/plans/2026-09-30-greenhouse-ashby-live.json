@@ -1,0 +1,1288 @@
+[
+  {
+    "name": "greenhouse-hosted",
+    "url": "https://job-boards.greenhouse.io/promptioinc/jobs/4420814009",
+    "applicationUrl": "https://job-boards.greenhouse.io/promptioinc/jobs/4420814009",
+    "before": "Kareer\nv0.4.99\ngoogle/gemini-2.0-flash\nRun\nProfile\nSettings\nDebug\nGreenhouse Application\n16 DETECTED\n40%\nREADY\nGreenhouse Application\nGreenhouse Host\nAutofill Greenhouse\nPause\nField Verification & Review\n16 FIELDS\n0 VERIFIED\n0 INFERRED\n0 FAILED\n16 UNTOUCHED\nFirst Name\nEmpty\nUNTOUCHED\nLast Name\nEmpty\nUNTOUCHED\nPreferred First Name\nEmpty\nUNTOUCHED\nEmail\nEmpty\nUNTOUCHED\nCountry\nEmpty\nUNTOUCHED\nPhone\nEmpty\nUNTOUCHED\nAttach\nEmpty\nUNTOUCHED\nSchool\nEmpty\nUNTOUCHED\nDegree\nEmpty\nUNTOUCHED\nDiscipline\nEmpty\nUNTOUCHED\nAre you eligible to work in the U.S. or Canada?\nEmpty\nUNTOUCHED\nDo you require or will y",
+    "after": "Kareer\nv0.4.99\ngoogle/gemini-2.0-flash\nRun\nProfile\nSettings\nDebug\nGreenhouse Application\n16 DETECTED\n40%\nPAUSED\nSoftware Engineer\nCompany unknown (uncertain)\n0\nsteps completed\n5\nfields answered\nRequired answers or documents need manual input. Add saved answers or an API key before resuming.\nResume Autofill\nPause\nField Verification & Review\n16 FIELDS\n5 VERIFIED\n0 INFERRED\n1 FAILED\n10 UNTOUCHED\nAttach\nEmpty\nFAILED\nPreferred First Name\nEmpty\nUNTOUCHED\nSchool\nEmpty\nUNTOUCHED\nDegree\nEmpty\nUNTOUCHED\nDiscipline\nEmpty\nUNTOUCHED\nAre you eligible to work in the U.S. or Canada?\nEmpty\nUNTOUCHED\nDo you require or will you require a work authorization?\nEmpty\nUNTOUCHED\nWhat interests you about this role at Prompt.io, and what would you bring to the team?\nEmpty\nUNTOUCHED\nLinkedIn Profile\nEmpty\nUNTOUCHED\nPlease include the name of the prompt.io teammate that referred you.\nEmpty\nUNTOUCHED\nDoes our posted annual salary of $100,000-$150,000 meet your salary expectations?\nEmpty\nUNTOUCHED\nFirst Name\nTest\nVERIFIED\nLast Name\nApplicant\nVERIFIED\nEmail\ntest.applicant@example.com\nVERIFIED\nCountry\nCanada +1\nVERIFIED\nPhone\n(416) 555-0199\nVERIFIED\nSystem Status\nPROFILE AUTOFILL READY\nKnown profile values are rea",
+    "submissionRequests": 0,
+    "controls": [
+      {
+        "id": "first_name",
+        "name": "",
+        "type": "text",
+        "filled": true,
+        "label": "First Name",
+        "parent": "input-wrapper",
+        "section": "text-input-wrapper"
+      },
+      {
+        "id": "last_name",
+        "name": "",
+        "type": "text",
+        "filled": true,
+        "label": "Last Name",
+        "parent": "input-wrapper",
+        "section": "text-input-wrapper"
+      },
+      {
+        "id": "preferred_name",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": "Preferred First Name",
+        "parent": "input-wrapper",
+        "section": "text-input-wrapper"
+      },
+      {
+        "id": "email",
+        "name": "",
+        "type": "text",
+        "filled": true,
+        "label": "Email",
+        "parent": "input-wrapper",
+        "section": "text-input-wrapper"
+      },
+      {
+        "id": "country",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "select__input-container remix-css-19bb58m",
+        "section": "select__value-container select__value-container--has-value remix-css-hlgwow"
+      },
+      {
+        "id": "iti-0__search-input",
+        "name": "",
+        "type": "search",
+        "filled": false,
+        "label": "Search",
+        "parent": "iti__search-input-wrapper",
+        "section": "iti__dropdown-content iti__hide "
+      },
+      {
+        "id": "phone",
+        "name": "",
+        "type": "tel",
+        "filled": true,
+        "label": "Phone",
+        "parent": "iti iti--allow-dropdown iti--show-flags iti--inline-dropdown",
+        "section": "input-wrapper input-wrapper--active"
+      },
+      {
+        "id": "resume",
+        "name": "",
+        "type": "file",
+        "filled": false,
+        "label": null,
+        "parent": "",
+        "section": "secondary-button"
+      },
+      {
+        "id": "school--0",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "select__input-container remix-css-19bb58m",
+        "section": "select__value-container remix-css-hlgwow"
+      },
+      {
+        "id": "degree--0",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "select__input-container remix-css-19bb58m",
+        "section": "select__value-container remix-css-hlgwow"
+      },
+      {
+        "id": "discipline--0",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "select__input-container remix-css-19bb58m",
+        "section": "select__value-container remix-css-hlgwow"
+      },
+      {
+        "id": "question_7716815009",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "select__input-container remix-css-19bb58m",
+        "section": "select__value-container remix-css-hlgwow"
+      },
+      {
+        "id": "",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "select-shell remix-css-b62m3t-container",
+        "section": "select__container"
+      },
+      {
+        "id": "question_7716816009",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "select__input-container remix-css-19bb58m",
+        "section": "select__value-container remix-css-hlgwow"
+      },
+      {
+        "id": "",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "select-shell remix-css-b62m3t-container",
+        "section": "select__container"
+      },
+      {
+        "id": "question_7716817009",
+        "name": "",
+        "type": "textarea",
+        "filled": false,
+        "label": "What interests you about this role at Prompt.io, and what would you bring to the team?",
+        "parent": "input-wrapper input-wrapper__multi-line",
+        "section": "text-input-wrapper"
+      },
+      {
+        "id": "question_7716818009",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": "LinkedIn Profile",
+        "parent": "input-wrapper",
+        "section": "text-input-wrapper"
+      },
+      {
+        "id": "question_7723507009",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": "Please include the name of the prompt.io teammate that referred you.",
+        "parent": "input-wrapper",
+        "section": "text-input-wrapper"
+      },
+      {
+        "id": "question_7739489009",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "select__input-container remix-css-19bb58m",
+        "section": "select__value-container remix-css-hlgwow"
+      },
+      {
+        "id": "g-recaptcha-response-100000",
+        "name": "g-recaptcha-response",
+        "type": "textarea",
+        "filled": false,
+        "label": null,
+        "parent": "grecaptcha-badge",
+        "section": ""
+      }
+    ],
+    "capture": "fixtures/greenhouse-promptio-captured.html"
+  },
+  {
+    "name": "ashby-hosted",
+    "url": "https://jobs.ashbyhq.com/siftstack/be082df3-225c-4269-a159-bdb362b21c8e/application",
+    "applicationUrl": "https://jobs.ashbyhq.com/siftstack/be082df3-225c-4269-a159-bdb362b21c8e/application",
+    "before": "Kareer\nv0.4.99\ngoogle/gemini-2.0-flash\nRun\nProfile\nSettings\nDebug\nAshby Application\n14 DETECTED\n40%\nREADY\nAshby Application\nAshby Host\nAutofill Ashby\nPause\nField Verification & Review\n14 FIELDS\n0 VERIFIED\n0 INFERRED\n0 FAILED\n14 UNTOUCHED\nUnknown Field\nEmpty\nUNTOUCHED\nName\nEmpty\nUNTOUCHED\nEmail\nEmpty\nUNTOUCHED\nPhone Number\nEmpty\nUNTOUCHED\nResume\nEmpty\nUNTOUCHED\nLinkedin Profile\nEmpty\nUNTOUCHED\nCurrent Location\nEmpty\nUNTOUCHED\nAre you able to work from our Marina del Rey or San Francisco office Monday through Thursday (4 days/week)?\nEmpty\nUNTOUCHED\nWhat is your current U.S. work authorization st",
+    "after": "Kareer\nv0.4.99\ngoogle/gemini-2.0-flash\nRun\nProfile\nSettings\nDebug\nAshby Application\n14 DETECTED\n40%\nPAUSED\nApplication Software Engineer\nSift Stack, Inc. · San Francisco, California, United States\n0\nsteps completed\n4\nfields answered\nRequired answers or documents need manual input. Add saved answers or an API key before resuming.\nResume Autofill\nPause\nField Verification & Review\n14 FIELDS\n4 VERIFIED\n0 INFERRED\n2 FAILED\n8 UNTOUCHED\nUnknown Field\nEmpty\nFAILED\nResume\nEmpty\nFAILED\nLinkedin Profile\nEmpty\nUNTOUCHED\nAre you able to work from our Marina del Rey or San Francisco office Monday through Thursday (4 days/week)?\nEmpty\nUNTOUCHED\nWhat is your current U.S. work authorization status?\nEmpty\nUNTOUCHED\nHave you had external customer facing experience? If yes, in what role and what capacity? If not, would you feel comfortable being the main point of contact for customers?\nEmpty\nUNTOUCHED\nHow much experience do you have using Python (or other language) in production environments?\nEmpty\nUNTOUCHED\nDo you have experience working at a hardware company (aerospace, robotics, defense, autonomous vehicles, manufacturing, etc.)?\nEmpty\nUNTOUCHED\nHow many years of full-time working experience do you",
+    "submissionRequests": 0,
+    "controls": [
+      {
+        "id": "",
+        "name": "",
+        "type": "file",
+        "filled": false,
+        "label": null,
+        "parent": "_root_xd2v0_1 ashby-application-form-autofill-input-root",
+        "section": "_autofillPane_5yu8i_448 ashby-application-form-autofill-pane  _container_f7cvd_28"
+      },
+      {
+        "id": "_systemfield_name",
+        "name": "_systemfield_name",
+        "type": "text",
+        "filled": true,
+        "label": null,
+        "parent": "",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "_systemfield_email",
+        "name": "_systemfield_email",
+        "type": "email",
+        "filled": true,
+        "label": null,
+        "parent": "",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "1b08574b-f6f3-486f-9fad-bb35971d4472",
+        "name": "1b08574b-f6f3-486f-9fad-bb35971d4472",
+        "type": "tel",
+        "filled": true,
+        "label": null,
+        "parent": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry",
+        "section": "_section_5yu8i_86 ashby-application-form-section-container"
+      },
+      {
+        "id": "_systemfield_resume",
+        "name": "",
+        "type": "file",
+        "filled": false,
+        "label": null,
+        "parent": "_container_10xk4_70  ashby-application-form-input-file",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "fef44e26-39ae-40b6-8b20-285c7ffac7a2",
+        "name": "fef44e26-39ae-40b6-8b20-285c7ffac7a2",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "",
+        "name": "",
+        "type": "text",
+        "filled": true,
+        "label": null,
+        "parent": "_inputContainer_d7ago_28",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "",
+        "name": "a8f34239-36cd-48b9-bee1-8e2c878a7b84",
+        "type": "checkbox",
+        "filled": true,
+        "label": null,
+        "parent": "_container_1svni_28 _yesno_1e3gg_148  ashby-application-form-input-yesno",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "_inputContainer_d7ago_28",
+        "section": "_container_wz442_28 _fieldEntry_1e3gg_28"
+      },
+      {
+        "id": "c373dd97-b6d8-4c4c-94ea-d33e457e898d",
+        "name": "c373dd97-b6d8-4c4c-94ea-d33e457e898d",
+        "type": "textarea",
+        "filled": false,
+        "label": null,
+        "parent": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry",
+        "section": "_section_5yu8i_86 ashby-application-form-section-container"
+      },
+      {
+        "id": "13013cac-6707-4fbd-aa14-08941286a469_fde56de0-ac87-429f-bb9f-19cd0616a471-labeled-radio-0",
+        "name": "13013cac-6707-4fbd-aa14-08941286a469_fde56de0-ac87-429f-bb9f-19cd0616a471",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "13013cac-6707-4fbd-aa14-08941286a469_fde56de0-ac87-429f-bb9f-19cd0616a471-labeled-radio-1",
+        "name": "13013cac-6707-4fbd-aa14-08941286a469_fde56de0-ac87-429f-bb9f-19cd0616a471",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "13013cac-6707-4fbd-aa14-08941286a469_fde56de0-ac87-429f-bb9f-19cd0616a471-labeled-radio-2",
+        "name": "13013cac-6707-4fbd-aa14-08941286a469_fde56de0-ac87-429f-bb9f-19cd0616a471",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "13013cac-6707-4fbd-aa14-08941286a469_fde56de0-ac87-429f-bb9f-19cd0616a471-labeled-radio-3",
+        "name": "13013cac-6707-4fbd-aa14-08941286a469_fde56de0-ac87-429f-bb9f-19cd0616a471",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "",
+        "name": "32d4d7ff-b59c-4e5a-915c-3edfa1ac3aa8",
+        "type": "checkbox",
+        "filled": true,
+        "label": null,
+        "parent": "_container_1svni_28 _yesno_1e3gg_148  ashby-application-form-input-yesno",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "13013cac-6707-4fbd-aa14-08941286a469_76a078d4-2560-48d3-823a-1e18541ea004-labeled-radio-0",
+        "name": "13013cac-6707-4fbd-aa14-08941286a469_76a078d4-2560-48d3-823a-1e18541ea004",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "13013cac-6707-4fbd-aa14-08941286a469_76a078d4-2560-48d3-823a-1e18541ea004-labeled-radio-1",
+        "name": "13013cac-6707-4fbd-aa14-08941286a469_76a078d4-2560-48d3-823a-1e18541ea004",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "13013cac-6707-4fbd-aa14-08941286a469_76a078d4-2560-48d3-823a-1e18541ea004-labeled-radio-2",
+        "name": "13013cac-6707-4fbd-aa14-08941286a469_76a078d4-2560-48d3-823a-1e18541ea004",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "13013cac-6707-4fbd-aa14-08941286a469_76a078d4-2560-48d3-823a-1e18541ea004-labeled-radio-3",
+        "name": "13013cac-6707-4fbd-aa14-08941286a469_76a078d4-2560-48d3-823a-1e18541ea004",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "2013b5f6-09f4-4cbf-9ba2-260ff5fc2530",
+        "name": "2013b5f6-09f4-4cbf-9ba2-260ff5fc2530",
+        "type": "textarea",
+        "filled": false,
+        "label": null,
+        "parent": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry",
+        "section": "_section_5yu8i_86 ashby-application-form-section-container"
+      },
+      {
+        "id": "g-recaptcha-response-100000",
+        "name": "g-recaptcha-response",
+        "type": "textarea",
+        "filled": false,
+        "label": null,
+        "parent": "grecaptcha-badge",
+        "section": ""
+      }
+    ],
+    "capture": "fixtures/ashby-sift-captured.html"
+  },
+  {
+    "name": "ashby-embed",
+    "url": "https://jobs.ashbyhq.com/cursor/d0e5b41d-84ab-4887-bd3a-55589b11dd7b/application?embed=true",
+    "applicationUrl": "https://jobs.ashbyhq.com/cursor/d0e5b41d-84ab-4887-bd3a-55589b11dd7b/application?embed=true",
+    "before": "Kareer\nv0.4.99\ngoogle/gemini-2.0-flash\nRun\nProfile\nSettings\nDebug\nAshby Application\n29 DETECTED\n40%\nREADY\nAshby Application\nAshby Host\nAutofill Ashby\nPause\nField Verification & Review\n29 FIELDS\n0 VERIFIED\n0 INFERRED\n0 FAILED\n29 UNTOUCHED\nUnknown Field\nEmpty\nUNTOUCHED\nName\nEmpty\nUNTOUCHED\nEmail\nEmpty\nUNTOUCHED\nResume\nEmpty\nUNTOUCHED\nLinkedIn URL\nEmpty\nUNTOUCHED\nPreferred First Name\nEmpty\nUNTOUCHED\nCountry\nEmpty\nUNTOUCHED\nPhone\nEmpty\nUNTOUCHED\nLocation (City)\nEmpty\nUNTOUCHED\nSchool\nEmpty\nUNTOUCHED\nDegree\nEmpty\nUNTOUCHED\nField of Study\nEmpty\nUNTOUCHED\nStart Date Month\nEmpty\nUNTOUCHED\nStart Date Y",
+    "after": "Kareer\nv0.4.99\ngoogle/gemini-2.0-flash\nRun\nProfile\nSettings\nDebug\nAshby Application\n29 DETECTED\n40%\nPAUSED\nSoftware Engineer, New Grad 2027\nSpaceXAI · San Francisco, CA, United States\n0\nsteps completed\n5\nfields answered\nRequired answers or documents need manual input. Add saved answers or an API key before resuming.\nResume Autofill\nPause\nField Verification & Review\n29 FIELDS\n5 VERIFIED\n0 INFERRED\n3 FAILED\n21 UNTOUCHED\nUnknown Field\nEmpty\nFAILED\nResume\nEmpty\nFAILED\nHow did you hear about this job?\nEmpty\nFAILED\nLinkedIn URL\nEmpty\nUNTOUCHED\nPreferred First Name\nEmpty\nUNTOUCHED\nSchool\nEmpty\nUNTOUCHED\nDegree\nEmpty\nUNTOUCHED\nField of Study\nEmpty\nUNTOUCHED\nStart Date Month\nEmpty\nUNTOUCHED\nStart Date Year\nEmpty\nUNTOUCHED\nEnd Date Month\nEmpty\nUNTOUCHED\nEnd Date Year\nEmpty\nUNTOUCHED\nStill Student?\nfalse\nUNTOUCHED\nProjected graduation  date?\nEmpty\nUNTOUCHED\nPortfolio, Website, Github\nEmpty\nUNTOUCHED\nGPA (Undergraduate / Graduate / Doctorate)\nEmpty\nUNTOUCHED\nSAT / ACT / GRE Score\nEmpty\nUNTOUCHED\nLegally authorized to work in the United States?\nEmpty\nUNTOUCHED\nCitizenship Status\nEmpty\nUNTOUCHED\nIf Other, please explain:\nEmpty\nUNTOUCHED\nShare an exceptional technical projects or product features",
+    "submissionRequests": 0,
+    "controls": [
+      {
+        "id": "",
+        "name": "",
+        "type": "file",
+        "filled": false,
+        "label": null,
+        "parent": "_root_xd2v0_1 ashby-application-form-autofill-input-root",
+        "section": "_autofillPane_5yu8i_448 ashby-application-form-autofill-uploader  _container_f7cvd_28"
+      },
+      {
+        "id": "_systemfield_name",
+        "name": "_systemfield_name",
+        "type": "text",
+        "filled": true,
+        "label": null,
+        "parent": "",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "_systemfield_email",
+        "name": "_systemfield_email",
+        "type": "email",
+        "filled": true,
+        "label": null,
+        "parent": "",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "_systemfield_resume",
+        "name": "",
+        "type": "file",
+        "filled": false,
+        "label": null,
+        "parent": "_container_10xk4_70  ashby-application-form-input-file",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "0d41c5ab-8fc6-4995-a674-029c4da01a21",
+        "name": "0d41c5ab-8fc6-4995-a674-029c4da01a21",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "be667f0c-d51c-45ec-bd01-2ee6d0e4bc1c",
+        "name": "be667f0c-d51c-45ec-bd01-2ee6d0e4bc1c",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "9b1d8b07-78fc-4184-bfe3-1c1f88dd0126",
+        "name": "9b1d8b07-78fc-4184-bfe3-1c1f88dd0126",
+        "type": "text",
+        "filled": true,
+        "label": null,
+        "parent": "",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "884ef1cf-02fc-49d2-8f3b-82e1b12b8c55",
+        "name": "884ef1cf-02fc-49d2-8f3b-82e1b12b8c55",
+        "type": "tel",
+        "filled": true,
+        "label": null,
+        "parent": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry",
+        "section": "_section_5yu8i_86 ashby-application-form-section-container"
+      },
+      {
+        "id": "d5629bcf-c5d7-4dbe-8373-0ffb14ba7338",
+        "name": "d5629bcf-c5d7-4dbe-8373-0ffb14ba7338",
+        "type": "text",
+        "filled": true,
+        "label": null,
+        "parent": "",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "_inputContainer_d7ago_28",
+        "section": "_stack_b7xpf_1 _vertical_b7xpf_4"
+      },
+      {
+        "id": "_systemfield_education_history-degree",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "_stack_b7xpf_1 _vertical_b7xpf_4 _educationFlexField_1e3gg_171",
+        "section": "_stack_b7xpf_1 _horizontal_b7xpf_7 _gapSmall_b7xpf_16 _wrap_b7xpf_34"
+      },
+      {
+        "id": "_systemfield_education_history-major",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "_stack_b7xpf_1 _vertical_b7xpf_4 _educationFlexField_1e3gg_171",
+        "section": "_stack_b7xpf_1 _horizontal_b7xpf_7 _gapSmall_b7xpf_16 _wrap_b7xpf_34"
+      },
+      {
+        "id": "",
+        "name": "",
+        "type": "select-one",
+        "filled": false,
+        "label": null,
+        "parent": "_container_14jlb_78 _select_1mqj5_1 _placeholder_1mqj5_7 ashby-application-form-input-dropdown",
+        "section": "_stack_b7xpf_1 _horizontal_b7xpf_7 _gapXSmall_b7xpf_13"
+      },
+      {
+        "id": "",
+        "name": "",
+        "type": "select-one",
+        "filled": false,
+        "label": null,
+        "parent": "_container_14jlb_78 _select_1mqj5_1 _placeholder_1mqj5_7 ashby-application-form-input-dropdown",
+        "section": "_stack_b7xpf_1 _horizontal_b7xpf_7 _gapXSmall_b7xpf_13"
+      },
+      {
+        "id": "",
+        "name": "",
+        "type": "select-one",
+        "filled": false,
+        "label": null,
+        "parent": "_container_14jlb_78 _select_1mqj5_1 _placeholder_1mqj5_7 ashby-application-form-input-dropdown",
+        "section": "_stack_b7xpf_1 _horizontal_b7xpf_7 _gapXSmall_b7xpf_13"
+      },
+      {
+        "id": "",
+        "name": "",
+        "type": "select-one",
+        "filled": false,
+        "label": null,
+        "parent": "_container_14jlb_78 _select_1mqj5_1 _placeholder_1mqj5_7 ashby-application-form-input-dropdown",
+        "section": "_stack_b7xpf_1 _horizontal_b7xpf_7 _gapXSmall_b7xpf_13"
+      },
+      {
+        "id": "_systemfield_education_history-isCurrent",
+        "name": "",
+        "type": "checkbox",
+        "filled": true,
+        "label": null,
+        "parent": " _container_1danv_28",
+        "section": "_stack_b7xpf_1 _horizontal_b7xpf_7 _gapSmall_b7xpf_16 _alignCenter_b7xpf_25"
+      },
+      {
+        "id": "ae27a41c-7217-4794-b632-d55f78f39466_c3428454-bd95-4b73-8357-dd803d037a6e-labeled-radio-0",
+        "name": "ae27a41c-7217-4794-b632-d55f78f39466_c3428454-bd95-4b73-8357-dd803d037a6e",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "ae27a41c-7217-4794-b632-d55f78f39466_c3428454-bd95-4b73-8357-dd803d037a6e-labeled-radio-1",
+        "name": "ae27a41c-7217-4794-b632-d55f78f39466_c3428454-bd95-4b73-8357-dd803d037a6e",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "ae27a41c-7217-4794-b632-d55f78f39466_c3428454-bd95-4b73-8357-dd803d037a6e-labeled-radio-2",
+        "name": "ae27a41c-7217-4794-b632-d55f78f39466_c3428454-bd95-4b73-8357-dd803d037a6e",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "ae27a41c-7217-4794-b632-d55f78f39466_c3428454-bd95-4b73-8357-dd803d037a6e-labeled-radio-3",
+        "name": "ae27a41c-7217-4794-b632-d55f78f39466_c3428454-bd95-4b73-8357-dd803d037a6e",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "0b6b64f2-e8ae-4443-9cef-d9c80d645cad",
+        "name": "0b6b64f2-e8ae-4443-9cef-d9c80d645cad",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "ae27a41c-7217-4794-b632-d55f78f39466_96b08697-63ad-4b0f-b3ae-b1ca9259aae6-labeled-radio-0",
+        "name": "ae27a41c-7217-4794-b632-d55f78f39466_96b08697-63ad-4b0f-b3ae-b1ca9259aae6",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "ae27a41c-7217-4794-b632-d55f78f39466_96b08697-63ad-4b0f-b3ae-b1ca9259aae6-labeled-radio-1",
+        "name": "ae27a41c-7217-4794-b632-d55f78f39466_96b08697-63ad-4b0f-b3ae-b1ca9259aae6",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "ae27a41c-7217-4794-b632-d55f78f39466_96b08697-63ad-4b0f-b3ae-b1ca9259aae6-labeled-radio-2",
+        "name": "ae27a41c-7217-4794-b632-d55f78f39466_96b08697-63ad-4b0f-b3ae-b1ca9259aae6",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "ae27a41c-7217-4794-b632-d55f78f39466_96b08697-63ad-4b0f-b3ae-b1ca9259aae6-labeled-radio-3",
+        "name": "ae27a41c-7217-4794-b632-d55f78f39466_96b08697-63ad-4b0f-b3ae-b1ca9259aae6",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "ae27a41c-7217-4794-b632-d55f78f39466_96b08697-63ad-4b0f-b3ae-b1ca9259aae6-labeled-radio-4",
+        "name": "ae27a41c-7217-4794-b632-d55f78f39466_96b08697-63ad-4b0f-b3ae-b1ca9259aae6",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "ae27a41c-7217-4794-b632-d55f78f39466_96b08697-63ad-4b0f-b3ae-b1ca9259aae6-labeled-radio-5",
+        "name": "ae27a41c-7217-4794-b632-d55f78f39466_96b08697-63ad-4b0f-b3ae-b1ca9259aae6",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "ae27a41c-7217-4794-b632-d55f78f39466_96b08697-63ad-4b0f-b3ae-b1ca9259aae6-labeled-radio-6",
+        "name": "ae27a41c-7217-4794-b632-d55f78f39466_96b08697-63ad-4b0f-b3ae-b1ca9259aae6",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "567796bd-2efb-4652-9191-06b1249bdf09",
+        "name": "567796bd-2efb-4652-9191-06b1249bdf09",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "43976371-da36-437b-a614-619c60519280",
+        "name": "43976371-da36-437b-a614-619c60519280",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "ae27a41c-7217-4794-b632-d55f78f39466_c4f5ebe5-5350-472c-9851-c86ca3226689-labeled-radio-0",
+        "name": "ae27a41c-7217-4794-b632-d55f78f39466_c4f5ebe5-5350-472c-9851-c86ca3226689",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "ae27a41c-7217-4794-b632-d55f78f39466_c4f5ebe5-5350-472c-9851-c86ca3226689-labeled-radio-1",
+        "name": "ae27a41c-7217-4794-b632-d55f78f39466_c4f5ebe5-5350-472c-9851-c86ca3226689",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "ae27a41c-7217-4794-b632-d55f78f39466_acbf6875-09c8-4a42-9529-8433223cfad4-labeled-radio-0",
+        "name": "ae27a41c-7217-4794-b632-d55f78f39466_acbf6875-09c8-4a42-9529-8433223cfad4",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "ae27a41c-7217-4794-b632-d55f78f39466_acbf6875-09c8-4a42-9529-8433223cfad4-labeled-radio-1",
+        "name": "ae27a41c-7217-4794-b632-d55f78f39466_acbf6875-09c8-4a42-9529-8433223cfad4",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "ae27a41c-7217-4794-b632-d55f78f39466_acbf6875-09c8-4a42-9529-8433223cfad4-labeled-radio-2",
+        "name": "ae27a41c-7217-4794-b632-d55f78f39466_acbf6875-09c8-4a42-9529-8433223cfad4",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "ae27a41c-7217-4794-b632-d55f78f39466_acbf6875-09c8-4a42-9529-8433223cfad4-labeled-radio-3",
+        "name": "ae27a41c-7217-4794-b632-d55f78f39466_acbf6875-09c8-4a42-9529-8433223cfad4",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "ae27a41c-7217-4794-b632-d55f78f39466_acbf6875-09c8-4a42-9529-8433223cfad4-labeled-radio-4",
+        "name": "ae27a41c-7217-4794-b632-d55f78f39466_acbf6875-09c8-4a42-9529-8433223cfad4",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "c152f5bb-57b3-49d0-ba11-b8081d6d505a",
+        "name": "c152f5bb-57b3-49d0-ba11-b8081d6d505a",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "2c58a1ad-f026-455c-bc72-ae0469c575dd",
+        "name": "2c58a1ad-f026-455c-bc72-ae0469c575dd",
+        "type": "textarea",
+        "filled": false,
+        "label": null,
+        "parent": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry",
+        "section": "_section_5yu8i_86 ashby-application-form-section-container"
+      },
+      {
+        "id": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_gender-labeled-radio-0",
+        "name": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_gender",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_gender-labeled-radio-1",
+        "name": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_gender",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_gender-labeled-radio-2",
+        "name": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_gender",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_race-labeled-radio-0",
+        "name": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_race",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_race-labeled-radio-1",
+        "name": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_race",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_race-labeled-radio-2",
+        "name": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_race",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_race-labeled-radio-3",
+        "name": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_race",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_race-labeled-radio-4",
+        "name": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_race",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_race-labeled-radio-5",
+        "name": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_race",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_race-labeled-radio-6",
+        "name": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_race",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_race-labeled-radio-7",
+        "name": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_race",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_veteran_status-labeled-radio-0",
+        "name": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_veteran_status",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_veteran_status-labeled-radio-1",
+        "name": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_veteran_status",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_veteran_status-labeled-radio-2",
+        "name": "c796ee41-0d94-4cbd-a3ae-2bdd5436fc20__systemfield_eeoc_veteran_status",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "g-recaptcha-response-100000",
+        "name": "g-recaptcha-response",
+        "type": "textarea",
+        "filled": false,
+        "label": null,
+        "parent": "grecaptcha-badge",
+        "section": ""
+      }
+    ],
+    "capture": "fixtures/ashby-cursor-embed-captured.html"
+  },
+  {
+    "name": "greenhouse-iframe",
+    "url": "http://kareer-live.test/greenhouse-iframe",
+    "applicationUrl": "https://job-boards.greenhouse.io/promptioinc/jobs/4420814009",
+    "before": "Kareer\nv0.4.99\ngoogle/gemini-2.0-flash\nRun\nProfile\nSettings\nDebug\nJob Application\n16 DETECTED\n40%\nREADY\nJob Application\nkareer-live.test\n0 here, 16 in 1 embedded frame.\nAutofill Application\nPause\nField Verification & Review\n16 FIELDS\n0 VERIFIED\n0 INFERRED\n0 FAILED\n16 UNTOUCHED\nFirst Name\nEmpty\nUNTOUCHED\nLast Name\nEmpty\nUNTOUCHED\nPreferred First Name\nEmpty\nUNTOUCHED\nEmail\nEmpty\nUNTOUCHED\nCountry\nEmpty\nUNTOUCHED\nPhone\nEmpty\nUNTOUCHED\nAttach\nEmpty\nUNTOUCHED\nSchool\nEmpty\nUNTOUCHED\nDegree\nEmpty\nUNTOUCHED\nDiscipline\nEmpty\nUNTOUCHED\nAre you eligible to work in the U.S. or Canada?\nEmpty\nUNTOUCHED\nDo y",
+    "after": "Kareer\nv0.4.99\ngoogle/gemini-2.0-flash\nRun\nProfile\nSettings\nDebug\nJob Application\n16 DETECTED\n40%\nPAUSED\nLive application acceptance host\nCompany unknown (uncertain)\n0\nsteps completed\n0\nfields answered\n0 here, 16 in 1 embedded frame.\nEmbedded application needs review: Required value missing or rejected. Required value missing or rejected. Required value missing or rejected.\nResume Autofill\nPause\nField Verification & Review\n16 FIELDS\n5 VERIFIED\n0 INFERRED\n3 FAILED\n8 UNTOUCHED\nAttach\nEmpty\nFAILED\nAre you eligible to work in the U.S. or Canada?\nEmpty\nFAILED\nDo you require or will you require a work authorization?\nEmpty\nFAILED\nPreferred First Name\nEmpty\nUNTOUCHED\nSchool\nEmpty\nUNTOUCHED\nDegree\nEmpty\nUNTOUCHED\nDiscipline\nEmpty\nUNTOUCHED\nWhat interests you about this role at Prompt.io, and what would you bring to the team?\nEmpty\nUNTOUCHED\nLinkedIn Profile\nEmpty\nUNTOUCHED\nPlease include the name of the prompt.io teammate that referred you.\nEmpty\nUNTOUCHED\nDoes our posted annual salary of $100,000-$150,000 meet your salary expectations?\nEmpty\nUNTOUCHED\nFirst Name\nTest\nVERIFIED\nLast Name\nApplicant\nVERIFIED\nEmail\ntest.applicant@example.com\nVERIFIED\nCountry\nCanada +1\nVERIFIED\nPhone\n(416) 555-0",
+    "submissionRequests": 0,
+    "controls": [
+      {
+        "id": "first_name",
+        "name": "",
+        "type": "text",
+        "filled": true,
+        "label": "First Name",
+        "parent": "input-wrapper",
+        "section": "text-input-wrapper"
+      },
+      {
+        "id": "last_name",
+        "name": "",
+        "type": "text",
+        "filled": true,
+        "label": "Last Name",
+        "parent": "input-wrapper",
+        "section": "text-input-wrapper"
+      },
+      {
+        "id": "preferred_name",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": "Preferred First Name",
+        "parent": "input-wrapper",
+        "section": "text-input-wrapper"
+      },
+      {
+        "id": "email",
+        "name": "",
+        "type": "text",
+        "filled": true,
+        "label": "Email",
+        "parent": "input-wrapper",
+        "section": "text-input-wrapper"
+      },
+      {
+        "id": "country",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "select__input-container remix-css-19bb58m",
+        "section": "select__value-container select__value-container--has-value remix-css-hlgwow"
+      },
+      {
+        "id": "iti-0__search-input",
+        "name": "",
+        "type": "search",
+        "filled": false,
+        "label": "Search",
+        "parent": "iti__search-input-wrapper",
+        "section": "iti__dropdown-content iti__hide "
+      },
+      {
+        "id": "phone",
+        "name": "",
+        "type": "tel",
+        "filled": true,
+        "label": "Phone",
+        "parent": "iti iti--allow-dropdown iti--show-flags iti--inline-dropdown",
+        "section": "input-wrapper"
+      },
+      {
+        "id": "resume",
+        "name": "",
+        "type": "file",
+        "filled": false,
+        "label": null,
+        "parent": "",
+        "section": "secondary-button"
+      },
+      {
+        "id": "school--0",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "select__input-container remix-css-19bb58m",
+        "section": "select__value-container remix-css-hlgwow"
+      },
+      {
+        "id": "degree--0",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "select__input-container remix-css-19bb58m",
+        "section": "select__value-container remix-css-hlgwow"
+      },
+      {
+        "id": "discipline--0",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "select__input-container remix-css-19bb58m",
+        "section": "select__value-container remix-css-hlgwow"
+      },
+      {
+        "id": "question_7716815009",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "select__input-container remix-css-19bb58m",
+        "section": "select__value-container remix-css-hlgwow"
+      },
+      {
+        "id": "",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "select-shell remix-css-b62m3t-container",
+        "section": "select__container"
+      },
+      {
+        "id": "question_7716816009",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "select__input-container remix-css-19bb58m",
+        "section": "select__value-container remix-css-hlgwow"
+      },
+      {
+        "id": "",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "select-shell remix-css-b62m3t-container",
+        "section": "select__container"
+      },
+      {
+        "id": "question_7716817009",
+        "name": "",
+        "type": "textarea",
+        "filled": false,
+        "label": "What interests you about this role at Prompt.io, and what would you bring to the team?",
+        "parent": "input-wrapper input-wrapper__multi-line",
+        "section": "text-input-wrapper"
+      },
+      {
+        "id": "question_7716818009",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": "LinkedIn Profile",
+        "parent": "input-wrapper",
+        "section": "text-input-wrapper"
+      },
+      {
+        "id": "question_7723507009",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": "Please include the name of the prompt.io teammate that referred you.",
+        "parent": "input-wrapper",
+        "section": "text-input-wrapper"
+      },
+      {
+        "id": "question_7739489009",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "select__input-container remix-css-19bb58m",
+        "section": "select__value-container remix-css-hlgwow"
+      },
+      {
+        "id": "g-recaptcha-response-100000",
+        "name": "g-recaptcha-response",
+        "type": "textarea",
+        "filled": false,
+        "label": null,
+        "parent": "grecaptcha-badge",
+        "section": ""
+      }
+    ]
+  },
+  {
+    "name": "ashby-iframe",
+    "url": "http://kareer-live.test/ashby-iframe",
+    "applicationUrl": "https://jobs.ashbyhq.com/siftstack/be082df3-225c-4269-a159-bdb362b21c8e/application?embed=true",
+    "before": "Kareer\nv0.4.99\ngoogle/gemini-2.0-flash\nRun\nProfile\nSettings\nDebug\nJob Application\n14 DETECTED\n40%\nREADY\nJob Application\nkareer-live.test\n0 here, 14 in 1 embedded frame.\nAutofill Application\nPause\nField Verification & Review\n14 FIELDS\n0 VERIFIED\n0 INFERRED\n0 FAILED\n14 UNTOUCHED\nUnknown Field\nEmpty\nUNTOUCHED\nName\nEmpty\nUNTOUCHED\nEmail\nEmpty\nUNTOUCHED\nPhone Number\nEmpty\nUNTOUCHED\nResume\nEmpty\nUNTOUCHED\nLinkedin Profile\nEmpty\nUNTOUCHED\nCurrent Location\nEmpty\nUNTOUCHED\nAre you able to work from our Marina del Rey or San Francisco office Monday through Thursday (4 days/week)?\nEmpty\nUNTOUCHED\nWhat is",
+    "after": "Kareer\nv0.4.99\ngoogle/gemini-2.0-flash\nRun\nProfile\nSettings\nDebug\nJob Application\n14 DETECTED\n40%\nPAUSED\nLive application acceptance host\nCompany unknown (uncertain)\n0\nsteps completed\n0\nfields answered\n0 here, 14 in 1 embedded frame.\nEmbedded application needs review: Please select a file. Please fill out this field. Required value missing or rejected. Required value missing or rejected. Please fill out this field. Required value missing or rejected.\nResume Autofill\nPause\nField Verification & Review\n14 FIELDS\n4 VERIFIED\n0 INFERRED\n4 FAILED\n6 UNTOUCHED\nUnknown Field\nEmpty\nFAILED\nResume\nEmpty\nFAILED\nLinkedin Profile\nEmpty\nFAILED\nWhat is your current U.S. work authorization status?\nEmpty\nFAILED\nAre you able to work from our Marina del Rey or San Francisco office Monday through Thursday (4 days/week)?\nEmpty\nUNTOUCHED\nHave you had external customer facing experience? If yes, in what role and what capacity? If not, would you feel comfortable being the main point of contact for customers?\nEmpty\nUNTOUCHED\nHow much experience do you have using Python (or other language) in production environments?\nEmpty\nUNTOUCHED\nDo you have experience working at a hardware company (aerospace, robotics, def",
+    "submissionRequests": 0,
+    "controls": [
+      {
+        "id": "",
+        "name": "",
+        "type": "file",
+        "filled": false,
+        "label": null,
+        "parent": "_root_xd2v0_1 ashby-application-form-autofill-input-root",
+        "section": "_autofillPane_5yu8i_448 ashby-application-form-autofill-pane  _container_f7cvd_28"
+      },
+      {
+        "id": "_systemfield_name",
+        "name": "_systemfield_name",
+        "type": "text",
+        "filled": true,
+        "label": null,
+        "parent": "",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "_systemfield_email",
+        "name": "_systemfield_email",
+        "type": "email",
+        "filled": true,
+        "label": null,
+        "parent": "",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "1b08574b-f6f3-486f-9fad-bb35971d4472",
+        "name": "1b08574b-f6f3-486f-9fad-bb35971d4472",
+        "type": "tel",
+        "filled": true,
+        "label": null,
+        "parent": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry",
+        "section": "_section_5yu8i_86 ashby-application-form-section-container"
+      },
+      {
+        "id": "_systemfield_resume",
+        "name": "",
+        "type": "file",
+        "filled": false,
+        "label": null,
+        "parent": "_container_10xk4_70  ashby-application-form-input-file",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "fef44e26-39ae-40b6-8b20-285c7ffac7a2",
+        "name": "fef44e26-39ae-40b6-8b20-285c7ffac7a2",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "",
+        "name": "",
+        "type": "text",
+        "filled": true,
+        "label": null,
+        "parent": "_inputContainer_d7ago_28",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "",
+        "name": "a8f34239-36cd-48b9-bee1-8e2c878a7b84",
+        "type": "checkbox",
+        "filled": true,
+        "label": null,
+        "parent": "_container_1svni_28 _yesno_1e3gg_148  ashby-application-form-input-yesno",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "",
+        "name": "",
+        "type": "text",
+        "filled": false,
+        "label": null,
+        "parent": "_inputContainer_d7ago_28",
+        "section": "_container_wz442_28 _fieldEntry_1e3gg_28"
+      },
+      {
+        "id": "c373dd97-b6d8-4c4c-94ea-d33e457e898d",
+        "name": "c373dd97-b6d8-4c4c-94ea-d33e457e898d",
+        "type": "textarea",
+        "filled": false,
+        "label": null,
+        "parent": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry",
+        "section": "_section_5yu8i_86 ashby-application-form-section-container"
+      },
+      {
+        "id": "73d83b75-0f0d-40ae-a92d-b17655f38fdf_fde56de0-ac87-429f-bb9f-19cd0616a471-labeled-radio-0",
+        "name": "73d83b75-0f0d-40ae-a92d-b17655f38fdf_fde56de0-ac87-429f-bb9f-19cd0616a471",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "73d83b75-0f0d-40ae-a92d-b17655f38fdf_fde56de0-ac87-429f-bb9f-19cd0616a471-labeled-radio-1",
+        "name": "73d83b75-0f0d-40ae-a92d-b17655f38fdf_fde56de0-ac87-429f-bb9f-19cd0616a471",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "73d83b75-0f0d-40ae-a92d-b17655f38fdf_fde56de0-ac87-429f-bb9f-19cd0616a471-labeled-radio-2",
+        "name": "73d83b75-0f0d-40ae-a92d-b17655f38fdf_fde56de0-ac87-429f-bb9f-19cd0616a471",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "73d83b75-0f0d-40ae-a92d-b17655f38fdf_fde56de0-ac87-429f-bb9f-19cd0616a471-labeled-radio-3",
+        "name": "73d83b75-0f0d-40ae-a92d-b17655f38fdf_fde56de0-ac87-429f-bb9f-19cd0616a471",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "",
+        "name": "32d4d7ff-b59c-4e5a-915c-3edfa1ac3aa8",
+        "type": "checkbox",
+        "filled": true,
+        "label": null,
+        "parent": "_container_1svni_28 _yesno_1e3gg_148  ashby-application-form-input-yesno",
+        "section": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry"
+      },
+      {
+        "id": "73d83b75-0f0d-40ae-a92d-b17655f38fdf_76a078d4-2560-48d3-823a-1e18541ea004-labeled-radio-0",
+        "name": "73d83b75-0f0d-40ae-a92d-b17655f38fdf_76a078d4-2560-48d3-823a-1e18541ea004",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "73d83b75-0f0d-40ae-a92d-b17655f38fdf_76a078d4-2560-48d3-823a-1e18541ea004-labeled-radio-1",
+        "name": "73d83b75-0f0d-40ae-a92d-b17655f38fdf_76a078d4-2560-48d3-823a-1e18541ea004",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "73d83b75-0f0d-40ae-a92d-b17655f38fdf_76a078d4-2560-48d3-823a-1e18541ea004-labeled-radio-2",
+        "name": "73d83b75-0f0d-40ae-a92d-b17655f38fdf_76a078d4-2560-48d3-823a-1e18541ea004",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "73d83b75-0f0d-40ae-a92d-b17655f38fdf_76a078d4-2560-48d3-823a-1e18541ea004-labeled-radio-3",
+        "name": "73d83b75-0f0d-40ae-a92d-b17655f38fdf_76a078d4-2560-48d3-823a-1e18541ea004",
+        "type": "radio",
+        "filled": true,
+        "label": null,
+        "parent": "_container_132c8_28",
+        "section": "_option_1258i_34 false ashby-application-form-input-radio-group-option"
+      },
+      {
+        "id": "2013b5f6-09f4-4cbf-9ba2-260ff5fc2530",
+        "name": "2013b5f6-09f4-4cbf-9ba2-260ff5fc2530",
+        "type": "textarea",
+        "filled": false,
+        "label": null,
+        "parent": "_fieldEntry_1e3gg_28 ashby-application-form-field-entry",
+        "section": "_section_5yu8i_86 ashby-application-form-section-container"
+      },
+      {
+        "id": "g-recaptcha-response-100000",
+        "name": "g-recaptcha-response",
+        "type": "textarea",
+        "filled": false,
+        "label": null,
+        "parent": "grecaptcha-badge",
+        "section": ""
+      }
+    ]
+  }
+]

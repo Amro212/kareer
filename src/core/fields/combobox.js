@@ -1,6 +1,6 @@
 import { extractLabel } from './labels.js';
 import { isResidenceLabel, locationMatches } from '../location.js';
-import { detectAdapter } from '../adapters/index.js';
+import { detectAdapter, adapterById } from '../adapters/index.js';
 
 // Shared ownership and committed-state rules for scanning, harvesting and filling.
 export const COMBO = '[role="combobox"], button[aria-haspopup="listbox"], input[aria-autocomplete="list"], input[aria-autocomplete="both"]';
@@ -131,9 +131,9 @@ export function findExactOption(options, target, field) {
     const exactValue = matches.filter(option => optionKey(option.value) === key);
     if (exactValue.length === 1) return exactValue[0];
   }
-  const adapter = detectAdapter();
+  const adapter = field?.ats?.adapter ? adapterById(field.ats.adapter) : detectAdapter();
   if (adapter.optionMatches) {
-    const meta = field?.ats ? field : adapter.fieldMetadata?.(field?.element || field) || {};
+    const meta = field?.ats ? field : field ? adapter.fieldMetadata?.(field.element || field) || {} : {};
     const adapterMatches = options.filter(option => adapter.optionMatches(meta, option.label, target) || adapter.optionMatches(meta, option.value, target));
     if (adapterMatches.length === 1) return adapterMatches[0];
     if (adapterMatches.length > 1) {
@@ -215,13 +215,15 @@ export function setComboboxSearch(input, value) {
 export function closeCombobox(element) {
   const { input } = resolveComboboxParts(element);
   const target = input || element;
-  target.blur?.();
-  // Workday listboxes treat Escape as "cancel the pick". Never send it.
-  if (detectAdapter().quirks.comboboxEscapeRollback) {
-    try {
-      element.ownerDocument.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
-    } catch {}
+  const adapter = detectAdapter();
+  // These ATS menus need Escape even if the control was never focused. Keep
+  // it away from generic page navigation and Workday's selection rollback.
+  if (['greenhouse','lever','ashby'].includes(adapter.id)) {
+    target.dispatchEvent(new target.ownerDocument.defaultView.KeyboardEvent('keydown', {key:'Escape',code:'Escape',bubbles:true,composed:true,cancelable:true}));
   }
+  target.blur?.();
+  adapter.afterComboboxClose?.(element);
+  element.ownerDocument.body.dispatchEvent(new element.ownerDocument.defaultView.MouseEvent('mousedown', {bubbles:true,cancelable:true,button:0}));
 }
 
 export function clickFieldControl(element) {
@@ -245,6 +247,7 @@ export async function openCombobox(element) {
   target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
   target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 0 }));
   clickFieldControl(target);
+  detectAdapter().afterComboboxOpen?.(element);
   await delay(80);
   if (menusClosed(element) && toggleBtn) clickFieldControl(toggleBtn);
 }

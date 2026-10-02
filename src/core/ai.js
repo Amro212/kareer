@@ -4,8 +4,7 @@ import { logger } from './debug.js';
 import { platform } from './platform.js';
 import { findExactOption } from './fields/combobox.js';
 import { profileForAI, fixedProfileAnswer, formatStructuredBackground } from './profile.js';
-import { detectAdapter } from './adapters/index.js';
-import { workdayAnswer } from './adapters/workday-fields.js';
+import { adapterById, detectAdapter } from './adapters/index.js';
 import { OPTIONAL_DISCLOSURE_KEYS } from './adapters/canonical.js';
 
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
@@ -158,16 +157,16 @@ export function buildStructuredSystemPrompt({ allowSearch = true } = {}) {
 
 CRITICAL OPERATING RULES:
 1. Ground all candidate claims strictly in the provided applicant profile, resume highlights, and applicant notes.
-2. NEVER fabricate or invent unlisted jobs, employers, dates, metrics, degrees, tools, or certifications (Rule 11).
+2. Use saved facts first, then infer the best-supported answer from all available candidate and job context. Never invent facts out of thin air. Mark grounded contextual answers with provenance="inferred"; mark uncertain context-based estimates with provenance="guessed" and inferred=true.
 3. For structured questions (radio, select, checkbox, short text) where candidate preferences or standard defaults apply:
    - Explicit structured applicantProfile answers have priority over conflicting resume context, applicant notes, previous answers, and generic defaults. Preserve explicit No answers.
-   - Work authorization and sponsorshipNow/sponsorshipFuture: candidate may have work eligibility in multiple countries listed in applicantProfile.workEligibilities (with fallback to applicantProfile.workCountry). Match the question's target country, or the confirmed job work country when implicit, to the corresponding entry in workEligibilities. Do not transfer eligibility across countries or infer it from residence, nationality, or a phone number. If applicantProfile has no eligibility entry matching the target country, return an empty string. When structured eligibility is unset for that country, only use unambiguous, country-specific facts from applicant context; never guess Yes or No.
-   - For sponsorship "now OR in the future", answer Yes if either scoped answer is Yes for that country; answer No only when BOTH scoped answers are No. Otherwise leave empty. Distinguish current from future sponsorship.
+   - Work authorization and sponsorshipNow/sponsorshipFuture: match the question or job country to applicantProfile.workEligibilities (or workCountry). An implicit country may use the single configured eligibility record. Do not present another country's authorization as a saved fact. Use resume context and applicant notes for remaining eligibility questions, marking contextual answers inferred and uncertain context-based estimates guessed. Distinguish authorization from requiring sponsorship and account for negation such as "without sponsorship".
+   - For sponsorship "now OR in the future", answer Yes if either scoped answer is Yes; answer No when BOTH scoped answers are No. Use contextual evidence for unset values and distinguish current from future sponsorship.
    - Years of experience dropdowns: infer the candidate's level (e.g. Senior, Mid, 5+ years) from their resume context and select the best matching option. Set "inferred": true.
-   - Demographic surveys / EEOD / gender / pronouns / race or ethnicity / disability / veteran status: use ONLY the corresponding explicit structured profile answer. Not set means return an empty string, never a guessed identity or guessed No. Prefer not to answer means choose an actual decline option; if absent leave empty. Match meaning precisely: general veteran status does not establish protected veteran status, race does not establish Hispanic ethnicity, and gender does not establish sex assigned at birth. Use genderDescription only when gender is Self-describe. Do not mention demographics in unrelated narrative answers.
+   - Demographic surveys / EEOD / gender / pronouns / race or ethnicity / disability / veteran status: prioritize the corresponding explicit profile answer, then relevant applicant notes and context. Preserve an explicit preference not to answer using an offered decline option. Mark contextual answers inferred and uncertain context-based estimates guessed. Match the specific question: protected veteran status, Hispanic ethnicity, and sex assigned at birth are distinct facts. Use genderDescription for Self-describe. Do not mention demographics in unrelated narrative answers.
    - "How did you hear about us?" and equivalent job discovery/source questions: always LinkedIn. For option fields choose only an offered LinkedIn option; if unavailable return empty (combobox may search LinkedIn). Do not invent a referrer or replace a LinkedIn profile URL with this source answer.
-   - Compensation must preserve expectedSalary, salaryCurrency and salaryPeriod together. Do not silently convert currency or annual/hourly pay. Total yearsExperience is not years with a particular tool. A preferred work arrangement does not imply willingness to accept all other arrangements. Past start dates require review, not a made-up new date.
-   - Consent / Privacy / Background check agreement checkboxes: set value to true.
+   - Compensation must preserve expectedSalary, salaryCurrency and salaryPeriod together. Do not silently convert currency or annual/hourly pay. Total yearsExperience is not years with a particular tool. Use relevant applicant context to resolve work arrangements and availability, including outdated start dates.
+   - Consent / Privacy / Background check / Application acknowledgment / Accuracy certification / Electronic signature agreement checkboxes: set value to true; for radio or select agreements choose the offered affirmative acknowledgment. These questions do not pause the form.
 4. For "select", "combobox", "radio", or "checkbox" fields:
    - Your "value" MUST be chosen strictly from the provided "options" list (matching either the option value or option label). Never leave a select on a placeholder like "-- Please Select --" or "Select...".
    - Options belong ONLY to their own fieldId. Never reuse a choice from another field.
@@ -181,6 +180,7 @@ CRITICAL OPERATING RULES:
     {
       "fieldId": "string (must match fieldId from input)",
       "value": "string or boolean",
+      "provenance": "inferred or guessed",
       "inferred": boolean${allowSearch ? ',\n      "searchQuery": "optional; only for an empty value requiring option discovery"' : ''}
     }
   ]
@@ -423,10 +423,9 @@ export async function testConnection() {
 export async function generateAutofillAnswers(normalizedFields, { allowSearch = true, jobContext = null, repairErrors = [] } = {}) {
   const settings = getSettings();
   const profile = getProfile();
-  const adapter = detectAdapter();
   const resolvedJob = jobContext || gmGet(STORAGE_KEYS.JOB) || null;
-  if (typeof adapter.resolveAnswer === 'function' || normalizedFields.some(field => field.ats?.adapter === 'workday' || field.ats?.adapter === 'lever')) {
-    return generateAdapterAnswers(normalizedFields, { adapter, settings, profile, allowSearch, jobContext: resolvedJob, repairErrors });
+  if (normalizedFields.some(field => adapterById(field.ats?.adapter).resolveAnswer)) {
+    return generatePageAnswers(normalizedFields, { settings, profile, allowSearch, jobContext: resolvedJob, repairErrors });
   }
   const defaultModel = settings.model || 'google/gemini-2.0-flash';
   const structuredModel = settings.structuredModel || defaultModel;
@@ -450,7 +449,7 @@ export async function generateAutofillAnswers(normalizedFields, { allowSearch = 
       url: window.location.href,
       host: window.location.hostname,
     },
-    jobContext: resolvedJob,
+    jobContext: resolvedJob || jobContext,
     repairErrors,
   };
 
@@ -597,35 +596,34 @@ export async function generateAutofillAnswers(normalizedFields, { allowSearch = 
 
 // Adapters with resolveAnswer send only unresolved questions in one page request.
 // Known record values and owned option labels never need a model or a voice-edit pass.
-async function generateAdapterAnswers(fields, { adapter, settings, profile, allowSearch, jobContext, repairErrors }) {
+async function generatePageAnswers(fields, { settings, profile, allowSearch, jobContext, repairErrors }) {
   const answers = [], unresolved = [];
-  const currentAdapter = adapter || detectAdapter();
   for (const field of fields) {
-    const resolver = currentAdapter?.resolveAnswer || (field.ats?.adapter === 'workday' ? workdayAnswer : null);
-    const deterministic = (resolver ? resolver(field, profile) : null) || fixedProfileAnswer(field, profile, { allowSearch });
+    const deterministic = adapterById(field.ats?.adapter).resolveAnswer?.(field, profile, { allowSearch, jobContext }) || fixedProfileAnswer(field, profile, { allowSearch });
     const saved = profile.savedAnswers?.[field.label];
-    const deterministicHasValue = deterministic && (Array.isArray(deterministic.value)
-      ? deterministic.value.length > 0
-      : deterministic.value !== '' && deterministic.value !== null && deterministic.value !== undefined);
-    if (deterministic && (deterministicHasValue || deterministic.searchQuery)) {
+    const resolved = deterministic && deterministic.value !== '' && deterministic.value != null && (!Array.isArray(deterministic.value) || deterministic.value.length > 0);
+    if (resolved || deterministic?.searchQuery) {
       if (!deterministic.source) deterministic.source = 'profile';
       answers.push(deterministic);
-    } else if (saved !== undefined && (!['combobox', 'select', 'radio'].includes(field.type) || findExactOption(field.options || [], saved))) {
+    } else if (saved !== undefined && (!['combobox', 'select', 'radio'].includes(field.type) || findExactOption(field.options || [], saved, field))) {
       answers.push({ fieldId: field.fieldId, value: saved, inferred: false, provenance: 'saved', source: 'saved' });
-    } else if (deterministic && OPTIONAL_DISCLOSURE_KEYS.has(field.ats?.canonicalKey)) {
-      if (!deterministic.source) deterministic.source = 'profile';
-      answers.push(deterministic);
-    } else unresolved.push(field);
+    } else {
+      unresolved.push(field);
+      // Keep an empty result when no API key is configured; with AI enabled,
+      // replace it with the contextual answer rather than treating it as settled.
+      if (deterministic) answers.push(deterministic);
+    }
   }
   const model = settings.model || 'google/gemini-2.0-flash';
   if (!unresolved.length) return { answers, latencyMs: 0, model };
   if (!hasApiKey()) return { answers, latencyMs: 0, model };
-  const tag = currentAdapter?.label ? `${currentAdapter.label} page` : 'Application page';
+  const currentAdapter = detectAdapter();
+  const tag = currentAdapter?.label ? `${currentAdapter.label} page` : 'ATS page';
   if (jobContext?.description) {
     logger.info(`Grounding ${unresolved.length} questions in job context: "${jobContext.title || 'Untitled'}" at "${jobContext.company || 'Unknown'}" (${jobContext.description.length} chars)`);
   }
   const result = await requestAiJson({ model, tag, messages: [
-    { role: 'system', content: `${buildStructuredSystemPrompt({ allowSearch })}\n${NARRATIVE_VOICE_RULES}\n${getNarrativeStyleExamples(profile, settings)}\nFor declared multiple-choice fields only, value may be an array of exact owned option labels. Ground answers in profile and record context first. For ambiguous factual or open-ended questions, best-effort factual guessing is enabled: label unsupported facts with provenance=guessed and inferred=true. Label grounded contextual answers provenance=inferred. Never guess disclosures or select a label outside owned options. Never complete assessments, identity verification, recorded interviews, e-signatures, or legal attestations.` },
+    { role: 'system', content: `${buildStructuredSystemPrompt({ allowSearch })}\n${NARRATIVE_VOICE_RULES}\n${getNarrativeStyleExamples(profile, settings)}\nFor declared multiple-choice fields only, value may be an array of exact owned option labels. Use all available profile, resume, notes, job, and saved-answer context for ambiguous factual or open-ended questions. Label uncertain context-based estimates with provenance=guessed and inferred=true, and grounded contextual answers provenance=inferred. Never invent facts out of thin air. Select only labels from this field's owned options. Answer every supplied application question, including eligibility, disclosures, and acknowledgments.` },
     { role: 'user', content: JSON.stringify({ applicantProfile: profileForAI(profile), resumeContext: formatStructuredBackground(profile) || profile.resumeContext, applicantNotes: profile.applicantNotes, jobContext, repairErrors, fieldsToFill: unresolved }) },
   ] });
   const byId = new Map(unresolved.map(field => [field.fieldId, field]));
@@ -639,16 +637,18 @@ async function generateAdapterAnswers(fields, { adapter, settings, profile, allo
     if (!Array.isArray(answer.value) && !['string', 'boolean', 'number'].includes(typeof answer.value)) continue;
     if (['combobox', 'select', 'radio'].includes(field.type) && answer.value !== '') {
       const values = Array.isArray(answer.value) ? answer.value : [answer.value];
-      const options = values.map(value => findExactOption(field.options || [], value));
+      const options = values.map(value => findExactOption(field.options || [], value,field));
       if (options.some(option => !option)) continue;
-      answer.value = Array.isArray(answer.value) ? options.map(option => option.label) : (field.type === 'combobox' ? options[0].label : options[0].value);
+      answer.value = Array.isArray(answer.value) ? options.map(option => field.type === 'combobox' ? option.label : option.value) : field.type === 'combobox' ? options[0].label : options[0].value;
     }
     if (!allowSearch || field.type !== 'combobox' || answer.value !== '' || typeof answer.searchQuery !== 'string' || answer.searchQuery.length > 200) delete answer.searchQuery;
     answer.source = 'ai';
     answer.provenance = answer.provenance === 'guessed' ? 'guessed' : 'inferred';
     answer.inferred = true;
     if (!OPTION_FIELD_TYPES.has(field.type)) answer.value = stripModelDashes(answer.value);
-    answers.push(answer);
+    const pendingIndex = answers.findIndex(existing => existing.fieldId === answer.fieldId);
+    if (pendingIndex >= 0) answers[pendingIndex] = answer;
+    else answers.push(answer);
   }
   return { answers, latencyMs: result.latencyMs, model };
 }
@@ -680,7 +680,7 @@ Rules:
 2. Incorporate the candidate's specific feedback and revision instructions.
 3. Follow NARRATIVE VOICE. First-person. Natural spoken English.
 4. Output ONLY the rewritten answer text with no surrounding quotes or commentary.
-5. Explicit structured profile answers take precedence over conflicting notes. Eligibility applies only to the matching country in workEligibilities or workCountry. Do not guess unknown eligibility or demographics, expose demographics in unrelated answers, or convert compensation units. Job discovery source is always LinkedIn.`;
+5. Explicit structured profile answers take precedence over conflicting notes. Match eligibility facts to the question or job country in workEligibilities or workCountry, and use relevant applicant context for unset answers. Do not expose demographics in unrelated answers or convert compensation units. Job discovery source is always LinkedIn.`;
 
   const structuredBg = formatStructuredBackground(profile);
   const combinedResumeContext = structuredBg || profile.resumeContext || '';

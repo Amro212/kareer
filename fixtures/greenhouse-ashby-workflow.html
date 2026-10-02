@@ -1,0 +1,52 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>ATS workflow replay</title>
+<!-- Synthetic local replay authored from the 2026-09-30 public configuration.
+     This is not a live capture. All submissions stay on this fixture. -->
+<style>body{font:16px sans-serif;padding:24px}label,fieldset,.field{display:block;margin:16px}input,select,button,textarea{padding:8px}.select2-drop-active{background:white;border:1px solid;padding:12px}.select2-result-label{padding:8px;cursor:pointer}</style>
+<body data-submissions="0"><main><h1>Engineer application</h1><form>
+<div class="field"><label for="first_name">First name</label><input id="first_name" required></div>
+<div class="field"><label for="last_name">Last name</label><input id="last_name" required></div>
+<div class="field"><label for="email">Email</label><input id="email" type="email" required></div>
+<div class="field"><label for="country">Country</label><select id="country"><option value="">Select</option><option>Canada</option><option>United States</option></select></div>
+<div class="field"><label for="resume">Resume</label><input id="resume" type="file" required><span class="filename" id="accepted-resume"></span><span id="processing" role="status"></span></div>
+<div class="field"><label for="cover_letter">Cover letter</label><input id="cover_letter" type="file"></div>
+<div class="field"><label for="why">Why this company?</label><textarea id="why"></textarea></div>
+<div id="education_section"><h2>Education</h2><div class="education repeatableEducationEntry">
+<label>School<input id="education_history-school" value="School A"></label><label>Degree<input id="education_history-degree"></label>
+</div><button type="button" id="add_education" class="repeatableEducationAddButton">Add education</button></div>
+<button type="button" id="continue">Continue</button>
+</form></main><script>
+const params=new URLSearchParams(location.search), ats=params.get('ats')||'greenhouse', form=document.querySelector('form');
+if(ats==='ashby'){form.className='ashby-application-form';form.setAttribute('data-ashby-root','');}
+else form.id=params.has('modern')?'application-form':'application_form';
+if(!params.has('upload')) document.querySelector('#resume').closest('.field').remove();
+if(params.has('hiddenResume')) document.querySelector('#resume').style.display='none';
+document.querySelector('#resume')?.addEventListener('change',()=>{
+ const field=document.querySelector('#resume').closest('.field');field.setAttribute('aria-busy','true');document.querySelector('#processing').textContent='Processing resume';
+ setTimeout(()=>{field.removeAttribute('aria-busy');document.querySelector('#processing').textContent='Resume uploaded successfully';document.querySelector('#accepted-resume').textContent=document.querySelector('#resume').files[0].name;document.querySelector('#first_name').value='Parsed';},350);
+});
+document.querySelector('#add_education').onclick=()=>{
+ const row=document.querySelector('.education').cloneNode(true);row.querySelectorAll('input').forEach(input=>input.value='');document.querySelector('#add_education').before(row);
+};
+if(params.has('select2')) {
+ const select=document.querySelector('#country');select.hidden=true;
+ select.insertAdjacentHTML('beforebegin','<div id="s2id_country" class="select2-container"><a class="select2-choice" href="#"><span class="select2-chosen">Select</span></a></div>');
+ document.querySelector('#s2id_country').onclick=e=>{
+  e.preventDefault();if(document.querySelector('.select2-drop-active'))return;
+  const popup=document.createElement('div');popup.className='select2-drop-active';popup.innerHTML='<input class="select2-input"><ul><li class="select2-result-selectable"><span class="select2-result-label">Canada</span></li><li class="select2-result-selectable"><span class="select2-result-label">United States</span></li></ul>';document.body.append(popup);
+  popup.querySelectorAll('.select2-result-label').forEach(option=>option.onclick=()=>{select.value=option.textContent;document.querySelector('.select2-chosen').textContent=option.textContent;popup.remove();});
+  popup.querySelector('input').addEventListener('keydown',e=>{if(e.key==='Escape')popup.remove();});
+ };
+}
+document.querySelector('#continue').onclick=()=>{
+ if(!form.checkValidity())return;
+ if(params.has('replace')){parent.postMessage('fixture-replace','http://ats.kareer.test');return;}
+ form.innerHTML='<h2>Application questions</h2><div class="field"><label for="additional_url">Additional URL</label><input id="additional_url" required></div><button type="submit" class="ashby-application-form-submit-button submit-step">Submit application</button>';
+};
+form.onsubmit=e=>{
+ e.preventDefault();if(params.has('reject')){form.insertAdjacentHTML('beforeend','<p role="alert">Application rejected: required manual answer.</p>');return;}
+ document.body.dataset.submissions=String(+document.body.dataset.submissions+1);
+ form.innerHTML=ats==='ashby'?'<div class="ashby-application-form-success-container">Success!</div>':'<div class="confirmation__content"><h2>We got your application</h2></div>';
+};
+if(params.has('step2'))form.innerHTML='<h2>Application questions</h2><div class="field"><label for="additional_url">Additional URL</label><input id="additional_url" required></div><button type="submit" class="ashby-application-form-submit-button submit-step">Submit application</button>';
+if(params.has('boundary'))form.insertAdjacentHTML('afterbegin','<h2>Identity verification</h2>');
+</script></body></html>

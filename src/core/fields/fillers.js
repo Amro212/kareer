@@ -248,7 +248,7 @@ export async function fillCombobox(element, targetValue, knownOptions) {
     return false;
   }
   const target = known?.label || String(targetValue);
-  const { input } = resolveComboboxParts(element);
+  let input = resolveComboboxParts(element).input;
   let ownsSearch;
   try {
     if (readComboboxSelection(element).some(value => optionKey(value) === optionKey(target) || detectAdapter().optionMatches?.(detectAdapter().fieldMetadata?.(element) || {}, value, target))) {
@@ -256,6 +256,7 @@ export async function fillCombobox(element, targetValue, knownOptions) {
       return await waitForComboboxSelection(element, target);
     }
     await openCombobox(element);
+    input = resolveComboboxParts(element).input;
     const location = isLeverLocation(element) || isPlacesLocation(element) || known && isResidenceLabel(extractLabel(element));
     ownsSearch = setComboboxSearch(input, location ? target.split(',')[0].trim() : detectAdapter().id === 'workday' && input ? (detectAdapter().searchQuery?.(element, target) || target) : '');
     let options = await waitForComboboxOptions(element, undefined, location || detectAdapter().id === 'workday' ? target : undefined);
@@ -355,6 +356,7 @@ export async function fillFileInput(element) {
 export async function fillField(field, targetValue) {
   if (!field || !field.element) return false;
   if (field.widget === 'workday-choice') return detectAdapter().fillChoice(field, targetValue, { checkbox: fillCheckbox }) === true;
+  if (field.widget === 'ats-choice') return detectAdapter().fillChoice(field, targetValue, {checkbox:fillCheckbox}) === true;
   if (['select', 'radio'].includes(field.type)) {
     const option = findExactOption(field.options || [], targetValue, field);
     if (!option) return false;

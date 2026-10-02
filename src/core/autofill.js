@@ -3,8 +3,7 @@ import { harvestComboboxOptions } from './fields/scanner.js';
 import { normalizeFieldsForAI } from './fields/normalize.js';
 import { logger } from './debug.js';
 import { getProfile } from './storage.js';
-import { detectAdapter } from './adapters/index.js';
-import { workdayAnswer } from './adapters/workday-fields.js';
+import { adapterById } from './adapters/index.js';
 import { findExactOption } from './fields/combobox.js';
 
 // One bounded discovery pass for remote/paginated comboboxes. Queries never fill fields.
@@ -18,12 +17,11 @@ export async function resolveComboboxSearchAnswers(fields, response) {
   await harvestComboboxOptions(searchFields, queries);
   const discovered = searchFields.filter(field => field.options.length);
   if (!discovered.length) return response;
-  const adapter = detectAdapter();
-  if (typeof adapter.resolveAnswer === 'function' || discovered.every(field => field.ats?.adapter === 'workday')) {
+  if (discovered.every(field => adapterById(field.ats?.adapter).resolveAnswer)) {
     return { ...response, answers: response.answers.map(answer => {
       const field = discovered.find(field => field.id === answer.fieldId);
       if (!field) return answer;
-      const fixed = adapter.resolveAnswer?.(field, getProfile()) || workdayAnswer(field, getProfile());
+      const fixed = adapterById(field.ats.adapter).resolveAnswer({...field,fieldId:field.id}, getProfile(), {allowSearch:false});
       if (fixed) return fixed;
       const option = findExactOption(field.options, answer.searchQuery, field);
       return option ? { ...answer, value: option.label, searchQuery: undefined } : answer;
@@ -38,4 +36,15 @@ export async function resolveComboboxSearchAnswers(fields, response) {
     logger.warn(`Combobox search resolution failed: ${err.message}`);
     return response;
   }
+}
+
+export function resolveDiscoveredAnswers(fields, answers) {
+  return answers.map(answer => {
+    const field = fields.find(field => field.fieldId === answer.fieldId);
+    if (!field) return answer;
+    const fixed = adapterById(field.ats?.adapter).resolveAnswer?.(field, getProfile(), {allowSearch:false});
+    if (fixed) return fixed;
+    const option = findExactOption(field.options || [], answer.searchQuery, field);
+    return option ? {...answer,value:option.label,searchQuery:undefined} : {...answer,value:'',searchQuery:undefined};
+  });
 }

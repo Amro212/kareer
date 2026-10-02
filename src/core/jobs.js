@@ -1,6 +1,7 @@
 import { gmSet } from './storage.js';
 import { STORAGE_KEYS } from './constants.js';
 import { isVisible, visibleText } from './pageClassifier.js';
+import { detectAdapter } from './adapters/index.js';
 import { logger } from './debug.js';
 
 const JOB_HYDRATION_TIMEOUT_MS = 5000;
@@ -84,7 +85,7 @@ export function captureJob(doc = document) {
     el.innerHTML = String(html || '');
     return el.textContent.replace(/\s+/g, ' ').trim().slice(0, 30000);
   };
-  const apply = Array.from(doc.querySelectorAll('a[href]')).find(el => isVisible(el) && /^(?:apply|apply now|apply for (?:this )?(?:job|position)|start application)$/i.test(visibleText(el)));
+  const apply = detectAdapter(doc.defaultView?.location, doc).applyControl?.(doc) || Array.from(doc.querySelectorAll('a[href]')).find(el => isVisible(el) && /^(?:apply|apply now|apply for (?:this )?(?:job|position)|start application)$/i.test(visibleText(el)));
   const company = posting?.hiringOrganization?.name || doc.querySelector('[itemprop=hiringOrganization]')?.textContent?.trim() || '';
   const address = [posting?.jobLocation].flat()[0]?.address;
 
