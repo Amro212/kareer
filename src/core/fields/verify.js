@@ -21,7 +21,9 @@ export async function verifyField(field, expectedValue) {
     const actual = detectAdapter().readChoice?.(field) || [];
     if (field.ats?.multiple) {
       const values = Array.isArray(expectedValue) ? expectedValue : [expectedValue];
-      const verified = values.length > 0 && values.every(value => field.options.some(option => option.value === value) && actual.includes(value));
+      const verified = field.widget === 'workday-choice'
+        ? values.length > 0 && values.every(value => field.options.some(option => option.value === value) && actual.includes(value))
+        : values.length > 0 && actual.length === values.length && values.every(value => field.options.some(option => option.value === value) && actual.includes(value));
       return { verified, actualValue: actual.join(', '), error: verified ? undefined : 'Expected choices were not accepted' };
     }
     const option = findExactOption(field.options || [], expectedValue, field);

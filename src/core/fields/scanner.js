@@ -92,7 +92,7 @@ export function scanFormFields(root = document) {
     [role="combobox"],
     .select2-container,
     button[aria-haspopup="listbox"]
-  `)).filter((el) => !isInsideCopilot(el) && !el.closest('.select2-container') && !el.closest('header,nav,footer,[role="banner"],[role="navigation"],[role="contentinfo"],.g-recaptcha,.h-captcha,[data-captcha]') && !/^(g-recaptcha-response|h-captcha-response|cf-turnstile-response)(?:$|-)/i.test(el.name || el.id || ''));
+  `)).filter((el) => !isInsideCopilot(el) && !el.parentElement?.closest('.select2-container') && !el.closest('header,nav,footer,[role="banner"],[role="navigation"],[role="contentinfo"],.g-recaptcha,.h-captcha,[data-captcha]') && !/^(g-recaptcha-response|h-captcha-response|cf-turnstile-response)(?:$|-)/i.test(el.name || el.id || ''));
 
   for (const el of candidates) {
     if (processedElements.has(el)) continue;

@@ -1,5 +1,25 @@
 # Context and Findings
 
+## Turn: 2026-10-01 - Fix validated Greenhouse/Ashby PR review findings
+
+- Target: shared extension/userscript workflow, canonical location/eligibility resolution, and disclosure checkbox reconciliation (`greenhouse-ashby` branch). User authorized validating and surgically fixing all three reviewer findings following simplicity-first guidelines.
+- P1 finding 1 (Keep embedded workflows active when host fields coexist):
+  - Platform/ATS: embedded Greenhouse/Ashby iframes hosted on carrier/corporate web pages.
+  - Symptoms & RCA: `src/core/application.js` guarded `embeddedWorkflow(token)` with `scanFormFields().length`. If the top host page contained any scannable control (such as a newsletter signup, search bar, or contact field), the guard exited the embedded workflow. The local workflow then ran on the host page and ignored the embedded application frame despite detection.
+  - Resolution: Replaced `scanFormFields().length` guard with `hasTopApplicationForm` (`Boolean(detectAdapter().applicationRoot?.(document)) || ['workday', 'lever'].includes(detectAdapter().id)`). The engine prefers the uniquely owned supported application frame unless the top document itself has an application form.
+- P1 finding 2 (Do not parse state abbreviations as job countries):
+  - Platform/ATS: Greenhouse, Ashby, and canonical work authorization/sponsorship resolution.
+  - Symptoms & RCA: In `src/core/adapters/application-fields.js`, `eligibilityValue` split `jobContext?.location` by comma and passed the last component to `countryCode()`. Because `countryCode()` accepts any 2-letter ISO country code, US state abbreviations like `CA` (California) and `IN` (Indiana) resolved to Canada (`CA`) and India (`IN`). If the user had a Canada or India work eligibility profile, the engine submitted that country's answers for a US job.
+  - Resolution: Added `explicitCountryCode(name)` in `src/core/adapters/canonical.js` which recognizes full country names and explicit country aliases (`US`, `USA`, `UK`), but refuses 2-letter codes. Used `explicitCountryCode` for `jobContext?.location` in `application-fields.js`, leaving state-only locations unresolved while preserving dedicated `jobContext.workCountry`.
+- P1 finding 3 (Clear stale checkbox choices when overwriting groups):
+  - Platform/ATS: Greenhouse & Ashby demographic disclosure checkbox questions.
+  - Symptoms & RCA: `fillCheckboxQuestion` in `application-fields.js` only checked elements matching requested values and never unchecked existing ones. When overwriting or filling a saved demographic answer where "Decline to state" or another choice was pre-checked, both the old and new choices remained checked. Furthermore, `verifyField` for `ats.multiple` accepted any superset of requested options.
+  - Resolution: `fillCheckboxQuestion` now reconciles the checked set with requested values by setting `checkbox(element, wanted)` for all group elements. `verifyField` enforces `actual.length === values.length` for `ats-choice` disclosure groups to reject supersets with stale/contradictory choices, while preserving Workday's tested multiple-choice behavior.
+  - In addition, fixed an issue in `scanner.js` where `.select2-container` was queried as a candidate but immediately filtered out by `!el.closest('.select2-container')`; updated to `!el.parentElement?.closest('.select2-container')`.
+- Test changes: `tests/unit/greenhouse-ashby.test.js` (3 new unit regression tests covering coexisting host fields in embedded workflow, state abbreviation rejection in job locations, and checkbox group reconciliation/superset rejection), `fixtures/ats-workflow-host.html` (added host controls to ensure real-browser embedded tests run with coexisting host inputs).
+- Build changes: `npm run build` rebuilt Chrome, Firefox, and Tampermonkey at **v0.4.102**.
+- Verification: `npm test`: **345 passed, 0 failed** across all unit test suites. `npx playwright test tests/e2e/greenhouse-ashby.spec.js`: **19 passed, 0 failed (3.5 minutes)** with the real Chromium extension. `git diff --check` passed cleanly. All fixes complete.
+
 ## Turn: 2026-10-01 - Fix validated Lever review findings
 
 - Target: shared extension/userscript job capture and hydration, plus panel autofill diagnostics. User authorized fixing all three previously validated screenshot findings.

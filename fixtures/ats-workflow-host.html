@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><meta charset="utf-8"><title>Embedded ATS workflow</title>
 <!-- Synthetic cross-origin host; fixture submissions stay local. -->
-<body><main><h1>Engineer</h1><p>Application hosted below.</p><div id="frames"></div></main>
+<body><div class="host-controls"><input id="site-search" placeholder="Search jobs"><input id="newsletter" type="email" placeholder="Subscribe to updates"></div><main><h1>Engineer</h1><p>Application hosted below.</p><div id="frames"></div></main>
 <script>
 const params=new URLSearchParams(location.search);
 const frame=document.createElement('iframe');frame.width='900';frame.height='1200';frame.src='http://embed.kareer.test/greenhouse-ashby-workflow.html'+location.search;document.querySelector('#frames').append(frame);

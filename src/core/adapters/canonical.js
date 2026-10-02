@@ -34,6 +34,19 @@ export function countryCode(name) {
   return { usa: 'US', uk: 'GB', 'united states of america': 'US' }[canonicalNorm(name)] || '';
 }
 
+export function explicitCountryCode(name) {
+  if (!name) return '';
+  const trimmed = String(name).trim();
+  const normalized = canonicalNorm(trimmed);
+  const aliases = { usa: 'US', uk: 'GB', us: 'US', 'u.s.': 'US', 'u.s.a.': 'US', 'united states of america': 'US' };
+  if (aliases[normalized]) return aliases[normalized];
+  if (/^[a-z]{2}$/i.test(trimmed)) return '';
+  for (const code of getCountries()) {
+    if ([countryNames.of(code), frenchCountries.of(code)].some(value => canonicalNorm(value) === normalized)) return code;
+  }
+  return '';
+}
+
 export const CANONICAL_PROFILE_KEYS = {
   first_name: 'firstName',
   last_name: 'lastName',

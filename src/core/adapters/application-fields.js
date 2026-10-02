@@ -1,5 +1,5 @@
 import { parsePhoneNumberFromString } from 'libphonenumber-js/min';
-import { countryCode } from './workday-fields.js';
+import { countryCode, explicitCountryCode } from './canonical.js';
 import { fixedProfileAnswer } from '../profile.js';
 import { optionKey, findExactOption, readComboboxSelection } from '../fields/combobox.js';
 import { locationMatches } from '../location.js';
@@ -116,7 +116,7 @@ export function applicationMetadata(element, adapter, { container, title, rowSel
 function eligibilityValue(field, profile, jobContext) {
   const label = field.label || '';
   const countries = [...new Set((label.match(/\b(?:Canada|United States(?: of America)?|USA|U\.S\.|United Kingdom|UK|Germany|France|Australia|India|Ireland|Netherlands|Singapore)\b/gi) || []).map(countryCode).filter(Boolean))];
-  const jobCountry = typeof jobContext?.workCountry === 'string' ? countryCode(jobContext.workCountry) : countryCode(jobContext?.location?.split(',').at(-1)?.trim());
+  const jobCountry = typeof jobContext?.workCountry === 'string' ? countryCode(jobContext.workCountry) : explicitCountryCode(jobContext?.location?.split(',').at(-1)?.trim());
   const target = countries.length === 1 ? countries[0] : countries.length ? '' : jobCountry;
   if (!target) return '';
   const records = (profile.workEligibilities?.length ? profile.workEligibilities : [{ country:profile.workCountry, workAuthorization:profile.workAuthorization, sponsorshipNow:profile.sponsorshipNow, sponsorshipFuture:profile.sponsorshipFuture }]).filter(record => record.enabled !== false && countryCode(record.country) === target);
@@ -209,7 +209,10 @@ export function checkboxQuestions(root, adapter) {
 export function fillCheckboxQuestion(field, value, {checkbox}) {
   const values = Array.isArray(value) ? value : [value];
   if (values.some(item => !field.options.some(option => option.value === item))) return false;
-  for (const element of field.elements) if (values.includes(element.value) && !element.checked) checkbox(element, true);
+  for (const element of field.elements) {
+    const wanted = values.includes(element.value);
+    if (element.checked !== wanted) checkbox(element, wanted);
+  }
   return true;
 }
 

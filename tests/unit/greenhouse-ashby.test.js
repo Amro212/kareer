@@ -206,8 +206,8 @@ test('optional links and transgender disclosure survive profile persistence with
   for (const name of ['twitter','behance','dribbble','website','additionalUrl','transgender']) assert.ok(getProfile()[name]);
 });
 
-function embeddedHost({ambiguous=false, boundary=false, cancel=false, unanswered=false, hostBoundary=false}={}) {
-  boot('<main><h1>Application</h1><iframe></iframe></main>');
+function embeddedHost({ambiguous=false, boundary=false, cancel=false, unanswered=false, hostBoundary=false, hostFields=false}={}) {
+  boot(`<main>${hostFields ? '<form><input id="newsletter" type="email"><input id="site-search" type="search"></form>' : ''}<h1>Application</h1><iframe></iframe></main>`);
   dom.reconfigure({url:'https://careers.example.com/job'});
   const host = createGmHost(), commands=[];
   let filled=false,submitted=false,questionResolved=false;
@@ -345,4 +345,70 @@ test('captured Ashby EEOC groups retain canonical disclosure metadata',async()=>
   assert.deepEqual(fields.map(field=>field.ats?.canonicalKey),['gender','ethnicity','veteran_v2']);
   const response=await generateAutofillAnswers(normalizeFieldsForAI(fields));
   assert.ok(response.answers.every(answer=>answer.value===''));
+});
+
+test('embedded workflow continues and fills when host page contains scannable controls', async () => {
+  const {engine,commands}=embeddedHost({hostFields:true});
+  try {
+    assert.ok(scanFormFields().length > 0);
+    await engine.start();
+    assert.equal(engine.session.status,'confirmation');
+    assert.equal(commands.filter(c=>c.action==='submit').length,1);
+  } finally {
+    engine.destroy();
+  }
+});
+
+test('jobContext location with state abbreviations does not infer country, leaving state-only locations unresolved', async () => {
+  boot('<form id="application_form"><label for="authorization">Are you authorized to work in the job country?</label><select id="authorization"><option value="">Select</option><option>Yes</option><option>No</option></select></form>');
+  saveProfile({
+    fullName: 'Test Applicant',
+    workEligibilities: [
+      { id: 'ca', country: 'Canada', workAuthorization: 'Yes', enabled: true },
+      { id: 'in', country: 'India', workAuthorization: 'Yes', enabled: true },
+      { id: 'us', country: 'United States', workAuthorization: 'No', enabled: true },
+    ]
+  });
+
+  // State abbreviation CA (California) must NOT be parsed as Canada
+  const fields = scanFormFields();
+  let response = await generateAutofillAnswers(normalizeFieldsForAI(fields), { jobContext: { location: 'San Francisco, CA' } });
+  assert.equal(response.answers[0].value, '');
+
+  // State abbreviation IN (Indiana) must NOT be parsed as India
+  response = await generateAutofillAnswers(normalizeFieldsForAI(fields), { jobContext: { location: 'Indianapolis, IN' } });
+  assert.equal(response.answers[0].value, '');
+
+  // Explicit country name in location DOES resolve
+  response = await generateAutofillAnswers(normalizeFieldsForAI(fields), { jobContext: { location: 'San Francisco, CA, United States' } });
+  assert.equal(response.answers[0].value, 'No');
+
+  // Explicit country alias USA in location DOES resolve
+  response = await generateAutofillAnswers(normalizeFieldsForAI(fields), { jobContext: { location: 'San Francisco, CA, USA' } });
+  assert.equal(response.answers[0].value, 'No');
+
+  // Dedicated workCountry DOES resolve
+  response = await generateAutofillAnswers(normalizeFieldsForAI(fields), { jobContext: { location: 'San Francisco, CA', workCountry: 'Canada' } });
+  assert.equal(response.answers[0].value, 'Yes');
+});
+
+test('fillCheckboxQuestion clears stale checked options and verifier rejects superset', async () => {
+  boot('<form id="application_form"><fieldset class="demographic_question"><legend>Gender</legend><label><input type="checkbox" name="gender" value="decline" checked>Decline to state</label><label><input type="checkbox" name="gender" value="male">Male</label><label><input type="checkbox" name="gender" value="female">Female</label></fieldset></form>');
+  const fields = scanFormFields();
+  assert.equal(fields[0].widget, 'ats-choice');
+  assert.equal(fields[0].ats?.multiple, true);
+
+  // When filling "male", stale "decline" choice must be unchecked
+  assert.equal(await fillField(fields[0], 'male'), true);
+  assert.equal(document.querySelector('input[value="decline"]').checked, false);
+  assert.equal(document.querySelector('input[value="male"]').checked, true);
+  assert.equal(document.querySelector('input[value="female"]').checked, false);
+
+  const verification = await verifyField(fields[0], 'male');
+  assert.equal(verification.verified, true);
+
+  // If an extra stale choice is checked, verifier must reject the superset
+  document.querySelector('input[value="female"]').checked = true;
+  const supersetVerification = await verifyField(fields[0], 'male');
+  assert.equal(supersetVerification.verified, false);
 });

@@ -369,7 +369,8 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
   }
 
   async function embeddedWorkflow(token) {
-    if (!platform.capabilities.crossFrame || scanFormFields().length || ['boundary','captcha','confirmation'].includes(classifyPage().type)) return false;
+    const hasTopApplicationForm = Boolean(detectAdapter().applicationRoot?.(document)) || ['workday', 'lever'].includes(detectAdapter().id);
+    if (!platform.capabilities.crossFrame || hasTopApplicationForm || ['boundary','captcha','confirmation'].includes(classifyPage().type)) return false;
     const current = () => guard(token);
     const discover = async () => {
       const states = await embeddedApplicationStates();
