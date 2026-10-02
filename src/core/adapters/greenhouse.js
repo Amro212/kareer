@@ -36,7 +36,7 @@ export const greenhouseAdapter = {
   },
   profileValue: applicationProfileValue,
   resolveAnswer: applicationAnswer,
-  searchQuery: (field, value) => DISCLOSURES.has(field.ats?.canonicalKey) ? '' : value,
+  searchQuery: (field, value) => DISCLOSURES.has(field.ats?.canonicalKey) || ['work_auth', 'sponsorship'].includes(field.ats?.canonicalKey) ? '' : value,
   needsFill: applicationNeedsFill,
   prepareSections(doc, profile, options) { return prepareApplicationSections(doc, profile, this, [
     {section:'#employment_section,[data-name="employments"],.experience--container,.experience-container,.employment--container,.employment-container',row:'.employment,ul > li,.experience--form,.experience-form,.employment--form,.employment-form',add:'#add_employment,.form-multifield__add,.add-another-button',records:'workExperiences',identity:['company','title']},

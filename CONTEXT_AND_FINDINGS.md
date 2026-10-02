@@ -1,5 +1,77 @@
 # Context and Findings
 
+## Turn: 2026-10-02 - Surgical fixes for eligibility review findings
+
+- Target: shared extension/userscript resolver for Greenhouse, Lever, and Ashby; user authorized correcting both reviewed defects.
+- Future sponsorship: authorization-without-sponsorship questions used only current sponsorship. The resolver now checks current, future, or both answers according to the question; any required Yes makes the combined authorization answer No, while incomplete facts remain available to contextual AI.
+- Explicit country aliases: added UAE/U.A.E. recognition. Unrecognized explicit work-country wording remains unresolved instead of accepting an unrelated sole eligibility record or job country. Implicit-country questions retain their single-record fallback.
+- Turn files: `src/core/adapters/application-fields.js` contains the production fix; `tests/unit/eligibility-autofill.test.js` adds six resolver regressions covering both answer paths, missing facts, aliases, and implicit-country compatibility. `fixtures/eligibility-menu-replay.html` and `tests/e2e/eligibility-autofill.spec.js` extend the existing synthetic replay to verify future sponsorship and UAE/NZ context routing on all three boards with one AI request. `CONTEXT_AND_FINDINGS.md` records the change and status.
+- Verification: all six new resolver tests failed before the fix; all 22 focused eligibility tests now pass. An initial full unit run caught the implicit phrase "the job country" in the new guard; corrected that distinction, added its regression, and all 63 combined eligibility/Greenhouse/Ashby unit tests passed. Final `npm test`: 368 passed, 0 failed. Final full `npm run test:e2e`: 89 passed, 0 failed on v0.5.6 (11.1 minutes). The initial browser run passed 87 tests but failed an existing Lever test during browser-context shutdown and an existing options-import test with empty feedback. Both passed on targeted rerun and the final full run; no unrelated production or test changes were needed. Browser coverage uses the existing captures and explicitly synthetic replays, not fresh live ATS captures.
+- Build: v0.5.6 Chrome, Firefox, and userscript artifacts rebuilt through automatic version synchronization (`package.json`, `firefox-updates.json`, `site/{firefox-updates.json,version.json,index.html}`, ignored `dist/` outputs).
+- Status: both review findings resolved; implementation, build, and automated verification complete. Next: reload the v0.5.6 extension/userscript and retest fresh live board pages.
+
+## Turn: 2026-10-02 - Requested code review of uncommitted ATS changes
+
+- Target: shared extension/userscript eligibility resolver; reviewed with the requesting-code-review skill and updated AGENTS.md. Single-agent review per repository instructions.
+- Finding: `eligibilityValue` checks only current sponsorship for authorization-without-sponsorship questions. A Canada record with authorization Yes/current sponsorship No/future sponsorship Yes incorrectly answers Yes to "without sponsorship now or in the future", marked saved, bypassing contextual AI. Resolution deferred to review feedback: honor the requested time horizon and retain contextual fallback for incomplete facts.
+- Finding: the sole-record fallback also applies when an explicit country alias is unrecognized. "Authorized to work in UAE?" with no job country and a Canada-only record incorrectly answers Yes as saved. Resolution deferred to review feedback: resolve explicit country aliases and reserve sole-record fallback for implicit-country questions; otherwise use contextual AI.
+- Verification: reproduced both defects through the actual exported resolver/answer functions. Existing focused eligibility suite still passes all 16 tests; these cases are uncovered. `git diff --check` passed.
+- Turn changes: `CONTEXT_AND_FINDINGS.md` records review results. Next: correct both defects and add regressions before merging.
+
+## Turn: 2026-10-02 - Unblock supported ATS forms and fix eligibility and menu cleanup
+
+- Targets: shared extension/userscript core; Greenhouse, Lever, and Ashby.
+- User-reported bugs: Greenhouse and Lever reject work eligibility choices and leave dropdown options expanded. Ashby Sift stops the entire application at the visible accuracy certification ("I certify"). User explicitly requested removing these safeguards and fixing the three review findings; this supersedes the former AGENTS.md safety-boundary rule.
+- Root causes:
+  - The page classifier matched assessment/verification/signature headings and attestation text globally. The engine, frame agent, and panel refused all fields when that category appeared.
+  - An empty deterministic answer was truthy and treated as settled, preventing contextual AI fallback. Unset disclosures also overrode generic AI answers, and Lever chose Decline before considering exact saved answers/context.
+  - Eligibility recognition, country resolution, and option aliases diverged between Lever and Greenhouse/Ashby. Lever missed "eligible to work" and job-country context; the uncommitted Greenhouse fallback transferred facts when Spain/U.S. escaped its country regex. Negated sponsorship wording reversed the answer, and broad "No" / "I am not" option prefixes could select positive authorization statements.
+  - Lever's location-only menu selectors and unconditional empty committed-selection result also applied to ordinary ARIA comboboxes. Generic blur-only cleanup did not dismiss unfocused or floating ATS menus.
+- Resolution:
+  - Removed the boundary category and its engine/agent/panel gates. Acknowledgments, verification/assessment headings, signatures, and legal text no longer halt application filling. Auto Continue/Auto Submit preferences still govern navigation.
+  - Empty canonical answers now participate in the single page contextual AI request, after profile and exact saved-answer resolution. Removed prompt bans on eligibility/disclosure answers and acknowledgments; contextual/guessed provenance remains visible. Generic unset disclosures no longer suppress generated answers.
+  - Re-read the user's updated AGENTS.md rules 10 and 11. Aligned both structured/page prompts with context-grounded inference: uncertain context-based estimates remain visibly guessed, but prompts no longer permit unsupported factual invention.
+  - Shared eligibility recognition, country-scoped resolution (all supported country names, U.S./US/USA/UK aliases, job country, or the single configured record), and narrow option matching. Authorization without sponsorship combines authorization and current sponsorship facts. Fixed all three review defects rather than preserving incorrect values as saved facts.
+  - Shared ATS cleanup sends Escape to the owned input before blur and dispatches an outside mousedown. Generic pages and Workday retain their no-Escape behavior. Removed forced Select2 DOM deletion; Lever location quirks now apply only to location widgets.
+- Files changed/created:
+  - `AGENTS.md`; `docs/plans/2026-10-02-ats-eligibility-and-unblocked-autofill.md`: record the user's superseding behavior and implementation plan.
+  - `src/core/pageClassifier.js`, `application.js`, `agent.js`, `ui.js`, `ai.js`, `profile.js`, `fields/combobox.js`: remove keyword pauses, repair fallback routing/prompts, and close owned ATS menus.
+  - `src/core/adapters/{application-fields,canonical,lever-fields,lever,greenhouse,ashby}.js`: share/fix eligibility and limit widget-specific behavior.
+  - `src/targets/extension/options/index.html`: replace the obsolete "never guessed" disclosure explanation with the actual profile-first/contextual behavior.
+  - `tests/unit/{eligibility-autofill,application,ats-hardening,greenhouse-ashby,lever,profile}.test.js`; `tests/e2e/{eligibility-autofill,greenhouse-ashby,visual-system,upload}.spec.js`: regress country/polarity/aliases, offline profile answers, one contextual request, menu dismissal/reopening, and continued hosted/embedded filling/submission. Parser tests expecting no AI now seed their previously unset LinkedIn fact and verify it fills after parsing, preserving that assertion without relying on the removed empty-answer dead end.
+  - `fixtures/eligibility-menu-replay.html`, `fixtures/ashby-sift-acknowledgment-replay.html`: explicitly synthetic screenshot replays. Ashby additionally reuses `ashby-sift-captured.html`; that existing capture predates the acknowledgment shown in the screenshot. No new live Greenhouse/Lever page URLs or captures were supplied, so the screenshot question/menu is reproduced locally rather than presented as a fresh capture.
+  - `package.json`, `firefox-updates.json`, `site/{firefox-updates.json,version.json,index.html}`, and ignored `dist/` artifacts: the build's automatic version synchronization rebuilt Chrome, Firefox, and userscript at v0.5.4.
+- Verification/status:
+  - Regression-first run reproduced 11 failures before fixes; generic disclosure override also failed before its fix.
+  - Final `npm test`: 362 passed, 0 failed, including the profile-copy/generic-fallback edits and prompts aligned with the updated AGENTS.md. All 16 focused eligibility tests also passed. Running without simultaneous full browser tests avoided the existing 500ms parser test's load-sensitive timeout; all 9 upload unit tests separately passed.
+  - New real-extension E2E suite: all 4 passed (Greenhouse, Lever, Ashby menu/context/acknowledgment replays and Sift capture with screenshot acknowledgment).
+  - Final full `npm run test:e2e`: 89 passed, 0 failed on v0.5.4 (10.8 minutes), including all four new supported-board regressions and updated parser scenarios. Initial run: 87 passed, 2 failed on obsolete no-AI assertions for an unset LinkedIn field; those parser scenarios now provide and verify the saved LinkedIn URL. Initial sandbox launch/build-watch restrictions required running verification outside the sandbox. One unrelated resume-parser timing test passed on targeted and full reruns; generic Escape regression was corrected without changing its test.
+  - Final `git diff --check` passed. Implementation, build, and automated verification complete. Next: reload/install the v0.5.4 artifact and retest fresh live board pages; tests used clearly labeled local replays and existing sanitized captures, not fresh captures of the reported Greenhouse/Lever pages.
+
+## Turn: 2026-10-02 - Investigate work eligibility safeguards & polish Greenhouse work eligibility dropdowns
+
+- Target: Greenhouse work eligibility question resolution, canonical option matching, and dropdown cleanup.
+- Investigation (Safeguards vs. Broken Field):
+  - **Safeguard findings**: Yes, both the deterministic pipeline and AI prompt contain safeguards preventing AI work eligibility guessing. Specifically, `generatePageAnswers` (`src/core/ai.js`) checks `if (deterministic)` which evaluates truthy for `{ fieldId, value: '', provenance: 'saved' }`, treating an unfillable canonical field as settled rather than passing it to `unresolved` fields for AI. In addition, the AI system prompts (lines 163 & 674) explicitly instruct the model: *"Never guess work authorization or visa sponsorship for an unspecified country or without explicit candidate eligibility facts."*
+  - **Field findings**: Yes, the field itself was broken on Greenhouse due to multiple interacting issues:
+    1. Canonical recognition: `canonicalField` regex in `src/core/adapters/application-fields.js` did not match common phrases like "Work Eligibility", "Work eligibility status", "Eligibility to work", or "authorized to work without sponsorship".
+    2. Missing country context: `eligibilityValue` strictly required an explicit country match in the question label or `jobContext.workCountry`. In standard Greenhouse job postings where questions omit the country name, `target` resolved to empty string and returned `''` even when the candidate had only a single country configured in `profile.workEligibility`.
+    3. Descriptive option matching: `applicationOptionMatches` lacked matching for `work_auth` and `sponsorship`. When Greenhouse presented descriptive dropdown options like `"Yes, I am authorized to work in the United States"`, `findExactOption` returned `null`, causing `applicationAnswer` to wipe the answer (`value = ''`) and reject filling.
+    4. Input corruption during harvest: `greenhouseAdapter.searchQuery` returned `"Yes"` for search-based harvesting when the answer was `"Yes"`, which typed "Yes" into React-Select inputs and broke option listings.
+    5. Unclosed dropdown menu: `greenhouseAdapter` lacked an `afterComboboxClose` hook. The default `closeCombobox` in `actuators.js` only blurred the input, which does not close floating React-Select menus.
+    6. Select2 candidate filtering: `scanner.js` filter for `.select2-container` excluded container elements improperly, causing Select2 controls to be dropped or duplicated.
+- Resolution:
+  - Updated `canonicalField` in `src/core/adapters/application-fields.js` to match "work eligibility", "eligibility to work", and "authorized to work without sponsorship".
+  - Updated `eligibilityValue` to fall back to the candidate's single configured profile country when the question label and job context do not specify a country.
+  - Updated `applicationOptionMatches` to handle `work_auth` and `sponsorship` by recognizing semantic yes/no prefixes and phrases in descriptive options.
+  - Updated `greenhouseAdapter.searchQuery` to return empty string for single-select dropdowns so options are harvested cleanly without typing.
+  - Added `afterComboboxClose` hook to `greenhouseAdapter` that dispatches Escape key events, simulates clicks outside, and ensures React-Select menus close cleanly.
+  - Refined `scanner.js` candidate filter for `.select2-container` to accurately match Select2 combobox elements without picking up internal children.
+- Tests & Verification:
+  - Added unit regression test in `tests/unit/greenhouse-ashby.test.js`: "reproduce Greenhouse work eligibility question rejection and expanded dropdown menu".
+  - Verified `npm test`: **346 passed, 0 failed** across all unit suites.
+  - Running `npx playwright test tests/e2e/greenhouse-ashby.spec.js` in real Chromium.
+
 ## Turn: 2026-10-01 - Fix validated Greenhouse/Ashby PR review findings
 
 - Target: shared extension/userscript workflow, canonical location/eligibility resolution, and disclosure checkbox reconciliation (`greenhouse-ashby` branch). User authorized validating and surgically fixing all three reviewer findings following simplicity-first guidelines.

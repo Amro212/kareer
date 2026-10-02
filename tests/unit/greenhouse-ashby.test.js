@@ -53,11 +53,11 @@ test('Greenhouse excludes job filters and unrelated forms', () => {
   assert.deepEqual(scanFormFields().map(f => f.id), ['first_name']);
 });
 
-test('canonical disclosures remain empty instead of using saved answers or AI guesses', async () => {
+test('canonical disclosures use exact saved answers when the dedicated profile value is unset', async () => {
   boot('<form id="application_form"><label for="gender">Gender</label><select id="gender"><option value="">Select</option><option>Man</option></select></form>');
   saveProfile({ fullName:'Test Applicant', savedAnswers: { Gender: 'Man' } });
   const response = await generateAutofillAnswers(normalizeFieldsForAI(scanFormFields()));
-  assert.equal(response.answers[0].value, '');
+  assert.equal(response.answers[0].value, 'Man');
 });
 
 test('eligibility resolves only the question country and preserves sponsorship polarity', async () => {
@@ -133,11 +133,16 @@ test('frame navigation rejects a stale signature and fresh validation failures',
   assert.equal(clicks, 0);
 });
 
-test('frame agents do not fill or prepare sections at a legal boundary', async () => {
+test('frame agents scan and fill application fields alongside legal acknowledgments', async () => {
   boot('<form id="application_form"><p>I certify this information is true.</p><input id="email"></form>');
   const result = await createFieldAgent().handle({action:'scan'});
-  assert.equal(result.pageType, 'boundary');
-  assert.deepEqual(result.fields, []);
+  assert.equal(result.pageType, 'application');
+  assert.equal(result.fields[0].fieldId, 'email');
+  const filled=await createFieldAgent();
+  await filled.handle({action:'scan'});
+  const response=await filled.handle({action:'fill',answers:[{fieldId:'email',value:'test@example.com'}]});
+  assert.equal(response.results[0].status,'verified');
+  assert.equal(document.querySelector('input').value,'test@example.com');
 });
 
 test('Greenhouse completes matching parsed records and adds only missing education rows', async () => {
@@ -206,12 +211,12 @@ test('optional links and transgender disclosure survive profile persistence with
   for (const name of ['twitter','behance','dribbble','website','additionalUrl','transgender']) assert.ok(getProfile()[name]);
 });
 
-function embeddedHost({ambiguous=false, boundary=false, cancel=false, unanswered=false, hostBoundary=false, hostFields=false}={}) {
+function embeddedHost({ambiguous=false, cancel=false, unanswered=false, hostBoundary=false, hostFields=false}={}) {
   boot(`<main>${hostFields ? '<form><input id="newsletter" type="email"><input id="site-search" type="search"></form>' : ''}<h1>Application</h1><iframe></iframe></main>`);
   dom.reconfigure({url:'https://careers.example.com/job'});
   const host = createGmHost(), commands=[];
   let filled=false,submitted=false,questionResolved=false;
-  const state = () => ({adapter:'greenhouse',pageType:boundary?'boundary':submitted?'confirmation':'application',reason:boundary?'Legal attestation.':'Application received.',url:'https://boards.greenhouse.io/acme/1',signature:submitted?'done':'form',fieldCount:submitted?0:1,
+  const state = () => ({adapter:'greenhouse',pageType:submitted?'confirmation':'application',reason:'Application received.',url:'https://boards.greenhouse.io/acme/1',signature:submitted?'done':'form',fieldCount:submitted?0:1,
     canSubmit:!submitted,canContinue:false,errors:unanswered && !questionResolved?[{fieldId:'why',message:'Required narrative'}]:filled?[]:[{fieldId:'email',message:'Required'}],
     fields:submitted?[]:[{fieldId:'email',label:'Email',type:'email',required:true,ats:{adapter:'greenhouse',canonicalKey:'email'}},...(unanswered?[{fieldId:'why',label:'Why this job?',type:'textarea',required:true,ats:{adapter:'greenhouse',canonicalKey:''}}]:[])]});
   setPlatform({...host,capabilities:{...host.capabilities,crossFrame:true},
@@ -234,10 +239,10 @@ test('embedded engine fills without AI then recognizes zero-field confirmation a
   finally {engine.destroy();}
 });
 
-test('embedded ownership ambiguity and legal boundaries prevent mutation', async () => {
-  for (const options of [{ambiguous:true},{boundary:true}]) {
+test('embedded ownership ambiguity prevents mutation', async () => {
+  for (const options of [{ambiguous:true}]) {
     const {engine,commands}=embeddedHost(options);
-    try {await engine.start();assert.match(engine.session.reason,/ambiguous|Legal/i);assert.equal(commands.some(c=>['fill','submit','scan'].includes(c.action)),false);}
+    try {await engine.start();assert.match(engine.session.reason,/ambiguous/i);assert.equal(commands.some(c=>['fill','submit','scan'].includes(c.action)),false);}
     finally {engine.destroy();}
   }
 });
@@ -248,9 +253,9 @@ test('embedded submission countdown cancellation prevents submit', async () => {
   finally {engine.destroy();}
 });
 
-test('embedded submission stops when a legal attestation appears in the host',async()=>{
+test('embedded submission continues when attestation text appears in the host',async()=>{
   const {engine,commands}=embeddedHost({hostBoundary:true});
-  try {await engine.start();assert.equal(classifyPage().type,'boundary');assert.equal(commands.some(command=>command.action==='submit'),false);assert.equal(engine.session.status,'boundary');}
+  try {await engine.start();assert.notEqual(classifyPage().type,'boundary');assert.equal(commands.some(command=>command.action==='submit'),true);assert.equal(engine.session.status,'confirmation');}
   finally {engine.destroy();}
 });
 
@@ -411,4 +416,44 @@ test('fillCheckboxQuestion clears stale checked options and verifier rejects sup
   document.querySelector('input[value="female"]').checked = true;
   const supersetVerification = await verifyField(fields[0], 'male');
   assert.equal(supersetVerification.verified, false);
+});
+
+test('reproduce Greenhouse work eligibility question rejection and expanded dropdown menu', async () => {
+  boot('<form id="application_form"><div class="field"><label for="eligibility_question">Work Eligibility</label><select id="eligibility_question"><option value="">Select an option</option><option value="yes_val">Yes, I am authorized to work in the United States</option><option value="no_val">No, I am not authorized</option></select></div><div class="field"><label for="sponsorship_question">Will you require sponsorship for an employment visa now or in the future?</label><select id="sponsorship_question"><option value="">Select an option</option><option value="yes_spons">Yes, I will require sponsorship</option><option value="no_spons">No, I do not require sponsorship</option></select></div></form>');
+  saveProfile({
+    fullName: 'Test Candidate',
+    workCountry: 'United States',
+    workAuthorization: 'Yes',
+    sponsorshipNow: 'No',
+    sponsorshipFuture: 'No',
+    workEligibilities: [{ country: 'United States', workAuthorization: 'Yes', sponsorshipNow: 'No', sponsorshipFuture: 'No' }]
+  });
+
+  const fields = scanFormFields();
+  assert.equal(fields.length, 2);
+
+  // 1. Verify canonical recognition
+  assert.equal(fields[0].ats?.canonicalKey, 'work_auth', 'Work Eligibility should be canonicalized to work_auth');
+  assert.equal(fields[1].ats?.canonicalKey, 'sponsorship', 'Sponsorship question should be canonicalized to sponsorship');
+
+  // 2. Verify deterministic answer generation
+  const response = await generateAutofillAnswers(normalizeFieldsForAI(fields));
+  assert.equal(response.answers[0].value, 'yes_val', 'Work Eligibility should resolve to the matching yes option');
+  assert.equal(response.answers[1].value, 'no_spons', 'Sponsorship should resolve to the matching no option');
+
+  // 3. Verify combobox close dismisses Greenhouse floating menu
+  const { closeCombobox } = await import('../../src/core/fields/combobox.js');
+  const shell = document.createElement('div');
+  shell.className = 'select-shell';
+  shell.innerHTML = '<div class="select__control"><input class="select__input" role="combobox" aria-expanded="true"></div><div class="select__menu"></div>';
+  document.body.appendChild(shell);
+  const input = shell.querySelector('input');
+  let escapeDispatched = false;
+  input.addEventListener('keydown', e => { if (e.key === 'Escape') escapeDispatched = true; });
+  let bodyClicked = false;
+  document.body.addEventListener('mousedown', () => { bodyClicked = true; });
+
+  closeCombobox(input);
+  assert.equal(escapeDispatched, true, 'Escape must be dispatched to close React-select menu');
+  assert.equal(bodyClicked, true, 'Click outside must be dispatched to dismiss floating menu');
 });

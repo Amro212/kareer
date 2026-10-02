@@ -59,21 +59,21 @@ test('workflow state presentation and error feedback remain inspectable', async 
   const page = await kr.context.newPage();
   const url = kr.fixtureUrl('phase2-form-fixture.html');
   // Deterministic presentation fixtures; inactive sessions cannot run or submit.
-  for (const status of ['running', 'paused', 'review', 'boundary']) {
+  for (const status of ['running', 'paused', 'review']) {
     await kr.worker.evaluate(async ({ status, url }) => {
       await chrome.storage.local.set({
         'kr:sessions': ['visual-state'],
         'kr:sessions:visual-state': {
           id: 'visual-state', identityVersion: 2, active: false, status,
           currentUrl: url, job: { title: 'Software Engineer', company: 'Fixture employer' },
-          reason: status === 'boundary' ? 'Review and complete the legal attestation manually.' : `Fixture ${status} state`,
+          reason: `Fixture ${status} state`,
           steps: {}, history: [], answers: {}, errors: [], completedSteps: 2,
         },
       });
     }, { status, url });
     await page.goto(url);
     await kr.openPanel(page);
-    await expect(page.locator('.kr-wf-reason')).toContainText(status === 'boundary' ? 'legal attestation' : status);
+    await expect(page.locator('.kr-wf-reason')).toContainText(status);
     await page.locator('#kr-main-panel').screenshot({ path: info.outputPath(`state-${status}.png`) });
   }
   kr.openrouter.status = 401;

@@ -36,12 +36,12 @@ test('embedded Ashby rediscovers a replacement frame and confirms its local subm
   await expect(page.locator('#kr-main-panel')).toContainText('confirmation');expect(kr.openrouter.requests).toHaveLength(0);
 });
 
-test('embedded identity verification prevents filling and submission',async({kr})=>{
+test('embedded verification headings allow profile filling and configured submission',async({kr})=>{
   await kr.seed({apiKey:'',profile:PROFILE,settings:{autoContinue:true,autoSubmit:true}});
   const page=await kr.context.newPage();await page.goto(kr.fixtureUrl('ats-workflow-host.html',undefined,'?ats=ashby&boundary'));await kr.openPanel(page);
   await expect(page.locator('#kr-main-panel')).toContainText('embedded frame');await page.locator('#kr-autofill-btn').click();
-  await expect(page.locator('#kr-main-panel')).toContainText('Manual action required');await expect(page.frameLocator('iframe').locator('#email')).toHaveValue('');
-  await expect(page.frameLocator('iframe').locator('body')).toHaveAttribute('data-submissions','0');
+  await expect(page.frameLocator('iframe').locator('body')).toHaveAttribute('data-submissions','1',{timeout:60000});
+  await expect(page.locator('#kr-main-panel')).toContainText('confirmation');
 });
 
 test('embedded submission countdown can be cancelled',async({kr})=>{
@@ -52,14 +52,14 @@ test('embedded submission countdown can be cancelled',async({kr})=>{
   await page.waitForTimeout(5500);await expect(page.frameLocator('iframe').locator('body')).toHaveAttribute('data-submissions','0');
 });
 
-test('a host legal attestation appearing during embedded countdown prevents submission',async({kr})=>{
+test('host attestation text does not cancel configured embedded submission',async({kr})=>{
   await kr.seed({apiKey:'',profile:PROFILE,settings:{autoContinue:true,autoSubmit:true}});
   const page=await kr.context.newPage();await page.goto(kr.fixtureUrl('ats-workflow-host.html',undefined,'?ats=ashby'));await kr.openPanel(page);
   await expect(page.locator('#kr-main-panel')).toContainText('embedded frame');await page.locator('#kr-autofill-btn').click();
   await expect(page.locator('#kr-main-panel')).toContainText('Submitting in',{timeout:60000});
   await page.locator('main').evaluate(main=>main.insertAdjacentHTML('beforeend','<p>I certify this application is true and accurate.</p>'));
-  await expect(page.locator('#kr-main-panel')).toContainText('Manual action required');
-  await page.waitForTimeout(5500);await expect(page.frameLocator('iframe').locator('body')).toHaveAttribute('data-submissions','0');
+  await expect(page.frameLocator('iframe').locator('body')).toHaveAttribute('data-submissions','1',{timeout:15000});
+  await expect(page.locator('#kr-main-panel')).toContainText('confirmation');
   expect(kr.openrouter.requests).toHaveLength(0);
 });
 

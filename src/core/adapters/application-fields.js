@@ -1,5 +1,5 @@
 import { parsePhoneNumberFromString } from 'libphonenumber-js/min';
-import { countryCode, explicitCountryCode } from './canonical.js';
+import { countryCode, explicitCountryCode, countryCodes, countryNames, eligibilityCanonicalKey, eligibilityOptionMatches } from './canonical.js';
 import { fixedProfileAnswer } from '../profile.js';
 import { optionKey, findExactOption, readComboboxSelection } from '../fields/combobox.js';
 import { locationMatches } from '../location.js';
@@ -27,6 +27,7 @@ export function applicationOptionMatches(field, actual, expected) {
     const month=value=>/^\d+$/.test(value) ? Number(value) : ['january','february','march','april','may','june','july','august','september','october','november','december'].findIndex(name=>name===optionKey(value) || name.slice(0,3)===optionKey(value))+1;
     return Boolean(month(actual) && month(actual)===month(expected));
   }
+  if (['work_auth','sponsorship'].includes(key)) return eligibilityOptionMatches(key, actual, expected);
   return false;
 }
 const aliases = { name: 'full_name', legal_name: 'full_name', preferred_name: 'preferred_first_name', first_name_preferred: 'preferred_first_name', last_name_preferred: 'preferred_last_name', phone_number: 'phone', candidate_name: 'full_name', candidate_email: 'email', candidate_phone: 'phone', race: 'ethnicity', veteran: 'veteran_v2', veteran_status: 'veteran_v2', disability: 'disability_v2', disability_status: 'disability_v2', lgbt: 'lgbt_v2', hispanic_ethnicity: 'hispanic', authorization: 'work_auth', sponsorship: 'sponsorship', resume: 'resume', cover_letter: 'coverLetter', cover_letter_text: 'coverLetter' };
@@ -77,8 +78,8 @@ export function canonicalField(element, label, row = false) {
   if (/highest (?:degree|level of education)|^education level$/.test(text)) return 'highestDegree';
   if (/^(?:how (?:did|do) you (?:hear|learn)|where did you (?:hear|find)|(?:application|referral) source|source)/.test(text)) return 'source';
   const choice = element.matches('select,button,input[type=checkbox],input[type=radio],[role=combobox],input[aria-autocomplete],.ashby-application-form-input-yesno,.select2-container');
-  if (choice && /(?:authorized|authorised|authorization|right|eligible) (?:to )?work|work authori[sz]/.test(text) && !/sponsor|assistance/.test(text)) return 'work_auth';
-  if (choice && /sponsor|require (?:our )?assistance/.test(text) && !/authoriz/.test(text)) return 'sponsorship';
+  const eligibility = choice && eligibilityCanonicalKey(text);
+  if (eligibility) return eligibility;
   if (choice || element.matches('input') && text.length < 50) {
     if (/transgender/.test(text)) return 'transgender';
     if (/^(?:what (?:is|are) your |your |please (?:select|indicate) your )?(?:gender(?: identity)?|sex)(?: \(optional\))?$/.test(text) || /^i identify my gender as/.test(text)) return 'gender';
@@ -113,16 +114,32 @@ export function applicationMetadata(element, adapter, { container, title, rowSel
   return metadata;
 }
 
-function eligibilityValue(field, profile, jobContext) {
-  const label = field.label || '';
-  const countries = [...new Set((label.match(/\b(?:Canada|United States(?: of America)?|USA|U\.S\.|United Kingdom|UK|Germany|France|Australia|India|Ireland|Netherlands|Singapore)\b/gi) || []).map(countryCode).filter(Boolean))];
+export function eligibilityValue(field, profile, jobContext) {
+  const label = `${field.label || ''} ${field.description || ''}`;
+  const normalized = ` ${optionKey(label).replace(/[^\p{L}\p{N}]+/gu,' ')} `;
+  const countries = [...countryCodes].filter(code => normalized.includes(` ${optionKey(countryNames.of(code)).replace(/[^\p{L}\p{N}]+/gu,' ')} `));
+  if (/\b(?:u\.s\.(?:a\.)?|USA|US)\b/.test(label) || /\b(?:u s|u s a|usa)\b/.test(normalized)) countries.push('US');
+  if (/\b(?:u k|uk)\b/.test(normalized)) countries.push('GB');
+  if (/\b(?:uae|u a e)\b/.test(normalized)) countries.push('AE');
+  const uniqueCountries = [...new Set(countries)];
+  if (uniqueCountries.length > 1) return '';
+  // An unrecognized explicit work country is not an implicit-country question.
+  if (!uniqueCountries.length && /\b(?:work|employment|sponsorship)(?: authorization| eligibility)? (?:in|within) (?!(?:(?:the|a) )?(?:(?:job |work )?country|future)\b|(?:this|that)\b)/.test(normalized)) return '';
   const jobCountry = typeof jobContext?.workCountry === 'string' ? countryCode(jobContext.workCountry) : explicitCountryCode(jobContext?.location?.split(',').at(-1)?.trim());
-  const target = countries.length === 1 ? countries[0] : countries.length ? '' : jobCountry;
-  if (!target) return '';
-  const records = (profile.workEligibilities?.length ? profile.workEligibilities : [{ country:profile.workCountry, workAuthorization:profile.workAuthorization, sponsorshipNow:profile.sponsorshipNow, sponsorshipFuture:profile.sponsorshipFuture }]).filter(record => record.enabled !== false && countryCode(record.country) === target);
+  const target = uniqueCountries.length === 1 ? uniqueCountries[0] : jobCountry;
+  const records = (profile.workEligibilities?.length ? profile.workEligibilities : [{ country:profile.workCountry, workAuthorization:profile.workAuthorization, sponsorshipNow:profile.sponsorshipNow, sponsorshipFuture:profile.sponsorshipFuture }]).filter(record => record.enabled !== false && (!target || countryCode(record.country) === target));
   if (records.length !== 1) return '';
   const record = records[0];
-  if (field.ats.canonicalKey === 'work_auth') return record.workAuthorization || '';
+  if (field.ats?.canonicalKey === 'work_auth') {
+    if (!/\bwithout\b.*(?:sponsor|visa)|\b(?:do not|not) (?:require|need).*sponsor/i.test(label)) return record.workAuthorization || '';
+    const sponsorship = /future|ever/i.test(label)
+      ? /now|current/i.test(label) ? [record.sponsorshipNow,record.sponsorshipFuture] : [record.sponsorshipFuture]
+      : [record.sponsorshipNow];
+    if (record.workAuthorization === 'No' || sponsorship.includes('Yes')) return 'No';
+    return record.workAuthorization === 'Yes' && sponsorship.every(value => value === 'No') ? 'Yes' : '';
+  }
+  if (field.ats?.canonicalKey === 'sponsorship_now') return record.sponsorshipNow || '';
+  if (field.ats?.canonicalKey === 'sponsorship_future') return record.sponsorshipFuture || '';
   if (/future|ever/i.test(label)) return /now|current/i.test(label) ? record.sponsorshipNow === 'Yes' || record.sponsorshipFuture === 'Yes' ? 'Yes' : record.sponsorshipNow === 'No' && record.sponsorshipFuture === 'No' ? 'No' : '' : record.sponsorshipFuture || '';
   if (/now|current/i.test(label)) return record.sponsorshipNow || '';
   return record.sponsorshipNow === record.sponsorshipFuture ? record.sponsorshipNow || '' : '';
@@ -147,7 +164,7 @@ export function applicationProfileValue(field, profile, { jobContext } = {}) {
     return record[key] ?? '';
   }
   if (key === 'source') return 'LinkedIn';
-  if (['work_auth', 'sponsorship'].includes(key)) return eligibilityValue(field, profile, jobContext) || (/^(Yes|No)$/.test(profile.savedAnswers?.[field.label]) ? profile.savedAnswers[field.label] : '');
+  if (['work_auth', 'sponsorship'].includes(key)) return eligibilityValue(field, profile, jobContext) || profile.savedAnswers?.[field.label] || '';
   if (key === 'current_company_name') {
     const current = profile.workExperiences?.filter(record => record.enabled !== false && record.current);
     return current?.length === 1 ? current[0].company || '' : '';
@@ -168,7 +185,7 @@ export function applicationProfileValue(field, profile, { jobContext } = {}) {
 export function applicationAnswer(field, profile, options = {}) {
   let value = applicationProfileValue(field, profile, options);
   if (value === undefined) return null;
-  if (value === '' && !field.ats.rowId && !DISCLOSURES.has(field.ats.canonicalKey) && !['work_auth','sponsorship'].includes(field.ats.canonicalKey)) {
+  if (value === '' && !field.ats.rowId) {
     value = profile.savedAnswers?.[field.label] ?? '';
   }
   const answer = { fieldId:field.fieldId || field.id, value, inferred:false, provenance:field.ats.canonicalKey === 'source' ? 'inferred' : 'saved' };
@@ -176,10 +193,10 @@ export function applicationAnswer(field, profile, options = {}) {
   const values = Array.isArray(value) ? value : [value];
   const matches = values.map(item => findExactOption(field.options || [], item, field));
   if (matches.some(item => !item)) {
-    // Existing disclosure aliases are narrow; an absent choice never reaches AI.
+    // Resolve known aliases first; otherwise the page request handles this field.
     const labels={gender:'Gender',pronouns:'Pronouns',ethnicity:'Ethnicity',veteran_v2:'Veteran status',disability_v2:'Disability status',source:'Source'};
     const alias = labels[field.ats.canonicalKey] ? fixedProfileAnswer({...field,label:labels[field.ats.canonicalKey]}, profile, options) : null;
-    return alias?.value ? { ...answer, ...alias, provenance:answer.provenance } : { ...answer, value:'', ...(field.type === 'combobox' && options.allowSearch !== false ? {searchQuery:String(value)} : {}) };
+    return alias?.value ? { ...answer, ...alias, provenance:answer.provenance } : { ...answer, value:'', ...(field.type === 'combobox' && options.allowSearch !== false && !['work_auth','sponsorship'].includes(field.ats.canonicalKey) ? {searchQuery:String(value)} : {}) };
   }
   return { ...answer, value: Array.isArray(value) ? matches.map(item => field.type === 'combobox' ? item.label : item.value) : field.type === 'combobox' ? matches[0].label : matches[0].value };
 }

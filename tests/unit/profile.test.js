@@ -115,14 +115,14 @@ test('source dropdowns use only owned LinkedIn options; missing option stays emp
   assert.equal(answers.find(a => a.fieldId === 'missing').searchQuery, 'LinkedIn');
 });
 
-test('unset demographics reject model guesses while explicit decline maps to offered choice', async () => {
+test('unset demographics accept contextual AI while explicit decline maps to the offered choice', async () => {
   saveProfile({ disabilityStatus: 'Prefer not to answer' });
   respond([{ fieldId: 'gender', value: 'Man' }, { fieldId: 'disability', value: 'No' }]);
   const { answers } = await generateAutofillAnswers([
     { fieldId: 'gender', label: 'Gender', type: 'text' },
     { fieldId: 'disability', label: 'Disability status', type: 'select', options: [{ value: 'no', label: 'No' }, { value: 'decline', label: 'I do not wish to answer' }] },
   ]);
-  assert.equal(answers.find(a => a.fieldId === 'gender').value, '');
+  assert.equal(answers.find(a => a.fieldId === 'gender').value, 'Man');
   assert.equal(answers.find(a => a.fieldId === 'disability').value, 'decline');
 });
 

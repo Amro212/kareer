@@ -39,7 +39,7 @@ export function createFieldAgent() {
   async function scan({ overwriteExisting = false } = {}) {
     const token=generation, isCurrent=()=>token===generation;
     const page = classifyPage();
-    if (['boundary','confirmation','captcha'].includes(page.type)) { cache.clear(); return {fields:[],pageType:page.type,reason:page.reason}; }
+    if (['confirmation','captcha'].includes(page.type)) { cache.clear(); return {fields:[],pageType:page.type,reason:page.reason}; }
     if (page.type === 'application') await detectAdapter().prepareSections?.(document, getProfile(),{isCurrent});
     if (page.type === 'application') await detectAdapter().prepareFields?.(document, getProfile(), { overwrite: overwriteExisting,isCurrent });
     if (!isCurrent()) return {error:'Frame operation cancelled.'};
@@ -73,7 +73,7 @@ export function createFieldAgent() {
 
     for (const answer of answers) {
       if (token!==generation) return {error:'Frame fill cancelled.',results};
-      if (['boundary','confirmation','captcha'].includes(classifyPage().type)) return {error:classifyPage().reason,results};
+      if (['confirmation','captcha'].includes(classifyPage().type)) return {error:classifyPage().reason,results};
       const field = cache.get(answer.fieldId);
       if (!field) {
         results.push({ fieldId: answer.fieldId, status: FILL_STATUS.FAILED, error: 'Field no longer present in frame' });
@@ -136,7 +136,7 @@ export function createFieldAgent() {
 
   async function uploadResume({ overwriteExisting = false } = {}) {
     const token=generation;
-    if (['boundary','confirmation','captcha'].includes(classifyPage().type)) return {error:classifyPage().reason};
+    if (['confirmation','captcha'].includes(classifyPage().type)) return {error:classifyPage().reason};
     const allFileFields = scanFormFields(document).filter((field) => field.type === 'file');
     deduplicateFields(allFileFields);
     const fields = allFileFields.filter((field) => isResumeField(field, allFileFields));

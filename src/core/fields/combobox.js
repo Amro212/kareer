@@ -215,14 +215,15 @@ export function setComboboxSearch(input, value) {
 export function closeCombobox(element) {
   const { input } = resolveComboboxParts(element);
   const target = input || element;
-  target.blur?.();
-  detectAdapter().afterComboboxClose?.(element);
-  // Workday listboxes treat Escape as "cancel the pick". Never send it.
-  if (detectAdapter().quirks.comboboxEscapeRollback) {
-    try {
-      element.ownerDocument.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
-    } catch {}
+  const adapter = detectAdapter();
+  // These ATS menus need Escape even if the control was never focused. Keep
+  // it away from generic page navigation and Workday's selection rollback.
+  if (['greenhouse','lever','ashby'].includes(adapter.id)) {
+    target.dispatchEvent(new target.ownerDocument.defaultView.KeyboardEvent('keydown', {key:'Escape',code:'Escape',bubbles:true,composed:true,cancelable:true}));
   }
+  target.blur?.();
+  adapter.afterComboboxClose?.(element);
+  element.ownerDocument.body.dispatchEvent(new element.ownerDocument.defaultView.MouseEvent('mousedown', {bubbles:true,cancelable:true,button:0}));
 }
 
 export function clickFieldControl(element) {

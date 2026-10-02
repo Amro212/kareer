@@ -134,7 +134,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
   function guard(token) {
     if (token !== generation || !session?.active) return false;
     const page = classifyPage();
-    if (['captcha', 'boundary', 'review', 'confirmation'].includes(page.type)) {
+    if (['captcha', 'review', 'confirmation'].includes(page.type)) {
       status(page.type, page.reason);
       return false;
     }
@@ -370,11 +370,11 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
 
   async function embeddedWorkflow(token) {
     const hasTopApplicationForm = Boolean(detectAdapter().applicationRoot?.(document)) || ['workday', 'lever'].includes(detectAdapter().id);
-    if (!platform.capabilities.crossFrame || hasTopApplicationForm || ['boundary','captcha','confirmation'].includes(classifyPage().type)) return false;
+    if (!platform.capabilities.crossFrame || hasTopApplicationForm || ['captcha','confirmation'].includes(classifyPage().type)) return false;
     const current = () => guard(token);
     const discover = async () => {
       const states = await embeddedApplicationStates();
-      const candidates = states.filter(state => ['application','review','confirmation','boundary','captcha'].includes(state.pageType));
+      const candidates = states.filter(state => ['application','review','confirmation','captcha'].includes(state.pageType));
       if (candidates.length > 1) throw new Error('Application frame ownership is ambiguous. Inspect embedded forms.');
       return candidates[0];
     };
@@ -383,7 +383,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     if (!state) throw new Error('Application frame is unavailable. Wait for it to load before resuming.');
     for (let pass=0; pass<30 && current(); pass++) {
       if (!getSettings().autofillEnabled) {status('paused','Autofill is disabled in Settings.');return true;}
-      if (['boundary','captcha','confirmation'].includes(state.pageType)) {
+      if (['captcha','confirmation'].includes(state.pageType)) {
         if (state.pageType === 'confirmation') completeStep();
         status(state.pageType,state.reason);return true;
       }

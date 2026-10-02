@@ -30,7 +30,7 @@ export const ashbyAdapter = {
   excludeField: element => Boolean(element.closest('[role=listbox],.ashby-select-menu,[class*="jobFilter"]')),
   profileValue: applicationProfileValue,
   resolveAnswer: applicationAnswer,
-  searchQuery: (field, value) => DISCLOSURES.has(field.ats?.canonicalKey) ? '' : value,
+  searchQuery: (field, value) => DISCLOSURES.has(field.ats?.canonicalKey) || ['work_auth','sponsorship'].includes(field.ats?.canonicalKey) ? '' : value,
   optionMatches: applicationOptionMatches,
   needsFill: applicationNeedsFill,
   prepareSections(doc, profile, options) { return prepareApplicationSections(doc, profile, this, [
@@ -100,10 +100,6 @@ export const ashbyAdapter = {
   },
   comboboxToggle(element) {
     return element?.parentElement?.querySelector('button[class*="_toggleButton_"]') || null;
-  },
-  afterComboboxClose(element) {
-    // Floating menus hide sibling questions from accessibility until dismissed.
-    element.dispatchEvent(new element.ownerDocument.defaultView.KeyboardEvent('keydown', {key:'Escape',code:'Escape',bubbles:true,composed:true,cancelable:true}));
   },
   continueControl() {
     return null;

@@ -50,7 +50,7 @@ for (const [ats, host] of [['ashby', ASHBY_HOST], ['lever', LEVER_HOST]]) {
 }
 
 test('resume parsing honors overwrite and workflow target rescanning', async ({ kr }) => {
-  await kr.seed({ profile: PROFILE, settings: { overwriteExisting: true, autoContinue: false },
+  await kr.seed({ profile: { ...PROFILE, linkedin: 'https://linkedin.com/in/test' }, settings: { overwriteExisting: true, autoContinue: false },
     resume: { name: 'Resume.pdf', type: 'application/pdf', contents: '%PDF-1.4 test' } });
   const page = await kr.context.newPage();
   await page.goto(kr.fixtureUrl('ats-race-fixture.html', ASHBY_HOST, '?ats=ashby&workflow'));
@@ -61,6 +61,7 @@ test('resume parsing honors overwrite and workflow target rescanning', async ({ 
   await expect(page.locator('body')).toHaveAttribute('data-parse', 'complete');
   await expect(page.locator('#name')).toHaveValue(PROFILE.fullName);
   await expect(page.locator('#email')).toHaveValue(PROFILE.email);
+  await expect(page.locator('#linkedin')).toHaveValue('https://linkedin.com/in/test');
   expect(kr.openrouter.requests).toHaveLength(0);
 });
 
@@ -79,7 +80,7 @@ test('pause during resume parsing prevents AI requests and later field fills', a
 });
 
 test('embedded Ashby parser completes before the parent asks for answers', async ({ kr }) => {
-  await kr.seed({ profile: PROFILE, resume: { name: 'Resume.pdf', type: 'application/pdf', contents: '%PDF-1.4 test' } });
+  await kr.seed({ profile: { ...PROFILE, linkedin: 'https://linkedin.com/in/test' }, resume: { name: 'Resume.pdf', type: 'application/pdf', contents: '%PDF-1.4 test' } });
   const page = await kr.context.newPage();
   await page.route('**/embedded-application.html', route => route.fulfill({ contentType: 'text/html', body:
     readFileSync(new URL('../../fixtures/ats-race-fixture.html', import.meta.url), 'utf8').replace('<body>', '<body data-ashby-root>') }));
@@ -92,6 +93,7 @@ test('embedded Ashby parser completes before the parent asks for answers', async
   await expect(frame.locator('body')).toHaveAttribute('data-parse', 'complete');
   await expect(frame.locator('#name')).toHaveValue('Parsed Applicant');
   await expect(frame.locator('#email')).toHaveValue(PROFILE.email);
+  await expect(frame.locator('#linkedin')).toHaveValue('https://linkedin.com/in/test');
   expect(kr.openrouter.requests).toHaveLength(0);
 });
 

@@ -21,6 +21,33 @@ import { locationMatches } from '../location.js';
 
 export const canonicalNorm = value => String(value || '').normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
 
+export function eligibilityCanonicalKey(label) {
+  const text = canonicalNorm(label);
+  const authorization = /(?:authorized|authorised|authorization|right|eligible|eligibility) (?:to |for )?(?:work|employment)|(?:work|employment) (?:authori[sz]|eligib)/.test(text);
+  const withoutSponsorship = /\bwithout\b.*(?:sponsor|visa)|\b(?:do not|not) (?:require|need).*sponsor/.test(text);
+  if (authorization && (withoutSponsorship || !/sponsor|(?:require|need).*visa/.test(text))) return 'work_auth';
+  if (/(?:require|need).*visa|sponsor|require (?:our )?assistance/.test(text)) return 'sponsorship';
+  return '';
+}
+
+export function eligibilityOptionMatches(canonical, actual, expected) {
+  const text = canonicalNorm(actual), value = canonicalNorm(expected);
+  if (text === value) return true;
+  const wanted = /^(?:yes|true)$/.test(value) ? 'yes' : /^(?:no|false)$/.test(value) ? 'no' : '';
+  if (!wanted) return false;
+  // A leading "No" can mean "No restrictions", not a negative answer.
+  const explicit = /^(yes|no)(?:$|\s*[,.:;!]|\s+i\b)/.exec(text)?.[1];
+  if (explicit) return explicit === wanted;
+  if (canonical === 'work_auth') {
+    const negative = /^(?:i am (?:legally )?)?not (?:authorized|authorised|eligible)\b|^(?:i (?:do not|don't) have (?:the )?(?:right|authori[sz]ation) to work|cannot (?:legally )?work)\b/.test(text);
+    const positive = /^(?:i am (?:legally )?|legally )?(?:authorized|authorised|eligible)\b|^no restrictions on (?:my |the )?right to work$/.test(text);
+    return wanted === 'no' ? negative : positive;
+  }
+  const negative = /^(?:i )?(?:do not|don't|will not|won't) (?:require|need)\b|^no (?:visa |employment )?sponsorship (?:is )?(?:required|needed)$/.test(text);
+  const positive = /^(?:i (?:will )?|will )?(?:require|need) (?:visa |employment )?sponsorship\b/.test(text);
+  return wanted === 'no' ? negative : positive;
+}
+
 export const countryNames = new Intl.DisplayNames(['en'], { type: 'region' });
 export const frenchCountries = new Intl.DisplayNames(['fr'], { type: 'region' });
 export const countryCodes = new Set(getCountries());
@@ -200,7 +227,7 @@ export function canonicalProfileValue(canonical, profile, record) {
   const value = directKey ? profile[directKey] : undefined;
   if (value) return value;
 
-  // Optional disclosures have no factual fallback; unset means leave blank.
+  // An unset disclosure has no deterministic profile value; page AI handles context.
   if (OPTIONAL_DISCLOSURE_KEYS.has(canonical)) return '';
 
   return undefined;
@@ -210,6 +237,8 @@ export function canonicalOptionMatches(canonical, actual, expected) {
   const normActual = canonicalNorm(actual);
   const normExpected = canonicalNorm(expected);
   if (normActual === normExpected) return true;
+
+  if (['work_auth','sponsorship','sponsorship_now','sponsorship_future'].includes(canonical)) return eligibilityOptionMatches(canonical, actual, expected);
 
   if (canonical === 'location') {
     return locationMatches(actual, expected);
