@@ -21,7 +21,7 @@ async function openApplication(kr, { stall = false } = {}) {
 test('Lever hydrated job and session remain plain data and survive filling and reload', async ({ kr }) => {
   const page = await openApplication(kr);
   await expect.poll(async () => (await kr.readStorage('kr:job'))?.description).toBe(DESCRIPTION);
-  await page.locator('#kr-capture-job').click();
+  await expect(page.locator('#kr-capture-job')).toHaveCount(0);
   await expect.poll(async () => {
     const ids = await kr.readStorage('kr:sessions');
     return ids?.[0] && (await kr.readStorage(`kr:sessions:${ids[0]}`))?.job.description;
@@ -34,7 +34,7 @@ test('Lever hydrated job and session remain plain data and survive filling and r
   await page.locator('#kr-autofill-btn').click();
   await expect(page.locator('#name')).toHaveValue(PROFILE.fullName);
   await expect(page.locator('#email')).toHaveValue(PROFILE.email);
-  await expect(page.locator('#kr-autofill-btn')).toHaveText(/next step/i);
+  await expect(page.locator('#kr-main-panel')).toContainText('Autofill complete. Review field statuses below.');
   const filled = await kr.readStorage(`kr:sessions:${id}`);
   expect(Object.keys(filled.answers).length).toBeGreaterThanOrEqual(2);
   expect(filled.job.description).toBe(DESCRIPTION);

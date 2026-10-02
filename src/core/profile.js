@@ -1,4 +1,5 @@
 import { isResidenceLabel, locationMatches } from './location.js';
+import { countryCode, countryNames, countryCodes } from './adapters/canonical.js';
 
 const yesNo = ['Yes', 'No'];
 const disclosure = ['Yes', 'No', 'Prefer not to answer'];
@@ -242,6 +243,15 @@ export function fixedProfileAnswer(field, profile, { allowSearch = true } = {}) 
   const label = normalize(field.label);
   const synthesizedLocation = (profile.location?.trim() || [profile.city, profile.stateProvince, profile.country].filter(Boolean).join(', ')).trim();
 
+  const identityKey = /^(?:your )?(?:full name|legal name|name)$/.test(label) ? 'fullName'
+    : /^(?:legal )?first name$/.test(label) ? 'firstName'
+    : /^(?:legal )?last name$/.test(label) ? 'lastName'
+    : /^(?:your )?e ?mail(?: address)?$/.test(label) ? 'email'
+    : /^(?:your )?(?:phone|phone number|telephone|mobile number)$/.test(label) ? 'phone' : null;
+  if (identityKey && ['text', 'email', 'tel'].includes(field.type) && profile[identityKey]) {
+    return { fieldId: field.fieldId, value: profile[identityKey], inferred: false, source: 'profile' };
+  }
+
   if (['text', 'textarea', 'url'].includes(field.type)) {
     let addressKey = null;
     if (/^(?:street address|address line 1|address 1|street|mailing address)$/i.test(label)) {
@@ -301,6 +311,40 @@ export function fixedProfileAnswer(field, profile, { allowSearch = true } = {}) 
   if (source && !match && field.type === 'combobox' && allowSearch) answer.searchQuery = 'LinkedIn';
   return answer;
 
+}
+
+// Eligibility is country scoped even when the question itself omits a country.
+// Empty/ambiguous scope must not be replaced by an AI or saved-answer guess.
+export function workEligibilityAnswer(field, profile, job) {
+  const text = `${field.label || ''} ${field.description || ''}`;
+  const sponsorship = /\b(?:visa|immigration|employment) sponsorship\b|\brequire.*sponsor/i.test(text);
+  const authorization = /\b(?:authorized|eligible|authorization|legal right)\b.*\bwork\b|\bwork (?:authorization|eligibility)\b/i.test(text);
+  if (!sponsorship && !authorization) return null;
+  const normalized = ` ${text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ')} `;
+  const countries = Array.from(countryCodes).filter(code => normalized.includes(` ${countryNames.of(code).toLowerCase()} `));
+  if (/\b(?:u s|u s a|usa)\b/.test(normalized)) countries.push('US');
+  if (/\b(?:u k|uk)\b/.test(normalized)) countries.push('GB');
+  const explicit = [...new Set(countries)];
+  const target = explicit.length === 1 ? explicit[0] : explicit.length ? '' : countryCode(job?.workCountry);
+  const records = (profile.workEligibilities || []).filter(record => record?.enabled !== false);
+  const record = target ? records.find(record => countryCode(record.country) === target)
+    || (countryCode(profile.workCountry) === target ? profile : null) : null;
+  let value = '';
+  if (record) {
+    if (sponsorship) {
+      const now = record.sponsorshipNow, future = record.sponsorshipFuture;
+      value = /\bnow\b.*\bfuture\b|\bfuture\b.*\bnow\b/i.test(text)
+        ? now === 'Yes' || future === 'Yes' ? 'Yes' : now === 'No' && future === 'No' ? 'No' : ''
+        : /\bfuture\b/i.test(text) ? future : now;
+    } else value = record.workAuthorization;
+    if (authorization && /\blive\b|\breside\b/i.test(text) && value !== 'No') value = '';
+  }
+  if (value && ['select', 'radio', 'combobox'].includes(field.type)) {
+    const choices = (field.options || []).filter(option => new RegExp(`^${value}\\b`, 'i').test(option.label));
+    value = choices.length === 1 ? field.type === 'combobox' ? choices[0].label : choices[0].value : '';
+  }
+  if (field.type === 'checkbox') value = '';
+  return { fieldId: field.fieldId || field.id, value: value || '', inferred: false, source: 'profile', provenance: value ? 'saved' : 'unresolved' };
 }
 
 export const MVP_PROFILE_FIELDS = [

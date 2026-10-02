@@ -153,7 +153,7 @@ export function extractGroupLabel(elements = [], groupName = '') {
   }
 
   // 2. Check closest form group / question container
-  const container = firstEl.closest('.form-group, .field, [role="radiogroup"], [role="group"], .question, div');
+  const container = firstEl.closest('.form-group, .field, [role="radiogroup"], [role="group"], .question') || firstEl.closest('div');
   if (container) {
     // Check aria-label on container
     const ariaLabel = container.getAttribute('aria-label');

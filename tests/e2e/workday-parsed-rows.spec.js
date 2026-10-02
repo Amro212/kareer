@@ -89,7 +89,7 @@ test('Workday application workflow reconciles saved rows before its review pause
   const page = await kr.context.newPage();
   await page.goto(kr.fixtureUrl('workday-parsed-rows-fixture.html', WORKDAY_HOST));
   await kr.openPanel(page);
-  await page.locator('#kr-capture-job').click();
+  await expect(page.locator('#kr-capture-job')).toHaveCount(0);
   await page.locator('#kr-autofill-btn').click();
   await expect(page.locator('#kr-autofill-btn')).toHaveText(/next step/i, { timeout: 60000 });
   await expect(page.locator('#workExperience-1--jobTitle')).toHaveValue('Senior Developer');

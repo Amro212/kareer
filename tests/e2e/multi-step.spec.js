@@ -16,7 +16,7 @@ test.describe('multi-step application workflow', () => {
     const page = await kr.context.newPage();
     await page.goto(kr.fixtureUrl('phase3-application-fixture.html', undefined, '?step=1'));
     await kr.openPanel(page);
-    await page.locator('#kr-capture-job').click();
+    await expect(page.locator('#kr-capture-job')).toHaveCount(0);
     await page.locator('#kr-autofill-btn').click();
     await expect(page.locator('#kr-autofill-btn')).toHaveText(/next step/i, { timeout: 60000 });
     await page.locator('#fullName').fill('User corrected name');
@@ -35,7 +35,7 @@ test.describe('multi-step application workflow', () => {
     await page.goto(kr.fixtureUrl('phase3-application-fixture.html', undefined, '?scenario=validation&step=1'));
     await kr.openPanel(page);
 
-    await page.locator('#kr-capture-job').click();
+    await expect(page.locator('#kr-capture-job')).toHaveCount(0);
     await page.locator('#kr-autofill-btn').click();
 
     // The fixture advances by URL, so the engine must survive real navigations and
@@ -58,7 +58,7 @@ test.describe('multi-step application workflow', () => {
     const page = await kr.context.newPage();
     await page.goto(kr.fixtureUrl('phase3-application-fixture.html', undefined, '?scenario=validation&step=1'));
     await kr.openPanel(page);
-    await page.locator('#kr-capture-job').click();
+    await expect(page.locator('#kr-capture-job')).toHaveCount(0);
     await page.locator('#kr-autofill-btn').click();
 
     await expect(page.locator('#kr-main-panel')).toContainText('Ready for review', { timeout: 90000 });
@@ -81,7 +81,7 @@ test.describe('multi-step application workflow', () => {
     const page = await kr.context.newPage();
     await page.goto(kr.fixtureUrl('phase3-application-fixture.html', undefined, '?scenario=validation&step=1'));
     await kr.openPanel(page);
-    await page.locator('#kr-capture-job').click();
+    await expect(page.locator('#kr-capture-job')).toHaveCount(0);
 
     const ids = await kr.readStorage('kr:sessions');
     expect(ids.length).toBe(1);

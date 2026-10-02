@@ -20,7 +20,17 @@ export function isVisible(element) {
 
 export function visibleText(root = document.body) {
   if (!root || !isVisible(root)) return '';
-  return Array.from(root.childNodes).map(node => node.nodeType === 3 ? node.textContent : node.nodeType === 1 ? visibleText(node) : '').join(' ').replace(/\s+/g, ' ').trim();
+  // Ancestors were checked at entry. Descendants only need their own visibility
+  // checked; walking every ancestor again makes classification quadratic in depth.
+  const read = node => {
+    if (node.nodeType === 3) return node.textContent;
+    if (node.nodeType !== 1 || node.hidden || node.getAttribute('aria-hidden') === 'true' ||
+      node.matches(`#${UI_IDS.CONTAINER}, #${UI_IDS.INLINE_REWRITE}, script, style, template`)) return '';
+    const style = node.ownerDocument.defaultView?.getComputedStyle(node);
+    if (style?.display === 'none' || style?.visibility === 'hidden') return '';
+    return Array.from(node.childNodes, read).join(' ');
+  };
+  return Array.from(root.childNodes, read).join(' ').replace(/\s+/g, ' ').trim();
 }
 
 export function classifyPage(doc = document) {

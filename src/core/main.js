@@ -1,8 +1,13 @@
-import { APP_NAME, APP_VERSION } from './constants.js';
+import { APP_NAME, APP_VERSION, UI_IDS } from './constants.js';
 import { initializeStorage, resetAll } from './storage.js';
-import { platform } from './platform.js';
+import { platform, getHostName } from './platform.js';
 import { logger } from './debug.js';
-import { mountUI, toggleUIVisibility, exportUserBackup } from './ui.js';
+import { mountUI, unmountUI, syncJobContext, toggleUIVisibility, exportUserBackup } from './ui.js';
+import { captureJob, isJobPage } from './jobs.js';
+
+let pageObserver = null;
+let pageTimer = null;
+let unsubscribePageNavigation = null;
 
 function registerMenuCommands() {
   if (!platform.capabilities.menuCommands) return;
@@ -37,7 +42,41 @@ export function bootstrap() {
   try {
     initializeStorage();
     registerMenuCommands();
-    mountUI();
+    const reconcile = () => {
+      if (!isJobPage()) {
+        unmountUI();
+        const root = document.getElementById(UI_IDS.CONTAINER);
+        if (root?.getAttribute('data-kr-host') === getHostName()) root.remove();
+        return;
+      }
+      const job = captureJob();
+      mountUI();
+      syncJobContext(job);
+      job.pendingHydration?.then(() => {
+        if (document.location.href === job.applicationUrl || document.location.href === job.listingUrl) syncJobContext(job);
+      });
+    };
+    const schedule = () => {
+      clearTimeout(pageTimer);
+      pageTimer = setTimeout(reconcile, 250);
+    };
+    pageObserver?.disconnect();
+    pageObserver = new MutationObserver(mutations => {
+      const relevant = mutations.some(mutation => {
+        const element = mutation.target.nodeType === 1 ? mutation.target : mutation.target.parentElement;
+        if (element?.closest(`#${UI_IDS.CONTAINER}, #${UI_IDS.INLINE_REWRITE}`)) return false;
+        if (element?.closest('h1,h2,[role="heading"],.job__location,.job-location,.ashby-job-posting-left-pane,[data-testid="job-location"],.job-description,.job__description')) return true;
+        if (mutation.type === 'characterData') return false;
+        return Array.from([...mutation.addedNodes, ...mutation.removedNodes]).some(node => node.nodeType === 1 &&
+          !node.matches(`#${UI_IDS.CONTAINER}, #${UI_IDS.INLINE_REWRITE}`) &&
+          (node.matches('main,h1,h2,form,input,textarea,iframe,script[type="application/ld+json"],.job__location,.job-description,.job__description') || node.querySelector('h1,h2,form,input,textarea,iframe,script[type="application/ld+json"]')));
+      });
+      if (relevant) schedule();
+    });
+    pageObserver.observe(document.body || document.documentElement, { childList: true, subtree: true, characterData: true });
+    unsubscribePageNavigation?.();
+    unsubscribePageNavigation = platform.navigation.onChange(schedule);
+    reconcile();
     logger.info(`${APP_NAME} v${APP_VERSION} initialized on ${window.location.hostname}`);
   } catch (err) {
     console.error(`[${APP_NAME}] Initialization error:`, err);

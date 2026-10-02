@@ -18,6 +18,12 @@ beforeEach(() => {
   saveProfile({});
 });
 
+test('nested radio options retain the country-scoped question from the form group', () => {
+  document.querySelector('main').innerHTML = '<div class="form-group"><label>Are you legally authorized to work in the United States?</label><div class="radio-group"><label><input type="radio" name="auth" value="yes">Yes</label><label><input type="radio" name="auth" value="no">No</label></div></div>';
+  const [field] = scanFormFields();
+  assert.equal(field.label, 'Are you legally authorized to work in the United States?');
+});
+
 function combo(id, labels, { selected = '', multi = false, delay = 0, portal = true, openEvent = 'mousedown' } = {}) {
   const shell = document.createElement('div');
   shell.innerHTML = `<label for="${id}">${id}</label><div class="select__control"><div class="select__value-container"><input id="${id}" role="combobox" aria-controls="${id}-menu"></div></div>`;
@@ -473,7 +479,7 @@ test('AI fill and rewrite prompts demand human voice and forbid em dashes', asyn
   assert.equal(rewriteTemp, 0.6);
 });
 
-test('structured and narrative passes use separate prompts and temperatures', async () => {
+test('mixed structured and narrative fields use one page request with candidate voice', async () => {
   saveApiKey('fixture-key');
   const requests = [];
   globalThis.GM_xmlhttpRequest = options => {
@@ -502,14 +508,9 @@ test('structured and narrative passes use separate prompts and temperatures', as
   ]);
 
   assert.equal(response.answers.length, 2);
-  const structuredReq = requests.find(r => r.messages[0].content.includes('filling structured fields'));
-  const narrativeReq = requests.find(r => r.messages[0].content.includes('writing open-ended job application responses'));
-  assert.ok(structuredReq, 'Structured request must be sent');
-  assert.ok(narrativeReq, 'Narrative request must be sent');
-  assert.equal(structuredReq.temperature, 0.2);
-  assert.equal(narrativeReq.temperature, 0.6);
-  assert.doesNotMatch(structuredReq.messages[0].content, /VOICE PROFILE/);
-  assert.match(narrativeReq.messages[0].content, /VOICE PROFILE/);
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].messages[0].content, /VOICE PROFILE/);
+  assert.deepEqual(JSON.parse(requests[0].messages[1].content).fieldsToFill.map(f => f.fieldId), ['why', 'role']);
 });
 
 test('free-text AI answers and rewrites strip em dashes but option values stay exact', async () => {

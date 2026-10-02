@@ -27,6 +27,16 @@ test('legacy profiles gain unset fields without losing their context', () => {
   assert.equal(profile.applicantNotes, 'Personal notes');
 });
 
+test('implicit eligibility uses the job country and never the sole applicant country', async () => {
+  saveProfile({ workEligibilities: [{ country: 'Canada', workAuthorization: 'Yes', sponsorshipNow: 'No', sponsorshipFuture: 'No' }, { country: 'United States', workAuthorization: 'No', sponsorshipNow: 'Yes', sponsorshipFuture: 'No' }] });
+  const fields = [{ fieldId: 'eligible', label: 'Are you eligible to work in the country in which you are applying?', type: 'radio', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] }];
+  respond([{ fieldId: 'eligible', value: 'yes' }]);
+  assert.equal((await generateAutofillAnswers(fields, { jobContext: { workCountry: 'United States' } })).answers[0].value, 'no');
+  assert.equal((await generateAutofillAnswers(fields, { jobContext: { workCountry: '', locationAmbiguous: true } })).answers[0].value, '');
+  fields[0].label = 'Are you authorized to work in Canada?';
+  assert.equal((await generateAutofillAnswers(fields, { jobContext: { workCountry: 'United States' } })).answers[0].value, 'yes');
+});
+
 test('residence grounding recognizes Canadian abbreviations without choosing another Toronto', async () => {
   saveProfile({ location: 'Toronto, Ontario' });
   const field = { fieldId: 'residence', label: 'Current location', type: 'combobox', options: [

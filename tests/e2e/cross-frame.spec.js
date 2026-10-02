@@ -58,7 +58,7 @@ test.describe('cross-origin embedded application', () => {
     expect(await frame.locator('input[name=work_auth]:checked').count()).toBe(1);
   });
 
-  test('embedded fields share one structured request regardless of narrative request order', async ({ kr }) => {
+  test('unresolved embedded fields share one page request after saved fields are resolved', async ({ kr }) => {
     await kr.seed({ profile: PROFILE });
 
     const page = await kr.context.newPage();
@@ -69,14 +69,16 @@ test.describe('cross-origin embedded application', () => {
     await page.locator('#kr-autofill-btn').click();
     await expect(page.locator('#kr-main-panel')).toContainText('Autofill complete. Review field statuses below.', { timeout: 60000 });
 
-    // Structured and narrative requests run concurrently; arrival order varies.
+    // Profile values are resolved locally; all remaining questions share a request.
     const structured = kr.openrouter.requests.filter(({ body }) => body.temperature === 0.2);
     expect(structured).toHaveLength(1);
     const fields = JSON.parse(structured[0].body.messages.at(-1).content).fieldsToFill;
 
     // Frame-namespaced ids prove the embedded controls were part of this request.
     const remote = fields.filter((field) => /^jcf\d+::/.test(field.fieldId));
-    expect(remote.length).toBeGreaterThanOrEqual(7);
+    expect(remote.length).toBeGreaterThanOrEqual(4);
+    expect(fields.some(field => /^(?:Full Name|Email|Phone|Current location)$/i.test(field.label))).toBe(false);
+    expect(kr.openrouter.requests).toHaveLength(1);
     expect(fields.every((field) => typeof field.label === 'string' && field.label.length > 0)).toBe(true);
   });
 

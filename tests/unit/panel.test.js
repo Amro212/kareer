@@ -94,6 +94,7 @@ test('panel autofill keeps field/source diagnostics without persisting applicant
     dom.window.eval(bundle.outputFiles[0].text);
     await new Promise(resolve => setTimeout(resolve, 30));
     const root = dom.window.document.querySelector('#kareer-root').shadowRoot;
+    root.querySelector('#kr-pebble-toggle-btn')?.click();
     root.querySelector('#kr-toggle-btn').click();
     root.querySelector('#kr-autofill-btn').click();
     for (let i = 0; i < 50 && !documentFilled(); i++) await new Promise(resolve => setTimeout(resolve, 100));
@@ -108,7 +109,7 @@ test('panel autofill keeps field/source diagnostics without persisting applicant
 
 test('workflow shows verified completion count and retained structural diagnostic', async () => {
   const bundle = await build({ entryPoints: ['src/targets/userscript/entry.js'], bundle: true, format: 'iife', write: false });
-  const dom = new JSDOM('<body></body>', { url: 'https://example.com/apply', runScripts: 'dangerously' });
+  const dom = new JSDOM('<title>Job Application</title><body></body>', { url: 'https://example.com/apply', runScripts: 'dangerously' });
   const storage = new Map([
     ['kr:sessions', ['diagnostic']],
     ['kr:sessions:diagnostic', {
@@ -125,6 +126,7 @@ test('workflow shows verified completion count and retained structural diagnosti
     dom.window.eval(bundle.outputFiles[0].text);
     await new Promise(resolve => setTimeout(resolve, 30));
     const root = dom.window.document.querySelector('#kareer-root').shadowRoot;
+    root.querySelector('#kr-pebble-toggle-btn')?.click();
     root.querySelector('#kr-toggle-btn').click();
     assert.match(root.textContent, /1\s+step completed/);
     assert.equal(root.querySelector('[data-tab=review]'), null);
@@ -139,7 +141,7 @@ test('workflow shows verified completion count and retained structural diagnosti
 
 test('profile sections save and reload explicit answers while preserving legacy context', async () => {
   const bundle = await build({ entryPoints: ['src/targets/userscript/entry.js'], bundle: true, format: 'iife', write: false });
-  const dom = new JSDOM('<body></body>', { url: 'https://example.com/apply', runScripts: 'dangerously' });
+  const dom = new JSDOM('<title>Job Application</title><body></body>', { url: 'https://example.com/apply', runScripts: 'dangerously' });
   const storage = new Map([['kr:profile', { fullName: 'Test Applicant', resumeContext: 'Existing detailed resume', applicantNotes: 'Existing custom notes', futureField: 'preserve' }]]);
   dom.window.GM_getValue = (key, fallback) => storage.get(key) ?? fallback;
   dom.window.GM_setValue = (key, value) => storage.set(key, value);
@@ -150,6 +152,7 @@ test('profile sections save and reload explicit answers while preserving legacy 
     dom.window.eval(bundle.outputFiles[0].text);
     await new Promise(resolve => setTimeout(resolve, 30));
     const root = dom.window.document.querySelector('#kareer-root').shadowRoot;
+    root.querySelector('#kr-pebble-toggle-btn')?.click();
     root.querySelector('#kr-toggle-btn').click();
     root.querySelector('[data-tab=profile]').click();
     const values = { workCountry: 'Canada', workAuthorization: 'Yes', sponsorshipNow: 'No', sponsorshipFuture: 'Yes', workArrangement: 'Remote', willingToRelocate: 'No', travelAvailability: 'Up to 25%', startDate: '2026-10-01', noticePeriod: 'Two weeks', expectedSalary: '95000', salaryCurrency: 'CAD', salaryPeriod: 'Annual', educationLevel: "Bachelor's degree", yearsExperience: '3', languages: 'English, French', gender: 'Woman', pronouns: 'she/her', raceEthnicity: 'Prefer not to answer', disabilityStatus: 'Prefer not to answer', veteranStatus: 'No' };
@@ -187,8 +190,9 @@ test('bundled panel mounts once and captures a job using GM storage', async () =
     await new Promise(resolve => setTimeout(resolve, 30));
     const root = dom.window.document.querySelector('#kareer-root');
     assert.ok(root?.shadowRoot, 'Persistent Shadow DOM panel mounts');
+    root.shadowRoot.querySelector('#kr-pebble-toggle-btn').click();
     root.shadowRoot.querySelector('#kr-toggle-btn').click();
-    root.shadowRoot.querySelector('#kr-capture-job').click();
+    assert.equal(root.shadowRoot.querySelector('#kr-capture-job'), null);
     assert.match(root.shadowRoot.textContent, /Software Engineer/);
     assert.match(root.shadowRoot.textContent, /Company unknown \(uncertain\)/);
     assert.equal(storage.get('kr:job').applicationUrl, 'https://example.com/apply/42');
@@ -209,7 +213,7 @@ test('bundled panel mounts once and captures a job using GM storage', async () =
 
 test('settings export downloads portable backup without the API key', async () => {
   const bundle = await build({ entryPoints: ['src/targets/userscript/entry.js'], bundle: true, format: 'iife', write: false });
-  const dom = new JSDOM('<body></body>', { url: 'https://example.com/apply', runScripts: 'dangerously' });
+  const dom = new JSDOM('<title>Job Application</title><body></body>', { url: 'https://example.com/apply', runScripts: 'dangerously' });
   const storage = new Map();
   storage.set('kr:profile', { fullName: 'Export Me' });
   storage.set('kr:secrets', { apiKey: 'fixture-stored-secret' });
@@ -230,6 +234,7 @@ test('settings export downloads portable backup without the API key', async () =
     dom.window.eval(bundle.outputFiles[0].text);
     await new Promise((resolve) => setTimeout(resolve, 30));
     const root = dom.window.document.querySelector('#kareer-root').shadowRoot;
+    root.querySelector('#kr-pebble-toggle-btn')?.click();
     root.querySelector('#kr-toggle-btn').click();
     root.querySelector('[data-tab=settings]').click();
     assert.ok(root.querySelector('#kr-export-data'));

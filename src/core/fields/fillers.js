@@ -349,7 +349,8 @@ export async function fillFileInput(element) {
   try { element.focus(); } catch {}
   dispatchEventSequence(element, ['input', 'change']);
   const attached = element.files?.[0];
-  return Boolean(attached && attached.name === stored.name);
+  const upload = detectAdapter().uploadState?.(element);
+  return Boolean(attached && attached.name === stored.name || upload?.accepted && upload.name === stored.name);
 }
 
 export async function fillField(field, targetValue) {

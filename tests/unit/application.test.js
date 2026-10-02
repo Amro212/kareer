@@ -257,7 +257,7 @@ test('markerless conditional fields stay on one step', async () => {
   } finally { engine.destroy(); }
 });
 
-test('legacy workflow sessions require recapture without replaying uncertain answers', async () => {
+test('legacy workflow sessions get fresh automatic context without replaying uncertain answers', async () => {
   render(`${input()}<button>Continue</button>`);
   const legacy = createSession(job());
   delete legacy.identityVersion;
@@ -269,10 +269,13 @@ test('legacy workflow sessions require recapture without replaying uncertain ans
   const engine = createApplicationEngine({ answer: async fields => { requests++; return workflowAnswers(fields); } });
   try {
     await engine.initialize();
-    await engine.start();
     assert.equal(requests, 0);
-    assert.equal(engine.session.status, 'paused');
-    assert.match(engine.session.reason, /capture job/i);
+    assert.notEqual(engine.session.id, legacy.id);
+    assert.equal(engine.session.identityVersion, 2);
+    assert.equal(engine.session.status, 'idle');
+    assert.equal(engine.session.active, false);
+    assert.deepEqual(engine.session.history, []);
+    assert.equal(document.querySelector('#name').value, '');
   } finally { engine.destroy(); }
 });
 

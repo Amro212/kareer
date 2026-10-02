@@ -55,11 +55,11 @@ test('resume parsing honors overwrite and workflow target rescanning', async ({ 
   const page = await kr.context.newPage();
   await page.goto(kr.fixtureUrl('ats-race-fixture.html', ASHBY_HOST, '?ats=ashby&workflow'));
   await kr.openPanel(page);
-  await page.locator('#kr-capture-job').click();
+  await expect(page.locator('#kr-capture-job')).toHaveCount(0);
   await page.locator('#kr-autofill-btn').click();
   await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Auto Continue is off.', { timeout: 60000 });
   await expect(page.locator('body')).toHaveAttribute('data-parse', 'complete');
-  await expect(page.locator('#name')).toHaveValue('Filled name');
+  await expect(page.locator('#name')).toHaveValue(PROFILE.fullName);
   await expect(page.locator('#email')).toHaveValue(PROFILE.email);
   expect(kr.openrouter.requests).toHaveLength(1);
 });

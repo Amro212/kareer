@@ -39,6 +39,7 @@ import { detectAdapter } from './adapters/index.js';
 import { rememberAnswer } from './memory.js';
 import { saveSession } from './sessions.js';
 import { captureJob } from './jobs.js';
+import { inspectContinue } from './navigation.js';
 
 let applicationEngine = null;
 let applicationState = null;
@@ -64,7 +65,7 @@ function resolveLiveFileElement(field, root = document) {
 let shadowRootRef = null;
 let currentTab = 'home';
 let panelVisible = false;
-let isPebble = false;
+let isPebble = true;
 let lastAiTestResult = null;
 let isAiTesting = false;
 
@@ -1575,8 +1576,11 @@ async function handleUnifiedAutofillClick() {
     return;
   }
 
-  // If a multi-step session exists (captured or in-progress), run the engine workflow
-  if (session) {
+  // Capture creates context for every job. Single-page/embedded applications
+  // still use their field-agent flow; a session alone does not imply navigation.
+  const needsWorkflow = session?.active || session?.currentStep || adapter.id === 'workday' ||
+    Boolean(inspectContinue().control) || getSettings().autoSubmit;
+  if (session && needsWorkflow) {
     void applicationEngine?.start();
     return;
   }
@@ -1783,10 +1787,6 @@ async function executeAutofillFlow() {
 
         scrollToField(field.element);
         highlightActiveField(field.element);
-
-        // Brief delay for visual animation (interruptible)
-        await autofillSleep(100);
-        if (token !== autofillGeneration) break;
 
         const didFill = await fillField(field, answer.value);
         if (token !== autofillGeneration) break;
@@ -2374,7 +2374,6 @@ function renderHomeTab() {
         <button class="kr-btn kr-btn-large" id="kr-autofill-btn" style="flex: 1;" ${btnDisabled ? 'disabled' : ''} ${btnTitle ? `title="${escapeHtml(btnTitle)}"` : ''}>
           ${btnContent}
         </button>
-        <button class="kr-btn kr-btn-secondary" id="kr-capture-job" title="Capture job listing" style="padding: 9px 12px;">${ICONS.briefcase}</button>
         <button class="kr-btn kr-btn-secondary ${wfIsRunning ? 'kr-btn-pause-active' : ''}" id="kr-pause-autofill-btn" style="padding: 9px 14px; font-size: 12px;" ${!wfIsRunning ? 'disabled' : ''} title="Pause autofill">
           ${wfIsRunning ? `${ICONS.pause} Pause` : 'Pause'}
         </button>
@@ -2719,7 +2718,6 @@ function renderDebugTab() {
     <div class="kr-card">
       <div class="kr-row">
         <span class="kr-card-title">Captured Job & Description</span>
-        <button class="kr-btn kr-btn-secondary" id="kr-recapture-job-btn" style="padding: 4px 8px; font-size: 10px;">Re-capture</button>
       </div>
       <div class="kr-row">
         <span class="kr-label">Title</span>
@@ -2728,6 +2726,14 @@ function renderDebugTab() {
       <div class="kr-row">
         <span class="kr-label">Company</span>
         <span class="kr-val" style="font-size: 11px;">${escapeHtml(currentJob?.company || 'None detected')}</span>
+      </div>
+      <div class="kr-row">
+        <span class="kr-label">Job Location</span>
+        <span class="kr-val" style="font-size: 11px;">${escapeHtml(currentJob?.location || 'Unknown')}</span>
+      </div>
+      <div class="kr-row">
+        <span class="kr-label">Work Country</span>
+        <span class="kr-val" style="font-size: 11px;">${escapeHtml(currentJob?.workCountry || 'Unknown or multiple countries — eligibility needs a country')}</span>
       </div>
       <div class="kr-row">
         <span class="kr-label">Description Status</span>
@@ -2834,8 +2840,6 @@ function updatePanelDOM() {
 
 function attachEventHandlers() {
   if (!shadowRootRef) return;
-  const capture = shadowRootRef.querySelector('#kr-capture-job');
-  if (capture) capture.onclick = () => applicationEngine?.capture();
 
   const resumeBoundary = shadowRootRef.querySelector('#kr-resume-boundary');
   if (resumeBoundary) {
@@ -3127,28 +3131,6 @@ function attachEventHandlers() {
     captureFixtureBtn.onclick = () => void saveFixtureSnapshot();
   }
 
-  const recaptureJobBtn = shadowRootRef.querySelector('#kr-recapture-job-btn');
-  if (recaptureJobBtn) {
-    recaptureJobBtn.onclick = async () => {
-      try {
-        recaptureJobBtn.textContent = 'Capturing...';
-        recaptureJobBtn.disabled = true;
-        const job = captureJob();
-        if (job?.pendingHydration) {
-          await job.pendingHydration;
-        }
-        if (applicationState?.session) {
-          applicationState.session.job = job;
-          saveSession(applicationState.session);
-        }
-        logger.info(`Re-captured job: "${job.title || 'Untitled'}" at "${job.company || 'Unknown'}" (${(job.description || '').length} chars)`);
-        updatePanelDOM();
-      } catch (err) {
-        logger.error(`Re-capture failed: ${err.message}`);
-        updatePanelDOM();
-      }
-    };
-  }
 
   // Debug: Clear logs
   const clearLogsBtn = shadowRootRef.querySelector('#kr-clear-logs-btn');
@@ -3250,6 +3232,9 @@ export function mountUI() {
   const rootElement = claim.root;
   if (!rootElement) return;
 
+  isPebble = true;
+  panelVisible = false;
+
   const shadow = rootElement.shadowRoot || rootElement.attachShadow({ mode: 'open' });
   shadowRootRef = shadow;
 
@@ -3319,6 +3304,7 @@ export function mountUI() {
     });
 
     applicationEngine = createApplicationEngine({ onChange: state => {
+      if (applicationState?.session?.id && applicationState.session.id !== state.session?.id) fieldResultsCache.clear();
       applicationState = state;
       for (const [id, result] of state.results) fieldResultsCache.set(id, result);
       refreshDetectedFields();
@@ -3331,7 +3317,13 @@ export function mountUI() {
 }
 
 export function toggleUIVisibility() {
+  if (!shadowRootRef) mountUI();
+  isPebble = false;
   panelVisible = !panelVisible;
   if (panelVisible) refreshDetectedFields();
   updatePanelDOM();
+}
+
+export function syncJobContext(job) {
+  applicationEngine?.updateJob(job);
 }

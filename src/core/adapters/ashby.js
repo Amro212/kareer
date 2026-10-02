@@ -57,6 +57,20 @@ export const ashbyAdapter = {
   isSectionHeading() {
     return false;
   },
+  uploadState(element) {
+    const root = element?.closest('.ashby-application-form-input-file');
+    if (!root) return null;
+    const busy = root.getAttribute('aria-busy') === 'true' ||
+      /^(?:loading|uploading|processing|parsing)$/.test(root.getAttribute('data-state') || '') ||
+      Boolean(root.querySelector('[role="progressbar"], [aria-busy="true"]'));
+    const failed = Boolean(root.querySelector('[role="alert"], [aria-invalid="true"]'));
+    const filename = root.querySelector('.ashby-application-form-input-file-filename, [class*="_fileName_"], [class*="_filename_"]');
+    // Ashby clears FileList after persisting an upload. Its filename and Replace
+    // control belong to this widget, not a neighboring cover-letter upload.
+    const replace = Array.from(root.querySelectorAll('button')).some(button => /^replace$/i.test(button.textContent.trim()));
+    const name = filename?.textContent.trim() || (replace ? root.textContent.match(/([^\n<>]+\.(?:pdf|docx?|odt|rtf|txt|md))\b/i)?.[1]?.trim() : '') || '';
+    return { name, accepted: Boolean(name && replace && !busy && !failed), busy };
+  },
   isCombobox(element) {
     return Boolean(element?.matches?.('.ashby-select-input, .ashby-application-form-input-autocomplete, [data-ashby-field]'));
   },

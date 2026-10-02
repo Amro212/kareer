@@ -1,5 +1,5 @@
 import { captureJob, safeUrl } from './jobs.js';
-import { createSession, restoreSession, saveSession, bindTab } from './sessions.js';
+import { createSession, restoreSession, saveSession, bindTab, matchesSession } from './sessions.js';
 import { classifyPage, isVisible } from './pageClassifier.js';
 import { inspectValidation } from './validation.js';
 import { findContinue, inspectContinue, inspectSubmit, pageSignature, isDisabled, observePage, comparePages, workflowLabel, questionIdentity } from './navigation.js';
@@ -37,7 +37,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
   let lastObservationLog = '';
   function compatibleSession() {
     if (session.identityVersion === 2) return true;
-    status('paused', 'Step tracking was updated. Click Capture Job once to start a compatible session.');
+    status('paused', 'Step tracking was updated. Reload this job page to start a compatible session.');
     return false;
   }
   function completeStep() {
@@ -274,8 +274,9 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
   async function applyAnswers(fields, answers, token, signature) {
     const byId = new Map(answers.map(a => [a.fieldId, a]));
     for (const original of fields) {
-      if (!await settleFields(signature, token, 'before field action', original.id)) return false;
-      const field = scanFormFields().find(f => f.id === original.id && f.label === original.label && f.type === original.type);
+      if (!checkPage(signature, token, 'before field action', original.id)) return false;
+      const currentFields = scanFormFields();
+      const field = currentFields.find(f => f.id === original.id && f.label === original.label && f.type === original.type);
       const entry = byId.get(original.id);
       if (!entry || entry.value === '' || entry.value == null) {
         if (original.required && entry && entry.value === '') {
@@ -291,7 +292,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         }
         continue;
       }
-      const replacement = scanFormFields().find(f => f.id === original.id);
+      const replacement = currentFields.find(f => f.id === original.id);
       const question = session.steps[session.currentStep]?.questions[original.id];
       if (replacement && (!field || question && question !== questionIdentity(replacement))) {
         status('paused', 'A question or its options changed. Inspect the page before resuming.');
@@ -301,8 +302,8 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       if (field.type === 'file') continue;
       field.options = original.options;
       field.element.scrollIntoView?.({ block: 'center', behavior: 'instant' });
+      logger.info(`Field action [${entry.source === 'ai' ? 'AI' : entry.source === 'saved' ? 'Saved' : 'Profile'}]: id=${field.id}, label="${field.label}"`);
       const filled = await fillField(field, entry.value);
-      await delay(settleMs);
       if (!await settleFields(signature, token, 'field action', field.id)) return false;
       const live = scanFormFields().find(f => f.id === field.id && f.label === field.label);
       const verified = filled && live ? await verifyField(live, entry.value) : { verified: false };
@@ -570,6 +571,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     get stepReview() { return Boolean(session?.stepReview); },
     async initialize() {
       session = await restoreSession();
+      if (session && session.identityVersion !== 2) session = null;
       if (session) bindTab(session);
       if (session && compatibleSession() && session.active && session.pendingStep === session.currentStep && Date.now() - session.pendingAt < 120000) {
         const previous = session.steps[session.currentStep];
@@ -587,6 +589,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         try {
           const job = captureJob();
           if (job?.pendingHydration) await job.pendingHydration;
+          session = createSession(job);
         } catch { /* Ignore early DOM access */ }
       }
       emit();
@@ -622,17 +625,30 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       interval = setInterval(() => void tick(), 1500);
       await tick();
     },
-    async capture() {
-      if (busy) return;
-      generation++;
-      const job = captureJob();
-      session = createSession(job);
-      emit();
-      if (session?.job?.pendingHydration) {
-        await session.job.pendingHydration;
-        saveSession(session);
+    updateJob(job) {
+      if (!session || busy) return;
+      if (JSON.stringify(session.job) === JSON.stringify(job)) return;
+      // Preserve the listing description across form-only application steps.
+      const previous = session.job;
+      const samePage = Boolean(job.listingUrl && job.listingUrl === previous?.listingUrl || job.applicationUrl && job.applicationUrl === previous?.applicationUrl);
+      const differentJob = previous?.jobId && job.jobId && previous.jobId !== job.jobId || samePage && previous?.title && job.title && previous.title !== job.title && !session.active && !session.currentStep;
+      if (differentJob || !matchesSession(session, window.location.href)) {
+        session = createSession(job);
+        results.clear();
         emit();
+        return;
       }
+      session.job = samePage ? job : { ...job,
+        title: previous?.title || job.title,
+        company: job.company || previous?.company,
+        location: job.location || previous?.location,
+        workCountries: job.workCountries?.length ? job.workCountries : previous?.workCountries,
+        workCountry: job.workCountries?.length ? job.workCountry : previous?.workCountry,
+        locationAmbiguous: job.workCountries?.length ? job.locationAmbiguous : previous?.locationAmbiguous,
+        description: previous?.description || job.description,
+      };
+      saveSession(session);
+      emit();
     },
     async start(job) {
       if (busy) return;

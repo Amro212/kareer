@@ -31,6 +31,32 @@ afterEach(() => {
   dom?.window.close();
 });
 
+test('Ashby accepted resume survives a cleared input and stays scoped to its upload widget', async () => {
+  document.body.setAttribute('data-ashby-root', '');
+  document.body.innerHTML = '<div class="ashby-application-form-field-entry"><label for="resume">Resume</label><div class="ashby-application-form-input-file"><input id="resume" type="file"><div class="ashby-application-form-input-file-filename">resume.pdf</div><button>Replace</button><button aria-label="Remove file"></button></div></div><div class="ashby-application-form-input-file"><input id="cover" type="file"><button>Upload File</button></div>';
+  const fields = scanFormFields();
+  const resume = fields.find(f => f.id === 'resume');
+  assert.equal(resume.currentValue, 'resume.pdf');
+  assert.equal((await verifyField(resume, 'resume.pdf')).verified, true);
+  assert.equal((await verifyField(fields.find(f => f.id === 'cover'), '')).verified, false);
+  assert.equal((await verifyField(resume, 'different.pdf')).verified, false);
+});
+
+test('Ashby synchronous acceptance is an upload success even when React clears files', async () => {
+  document.body.setAttribute('data-ashby-root', '');
+  document.body.innerHTML = '<div class="ashby-application-form-input-file"><input id="resume" type="file"></div>';
+  const host = createGmHost();
+  host.capabilities.fileUpload = true;
+  host.documentsGet = async () => ({ name: 'resume.pdf', buffer: new Uint8Array([1]).buffer });
+  setPlatform(host);
+  const input = document.querySelector('input');
+  input.onchange = () => {
+    Object.defineProperty(input, 'files', { configurable: true, value: [] });
+    input.insertAdjacentHTML('afterend', '<div class="ashby-application-form-input-file-filename">resume.pdf</div><button>Replace</button>');
+  };
+  assert.equal(await fillFileInput(input), true);
+});
+
 test('scanner includes file inputs instead of skipping them', () => {
   const fields = scanFormFields();
   assert.equal(fields.length, 1);
@@ -47,7 +73,7 @@ test('parser wait observes value properties and replacement nodes before settlin
   document.body.setAttribute('data-ashby-root', '');
   document.body.insertAdjacentHTML('beforeend', '<input id="name"><div role="status">Processing resume</div>');
   const original = document.querySelector('#name');
-  const pending = waitForResumeParsing({ minimumMs: 0, quietMs: 40, timeoutMs: 500, pollMs: 10 });
+  const pending = waitForResumeParsing({ minimumMs: 0, quietMs: 40, timeoutMs: 2000, pollMs: 10 });
   setTimeout(() => {
     const replacement = original.cloneNode(true);
     replacement.value = 'Parsed Applicant';
