@@ -29,6 +29,7 @@ import {
   highlightFailedField,
   clearHighlights,
   initInlineRewriteBadge,
+  destroyInlineRewriteBadge,
 } from './fields/highlight.js';
 import { startFormObserver, pauseFormObserver, resumeFormObserver, stopFormObserver } from './observer.js';
 import { collectRemoteFields, applyRemoteAnswers, searchRemoteOptions, listRemoteFrames, captureRemoteFixtures, isRemoteFieldId, applyRemoteResumeUploads, locateRemoteField, inspectRemoteFields } from './remote.js';
@@ -1580,7 +1581,8 @@ async function handleUnifiedAutofillClick() {
   // still use their field-agent flow; a session alone does not imply navigation.
   const needsWorkflow = session?.active || session?.currentStep || adapter.id === 'workday' ||
     Boolean(inspectContinue().control) || getSettings().autoSubmit;
-  if (session && needsWorkflow) {
+  const hasEmbeddedFields = remoteFieldsCache.length || (await listRemoteFrames()).length;
+  if (session && needsWorkflow && !hasEmbeddedFields) {
     void applicationEngine?.start();
     return;
   }
@@ -3214,7 +3216,9 @@ export function unmountUI() {
   applicationEngine = null;
   applicationState = null;
   stopFormObserver();
+  destroyInlineRewriteBadge();
   shadowRootRef = null;
+  if (isAutofilling) stopAutofillFlow('Job page closed. Pending autofill stopped.');
 }
 
 export function mountUI() {

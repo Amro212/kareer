@@ -59,6 +59,11 @@ test('visible text visits ancestor styles once and preserves hidden content boun
 });
 
 test('job-page eligibility excludes ordinary pages with search/comment inputs', () => {
+  assert.equal(isJobPage(page('<title>How to build a React application</title><h1>How to build a React application</h1><form><textarea placeholder="Comment"></textarea></form>', 'https://www.youtube.com/watch?v=example')), false);
+  assert.equal(isJobPage(page('<h1>Careers in React</h1><textarea placeholder="Comment"></textarea>', 'https://www.youtube.com/watch?v=example')), false);
+  assert.equal(isJobPage(page('<h1>Application · Contact</h1><form><input type="email"></form>', 'https://example.com/jobs/apply')), true);
+  assert.equal(isJobPage(page('<h1>Review application</h1><button>Submit application</button>', 'https://example.com/jobs/apply')), true);
+  assert.equal(isJobPage(page('<h1>Software Engineer Application</h1><form id="job-application-form"><input type="email"></form>', 'https://example.com/jobs/apply')), true);
   assert.equal(isJobPage(page('<h1>Video</h1><input type="search"><textarea placeholder="Comment"></textarea>', 'https://www.youtube.com/watch?v=example')), false);
   assert.equal(isJobPage(page('<h1>Video</h1><article>A resume tutorial</article><form><textarea placeholder="Comment"></textarea></form>', 'https://www.youtube.com/watch?v=example')), false);
   assert.equal(isJobPage(page('<h1>Login</h1><input type="email"><input type="password">', 'https://example.com/login')), false);

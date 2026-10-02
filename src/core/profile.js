@@ -317,12 +317,13 @@ export function fixedProfileAnswer(field, profile, { allowSearch = true } = {}) 
 // Empty/ambiguous scope must not be replaced by an AI or saved-answer guess.
 export function workEligibilityAnswer(field, profile, job) {
   const text = `${field.label || ''} ${field.description || ''}`;
+  if (field.isNarrative || field.type === 'textarea' || /\b(?:explain|describe|elaborate|details)\b/i.test(text)) return null;
   const sponsorship = /\b(?:visa|immigration|employment) sponsorship\b|\brequire.*sponsor/i.test(text);
   const authorization = /\b(?:authorized|eligible|authorization|legal right)\b.*\bwork\b|\bwork (?:authorization|eligibility)\b/i.test(text);
   if (!sponsorship && !authorization) return null;
   const normalized = ` ${text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ')} `;
   const countries = Array.from(countryCodes).filter(code => normalized.includes(` ${countryNames.of(code).toLowerCase()} `));
-  if (/\b(?:u s|u s a|usa)\b/.test(normalized)) countries.push('US');
+  if (/\bUS\b/.test(text) || /\b(?:u s|u s a|usa)\b/.test(normalized)) countries.push('US');
   if (/\b(?:u k|uk)\b/.test(normalized)) countries.push('GB');
   const explicit = [...new Set(countries)];
   const target = explicit.length === 1 ? explicit[0] : explicit.length ? '' : countryCode(job?.workCountry);

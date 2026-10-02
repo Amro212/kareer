@@ -35,6 +35,142 @@ const job = () => ({ title: 'Engineer', company: 'Example', listingUrl: 'https:/
 
 const workflowAnswers = async fields => ({ answers: fields.map(f => ({ fieldId: f.fieldId, value: 'Applicant' })) });
 
+test('destroy during initialization does not restore a session or register observers', async () => {
+  render('<h1>Job Application</h1>' + input());
+  let emissions = 0;
+  const engine = createApplicationEngine({ onChange: () => emissions++ });
+  const initializing = engine.initialize();
+  engine.destroy();
+  await initializing;
+  assert.equal(engine.session, null);
+  assert.equal(emissions, 0);
+});
+
+test('destroy during a request discards queued job context and late emissions', async () => {
+  render('<h1>Engineer A</h1>' + input() + '<button>Continue</button>');
+  let release, emissions = 0;
+  const engine = createApplicationEngine({ settleMs: 0, answer: () => new Promise(resolve => { release = resolve; }), onChange: () => emissions++ });
+  const pending = engine.start(captureJob());
+  while (!release) await new Promise(resolve => setTimeout(resolve, 1));
+  const oldId = engine.session.id;
+  engine.updateJob({ ...engine.session.job, title: 'Engineer B' });
+  engine.destroy();
+  const count = emissions;
+  release({ answers: [{ fieldId: 'name', value: 'Late answer' }] });
+  await pending;
+  assert.equal(engine.session.id, oldId);
+  assert.equal(emissions, count);
+  assert.equal(gmGet('kr:sessions').length, 1);
+});
+
+test('queued automatic capture preserves a restored same-application POST redirect', async () => {
+  const old = createSession({ ...job(), applicationUrl: 'https://example.com/apply/42/step1', workCountry: 'Canada', workCountries: ['Canada'] });
+  old.active = true;
+  old.pendingUrl = old.job.applicationUrl;
+  old.pendingAt = Date.now();
+  saveSession(old);
+  globalThis.GM_getTab = callback => callback({ kareerSession: old.id });
+  dom.reconfigure({ url: 'https://example.com/apply/42/step2' });
+  render('<h1>Application · Experience</h1>' + input());
+  const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0 });
+  try {
+    const pending = engine.initialize();
+    engine.updateJob(captureJob());
+    await pending;
+    engine.updateJob(captureJob());
+    assert.equal(engine.session.id, old.id);
+    assert.equal(engine.session.job.title, 'Engineer');
+    assert.equal(engine.session.job.workCountry, 'Canada');
+  } finally { engine.destroy(); }
+});
+
+test('capture queued during initialization replaces stale same-URL job context', async () => {
+  const old = createSession({ ...job(), title: 'Engineer A', listingUrl: window.location.href, workCountry: 'United States' });
+  render('<h1>Engineer B</h1><div class="job__location">Canada</div>' + input());
+  const captured = captureJob();
+  const engine = createApplicationEngine();
+  try {
+    const initializing = engine.initialize();
+    engine.updateJob(captured);
+    await initializing;
+    assert.equal(engine.session.job.title, 'Engineer B');
+    assert.equal(engine.session.job.workCountry, 'Canada');
+    assert.notEqual(engine.session.id, old.id);
+    assert.equal(document.querySelector('#name').value, '');
+  } finally { engine.destroy(); }
+});
+
+test('a different job clears a paused workflow while a genuine step heading preserves it', async () => {
+  render('<h1>Engineer A</h1>' + input() + '<button>Continue</button>');
+  saveSettings({ autoContinue: false });
+  const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0 });
+  try {
+    await engine.start(captureJob());
+    const oldId = engine.session.id;
+    assert.equal(engine.stepReview, true);
+    render('<h1>My Information</h1>' + input() + '<button>Continue</button>');
+    engine.updateJob(captureJob());
+    assert.equal(engine.session.id, oldId);
+    assert.equal(engine.session.job.title, 'Engineer A');
+    render('<h1>Engineer B</h1>' + input() + '<button>Continue</button>');
+    engine.updateJob(captureJob());
+    assert.notEqual(engine.session.id, oldId);
+    assert.equal(engine.session.job.title, 'Engineer B');
+    assert.deepEqual(engine.session.answers, {});
+    assert.equal(engine.stepReview, false);
+  } finally { engine.destroy(); }
+});
+
+test('review-route recapture preserves the completed application session', async () => {
+  render('<h1>Engineer</h1>' + input() + '<button>Continue</button>');
+  document.querySelector('button').onclick = () => {
+    window.history.replaceState({}, '', '/jobs/42/review');
+    render('<h1>Review application</h1><button>Submit application</button>');
+  };
+  const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0 });
+  try {
+    await engine.start(captureJob());
+    const id = engine.session.id;
+    assert.equal(engine.session.status, 'review');
+    engine.updateJob(captureJob());
+    assert.equal(engine.session.id, id);
+    assert.equal(engine.session.status, 'review');
+    assert.equal(engine.session.completedSteps, 1);
+  } finally { engine.destroy(); }
+});
+
+for (const directReview of [false, true]) {
+  for (const separateUrl of [false, true]) {
+    test(`confirmation recapture preserves submission (${directReview ? 'direct review' : 'filled form'}, ${separateUrl ? 'new URL' : 'same URL'})`, async () => {
+      saveSettings({ autoContinue: true, autoSubmit: true });
+      const review = () => {
+        if (separateUrl) window.history.replaceState({}, '', '/jobs/42/review');
+        render('<h1>Review application</h1><button>Submit application</button>');
+        document.querySelector('button').onclick = () => {
+          if (separateUrl) window.history.replaceState({}, '', '/jobs/42/confirmation');
+          render('<h1>Application submitted</h1>');
+        };
+      };
+      if (directReview) review();
+      else {
+        render('<h1>Engineer</h1>' + input() + '<button>Continue</button>');
+        document.querySelector('button').onclick = review;
+      }
+      const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0, submitCountdownMs: 0 });
+      try {
+        await engine.start(captureJob());
+        const id = engine.session.id;
+        assert.equal(engine.session.status, 'confirmation');
+        engine.updateJob(captureJob());
+        assert.equal(engine.session.id, id);
+        assert.equal(engine.session.status, 'confirmation');
+        assert.equal(engine.session.submits, 1);
+        assert.equal(engine.session.completedSteps, directReview ? 0 : 1);
+      } finally { engine.destroy(); }
+    });
+  }
+}
+
 for (const workday of [false, true]) {
   test(`continuation preserves review edits with overwrite enabled (${workday ? 'Workday' : 'generic'})`, async () => {
     saveSettings({ autoContinue: false, overwriteExisting: true });

@@ -6,7 +6,7 @@ import { findExactOption } from './fields/combobox.js';
 import { profileForAI, fixedProfileAnswer, workEligibilityAnswer, formatStructuredBackground } from './profile.js';
 import { detectAdapter } from './adapters/index.js';
 import { workdayAnswer } from './adapters/workday-fields.js';
-import { OPTIONAL_DISCLOSURE_KEYS } from './adapters/canonical.js';
+import { isResidenceLabel, locationMatches } from './location.js';
 
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 const AUTOFILL_TIMEOUT_MS = 120000;
@@ -441,16 +441,16 @@ async function generateAdapterAnswers(fields, { adapter, settings, profile, allo
     const deterministicHasValue = deterministic && (Array.isArray(deterministic.value)
       ? deterministic.value.length > 0
       : deterministic.value !== '' && deterministic.value !== null && deterministic.value !== undefined);
-    if (deterministic && (eligibility || deterministicHasValue || deterministic.searchQuery)) {
+    if (deterministic && (deterministicHasValue || deterministic.searchQuery)) {
       if (!deterministic.source) deterministic.source = 'profile';
       if (!deterministic.provenance) deterministic.provenance = deterministic.value ? 'saved' : 'unresolved';
       answers.push(deterministic);
     } else if (saved !== undefined && (!['combobox', 'select', 'radio'].includes(field.type) || findExactOption(field.options || [], saved))) {
       answers.push({ fieldId: field.fieldId, value: saved, inferred: false, provenance: 'saved', source: 'saved' });
-    } else if (deterministic && (fixed || OPTIONAL_DISCLOSURE_KEYS.has(field.ats?.canonicalKey))) {
-      if (!deterministic.source) deterministic.source = 'profile';
-      answers.push(deterministic);
-    } else unresolved.push(field);
+    } else {
+      unresolved.push(field);
+      if (deterministic) answers.push({ ...deterministic, source: 'profile', provenance: 'unresolved' });
+    }
   }
   const model = settings.model || 'google/gemini-2.0-flash';
   if (!unresolved.length && fields.length) return { answers, latencyMs: 0, model };
@@ -476,6 +476,8 @@ async function generateAdapterAnswers(fields, { adapter, settings, profile, allo
       const values = Array.isArray(answer.value) ? answer.value : [answer.value];
       const options = values.map(value => findExactOption(field.options || [], value));
       if (options.some(option => !option)) continue;
+      const residence = profileForAI(profile).location;
+      if (isResidenceLabel(field.label) && residence && options.some(option => !locationMatches(option.label, residence) && !locationMatches(residence, option.label))) continue;
       answer.value = Array.isArray(answer.value) ? options.map(option => option.label) : (field.type === 'combobox' ? options[0].label : options[0].value);
     }
     if (!allowSearch || field.type !== 'combobox' || answer.value !== '' || typeof answer.searchQuery !== 'string' || answer.searchQuery.length > 200) delete answer.searchQuery;
@@ -483,7 +485,9 @@ async function generateAdapterAnswers(fields, { adapter, settings, profile, allo
     answer.provenance = answer.provenance === 'guessed' ? 'guessed' : 'inferred';
     answer.inferred = true;
     if (!OPTION_FIELD_TYPES.has(field.type)) answer.value = stripModelDashes(answer.value);
-    answers.push(answer);
+    const pendingIndex = answers.findIndex(existing => existing.fieldId === answer.fieldId);
+    if (pendingIndex >= 0) answers[pendingIndex] = answer;
+    else answers.push(answer);
   }
   return { answers, latencyMs: result.latencyMs, model };
 }

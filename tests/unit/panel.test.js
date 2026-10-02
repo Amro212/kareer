@@ -107,6 +107,78 @@ test('panel autofill keeps field/source diagnostics without persisting applicant
   } finally { dom.window.close(); }
 });
 
+test('an early Auto Submit click discovers embedded fields before the panel inspection finishes', async () => {
+  const bundle = await build({ stdin: { contents: `
+    import { createGmHost } from './src/core/hosts/gm.js';
+    import { setPlatform } from './src/core/platform.js';
+    import { bootstrapWhenReady } from './src/core/main.js';
+    const host = createGmHost();
+    setPlatform({ ...host, capabilities: { ...host.capabilities, crossFrame: true },
+      framesList: async () => [{ frameId: 1, isTop: false, fieldCount: 1, url: 'https://boards.greenhouse.io/embed/job_app?token=42' }],
+      frameCommand: async (id, command) => {
+        if (command.action === 'inspect') { await new Promise(resolve => setTimeout(resolve, 700)); return { fields: [] }; }
+        if (command.action === 'scan') { window.scanCalls++; return { fields: [{ fieldId: 'email', label: 'Email', type: 'email', options: [] }] }; }
+        if (command.action === 'fill') return { results: command.answers.map(a => ({ ...a, status: 'verified' })) };
+        return { fields: [], results: [] };
+      },
+    });
+    bootstrapWhenReady();
+  `, resolveDir: process.cwd() }, bundle: true, format: 'iife', write: false });
+  const dom = new JSDOM('<title>Job Application</title><body><h1>Engineer</h1><iframe src="https://boards.greenhouse.io/embed/job_app?token=42"></iframe></body>', { url: 'https://example.com/jobs/42', runScripts: 'dangerously', pretendToBeVisual: true });
+  const storage = new Map([['kr:profile', { fullName: 'Test Applicant', email: 'test@example.com' }], ['kr:settings', { autoSubmit: true }], ['kr:secrets', { apiKey: 'test-key' }]]);
+  dom.window.GM_getValue = (key, fallback) => storage.get(key) ?? fallback;
+  dom.window.GM_setValue = (key, value) => storage.set(key, structuredClone(value));
+  dom.window.CSS = { escape: value => value };
+  dom.window.scanCalls = 0;
+  try {
+    dom.window.eval(bundle.outputFiles[0].text);
+    await new Promise(resolve => setTimeout(resolve, 40));
+    const root = dom.window.document.querySelector('#kareer-root').shadowRoot;
+    root.querySelector('#kr-pebble-toggle-btn').click();
+    root.querySelector('#kr-toggle-btn').click();
+    root.querySelector('#kr-autofill-btn').click();
+    for (let i = 0; i < 30 && !dom.window.scanCalls; i++) await new Promise(resolve => setTimeout(resolve, 40));
+    assert.ok(dom.window.scanCalls > 0, 'early click must scan the announced frame');
+  } finally { dom.window.close(); }
+});
+
+test('leaving a job page cancels a pending standalone response before remount', async () => {
+  const bundle = await build({ entryPoints: ['src/targets/userscript/entry.js'], bundle: true, format: 'iife', write: false });
+  const dom = new JSDOM('<title>Job Application</title><body><h1>Job Application</h1><form><label for="why">Why this role?</label><textarea id="why" required></textarea></form></body>', { url: 'https://example.com/jobs/42', runScripts: 'dangerously', pretendToBeVisual: true });
+  const storage = new Map([['kr:profile', { fullName: 'Test Applicant', email: 'test@example.com' }], ['kr:secrets', { apiKey: 'test-key' }]]);
+  let request;
+  dom.window.GM_getValue = (key, fallback) => storage.get(key) ?? fallback;
+  dom.window.GM_setValue = (key, value) => storage.set(key, structuredClone(value));
+  dom.window.GM_xmlhttpRequest = options => { request = options; };
+  dom.window.CSS = { escape: value => value };
+  Object.defineProperty(dom.window.HTMLElement.prototype, 'offsetWidth', { get: () => 200 });
+  dom.window.HTMLElement.prototype.scrollIntoView = () => {};
+  try {
+    dom.window.eval(bundle.outputFiles[0].text);
+    await new Promise(resolve => setTimeout(resolve, 40));
+    let root = dom.window.document.querySelector('#kareer-root').shadowRoot;
+    root.querySelector('#kr-pebble-toggle-btn').click(); root.querySelector('#kr-toggle-btn').click(); root.querySelector('#kr-autofill-btn').click();
+    for (let i = 0; i < 40 && !request; i++) await new Promise(resolve => setTimeout(resolve, 30));
+    assert.ok(request);
+    dom.window.document.title = 'Videos';
+    dom.window.document.querySelector('h1').textContent = 'Videos';
+    dom.window.document.querySelector('form').remove();
+    await new Promise(resolve => setTimeout(resolve, 400));
+    assert.equal(dom.window.document.querySelector('#kareer-root'), null);
+    dom.window.document.querySelector('h1').textContent = 'Job Application';
+    const form = dom.window.document.createElement('form');
+    form.innerHTML = '<label for="why">Why this new role?</label><textarea id="why" required></textarea>';
+    dom.window.document.body.append(form);
+    await new Promise(resolve => setTimeout(resolve, 400));
+    root = dom.window.document.querySelector('#kareer-root').shadowRoot;
+    root.querySelector('#kr-pebble-toggle-btn').click(); root.querySelector('#kr-toggle-btn').click();
+    assert.equal(root.querySelector('#kr-autofill-btn').disabled, false);
+    request.onload({ status: 200, responseText: JSON.stringify({ choices: [{ message: { content: JSON.stringify({ answers: [{ fieldId: 'why', value: 'Old job answer' }] }) } }] }) });
+    await new Promise(resolve => setTimeout(resolve, 250));
+    assert.equal(dom.window.document.querySelector('#why').value, '');
+  } finally { dom.window.close(); }
+});
+
 test('workflow shows verified completion count and retained structural diagnostic', async () => {
   const bundle = await build({ entryPoints: ['src/targets/userscript/entry.js'], bundle: true, format: 'iife', write: false });
   const dom = new JSDOM('<title>Job Application</title><body></body>', { url: 'https://example.com/apply', runScripts: 'dangerously' });

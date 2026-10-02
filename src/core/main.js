@@ -65,7 +65,7 @@ export function bootstrap() {
       const relevant = mutations.some(mutation => {
         const element = mutation.target.nodeType === 1 ? mutation.target : mutation.target.parentElement;
         if (element?.closest(`#${UI_IDS.CONTAINER}, #${UI_IDS.INLINE_REWRITE}`)) return false;
-        if (element?.closest('h1,h2,[role="heading"],.job__location,.job-location,.ashby-job-posting-left-pane,[data-testid="job-location"],.job-description,.job__description')) return true;
+        if (element?.closest('title,script[type="application/ld+json"],h1,h2,[role="heading"],.job__location,.job-location,.ashby-job-posting-left-pane,[data-testid="job-location"],.job-description,.job__description')) return true;
         if (mutation.type === 'characterData') return false;
         return Array.from([...mutation.addedNodes, ...mutation.removedNodes]).some(node => node.nodeType === 1 &&
           !node.matches(`#${UI_IDS.CONTAINER}, #${UI_IDS.INLINE_REWRITE}`) &&
@@ -73,7 +73,7 @@ export function bootstrap() {
       });
       if (relevant) schedule();
     });
-    pageObserver.observe(document.body || document.documentElement, { childList: true, subtree: true, characterData: true });
+    pageObserver.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
     unsubscribePageNavigation?.();
     unsubscribePageNavigation = platform.navigation.onChange(schedule);
     reconcile();

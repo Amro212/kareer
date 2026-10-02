@@ -26,29 +26,61 @@ const shouldFill = field => detectAdapter().needsFill?.(field, getProfile()) ?? 
 const runnable = new Set(['running', 'captcha', 'waiting', 'submitting']);
 
 export function createApplicationEngine({ answer = generateAutofillAnswers, onChange = () => {}, settleMs = 180, transitionMs = 1200, navigationTimeoutMs = transitionMs === 0 ? 0 : 10000, submitCountdownMs = 5000 } = {}) {
-  let session = null, busy = false, generation = 0, timer = null, observer = null, interval = null, cancelDelay = null, unsubscribeNavigation = null;
+  let session = null, busy = false, generation = 0, timer = null, observer = null, interval = null, cancelDelay = null, unsubscribeNavigation = null, disposed = false;
   const delay = ms => new Promise(resolve => {
     let t = null;
     cancelDelay = () => { clearTimeout(t); cancelDelay = null; resolve(); };
     t = setTimeout(() => { cancelDelay = null; resolve(); }, ms);
   });
   const results = new Map();
+  let pendingJob = null;
   let lastEmission = '';
   let lastObservationLog = '';
+  function updateJob(job) {
+      if (disposed) return;
+      pendingJob = job;
+      if (!session || busy) return;
+      pendingJob = null;
+      if (JSON.stringify(session.job) === JSON.stringify(job)) return;
+      // Preserve the listing description across form-only application steps.
+      const previous = session.job;
+      if (job.applicationStep && previous?.title) job = { ...job, title: previous.title };
+      const samePage = Boolean(job.listingUrl && job.listingUrl === previous?.listingUrl || job.applicationUrl && job.applicationUrl === previous?.applicationUrl);
+      const differentJob = previous?.jobId && job.jobId && previous.jobId !== job.jobId || samePage && previous?.title && job.title && previous.title !== job.title;
+      if (differentJob || !matchesSession(session, window.location.href)) {
+        session = createSession(job);
+        results.clear();
+        emit();
+        return;
+      }
+      const hasLocation = Boolean(job.location || job.workCountries?.length);
+      session.job = samePage && !job.applicationStep ? job : { ...job,
+        title: previous?.title || job.title,
+        company: job.company || previous?.company,
+        location: job.location || previous?.location,
+        workCountries: hasLocation ? job.workCountries : previous?.workCountries,
+        workCountry: hasLocation ? job.workCountry : previous?.workCountry,
+        locationAmbiguous: hasLocation ? job.locationAmbiguous : previous?.locationAmbiguous,
+        description: previous?.description || job.description,
+      };
+      saveSession(session);
+      emit();
+  }
   function compatibleSession() {
     if (session.identityVersion === 2) return true;
     status('paused', 'Step tracking was updated. Reload this job page to start a compatible session.');
     return false;
   }
   function completeStep() {
+    session.currentUrl = window.location.href;
     const step = session.steps[session.currentStep];
     if (step && !step.completed) {
       step.completed = true;
       session.completedSteps++;
       session.pendingStep = '';
       session.pendingUrl = '';
-      saveSession(session);
     }
+    saveSession(session);
   }
   function checkPage(snapshot, token, stage, fieldId) {
     if (!guard(token)) return false;
@@ -117,6 +149,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     return errors;
   }
   function emit() {
+    if (disposed) return;
     const state = JSON.stringify([session, busy, [...results]]);
     if (state === lastEmission) return;
     lastEmission = state;
@@ -262,7 +295,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       if (token !== generation) return true;
       const next = classifyPage();
       if (next.type === 'confirmation') {
-        if (step) completeStep();
+        completeStep();
         status('confirmation', next.reason);
         return true;
       }
@@ -563,16 +596,23 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       status('paused', 'Workflow limit reached. Continue manually.');
     } catch (error) {
       if (token === generation && session) status('paused', `Workflow stopped: ${error.message}`);
-    } finally { busy = false; emit(); }
+    } finally { busy = false; if (!disposed) { if (pendingJob) updateJob(pendingJob); emit(); } }
   }
   return {
     get session() { return session; },
     get busy() { return busy; },
     get stepReview() { return Boolean(session?.stepReview); },
     async initialize() {
-      session = await restoreSession();
+      const restored = await restoreSession();
+      if (disposed) return;
+      session = restored;
       if (session && session.identityVersion !== 2) session = null;
-      if (session) bindTab(session);
+      if (session) {
+        bindTab(session);
+        // restoreSession also approves bounded POST redirects between steps.
+        session.currentUrl = window.location.href;
+      }
+      if (session && pendingJob) updateJob(pendingJob);
       if (session && compatibleSession() && session.active && session.pendingStep === session.currentStep && Date.now() - session.pendingAt < 120000) {
         const previous = session.steps[session.currentStep];
         const page = classifyPage();
@@ -589,9 +629,11 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         try {
           const job = captureJob();
           if (job?.pendingHydration) await job.pendingHydration;
+          if (disposed) return;
           session = createSession(job);
         } catch { /* Ignore early DOM access */ }
       }
+      if (pendingJob) updateJob(pendingJob);
       emit();
       const checkNativeStepAdvance = () => {
         if (!session || !session.stepReview) return;
@@ -625,37 +667,14 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       interval = setInterval(() => void tick(), 1500);
       await tick();
     },
-    updateJob(job) {
-      if (!session || busy) return;
-      if (JSON.stringify(session.job) === JSON.stringify(job)) return;
-      // Preserve the listing description across form-only application steps.
-      const previous = session.job;
-      const samePage = Boolean(job.listingUrl && job.listingUrl === previous?.listingUrl || job.applicationUrl && job.applicationUrl === previous?.applicationUrl);
-      const differentJob = previous?.jobId && job.jobId && previous.jobId !== job.jobId || samePage && previous?.title && job.title && previous.title !== job.title && !session.active && !session.currentStep;
-      if (differentJob || !matchesSession(session, window.location.href)) {
-        session = createSession(job);
-        results.clear();
-        emit();
-        return;
-      }
-      session.job = samePage ? job : { ...job,
-        title: previous?.title || job.title,
-        company: job.company || previous?.company,
-        location: job.location || previous?.location,
-        workCountries: job.workCountries?.length ? job.workCountries : previous?.workCountries,
-        workCountry: job.workCountries?.length ? job.workCountry : previous?.workCountry,
-        locationAmbiguous: job.workCountries?.length ? job.locationAmbiguous : previous?.locationAmbiguous,
-        description: previous?.description || job.description,
-      };
-      saveSession(session);
-      emit();
-    },
+    updateJob,
     async start(job) {
-      if (busy) return;
+      if (busy || disposed) return;
       generation++;
       if (job || !session) session = createSession(job || captureJob());
       if (session?.job?.pendingHydration) {
         await session.job.pendingHydration;
+        if (disposed) return;
         saveSession(session);
         emit();
       }
@@ -684,6 +703,6 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       if (session) status('paused', 'Paused by user.');
     },
     tick,
-    destroy() { generation++; clearTimeout(timer); cancelDelay?.(); clearInterval(interval); observer?.disconnect(); unsubscribeNavigation?.(); },
+    destroy() { disposed = true; pendingJob = null; generation++; clearTimeout(timer); cancelDelay?.(); clearInterval(interval); observer?.disconnect(); unsubscribeNavigation?.(); },
   };
 }

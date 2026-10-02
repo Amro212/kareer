@@ -35,8 +35,9 @@ test.describe('cross-origin embedded application', () => {
     await expect(page.locator('#kr-main-panel')).not.toContainText('No form fields detected on this page.');
   });
 
-  test('fills the embedded form end to end from the host page panel', async ({ kr }) => {
-    await kr.seed({ profile: PROFILE });
+  for (const autoSubmit of [false, true]) {
+  test(`fills the embedded form from the host panel with Auto Submit ${autoSubmit ? 'on' : 'off'}`, async ({ kr }) => {
+    await kr.seed({ profile: PROFILE, settings: { autoSubmit } });
 
     const page = await kr.context.newPage();
     await page.goto(kr.fixtureUrl('embedded-host.html'));
@@ -57,6 +58,7 @@ test.describe('cross-origin embedded application', () => {
     await expect(frame.locator('#privacy')).toBeChecked();
     expect(await frame.locator('input[name=work_auth]:checked').count()).toBe(1);
   });
+  }
 
   test('unresolved embedded fields share one page request after saved fields are resolved', async ({ kr }) => {
     await kr.seed({ profile: PROFILE });
