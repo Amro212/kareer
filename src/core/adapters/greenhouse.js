@@ -45,7 +45,7 @@ export const greenhouseAdapter = {
   prepareFields: prepareApplicationDependencies,
   uploadState: element => applicationUploadState(element, '.field,.form-group,.upload,.file-upload,.resume-input', '.filename,.file-name,[class*="fileName"],[class*="filename"],[data-file-name],.uploaded-file'),
   choiceGroups(root) { return checkboxQuestions(root, this); },
-  readChoice: field => field.widget === 'ats-choice' ? field.elements.filter(element => element.checked).map(element => element.value) : null,
+  readChoice: field => field.widget === 'ats-choice' ? field.elements.flatMap((element,index) => element.checked ? [field.options[index].value] : []) : null,
   fillChoice: fillCheckboxQuestion,
   optionMatches: applicationOptionMatches,
   applyControl: doc => doc.querySelector('#apply_button'),

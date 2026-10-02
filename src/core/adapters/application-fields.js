@@ -3,6 +3,7 @@ import { countryCode, explicitCountryCode, countryCodes, countryNames, eligibili
 import { fixedProfileAnswer } from '../profile.js';
 import { optionKey, findExactOption, readComboboxSelection } from '../fields/combobox.js';
 import { locationMatches } from '../location.js';
+import { choiceValue, extractOptionLabel } from '../fields/labels.js';
 
 // Local recipes authored from the public Greenhouse/Ashby inventory. They map
 // controls to existing profile facts; they do not interpret remote action code.
@@ -196,7 +197,7 @@ export function applicationAnswer(field, profile, options = {}) {
     // Resolve known aliases first; otherwise the page request handles this field.
     const labels={gender:'Gender',pronouns:'Pronouns',ethnicity:'Ethnicity',veteran_v2:'Veteran status',disability_v2:'Disability status',source:'Source'};
     const alias = labels[field.ats.canonicalKey] ? fixedProfileAnswer({...field,label:labels[field.ats.canonicalKey]}, profile, options) : null;
-    return alias?.value ? { ...answer, ...alias, provenance:answer.provenance } : { ...answer, value:'', ...(field.type === 'combobox' && options.allowSearch !== false && !['work_auth','sponsorship'].includes(field.ats.canonicalKey) ? {searchQuery:String(value)} : {}) };
+    return alias?.value ? { ...answer, ...alias, provenance:answer.provenance } : { ...answer, value:'', ...(field.type === 'combobox' && !field.options?.length && options.allowSearch !== false && !['work_auth','sponsorship'].includes(field.ats.canonicalKey) ? {searchQuery:String(value)} : {}) };
   }
   return { ...answer, value: Array.isArray(value) ? matches.map(item => field.type === 'combobox' ? item.label : item.value) : field.type === 'combobox' ? matches[0].label : matches[0].value };
 }
@@ -215,19 +216,20 @@ export function checkboxQuestions(root, adapter) {
     const elements = [...container.querySelectorAll('input[type=checkbox]')];
     if (!elements.length || container.querySelector('fieldset,.demographic_question,.ashby-application-form-field-entry')) return [];
     const metadata = adapter.fieldMetadata(elements[0]);
-    if (!DISCLOSURES.has(metadata?.ats?.canonicalKey)) return [];
-    const options = elements.map(element => ({value:element.value, label:element.closest('label')?.textContent.trim() || element.ownerDocument.querySelector(`label[for="${CSS.escape(element.id)}"]`)?.textContent.trim() || element.value}));
+    const multipleQuestion = adapter.id === 'ashby' && elements.length > 1 && container.matches('.ashby-application-form-input-checkbox-group');
+    if (!DISCLOSURES.has(metadata?.ats?.canonicalKey) && !multipleQuestion) return [];
+    const options = elements.map(element => ({value:choiceValue(element,elements), label:extractOptionLabel(element)}));
     return [{...metadata,id:container.id || elements[0].name || elements[0].id,type:'radio',widget:'ats-choice',element:container,elements,options,
       ats:{...metadata.ats,multiple:elements.length > 1},required:metadata.required || container.getAttribute('aria-required') === 'true',
-      currentValue:elements.filter(element => element.checked).map(element => element.value).join(', '),constraints:{},isNarrative:false}];
+      currentValue:elements.flatMap((element,index) => element.checked ? [options[index].value] : []).join(', '),constraints:{},isNarrative:false}];
   });
 }
 
 export function fillCheckboxQuestion(field, value, {checkbox}) {
   const values = Array.isArray(value) ? value : [value];
   if (values.some(item => !field.options.some(option => option.value === item))) return false;
-  for (const element of field.elements) {
-    const wanted = values.includes(element.value);
+  for (const [index,element] of field.elements.entries()) {
+    const wanted = values.includes(field.options[index].value);
     if (element.checked !== wanted) checkbox(element, wanted);
   }
   return true;

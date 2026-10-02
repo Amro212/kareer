@@ -9,6 +9,7 @@ import { leverAnswer, leverCanonicalKey } from '../../src/core/adapters/lever-fi
 import { classifyPage } from '../../src/core/pageClassifier.js';
 import { fillField } from '../../src/core/fields/fillers.js';
 import { saveProfile, saveApiKey } from '../../src/core/storage.js';
+import {resolveDiscoveredAnswers} from '../../src/core/autofill.js';
 
 let dom;
 function boot(html, ats = 'greenhouse') {
@@ -30,6 +31,37 @@ function boot(html, ats = 'greenhouse') {
 afterEach(() => dom?.window.close());
 const options = [{value:'yes',label:'Yes'},{value:'no',label:'No'}];
 const question = (label,key='work_auth',ats='greenhouse') => ({id:'q',fieldId:'q',label,type:'select',options,ats:{adapter:ats,canonicalKey:key}});
+
+test('a harvested equivalent degree remains eligible for the primary contextual request', async () => {
+  boot('<form></form>','ashby');
+  saveProfile({fullName:'Test Candidate',educationLevel:'Bachelor'});
+  saveApiKey('fixture-key');
+  const field={fieldId:'degree',label:'Highest degree',type:'combobox',required:true,options:[{value:'Bachelor degree',label:'Bachelor degree'}],ats:{adapter:'ashby',canonicalKey:'highestDegree'}};
+  let calls=0;
+  globalThis.GM_xmlhttpRequest=request=>{
+    calls++;
+    assert.deepEqual(JSON.parse(JSON.parse(request.data).messages.at(-1).content).fieldsToFill.map(field=>field.fieldId),['degree']);
+    request.onload({status:200,responseText:JSON.stringify({choices:[{message:{content:JSON.stringify({answers:[{fieldId:'degree',value:'Bachelor degree'}]})}}]})});
+  };
+  const response=await generateAutofillAnswers([field]);
+  assert.equal(calls,1);
+  assert.equal(response.answers[0].value,'Bachelor degree');
+  assert.equal(response.answers[0].source,'ai');
+});
+
+test('late owned degree options receive one bounded contextual resolution',async()=>{
+  boot('<form></form>','ashby');
+  saveProfile({fullName:'Test Candidate',educationLevel:'Bachelor'});saveApiKey('fixture-key');
+  const fields=[{fieldId:'jcf2::degree',label:'Highest degree',type:'combobox',required:true,options:[{value:'Bachelor degree',label:'Bachelor degree'}],ats:{adapter:'ashby',canonicalKey:'highestDegree'}}];
+  let calls=0;
+  globalThis.GM_xmlhttpRequest=request=>{
+    calls++;
+    assert.deepEqual(JSON.parse(JSON.parse(request.data).messages.at(-1).content).fieldsToFill.map(field=>field.fieldId),['jcf2::degree']);
+    request.onload({status:200,responseText:JSON.stringify({choices:[{message:{content:JSON.stringify({answers:[{fieldId:'jcf2::degree',value:'Bachelor degree'}]})}}]})});
+  };
+  const answers=await resolveDiscoveredAnswers(fields,[{fieldId:'jcf2::degree',value:'',searchQuery:'Bachelor'}]);
+  assert.equal(calls,1);assert.equal(answers[0].value,'Bachelor degree');assert.equal(answers[0].source,'ai');
+});
 
 for (const resolve of [applicationAnswer,leverAnswer]) {
   test(`${resolve.name} keeps explicit countries and country aliases scoped`, () => {

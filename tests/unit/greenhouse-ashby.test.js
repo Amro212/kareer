@@ -6,7 +6,7 @@ import { scanFormFields } from '../../src/core/fields/scanner.js';
 import { normalizeFieldsForAI } from '../../src/core/fields/normalize.js';
 import { generateAutofillAnswers } from '../../src/core/ai.js';
 import { verifyField } from '../../src/core/fields/verify.js';
-import { saveProfile } from '../../src/core/storage.js';
+import { saveProfile, saveApiKey } from '../../src/core/storage.js';
 import { createFieldAgent } from '../../src/core/agent.js';
 import { classifyPage } from '../../src/core/pageClassifier.js';
 import { fillField } from '../../src/core/fields/fillers.js';
@@ -19,6 +19,7 @@ import {readFile} from 'node:fs/promises';
 import {harvestComboboxOptions,assertUniqueFields} from '../../src/core/fields/scanner.js';
 import {isResumeField} from '../../src/core/resume.js';
 import {build} from 'esbuild';
+import {readFileSync} from 'node:fs';
 
 let dom;
 function boot(html, ats = 'greenhouse', scripts=false) {
@@ -36,6 +37,85 @@ function boot(html, ats = 'greenhouse', scripts=false) {
   saveProfile({ fullName: 'Test Applicant', email: 'test@example.com', phone: '+1 416 555 0199', country: 'Canada', city: 'Toronto', stateProvince: 'Ontario' });
 }
 afterEach(() => { dom?.window.close(); setPlatform(createGmHost()); });
+
+for (const cancel of [false,true]) test(`embedded late degree discovery ${cancel?'honors Pause during refresh':'resolves the required equivalent choice'}`,async()=>{
+  boot('<main><h1>Job Application</h1><iframe></iframe></main>');
+  dom.reconfigure({url:'https://careers.example.com/jobs/1'});
+  const host=createGmHost(),commands=[];
+  let discovered=false,accepted=false,calls=0,paused=false;
+  const field=()=>({fieldId:'degree',label:'Highest degree',type:'combobox',required:true,options:discovered?[{value:'Bachelor degree',label:'Bachelor degree'}]:[],ats:{adapter:'ashby',canonicalKey:'highestDegree'}});
+  setPlatform({...host,capabilities:{...host.capabilities,crossFrame:true},framesList:async()=>[{frameId:1,isTop:false,fieldCount:1}],frameCommand:async(id,command)=>{
+    commands.push(command);
+    if(command.action==='stepState'){
+      if(cancel && discovered && !paused){paused=true;engine.pause();}
+      return {adapter:'ashby',pageType:'application',url:'https://jobs.ashbyhq.com/acme/1/application',signature:'degree-form',fieldCount:1,canSubmit:true,canContinue:false,errors:accepted?[]:[{fieldId:'degree',message:'Required degree'}]};
+    }
+    if(command.action==='scan')return {fields:[field()]};
+    if(command.action==='searchOptions'){discovered=true;return {fields:[field()]};}
+    if(command.action==='fill'){
+      accepted=command.answers[0].value==='Bachelor degree';
+      return {results:command.answers.map(answer=>({fieldId:answer.fieldId,status:accepted?'verified':'failed',value:answer.value}))};
+    }
+    return {results:[]};
+  }});
+  saveProfile({fullName:'Test Applicant',educationLevel:'Bachelor'});saveApiKey('fixture-key');saveSettings({autoContinue:false,autoSubmit:false});
+  globalThis.GM_xmlhttpRequest=request=>{calls++;request.onload({status:200,responseText:JSON.stringify({choices:[{message:{content:JSON.stringify({answers:[{fieldId:'jcf1::degree',value:'Bachelor degree'}]})}}]})});};
+  const engine=createApplicationEngine({settleMs:0});
+  try {
+    await engine.start();
+    assert.equal(calls,cancel?0:1);assert.equal(accepted,!cancel);
+    assert.equal(commands.filter(command=>command.action==='searchOptions').length,1);
+    assert.equal(engine.session.reason,cancel?'Paused by user.':'Embedded page filled. Review the application before proceeding.');
+  } finally {engine.destroy();globalThis.GM_xmlhttpRequest=undefined;}
+});
+
+test('generic native radios with duplicate HTML values fill and rescan the saved choice',async()=>{
+  boot('<fieldset><legend>Preferred schedule</legend><label><input type="radio" name="schedule">Morning</label><label><input type="radio" name="schedule">Evening</label></fieldset>');
+  dom.reconfigure({url:'https://example.com/jobs/1/apply'});
+  saveProfile({...getProfile(),savedAnswers:{'Preferred schedule':'Evening'}});
+  const [field]=scanFormFields();
+  const response=await generateAutofillAnswers(normalizeFieldsForAI([field]));
+  assert.equal(await fillField(field,response.answers[0].value),true);
+  assert.equal((await verifyField(field,response.answers[0].value)).verified,true);
+  assert.equal(scanFormFields()[0].currentValue,'Evening');
+});
+
+test('captured 1Password radios retain distinct answers despite default HTML values', async () => {
+  boot(readFileSync('fixtures/ashby-1password-2026-10-02-captured.html','utf8'),'ashby');
+  const field=scanFormFields().find(field=>field.label.includes('Size of company'));
+  assert.equal(field.options.length,5);
+  assert.equal(new Set(field.options.map(option=>option.value)).size,5);
+  assert.equal(await fillField(field,'101-999'),true);
+  assert.equal((await verifyField(field,'101-999')).verified,true);
+  assert.equal(scanFormFields().find(item=>item.id===field.id).currentValue,'101-999');
+});
+
+test('Ashby checkbox disclosures select only the requested answer with duplicate on values', async () => {
+  boot('<form data-ashby-root><fieldset><legend>Disability status</legend><label><input type="checkbox" name="disability">Yes</label><label><input type="checkbox" name="disability">No</label><label><input type="checkbox" name="disability">Prefer not to say</label></fieldset></form>','ashby');
+  saveProfile({...getProfile(),disabilityStatus:'No'});
+  const [field]=scanFormFields();
+  const response=await generateAutofillAnswers(normalizeFieldsForAI([field]));
+  assert.equal(response.answers[0].value,'No');
+  assert.equal(await fillField(field,response.answers[0].value),true);
+  assert.deepEqual([...document.querySelectorAll('input')].map(input=>input.checked),[false,true,false]);
+  assert.equal((await verifyField(field,response.answers[0].value)).verified,true);
+});
+
+test('captured Ashby multi-checkbox questions retain their title and owned choices', async () => {
+  boot(readFileSync('fixtures/ashby-1password-2026-10-02-captured.html','utf8'),'ashby');
+  const fields=scanFormFields();
+  const languages=fields.find(field=>field.label.includes('lanugages'));
+  assert.equal(languages?.widget,'ats-choice');
+  assert.equal(languages.ats.multiple,true);
+  assert.equal(languages.options.length,8);
+  const values=languages.options.slice(0,2).map(option=>option.value);
+  assert.equal(await fillField(languages,values),true);
+  assert.equal(languages.elements.filter(element=>element.checked).length,2);
+  assert.equal((await verifyField(languages,values)).verified,true);
+  assert.equal(fields.filter(field=>field.type==='checkbox' && languages.elements.includes(field.element)).length,0);
+  const consent=document.querySelectorAll('.ashby-application-form-input-checkbox-group')[2].querySelector('input');
+  assert.ok(fields.some(field=>field.type==='checkbox' && field.element===consent));
+});
 
 for (const ats of ['greenhouse', 'ashby']) {
   test(`${ats} resolves canonical names and contact fields without an API key`, async () => {

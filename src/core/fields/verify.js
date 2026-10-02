@@ -1,6 +1,7 @@
 import { FIELD_TYPES } from '../constants.js';
 import { readComboboxSelection, optionKey, waitForComboboxSelection, findExactOption } from './combobox.js';
 import { detectAdapter } from '../adapters/index.js';
+import { choiceValue } from './labels.js';
 
 export async function verifyField(field, expectedValue) {
   if (!field || !field.element) {
@@ -38,7 +39,7 @@ export async function verifyField(field, expectedValue) {
       if (!checkedRadio) {
         return { verified: false, actualValue: '', error: 'No option selected' };
       }
-      const actualVal = checkedRadio.value || checkedRadio.closest('label')?.textContent?.trim() || '';
+      const actualVal = choiceValue(checkedRadio, radios);
       const option = findExactOption(field.options || [], expectedValue, field);
       const verified = Boolean(option && radios.filter(r => r.checked).length === 1 && optionKey(actualVal) === optionKey(option.value));
       return { verified, actualValue: actualVal, error: verified ? undefined : 'Selected radio does not match the expected option' };

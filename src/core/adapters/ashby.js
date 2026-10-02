@@ -78,7 +78,7 @@ export const ashbyAdapter = {
     }).filter(field => field.id && field.options.length)];
   },
   readChoice(field) {
-    if (field.widget === 'ats-choice') return field.elements.filter(element => element.checked).map(element => element.value);
+    if (field.widget === 'ats-choice') return field.elements.flatMap((element,index) => element.checked ? [field.options[index].value] : []);
     if (field.widget !== 'ashby-yesno') return null;
     return field.elements.filter(el => el.getAttribute('aria-pressed') === 'true').map(el => el.textContent.trim());
   },

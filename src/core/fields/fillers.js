@@ -1,5 +1,5 @@
 import { FIELD_TYPES } from '../constants.js';
-import { extractOptionLabel, extractLabel } from './labels.js';
+import { extractOptionLabel, extractLabel, choiceValue } from './labels.js';
 import { isResidenceLabel } from '../location.js';
 import { logger } from '../debug.js';
 import { isLeverLocation, isPlacesLocation, recordLocationActivation } from './combobox.js';
@@ -164,7 +164,7 @@ export function fillRadioGroup(elements, targetValue) {
 
   // 1. Exact value match
   for (const r of elements) {
-    if (r.value.trim().toLowerCase() === targetStr) {
+    if (choiceValue(r, elements).trim().toLowerCase() === targetStr) {
       matchedRadio = r;
       break;
     }

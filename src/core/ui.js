@@ -1498,21 +1498,21 @@ let cancelAutofillDelay = null;
  * Second AI pass for comboboxes inside embedded frames whose options only appear
  * after a search, mirroring resolveComboboxSearchAnswers for the local document.
  */
-async function resolveRemoteSearchAnswers(response) {
+async function resolveRemoteSearchAnswers(response, context = {}) {
   const pending = response.answers.filter((answer) => isRemoteFieldId(answer.fieldId) && answer.searchQuery);
   if (!pending.length) return response;
 
   const discovered = await searchRemoteOptions(null, pending);
-  if (!discovered.length) return response;
+  if (!discovered.length || context.isCurrent?.() === false) return response;
 
   if (discovered.every(field => ['greenhouse','ashby','workday'].includes(field.ats?.adapter))) {
-    const resolved = resolveDiscoveredAnswers(discovered, pending);
+    const resolved = await resolveDiscoveredAnswers(discovered, pending, context);
     const byId = new Map(resolved.map(answer => [answer.fieldId,answer]));
     return {...response,answers:response.answers.map(answer => byId.get(answer.fieldId) || answer)};
   }
 
   try {
-    const resolved = await generateAutofillAnswers(discovered, { allowSearch: false });
+    const resolved = await generateAutofillAnswers(discovered, { ...context, allowSearch: false });
     const byId = new Map(resolved.answers.map((answer) => [answer.fieldId, answer]));
     return { ...response, answers: response.answers.map((answer) => byId.get(answer.fieldId) || answer) };
   } catch (err) {
@@ -1757,9 +1757,9 @@ async function executeAutofillFlow() {
     if (aiResponse.answers.some(answer => answer.searchQuery)) {
       autofillProgress.statusText = 'Searching for missing combobox options...';
       updatePanelDOM();
-      aiResponse = await resolveComboboxSearchAnswers(aiTargetFields, aiResponse);
+      aiResponse = await resolveComboboxSearchAnswers(aiTargetFields, aiResponse, {jobContext:currentJob,isCurrent:()=>token===autofillGeneration && window.location.href===runUrl});
       if (token !== autofillGeneration) return;
-      aiResponse = await resolveRemoteSearchAnswers(aiResponse);
+      aiResponse = await resolveRemoteSearchAnswers(aiResponse, {jobContext:currentJob,isCurrent:()=>token===autofillGeneration && window.location.href===runUrl});
       if (token !== autofillGeneration) return;
     }
     const answersMap = new Map(aiResponse.answers.map((a) => [a.fieldId, a]));

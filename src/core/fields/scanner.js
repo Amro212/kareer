@@ -1,6 +1,6 @@
 import { FIELD_TYPES, UI_IDS } from '../constants.js';
 import { detectAdapter } from '../adapters/index.js';
-import { extractLabel, extractGroupLabel, extractOptionLabel, extractDescription } from './labels.js';
+import { extractLabel, extractGroupLabel, extractOptionLabel, extractDescription, choiceValue } from './labels.js';
 import { logger } from '../debug.js';
 import { getProfile } from '../storage.js';
 import { isResidenceLabel, locationMatches } from '../location.js';
@@ -159,14 +159,14 @@ export function scanFormFields(root = document) {
       const options = radioEls.map((r) => {
         const optionLabel = extractOptionLabel(r);
         return {
-          value: r.value || optionLabel,
+          value: choiceValue(r, radioEls),
           label: optionLabel || r.value,
           checked: r.checked,
         };
       });
 
       const checkedRadio = radioEls.find((r) => r.checked);
-      const currentValue = checkedRadio ? (checkedRadio.value || extractOptionLabel(checkedRadio)) : '';
+      const currentValue = checkedRadio ? choiceValue(checkedRadio, radioEls) : '';
 
       detectedFields.push({
         id: el.name || el.id || `jc_field_${++fieldCounter}`,

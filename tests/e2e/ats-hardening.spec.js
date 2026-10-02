@@ -85,7 +85,13 @@ test('Ashby commits its portal location and visible No button without submission
   await expect(page.locator('[data-option=no]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[data-option=yes]')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('#kr-main-panel')).not.toContainText('Required field left empty');
-  expect(kr.openrouter.requests).toHaveLength(0);
+  // The unresolved required source now receives the two bounded repairs;
+  // saved contact/location/eligibility values never need another model answer.
+  expect(kr.openrouter.requests).toHaveLength(2);
+  for (const request of kr.openrouter.requests) {
+    const fields=JSON.parse(request.body.messages.at(-1).content).fieldsToFill;
+    expect(fields.map(field=>field.ats?.canonicalKey)).toEqual(['source']);
+  }
   expect((await kr.readStorage('kr:job')).workCountry).toBe('United States');
   await expect(page.locator('body')).toHaveAttribute('data-submissions', '0');
 });

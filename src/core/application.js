@@ -366,14 +366,14 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     if (!await settleFields(signature, token, 'option harvesting')) return [];
     let response = await answer(normalizeFieldsForAI(fields), { jobContext: session.job, ...context });
     if (!await settleFields(signature, token, 'AI response')) return [];
-    if (response.answers.some(a => a.searchQuery)) response = await resolveComboboxSearchAnswers(fields, response);
+    if (response.answers.some(a => a.searchQuery)) response = await resolveComboboxSearchAnswers(fields, response, {jobContext:session.job,isCurrent:()=>guard(token)});
     if (!await settleFields(signature, token, 'option search')) return [];
     return response.answers;
   }
   async function repair(errors, step, token, signature) {
     const blocked=errors.every(error=>{
       const field=scanFormFields().find(field=>field.id===error.fieldId);
-      return field?.type==='file' || field?.ats?.canonicalKey && step.answers[field.id]?.value==='';
+      return field?.type==='file' || answer === generateAutofillAnswers && !hasApiKey() && field?.ats?.canonicalKey && step.answers[field.id]?.value==='';
     });
     if (blocked) {status('paused','Required saved values or documents are unavailable. Review the highlighted questions before resuming.');return false;}
     if (answer === generateAutofillAnswers && !hasApiKey()) {status('paused','Required answers or documents need manual input. Add saved answers or an API key before resuming.');return false;}
@@ -478,7 +478,12 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
           const discovered=await command('searchOptions',{queries:searches});
           if (!current()) return true;
           await refresh();
-          for (const entry of resolveDiscoveredAnswers((discovered.fields || []).map(field=>({...field,fieldId:remoteFieldId(state.frameId,field.fieldId)})), response.answers)) step.answers[entry.fieldId]=entry;
+          if (!current()) return true;
+          const resolved = await resolveDiscoveredAnswers((discovered.fields || []).map(field=>({...field,fieldId:remoteFieldId(state.frameId,field.fieldId)})), response.answers, {jobContext:session.job,isCurrent:current});
+          if (!current()) return true;
+          await refresh();
+          if (!current()) return true;
+          for (const entry of resolved) step.answers[entry.fieldId]=entry;
         }
       }
       step.primary=true;

@@ -228,6 +228,14 @@ export function extractOptionLabel(element) {
   return cleanText(element.id || 'Option');
 }
 
+// Native choices may all expose the browser default "on". Keep their owned
+// labels as identities when the HTML values cannot distinguish the choices.
+export function choiceValue(element, elements) {
+  const value = element.value;
+  return value && elements.filter(item => item.value === value).length === 1
+    ? value : extractOptionLabel(element);
+}
+
 function describedByText(node) {
   if (!node || node.matches('.select__placeholder, [id$="-placeholder" i]')) return '';
   const text = cleanText(node.textContent);

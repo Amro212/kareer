@@ -35,6 +35,23 @@ const job = () => ({ title: 'Engineer', company: 'Example', listingUrl: 'https:/
 
 const workflowAnswers = async fields => ({ answers: fields.map(f => ({ fieldId: f.fieldId, value: 'Applicant' })) });
 
+test('an unresolved required canonical answer receives bounded contextual repair',async()=>{
+  dom.reconfigure({url:'https://jobs.ashbyhq.com/acme/1/application'});
+  render('<h1>Job Application</h1><form data-ashby-root>'+input('email','Email')+'</form>');
+  saveSettings({autoContinue:false});
+  let calls=0;
+  const engine=createApplicationEngine({settleMs:0,answer:async fields=>{
+    calls++;
+    return {answers:fields.map(field=>({fieldId:field.fieldId,value:calls===1?'':'test@example.com',source:'ai',inferred:true}))};
+  }});
+  try {
+    await engine.start();
+    assert.equal(calls,2);
+    assert.equal(document.querySelector('#email').value,'test@example.com');
+    assert.equal(engine.session.reason,'Page filled. Auto Continue is off.');
+  } finally {engine.destroy();}
+});
+
 test('destroy during initialization does not restore a session or register observers', async () => {
   render('<h1>Job Application</h1>' + input());
   let emissions = 0;
