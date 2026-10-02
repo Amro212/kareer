@@ -4,21 +4,21 @@ import { classifyPage, isVisible } from './pageClassifier.js';
 import { inspectValidation } from './validation.js';
 import { findContinue, inspectContinue, inspectSubmit, pageSignature, isDisabled, observePage, comparePages, workflowLabel, questionIdentity } from './navigation.js';
 import { rememberAnswer, recallAnswer } from './memory.js';
-import { getSettings, getProfile } from './storage.js';
+import { getSettings, getProfile, hasApiKey } from './storage.js';
 import { scanFormFields as scanAllFields, harvestComboboxOptions } from './fields/scanner.js';
 import { normalizeFieldsForAI } from './fields/normalize.js';
 import { fillField } from './fields/fillers.js';
 import { uploadResumeAndWait, isResumeField } from './resume.js';
 import { verifyField } from './fields/verify.js';
 import { generateAutofillAnswers } from './ai.js';
-import { resolveComboboxSearchAnswers } from './autofill.js';
+import { resolveComboboxSearchAnswers, resolveDiscoveredAnswers } from './autofill.js';
 import { platform } from './platform.js';
 import { detectAdapter } from './adapters/index.js';
 import { logger } from './debug.js';
-import { applyRemoteResumeUploads } from './remote.js';
+import { applyRemoteResumeUploads, embeddedApplicationStates, remoteFieldId } from './remote.js';
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-const scanPageFields = () => scanAllFields().filter(f => isVisible(f.element) && !f.element.closest('[role=listbox],.select__menu')).map(f => ({ ...f, label: workflowLabel(f) }));
+const scanPageFields = () => scanAllFields().filter(f => (isVisible(f.element) || f.type === 'file' && isVisible(f.element.parentElement)) && !f.element.closest('[role=listbox],.select__menu')).map(f => ({ ...f, label: workflowLabel(f) }));
 const scanFormFields = () => scanPageFields().filter(f => !f.element.disabled && !f.element.readOnly);
 const unfilled = field => field.hasExistingValue ? false : field.type === 'checkbox' && !field.widget ? !field.element.checked : !String(field.currentValue ?? '').trim();
 const empty = field => detectAdapter().needsFill?.(field, getProfile()) ?? unfilled(field);
@@ -167,7 +167,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
   function guard(token) {
     if (token !== generation || !session?.active) return false;
     const page = classifyPage();
-    if (['captcha', 'boundary', 'review', 'confirmation'].includes(page.type)) {
+    if (['captcha', 'review', 'confirmation'].includes(page.type)) {
       status(page.type, page.reason);
       return false;
     }
@@ -341,8 +341,8 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       const live = scanFormFields().find(f => f.id === field.id && f.label === field.label);
       const verified = filled && live ? await verifyField(live, entry.value) : { verified: false };
       // Phase 2's generic verifier only checks non-empty values. Workflow requires exact persistence.
-      let exact = field.ats?.adapter === 'workday' || !['text', 'textarea', 'email', 'tel', 'url', 'number', 'contenteditable'].includes(field.type) || String(verified.actualValue ?? '').trim() === String(entry.value).trim();
-      if (['select', 'radio'].includes(field.type)) exact = field.options.some(o => (String(o.value) === String(entry.value) || o.label === String(entry.value)) && String(o.value) === String(verified.actualValue));
+      let exact = Boolean(field.ats?.adapter) || !['text', 'textarea', 'email', 'tel', 'url', 'number', 'contenteditable'].includes(field.type) || String(verified.actualValue ?? '').trim() === String(entry.value).trim();
+      if (['select', 'radio'].includes(field.type) && !field.widget) exact = field.options.some(o => (String(o.value) === String(entry.value) || o.label === String(entry.value)) && String(o.value) === String(verified.actualValue));
       const valid = verified.verified && exact && !inspectValidation([live]).some(error => error.fieldId === live.id);
       results.set(field.id, {
         status: valid ? entry.provenance === 'guessed' ? 'guessed' : entry.inferred ? 'inferred' : 'verified' : 'failed',
@@ -371,6 +371,12 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     return response.answers;
   }
   async function repair(errors, step, token, signature) {
+    const blocked=errors.every(error=>{
+      const field=scanFormFields().find(field=>field.id===error.fieldId);
+      return field?.type==='file' || field?.ats?.canonicalKey && step.answers[field.id]?.value==='';
+    });
+    if (blocked) {status('paused','Required saved values or documents are unavailable. Review the highlighted questions before resuming.');return false;}
+    if (answer === generateAutofillAnswers && !hasApiKey()) {status('paused','Required answers or documents need manual input. Add saved answers or an API key before resuming.');return false;}
     if (step.repairs >= 2) { status('paused', 'Repair limit reached (2/2). Review errors and resume manually.'); return false; }
     step.repairs++;
     session.errors.push(...errors.map(error => ({ ...error, attempt: step.repairs, url: window.location.href, at: new Date().toISOString() })));
@@ -395,6 +401,142 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     }
     return guard(token);
   }
+
+  async function embeddedWorkflow(token) {
+    const hasTopApplicationForm = Boolean(detectAdapter().applicationRoot?.(document)) || ['workday', 'lever'].includes(detectAdapter().id);
+    if (!platform.capabilities.crossFrame || hasTopApplicationForm || ['captcha','confirmation'].includes(classifyPage().type)) return false;
+    const current = () => guard(token);
+    const discover = async () => {
+      const states = await embeddedApplicationStates();
+      const candidates = states.filter(state => ['application','review','confirmation','captcha'].includes(state.pageType));
+      if (candidates.length > 1) throw new Error('Application frame ownership is ambiguous. Inspect embedded forms.');
+      return candidates[0];
+    };
+    let state = await discover();
+    if (!state && !session.frameOwner) return false;
+    if (!state) throw new Error('Application frame is unavailable. Wait for it to load before resuming.');
+    for (let pass=0; pass<30 && current(); pass++) {
+      if (!getSettings().autofillEnabled) {status('paused','Autofill is disabled in Settings.');return true;}
+      if (['captcha','confirmation'].includes(state.pageType)) {
+        if (state.pageType === 'confirmation') completeStep();
+        status(state.pageType,state.reason);return true;
+      }
+      if (session.frameOwner && (session.frameOwner.adapter !== state.adapter || new URL(session.frameOwner.url).origin !== new URL(state.url).origin)) throw new Error('Application frame ownership changed. Inspect before resuming.');
+      session.frameOwner = {frameId:state.frameId,adapter:state.adapter,url:state.url};
+      const command = async (action, data={}) => {
+        if (!current()) return null;
+        const result = await platform.frames.command(state.frameId,{action,expectedSignature:state.signature,...data});
+        if (result?.error) throw new Error(result.error);
+        if (!result) throw new Error('Application frame did not respond.');
+        return result;
+      };
+      const refresh = async () => {
+        const next = await discover();
+        if (!next || next.frameId !== state.frameId || next.url !== state.url || next.pageType !== state.pageType || next.observation && state.observation && comparePages(state.observation,next.observation) !== 'same') throw new Error('Application frame changed while filling. Inspect before resuming.');
+        state=next;
+      };
+      const signature = `embedded:${state.adapter}:${state.signature}`;
+      let step = session.steps[session.currentStep];
+      if (!step || step.frameUrl !== state.url) {
+        session.currentStep=signature;
+        step=session.steps[signature] ||= {answers:{},questions:{},primary:false,lateRequests:0,clicks:0,frameUrl:state.url};
+        results.clear();
+        if (!session.history.some(entry=>entry.signature===signature)) session.history.push({url:state.url,signature,at:new Date().toISOString()});
+      }
+      if (platform.capabilities.fileUpload && !step.uploaded) {
+        const uploaded=await command('uploadResume',{overwriteExisting:getSettings().overwriteExisting});
+        if (!current()) return true;
+        for (const entry of uploaded.results || []) results.set(remoteFieldId(state.frameId,entry.fieldId),entry);
+        step.uploaded=true;
+        await refresh();
+      }
+      // Agents own DOM and local recipes; only this frame generates answers.
+      const scanned=await command('scan',{overwriteExisting:!step.primary && getSettings().overwriteExisting});
+      if (!current()) return true;
+      await refresh();
+      const fields=(scanned.fields || []).map(field=>({...field,fieldId:remoteFieldId(state.frameId,field.fieldId)}));
+      // Discovery and answer availability are separate: an unanswered known
+      // question must not consume the budget for genuinely new conditional fields.
+      const key=field=>field.fieldId.replace(/^jcf\d+::/, '');
+      if (fields.some(field=>Object.hasOwn(step.questions,key(field)) && step.questions[key(field)]!==questionIdentity(field))) throw new Error('An embedded question changed. Inspect before resuming.');
+      const retry=step.retryRequested;
+      step.retryRequested=false;
+      const missing=fields.filter(field=>!Object.hasOwn(step.questions,key(field)) || retry && (!step.answers[field.fieldId]?.value || results.get(field.fieldId)?.status==='failed'));
+      if (missing.length) {
+        if (step.primary && retry) {
+          step.repairs=(step.repairs || 0)+1;
+          if (step.repairs>2) throw new Error('Embedded repair limit reached. Review manually.');
+        } else if (step.primary && step.lateRequests++ >= 2) throw new Error('Embedded dynamic field limit reached. Review manually.');
+        status('running',`Resolving ${missing.length} embedded fields.`);
+        for (const field of missing) step.questions[key(field)]=questionIdentity(field);
+        const response=await answer(missing,{jobContext:session.job,...(retry?{repairErrors:state.errors,allowSearch:false}:{})});
+        if (!current()) return true;
+        await refresh();
+        for (const entry of response.answers) step.answers[entry.fieldId]=entry;
+        const searches=response.answers.filter(entry=>entry.searchQuery).map(entry=>({...entry,fieldId:entry.fieldId.replace(/^jcf\d+::/, '')}));
+        if (searches.length) {
+          const discovered=await command('searchOptions',{queries:searches});
+          if (!current()) return true;
+          await refresh();
+          for (const entry of resolveDiscoveredAnswers((discovered.fields || []).map(field=>({...field,fieldId:remoteFieldId(state.frameId,field.fieldId)})), response.answers)) step.answers[entry.fieldId]=entry;
+        }
+      }
+      step.primary=true;
+      saveSession(session);
+      const entries=fields.map(field=>step.answers[field.fieldId]).filter(Boolean);
+      if (entries.length) {
+        const filled=await command('fill',{answers:entries.map(entry=>({...entry,fieldId:entry.fieldId.replace(/^jcf\d+::/, '')}))});
+        if (!current()) return true;
+        for (const entry of filled.results || []) results.set(remoteFieldId(state.frameId,entry.fieldId),entry);
+        await refresh();
+        emit();
+        // Conditional questions revealed by filling get their bounded late pass.
+        const next=await command('scan');
+        if (!current()) return true;
+        await refresh();
+        if (next.fields?.some(field=>!Object.hasOwn(step.questions,field.fieldId))) continue;
+      }
+      if (state.errors.length || [...results.values()].some(entry=>entry.status==='failed')) {
+        status('paused',`Embedded application needs review: ${state.errors.map(error=>error.message).join(' ').slice(0,250) || 'A value or upload was rejected.'}`);return true;
+      }
+      let action;
+      if (state.canContinue) {
+        if (!getSettings().autoContinue && !step.forceContinue) {session.stepReview=true;status('paused','Page filled. Auto Continue is off.');return true;}
+        step.forceContinue=false;
+        if (step.clicks++>=3 || session.transitions++>=30) throw new Error('Embedded navigation limit reached. Continue manually.');
+        action='continue';
+      } else if (state.canSubmit && getSettings().autoSubmit) {
+        if (session.submits) throw new Error('Auto Submit already attempted. Check the result manually.');
+        for (let left=Math.ceil(submitCountdownMs/1000);left>0;left--) {
+          if (!current()) return true;
+          status('submitting',`Submitting in ${left}s. Click Pause to cancel.`);
+          if (!current()) return true;
+          await delay(1000);
+        }
+        if (!current()) return true;
+        await refresh();
+        if (!state.canSubmit || state.canContinue || state.errors.length) throw new Error('Embedded validation changed during countdown. Review manually.');
+        session.submits=1;step.submits=1;action='submit';
+      } else {status('paused','Embedded page filled. Review the application before proceeding.');return true;}
+      status(action==='submit'?'submitting':'running',action==='submit'?'Submitting application.':'Continuing embedded application.');
+      saveSession(session);
+      const before=state;
+      await command(action);
+      const deadline=Date.now()+navigationTimeoutMs;
+      let next;
+      do {
+        if (!current()) return true;
+        next=await discover();
+        if (next && (next.pageType!==before.pageType || next.url!==before.url || next.signature!==before.signature || next.frameId!==before.frameId)) break;
+        if (next?.errors.length) throw new Error('Embedded navigation rejected by validation. Review manually.');
+        await delay(Math.min(100,Math.max(1,deadline-Date.now())));
+      } while (Date.now()<deadline);
+      if (!next || next.signature===before.signature && next.pageType===before.pageType && next.url===before.url) throw new Error('Embedded navigation did not reach a new step. Check manually.');
+      completeStep();session.currentStep='';state=next;
+    }
+    if (current()) status('paused','Embedded workflow limit reached. Continue manually.');
+    return true;
+  }
   async function tick() {
     if (busy || !session?.active) return;
     if (session.status === 'review' && getSettings().autoSubmit) {
@@ -417,6 +559,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     busy = true;
     const token = generation;
     try {
+      if (await embeddedWorkflow(token)) return;
       for (let pass = 0; pass < 40; pass++) {
         if (!guard(token)) {
           if (token === generation && session.status === 'review' && getSettings().autoSubmit) {
@@ -484,7 +627,16 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         } else {
           // Recover persisted answers after a full document reload without another primary request.
           if (!await applyResumeUploads(fields.filter(f => f.type === 'file' && isResumeField(f, fields) && empty(f)), token, signature)) return;
-          const missing = fields.filter(f => f.type !== 'file' && unfilled(f));
+          await detectAdapter().prepareSections?.(document,getProfile(),{session,isCurrent:()=>guard(token)});
+          await detectAdapter().prepareFields?.(document,getProfile(),{overwrite:false,isCurrent:()=>guard(token)});
+          signature=observePage(scanPageFields());
+          step.observation=signature;
+          const missing = scanFormFields().filter(f => f.type !== 'file' && shouldFill(f) && unfilled(f));
+          for (const field of normalizeFieldsForAI(missing)) {
+            if (!field.ats?.canonicalKey || step.answers[field.fieldId]?.value !== '') continue;
+            const refreshed = detectAdapter().resolveAnswer?.(field, getProfile(), {jobContext:session.job,allowSearch:false});
+            if (refreshed?.value != null && refreshed.value !== '') step.answers[field.fieldId] = refreshed;
+          }
           if (missing.length && !await applyAnswers(missing, Object.values(step.answers), token, signature)) return;
         }
         if (!checkPage(signature, token, 'fill completion')) return;
@@ -680,6 +832,8 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       }
       if (!compatibleSession()) return;
       session.stepReview = false;
+      const step=session.steps[session.currentStep];
+      if (step?.frameUrl && step.primary) step.retryRequested=true;
       session.active = true;
       status('running', 'Starting application workflow.');
       await tick();
@@ -697,12 +851,17 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     },
     pause() {
       generation++;
+      if (session?.frameOwner) void platform.frames.command(session.frameOwner.frameId,{action:'cancel'}).catch(()=>{});
       clearTimeout(timer);
       cancelDelay?.();
       busy = false;
       if (session) status('paused', 'Paused by user.');
     },
     tick,
-    destroy() { disposed = true; pendingJob = null; generation++; clearTimeout(timer); cancelDelay?.(); clearInterval(interval); observer?.disconnect(); unsubscribeNavigation?.(); },
+    destroy() {
+      disposed = true; pendingJob = null; generation++;
+      if (session?.frameOwner) void platform.frames.command(session.frameOwner.frameId,{action:'cancel'}).catch(()=>{});
+      clearTimeout(timer); cancelDelay?.(); clearInterval(interval); observer?.disconnect(); unsubscribeNavigation?.();
+    },
   };
 }

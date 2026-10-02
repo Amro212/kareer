@@ -61,7 +61,7 @@ export const leverAdapter = {
   optionMatches: leverOptionMatches,
   needsFill: leverNeedsFill,
   searchQuery(field, value) {
-    return value;
+    return ['work_auth','sponsorship','sponsorship_now','sponsorship_future','gender','pronouns','ethnicity','disability_v2','veteran_v2'].includes(field.ats?.canonicalKey) ? '' : value;
   },
   choiceGroups(root, profile = {}) {
     return Array.from(root.querySelectorAll('#candidatePronounsCheckboxes')).map(container => {
@@ -128,7 +128,7 @@ export const leverAdapter = {
       }
       return [];
     }
-    return [];
+    return null;
   },
   continueControl() {
     return null;
@@ -137,12 +137,12 @@ export const leverAdapter = {
     return '';
   },
   comboboxMenus(element) {
-    if (!element?.parentElement) return null;
+    if (!element?.parentElement || !this.isCombobox(element)) return null;
     const menus = Array.from(element.parentElement.querySelectorAll('.dropdown-container'));
     return menus.length ? menus : null;
   },
-  comboboxOptionSelector() {
-    return '.dropdown-results > .dropdown-location';
+  comboboxOptionSelector(element) {
+    return this.isCombobox(element) ? '.dropdown-results > .dropdown-location' : '';
   },
   uploadState(element) {
     if (element?.type !== 'file') return null;

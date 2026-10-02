@@ -783,11 +783,11 @@ test('final submit cannot become a Continue candidate', () => {
   assert.equal(classifyPage().type, 'review');
   assert.equal(findContinue(), null);
 });
-test('hidden boundaries do not pause, visible legal attestations do', () => {
+test('hidden content and visible legal attestations do not pause application forms', () => {
   render(`${input()}<div hidden>Assessment</div><button>Continue</button>`);
   assert.equal(classifyPage().type, 'application');
   render(`${input()}<label><input type="checkbox">I certify that all information is accurate</label><button>Continue</button>`);
-  assert.equal(classifyPage().type, 'boundary');
+  assert.equal(classifyPage().type, 'application');
 });
 test('engine repairs server rejection, advances two steps and stops before submit', async () => {
   render(`${input('answer', 'Describe your skills')}<p id="error" hidden role="alert"></p><button type="button">Continue</button>`);
@@ -824,15 +824,17 @@ test('engine repairs server rejection, advances two steps and stops before submi
   assert.ok(engine.session.errors.some(e => e.fieldId === 'answer'));
   engine.destroy();
 });
-test('background CAPTCHA does not block filling; assessment still pauses', async () => {
+test('background CAPTCHA and assessment headings do not block applicant fields', async () => {
   render(`<iframe src="https://www.google.com/recaptcha/api2/anchor"></iframe>${input()}<button>Continue</button>`);
   let calls = 0;
   const engine = createApplicationEngine({ settleMs: 0, transitionMs: 0, answer: async fields => { calls++; return { answers: fields.map(f => ({ fieldId: f.fieldId, value: 'Test Applicant' })) }; } });
-  document.querySelector('button').onclick = () => render('<h1>Skills assessment</h1><label>Answer<input required></label><button>Continue</button>');
+  document.querySelector('button').onclick = () => {
+    render('<h1>Skills assessment</h1><label>Answer<input id="answer" required></label><button>Continue</button>');
+    document.querySelector('button').onclick = () => render('<h1>Thank you for applying</h1>');
+  };
   await engine.start(job());
-  assert.equal(engine.session.status, 'boundary');
-  assert.equal(document.querySelector('input').value, '');
-  assert.equal(calls, 1);
+  assert.equal(engine.session.status, 'confirmation');
+  assert.equal(calls, 2);
   engine.destroy();
 });
 
@@ -958,15 +960,15 @@ test('ambiguous navigation controls require manual action', () => {
   render('<button>Next</button><button>Continue</button>');
   assert.equal(findContinue(), null);
 });
-test('boundary appearing during AI request prevents filling', async () => {
+test('verification heading appearing during AI request does not block filling', async () => {
   render(input());
   const engine = createApplicationEngine({ settleMs: 0, transitionMs: 0, answer: async () => {
     document.querySelector('main').insertAdjacentHTML('afterbegin', '<h1>Identity verification</h1>');
     return { answers: [{ fieldId: 'name', value: 'Test Applicant' }] };
   } });
   await engine.start(job());
-  assert.equal(document.querySelector('input').value, '');
-  assert.equal(engine.session.status, 'boundary');
+  assert.equal(document.querySelector('input').value, 'Test Applicant');
+  assert.notEqual(engine.session.status, 'boundary');
   engine.destroy();
 });
 test('full document reload restores active session and saved answers without a primary request', async () => {

@@ -4,7 +4,7 @@
      Delayed parser is simulated; no requests or personal documents are sent. -->
 <style>body{font:16px sans-serif;padding:24px}label{display:block;margin:16px}input{padding:8px}</style>
 <body><main><h1>Apply</h1><form>
-<div class="ashby-application-form-autofill-input-root" data-state="default"><label>Autofill from resume<input id="resume" type="file"></label><span id="parse-status" role="status"></span></div>
+<div class="ashby-application-form-autofill-input-root" data-state="default"><label>Autofill from resume<input id="resume" type="file"></label><span class="filename" id="accepted-resume"></span><span id="parse-status" role="status"></span></div>
 <label>Full Name<input id="name" required></label>
 <label>Email<input id="email" type="email" required></label>
 <label>LinkedIn URL<input id="linkedin"></label>
@@ -30,6 +30,7 @@ document.querySelector('#resume').addEventListener('change',()=>{
     replacement.value='Parsed Applicant'; document.querySelector('#email').value='';
     root.dataset.state='default'; root.removeAttribute('aria-busy');
     document.querySelector('#parse-status').textContent='Resume processed';
+    document.querySelector('#accepted-resume').textContent=document.querySelector('#resume').files[0].name;
     document.body.dataset.parse='complete';
     document.body.dataset.parsedAt=String(Date.now());
   },1800);

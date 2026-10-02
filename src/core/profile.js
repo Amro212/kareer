@@ -28,7 +28,7 @@ export const PROFILE_SECTIONS = [
     { name: 'yearsExperience', label: 'Total years of professional experience', type: 'number', placeholder: 'e.g. 3', min: '0', step: '0.5' },
     { name: 'languages', label: 'Languages and proficiency', placeholder: 'e.g. English (fluent), French (intermediate)' },
   ] },
-  { title: 'Demographics & disclosures', description: 'Not set leaves the answer blank. Choose “Prefer not to answer” to decline disclosure. These answers are never guessed.', fields: [
+  { title: 'Demographics & disclosures', description: 'Saved answers take priority. Unset answers use your notes and context; inferred or guessed answers are marked in the panel. Choose “Prefer not to answer” to decline disclosure.', fields: [
     { name: 'gender', label: 'Gender', options: ['Woman', 'Man', 'Non-binary', 'Self-describe', 'Prefer not to answer'] },
     { name: 'genderDescription', label: 'Gender self-description (if selected)', placeholder: 'Your own description' },
     { name: 'pronouns', label: 'Pronouns', placeholder: 'e.g. she/her, he/him, they/them, Prefer not to answer' },
@@ -39,10 +39,12 @@ export const PROFILE_SECTIONS = [
     { name: 'lgbtStatus', label: 'LGBTQ+', options: disclosure },
     { name: 'visibleMinority', label: 'Visible minority', options: disclosure },
     { name: 'armedForces', label: 'Armed forces service', options: disclosure },
+    { name: 'transgender', label: 'Transgender', options: disclosure },
   ] },
 ];
 
 export const CORE_PROFILE_DEFAULTS = {
+  twitter: '', behance: '', dribbble: '', website: '', additionalUrl: '',
   firstName: '',
   middleName: '',
   lastName: '',
@@ -298,6 +300,7 @@ export function fixedProfileAnswer(field, profile, { allowSearch = true } = {}) 
   if (!source && !key) return null;
   let value = source ? 'LinkedIn' : profile[key] || '';
   if (key === 'gender' && value === 'Self-describe') value = profile.genderDescription || '';
+  if (key && !value) return null;
   const answer = { fieldId: field.fieldId, value, inferred: false, source: 'profile' };
   if (!value || !['select', 'combobox', 'radio', 'checkbox'].includes(field.type)) return answer;
   const options = field.options || [];

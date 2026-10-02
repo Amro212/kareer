@@ -37,6 +37,7 @@ function profileSecrets(profile) {
     profile.fullName, profile.email, profile.phone,
     profile.streetAddress, profile.addressLine2, profile.city, profile.stateProvince, profile.postalCode, profile.country,
     profile.location, profile.linkedin, profile.github, profile.portfolio,
+    profile.twitter, profile.behance, profile.dribbble, profile.website, profile.additionalUrl,
     profile.expectedSalary, profile.genderDescription,
   ];
   return values

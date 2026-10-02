@@ -45,12 +45,13 @@ for (const [ats, host] of [['ashby', ASHBY_HOST], ['lever', LEVER_HOST]]) {
     await expect(page.locator('#name')).toHaveValue('Parsed Applicant');
     await expect(page.locator('#email')).toHaveValue(PROFILE.email);
     await expect(page.locator('body')).toHaveAttribute('data-submissions', '0');
+    await expect(page.locator('#why')).not.toHaveValue('');
     expect(kr.openrouter.requests).toHaveLength(1);
   });
 }
 
 test('resume parsing honors overwrite and workflow target rescanning', async ({ kr }) => {
-  await kr.seed({ profile: PROFILE, settings: { overwriteExisting: true, autoContinue: false },
+  await kr.seed({ profile: { ...PROFILE, linkedin: 'https://linkedin.com/in/test' }, settings: { overwriteExisting: true, autoContinue: false },
     resume: { name: 'Resume.pdf', type: 'application/pdf', contents: '%PDF-1.4 test' } });
   const page = await kr.context.newPage();
   await page.goto(kr.fixtureUrl('ats-race-fixture.html', ASHBY_HOST, '?ats=ashby&workflow'));
@@ -61,6 +62,8 @@ test('resume parsing honors overwrite and workflow target rescanning', async ({ 
   await expect(page.locator('body')).toHaveAttribute('data-parse', 'complete');
   await expect(page.locator('#name')).toHaveValue(PROFILE.fullName);
   await expect(page.locator('#email')).toHaveValue(PROFILE.email);
+  await expect(page.locator('#linkedin')).toHaveValue('https://linkedin.com/in/test');
+  await expect(page.locator('#why')).not.toHaveValue('');
   expect(kr.openrouter.requests).toHaveLength(1);
 });
 
@@ -79,7 +82,7 @@ test('pause during resume parsing prevents AI requests and later field fills', a
 });
 
 test('embedded Ashby parser completes before the parent asks for answers', async ({ kr }) => {
-  await kr.seed({ profile: PROFILE, resume: { name: 'Resume.pdf', type: 'application/pdf', contents: '%PDF-1.4 test' } });
+  await kr.seed({ profile: { ...PROFILE, linkedin: 'https://linkedin.com/in/test' }, resume: { name: 'Resume.pdf', type: 'application/pdf', contents: '%PDF-1.4 test' } });
   const page = await kr.context.newPage();
   await page.route('**/embedded-application.html', route => route.fulfill({ contentType: 'text/html', body:
     readFileSync(new URL('../../fixtures/ats-race-fixture.html', import.meta.url), 'utf8').replace('<body>', '<body data-ashby-root>') }));
@@ -87,11 +90,13 @@ test('embedded Ashby parser completes before the parent asks for answers', async
   await kr.openPanel(page);
   await expect(page.locator('#kr-main-panel')).toContainText('embedded frame');
   await page.locator('#kr-autofill-btn').click();
-  await expect(page.locator('#kr-main-panel')).toContainText('Autofill complete. Review field statuses below.', { timeout: 60000 });
+  await expect(page.locator('#kr-main-panel')).toContainText('Embedded page filled. Review the application before proceeding.', { timeout: 60000 });
   const frame = page.frameLocator('iframe');
   await expect(frame.locator('body')).toHaveAttribute('data-parse', 'complete');
   await expect(frame.locator('#name')).toHaveValue('Parsed Applicant');
   await expect(frame.locator('#email')).toHaveValue(PROFILE.email);
+  await expect(frame.locator('#linkedin')).toHaveValue('https://linkedin.com/in/test');
+  await expect(frame.locator('#why')).not.toHaveValue('');
   expect(kr.openrouter.requests).toHaveLength(1);
 });
 

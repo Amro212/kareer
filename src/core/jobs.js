@@ -1,9 +1,9 @@
 import { gmGet, gmSet } from './storage.js';
 import { STORAGE_KEYS } from './constants.js';
 import { isVisible, visibleText } from './pageClassifier.js';
+import { detectAdapter } from './adapters/index.js';
 import { logger } from './debug.js';
 import { countryCode, countryNames, countryCodes } from './adapters/canonical.js';
-import { detectAdapter } from './adapters/index.js';
 
 const JOB_HYDRATION_TIMEOUT_MS = 5000;
 const capturedJobs = new WeakMap();
@@ -135,7 +135,7 @@ export function captureJob(doc = document) {
     el.innerHTML = String(html || '');
     return el.textContent.replace(/\s+/g, ' ').trim().slice(0, 30000);
   };
-  const apply = Array.from(doc.querySelectorAll('a[href]')).find(el => isVisible(el) && /^(?:apply|apply now|apply for (?:this )?(?:job|position)|start application)$/i.test(visibleText(el)));
+  const apply = detectAdapter(doc.location || window.location, doc).applyControl?.(doc) || Array.from(doc.querySelectorAll('a[href]')).find(el => isVisible(el) && /^(?:apply|apply now|apply for (?:this )?(?:job|position)|start application)$/i.test(visibleText(el)));
   const logo = doc.querySelector('main img[alt$=" Logo"], .company-logo img[alt]');
   const company = posting?.hiringOrganization?.name || doc.querySelector('[itemprop=hiringOrganization], .ashby-job-posting-header a p, .posting-company, [data-testid="company-name"]')?.textContent?.trim() || logo?.getAttribute('alt')?.replace(/\s+Logo$/i, '') || '';
   const addresses = [posting?.jobLocation].flat().filter(Boolean).map(place => place.address).filter(Boolean);

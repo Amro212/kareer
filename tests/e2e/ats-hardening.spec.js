@@ -71,7 +71,7 @@ test('Lever overwrite repairs multiple pronouns; another run preserves existing 
 });
 
 test('Ashby commits its portal location and visible No button without submission', async ({ kr }) => {
-  await kr.seed({ profile: { ...profile, workEligibilities: [{ country: 'United States', workAuthorization: 'No' }] } });
+  await kr.seed({ profile: { ...profile, workEligibilities: [{ country: 'United States', workAuthorization: 'No' }], savedAnswers: { 'Do you live in, and are you legally authorized to work in the countries listed in the job posting?': 'No' } } });
   answerQuestions(kr);
   const page = await kr.context.newPage();
   await page.goto(kr.fixtureUrl('ashby-hardening-fixture.html', ASHBY_HOST));
@@ -80,20 +80,18 @@ test('Ashby commits its portal location and visible No button without submission
   await expect(page.locator('#kr-autofill-btn')).toBeEnabled({ timeout: 60000 });
   await expect(page.locator('body')).toHaveAttribute('data-accepted-location', 'Toronto, ON, CAN');
   await expect(page.locator('body')).toHaveAttribute('data-accepted-authorization', 'no');
-  await expect(page.locator('body')).toHaveAttribute('data-accepted-source', 'Other');
+  // Source's only option is Other; LinkedIn is never silently replaced with it.
+  expect(await page.locator('body').getAttribute('data-accepted-source')).toBeNull();
   await expect(page.locator('[data-option=no]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[data-option=yes]')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('#kr-main-panel')).not.toContainText('Required field left empty');
-  const fields = JSON.parse(kr.openrouter.requests[0].body.messages.at(-1).content).fieldsToFill;
-  expect(fields.some(f => f.fieldId === 'authorization')).toBe(false);
-  expect(JSON.parse(kr.openrouter.requests[0].body.messages.at(-1).content).jobContext.workCountry).toBe('United States');
-  expect(fields.some(f => f.label === 'Option')).toBe(false);
-  expect(kr.openrouter.requests).toHaveLength(1);
+  expect(kr.openrouter.requests).toHaveLength(0);
+  expect((await kr.readStorage('kr:job')).workCountry).toBe('United States');
   await expect(page.locator('body')).toHaveAttribute('data-submissions', '0');
 });
 
 test('Greenhouse harvests job-boards Location (City) and multi-select chips', async ({ kr }) => {
-  await kr.seed({ profile });
+  await kr.seed({ profile:{...profile,gender:'Man'} });
   answerQuestions(kr);
   const page = await kr.context.newPage();
   await page.goto(kr.fixtureUrl('greenhouse-job-boards-fixture.html', GREENHOUSE_HOST));
@@ -102,10 +100,9 @@ test('Greenhouse harvests job-boards Location (City) and multi-select chips', as
   await expect(page.locator('#kr-autofill-btn')).toBeEnabled({ timeout: 60000 });
   await expect(page.locator('body')).toHaveAttribute('data-candidate-location', 'Toronto, Ontario, Canada');
   await expect(page.locator('body')).toHaveAttribute('data-326', 'Male');
-  await expect(page.locator('#kr-main-panel')).toContainText('1 VERIFIED');
-  await expect(page.locator('#kr-main-panel')).toContainText('1 INFERRED');
+  await expect(page.locator('#kr-main-panel')).toContainText('2 VERIFIED');
   await expect(page.locator('#kr-main-panel')).toContainText('0 FAILED');
-  expect(kr.openrouter.requests).toHaveLength(1);
+  expect(kr.openrouter.requests).toHaveLength(0);
   await expect(page.locator('body')).toHaveAttribute('data-submissions', '0');
 });
 

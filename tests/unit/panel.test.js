@@ -179,6 +179,61 @@ test('leaving a job page cancels a pending standalone response before remount', 
   } finally { dom.window.close(); }
 });
 
+for (const cancel of ['navigation', 'pause']) {
+  test(`pending embedded routing cannot start autofill after ${cancel}`, async () => {
+    const bundle = await build({ stdin: { contents: `
+      import { createGmHost } from './src/core/hosts/gm.js';
+      import { setPlatform } from './src/core/platform.js';
+      import { bootstrapWhenReady } from './src/core/main.js';
+      const host = createGmHost();
+      setPlatform({ ...host, capabilities: { ...host.capabilities, crossFrame: true },
+        framesList: async () => [{ frameId: 1, isTop: false, fieldCount: 1 }],
+        frameCommand: async (id, command) => {
+          if (command.action === 'stepState') {
+            if (!window.releaseRouting) await new Promise(resolve => window.releaseRouting = resolve);
+            return { adapter: 'ashby' };
+          }
+          return { fields: [], results: [] };
+        },
+      });
+      bootstrapWhenReady();
+    `, resolveDir: process.cwd() }, bundle: true, format: 'iife', write: false });
+    const html = '<title>Job Application</title><body><main data-ashby-root><h1>Engineer A</h1><form class="ashby-application-form"><label for="email">Email</label><input id="email" type="email" required></form></main></body>';
+    const dom = new JSDOM(html, {url:'https://example.com/jobs/a',runScripts:'dangerously',pretendToBeVisual:true});
+    const storage = new Map([['kr:profile',{fullName:'Test Applicant',email:'test@example.com'}],['kr:settings',{autoContinue:false}]]);
+    dom.window.GM_getValue=(key,fallback)=>storage.get(key) ?? fallback;
+    dom.window.GM_setValue=(key,value)=>storage.set(key,structuredClone(value));
+    dom.window.CSS={escape:value=>value};
+    Object.defineProperty(dom.window.HTMLElement.prototype,'offsetWidth',{get:()=>200});
+    dom.window.HTMLElement.prototype.scrollIntoView=()=>{};
+    try {
+      dom.window.eval(bundle.outputFiles[0].text);
+      await new Promise(resolve=>setTimeout(resolve,80));
+      let root=dom.window.document.querySelector('#kareer-root').shadowRoot;
+      root.querySelector('#kr-pebble-toggle-btn').click();root.querySelector('#kr-toggle-btn').click();root.querySelector('#kr-autofill-btn').click();
+      for(let i=0;i<30 && !dom.window.releaseRouting;i++) await new Promise(resolve=>setTimeout(resolve,20));
+      assert.ok(dom.window.releaseRouting);
+      if(cancel==='navigation') {
+        dom.window.document.title='Videos';
+        dom.window.document.body.innerHTML='<h1>Videos</h1>';
+        dom.window.history.pushState({},'', '/videos');
+        await new Promise(resolve=>setTimeout(resolve,350));
+        assert.equal(dom.window.document.querySelector('#kareer-root'),null);
+        dom.window.document.title='Job Application';
+        dom.window.document.body.innerHTML='<main data-ashby-root><h1>Engineer B</h1><form class="ashby-application-form"><label for="email">Email</label><input id="email" type="email" required></form></main>';
+        dom.window.history.pushState({},'', '/jobs/b');
+        await new Promise(resolve=>setTimeout(resolve,350));
+        assert.ok(dom.window.document.querySelector('#kareer-root'));
+      } else {
+        root.querySelector('#kr-pause-autofill-btn').onclick();
+      }
+      dom.window.releaseRouting();
+      await new Promise(resolve=>setTimeout(resolve,650));
+      assert.equal(dom.window.document.querySelector('#email').value,'');
+    } finally {dom.window.close();}
+  });
+}
+
 test('workflow shows verified completion count and retained structural diagnostic', async () => {
   const bundle = await build({ entryPoints: ['src/targets/userscript/entry.js'], bundle: true, format: 'iife', write: false });
   const dom = new JSDOM('<title>Job Application</title><body></body>', { url: 'https://example.com/apply', runScripts: 'dangerously' });

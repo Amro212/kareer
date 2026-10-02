@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Eligibility and acknowledgment replay</title>
+<!-- Synthetic replay of the 2026-10-02 screenshot question and expanded menus.
+     Not a live capture. The Ashby acknowledgment is also covered against the
+     existing ashby-sift-captured.html capture. Submissions remain local. -->
+<style>body{font:16px sans-serif;padding:24px}label,.field{display:block;margin:16px 0}.select__menu{background:white;border:1px solid #bbb;padding:12px}.select__option{padding:8px;cursor:pointer}input,button{padding:8px}</style>
+<body data-submissions="0"><main><h1>Engineer application</h1><form>
+<div class="field application-question ashby-application-form-field-entry"><label class="application-label ashby-application-form-question-title" for="name">Full Name</label><input id="name" name="name" required></div>
+<div class="field application-question ashby-application-form-field-entry"><label class="application-label ashby-application-form-question-title" for="email">Email</label><input id="email" type="email" required></div>
+<div class="field select-shell application-question ashby-application-form-field-entry" data-field-path="eligibility"><label class="application-label ashby-application-form-question-title" for="eligibility">Are you currently eligible to work in the country that you are applying for?</label><div class="select__control"><input id="eligibility" role="combobox" aria-controls="eligibility-menu" aria-expanded="false" aria-required="true"></div><div id="eligibility-menu" class="select__menu" role="listbox" hidden></div><input type="hidden" id="eligibility-value"></div>
+<div class="field select-shell application-question ashby-application-form-field-entry" data-field-path="sponsorship"><label class="application-label ashby-application-form-question-title" for="sponsorship">Will you require sponsorship now or in the future?</label><div class="select__control"><input id="sponsorship" role="combobox" aria-controls="sponsorship-menu" aria-expanded="false" aria-required="true"></div><div id="sponsorship-menu" class="select__menu" role="listbox" hidden></div><input type="hidden" id="sponsorship-value"></div>
+<div class="field application-question ashby-application-form-field-entry"><label class="application-label ashby-application-form-question-title" for="spain">Are you authorized to work in Spain?</label><select id="spain" required><option value="">Select</option><option value="yes">Yes</option><option value="no">No</option></select></div>
+<div class="field application-question ashby-application-form-field-entry"><label class="application-label ashby-application-form-question-title" for="authorization-no-sponsorship">Are you authorized to work in Canada without sponsorship now or in the future?</label><select id="authorization-no-sponsorship" required><option value="">Select</option><option value="yes">Yes</option><option value="no">No</option></select></div>
+<div class="field application-question ashby-application-form-field-entry"><label class="application-label ashby-application-form-question-title" for="uae">Are you authorized to work in UAE?</label><select id="uae" required><option value="">Select</option><option value="yes">Yes</option><option value="no">No</option></select></div>
+<div class="field application-question ashby-application-form-field-entry"><label class="application-label ashby-application-form-question-title" for="nz">Are you authorized to work in NZ?</label><select id="nz" required><option value="">Select</option><option value="yes">Yes</option><option value="no">No</option></select></div>
+<label><input id="acknowledgment" type="checkbox" required>I certify that all information provided in this application and accompanying documents, including my resume, are true, accurate, and complete to the best of my knowledge.</label>
+<button type="submit" class="submit-step ashby-application-form-submit-button">Submit Application</button>
+</form></main><script>
+const ats=new URLSearchParams(location.search).get('ats')||'greenhouse',form=document.querySelector('form');
+if(ats==='greenhouse')form.id='application_form';
+if(ats==='ashby'){form.className='ashby-application-form';form.setAttribute('data-ashby-root','');}
+for(const [id,choices] of [
+ ['eligibility',[['yes','Yes, I am authorized to work in Canada'],['no','No, I am not authorized to work in Canada']]],
+ ['sponsorship',[['yes','Yes, I will require sponsorship'],['no','No, I do not require sponsorship']]]
+]){
+ const input=document.getElementById(id),shell=input.closest('.select-shell'),menu=document.getElementById(id+'-menu');
+ const close=()=>{menu.hidden=true;input.setAttribute('aria-expanded','false');};
+ const render=()=>{
+  menu.replaceChildren();
+  for(const [value,label] of choices.filter(([,label])=>label.toLowerCase().includes(input.value.toLowerCase()))){
+   const option=document.createElement('div');option.className='select__option';option.setAttribute('role','option');option.dataset.value=value;option.textContent=label;menu.append(option);
+   option.addEventListener('mousedown',event=>{
+    event.preventDefault();shell.querySelector('.select__single-value')?.remove();
+    const selected=document.createElement('span');selected.className='select__single-value';selected.textContent=label;input.before(selected);
+    document.getElementById(id+'-value').value=value;input.value='';close();
+   });
+  }
+ };
+ input.addEventListener('mousedown',()=>{render();menu.hidden=false;input.setAttribute('aria-expanded','true');});
+ input.addEventListener('input',render);
+ input.addEventListener('keydown',event=>{if(event.key==='Escape')close();});
+ document.addEventListener('mousedown',event=>{if(!shell.contains(event.target))close();});
+}
+form.addEventListener('submit',event=>{event.preventDefault();if(!form.checkValidity())return;document.body.dataset.submissions=String(+document.body.dataset.submissions+1);});
+</script></body></html>

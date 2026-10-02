@@ -17,18 +17,22 @@ const NON_RESUME_PATTERN = /\b(?:cover[\s-]*letter|portfolio|work[\s-]*sample|wr
  */
 export function isResumeField(field, allFileFields) {
   if (!field || field.type !== 'file') return false;
+  if (field.ats?.canonicalKey === 'coverLetter') return false;
   const text = [field.label, field.name, field.id, field.description,
     field.constraints?.accept].filter(Boolean).join(' ');
   // Explicit non-resume label — never attach the resume.
   if (NON_RESUME_PATTERN.test(text)) return false;
   // Explicit resume label — always attach.
   if (RESUME_PATTERN.test(text)) return true;
+  // These adapters identify resume controls explicitly. Other files stay manual;
+  // Ashby's separate parser uploader is the evidenced unlabelled exception.
+  if (['greenhouse','ashby'].includes(field.ats?.adapter)) return Boolean(field.element?.closest('.ashby-application-form-autofill-input-root'));
   // Ambiguous label (e.g. "Attach file"): only treat the first file field on
   // the page as a resume upload; later ones are likely cover letter or other.
   if (allFileFields) return allFileFields[0] === field;
   return true;
 }
-const parserHosts = new Set(['ashby', 'lever', 'workday']);
+const parserHosts = new Set(['ashby', 'lever', 'workday', 'greenhouse']);
 const BUSY = '[aria-busy="true"], [role="progressbar"], .resume-upload-working, ' +
   '.ashby-application-form-autofill-input-root:is([data-state="loading"], [data-state="uploading"], [data-state="parsing"], [data-state="processing"])';
 

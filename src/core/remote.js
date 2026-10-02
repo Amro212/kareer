@@ -11,6 +11,19 @@ import { logger } from './debug.js';
  */
 const PREFIX = 'jcf';
 
+// Workflow discovery includes zero-field frames so success pages survive scans.
+export async function embeddedApplicationStates() {
+  if (!platform.capabilities.crossFrame) return [];
+  const frames = (await platform.frames.list()).filter(frame => !frame.isTop);
+  const states = await Promise.all(frames.map(async frame => {
+    try {
+      const state = await platform.frames.command(frame.frameId, {action:'stepState'});
+      return state && !state.error && ['greenhouse','ashby'].includes(state.adapter) ? {...state,frameId:frame.frameId} : null;
+    } catch { return null; }
+  }));
+  return states.filter(Boolean);
+}
+
 export const remoteFieldId = (frameId, fieldId) => `${PREFIX}${frameId}::${fieldId}`;
 
 export function parseRemoteFieldId(id) {

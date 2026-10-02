@@ -76,6 +76,8 @@ export function scanFormFields(root = document) {
   const processedElements = new Set();
   const processedRadioGroups = new Set();
   const adapter = detectAdapter();
+  const applicationRoot = adapter.applicationRoot?.(root.ownerDocument || root);
+  if (applicationRoot && (root === document || root.contains(applicationRoot))) root = applicationRoot;
   for (const field of adapter.choiceGroups?.(root, getProfile()) || []) {
     if (!isVisible(field.element) || isInsideCopilot(field.element)) continue;
     detectedFields.push(field);
@@ -88,11 +90,13 @@ export function scanFormFields(root = document) {
     select,
     [contenteditable="true"],
     [role="combobox"],
+    .select2-container,
     button[aria-haspopup="listbox"]
-  `)).filter((el) => !isInsideCopilot(el) && !el.closest('.select2-container') && !el.closest('header,nav,footer,[role="banner"],[role="navigation"],[role="contentinfo"],.g-recaptcha,.h-captcha,[data-captcha]') && !/^(g-recaptcha-response|h-captcha-response|cf-turnstile-response)(?:$|-)/i.test(el.name || el.id || ''));
+  `)).filter((el) => !isInsideCopilot(el) && !(el.closest('.select2-container') && !el.matches('.select2-container')) && !(el.matches('.select2-container') && !adapter.isCombobox?.(el)) && !el.closest('header,nav,footer,[role="banner"],[role="navigation"],[role="contentinfo"],.g-recaptcha,.h-captcha,[data-captcha]') && !/^(g-recaptcha-response|h-captcha-response|cf-turnstile-response)(?:$|-)/i.test(el.name || el.id || ''));
 
   for (const el of candidates) {
     if (processedElements.has(el)) continue;
+    if (adapter.excludeField?.(el)) continue;
     if (adapter.id === 'workday' && el.closest('[data-automation-id="signInContent"], [data-automation-id="activeListContainer"], [data-automation-activepopup="true"]')) continue;
     if (adapter.id === 'workday' && el.matches('button') && el.closest('[data-automation-id="multiSelectContainer"], [data-automation-id="multiselectInputContainer"]')?.querySelector('input:not([type="hidden"])')) continue;
     // Workday single-select buttons can carry an unlabelled sibling input for
@@ -348,7 +352,7 @@ export function scanFormFields(root = document) {
     const metadata = adapter.fieldMetadata?.(field.element);
     // Ordinary checkboxes retain their own option identity and label. Only
     // adapter-declared single-choice widgets consume a whole question container.
-    if (field.type === FIELD_TYPES.CHECKBOX && adapter.id !== 'workday') return field;
+    if (field.type === FIELD_TYPES.CHECKBOX && adapter.id !== 'workday' && !metadata?.ats?.canonicalKey) return field;
     return { ...field, ...metadata, id: metadata?.id || field.id };
   }).sort(compareDocumentOrder);
 }
@@ -414,13 +418,14 @@ export async function harvestComboboxOptions(fields, searchQueries = new Map()) 
     const element = field.element;
     if (!element) continue;
     if (readComboboxSelection(element).length && !field.ats?.multiple && detectAdapter().needsFill?.(field, getProfile()) !== true) continue;
-    const { input } = resolveComboboxParts(element);
+    let input = resolveComboboxParts(element).input;
     let ownsSearch;
     try {
       await openCombobox(element);
+      input = resolveComboboxParts(element).input;
       const saved = detectAdapter().profileValue?.(field, getProfile());
       const rawQueries = searchQueries.has(field.id) ? [searchQueries.get(field.id)] : Array.isArray(saved) ? saved : [typeof saved === 'string' ? saved : ''];
-      const queries = rawQueries.map(q => detectAdapter().searchQuery?.(field, q) || q);
+      const queries = rawQueries.map(q => searchQueries.has(field.id) ? q : detectAdapter().searchQuery?.(field, q) ?? q);
       const discovered = [];
       for (const savedQuery of queries) {
         const query = savedQuery || (isResidenceLabel(field.label) ? profileLocation : '') || '';

@@ -16,7 +16,7 @@ export function inspectValidation(fields, control = null, doc = document) {
   const owned = new Set();
   for (const field of fields) {
     const el = field.element;
-    if (!isVisible(el) || el.disabled) continue;
+    if ((!isVisible(el) && !(field.type === 'file' && isVisible(el.parentElement))) || el.disabled) continue;
     const ids = `${el.getAttribute('aria-errormessage') || ''} ${el.getAttribute('aria-describedby') || ''}`.trim().split(/\s+/);
     const nodes = ids.map(id => doc.getElementById(id)).filter(node => node && isVisible(node));
     const invalid = el.getAttribute('aria-invalid') === 'true' || el.validity?.valid === false;
