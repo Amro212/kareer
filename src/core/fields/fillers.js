@@ -290,6 +290,7 @@ export async function fillCombobox(element, targetValue, knownOptions) {
         checkbox.dispatchEvent(new Event('change', { bubbles: true }));
       }
     }
+    detectAdapter().afterComboboxOptionClick?.(element, match, options);
     recordLocationActivation(element, match.label);
     if (!await waitForComboboxSelection(element, target)) return false;
     closeCombobox(element);

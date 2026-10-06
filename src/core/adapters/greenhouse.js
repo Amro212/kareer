@@ -36,7 +36,9 @@ export const greenhouseAdapter = {
   },
   profileValue: applicationProfileValue,
   resolveAnswer: applicationAnswer,
-  searchQuery: (field, value) => DISCLOSURES.has(field.ats?.canonicalKey) || ['work_auth', 'sponsorship'].includes(field.ats?.canonicalKey) ? '' : value,
+  // Read education/date menus before filtering: profile wording may differ
+  // from the owned choices (e.g. Bachelor of Engineering / Bachelor degree).
+  searchQuery: (field, value) => DISCLOSURES.has(field.ats?.canonicalKey) || ['work_auth', 'sponsorship', 'institution', 'degree', 'highestDegree', 'fieldOfStudy'].includes(field.ats?.canonicalKey) || /_month$/.test(field.ats?.canonicalKey || '') ? '' : value,
   needsFill: applicationNeedsFill,
   prepareSections(doc, profile, options) { return prepareApplicationSections(doc, profile, this, [
     {section:'#employment_section,[data-name="employments"],.experience--container,.experience-container,.employment--container,.employment-container',row:'.employment,ul > li,.experience--form,.experience-form,.employment--form,.employment-form',add:'#add_employment,.form-multifield__add,.add-another-button',records:'workExperiences',identity:['company','title']},

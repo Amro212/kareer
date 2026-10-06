@@ -13,6 +13,13 @@ const POPUPS = '[data-automation-activepopup="true"], [visibility="opened"], [da
 const visible = node => !node.closest('[hidden],[aria-hidden="true"]') && node.ownerDocument.defaultView.getComputedStyle(node).display !== 'none' && node.ownerDocument.defaultView.getComputedStyle(node).visibility !== 'hidden';
 const clean = text => String(text || '').replace(/\s+/g, ' ').trim();
 const placeholder = text => /^(?:select(?: one| an? option)?|choose(?: one| an? option)?|no (?:items|results|matches)|sélectionner(?: un)?|--.*--)$/i.test(clean(text));
+function enter(input) {
+  for (const type of ['keydown', 'keyup']) {
+    const event = new input.ownerDocument.defaultView.KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, composed: true, cancelable: true });
+    event.preventDefault();
+    input.dispatchEvent(event);
+  }
+}
 function hostnameOf(loc) {
   return String(loc?.hostname || '');
 }
@@ -168,11 +175,14 @@ export const workdayAdapter = {
     searches.set(input, { groups: new Set(), advances: 0 });
     if (!value || !input.closest(PROMPT)) return;
     this.beforeComboboxOpen(input);
-    for (const type of ['keydown', 'keyup']) {
-      const event = new input.ownerDocument.defaultView.KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, composed: true, cancelable: true });
-      event.preventDefault();
-      input.dispatchEvent(event);
-    }
+    enter(input);
+  },
+  afterComboboxOptionClick(element, option, options) {
+    // Some skills prompts accept their first search result only with Enter.
+    // Never choose another result or treat search text as a selected token.
+    if (workdayFieldMetadata(element).ats.canonicalKey !== 'skill' || options[0] !== option.element || !option.element.isConnected || this.readComboboxSelection(element).some(value => clean(value) === clean(option.label))) return;
+    const input = this.comboboxParts(element)?.input;
+    if (input) { input.focus(); enter(input); }
   },
   advanceComboboxSearch(element, query, menus) {
     const input = this.comboboxParts(element)?.input || element;

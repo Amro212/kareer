@@ -4,6 +4,17 @@ import { build } from 'esbuild';
 import { JSDOM } from 'jsdom';
 import { summarizeFieldResults } from '../../src/core/ui.js';
 
+test('panel hides historical required-field errors when its current FAILED count is zero',async()=>{
+  const bundle=await build({entryPoints:['src/targets/userscript/entry.js'],bundle:true,format:'iife',write:false});
+  const url='https://job-boards.greenhouse.io/acme/jobs/1';
+  const dom=new JSDOM('<h1>Engineer</h1><form id="application_form"><label for="email">Email</label><input id="email" type="email"></form>',{url,runScripts:'dangerously',pretendToBeVisual:true});
+  const session={id:'old-errors',identityVersion:2,currentUrl:url,job:{listingUrl:url,title:'Engineer'},status:'paused',reason:'No Next or Continue button found. Continue manually.',active:false,steps:{},answers:{},history:[],errors:[{fieldId:'removed',message:'Required value missing or rejected.'}]};
+  const storage=new Map([['kr:sessions',['old-errors']],['kr:sessions:old-errors',session],['kr:profile',{fullName:'Test Applicant',email:'test@example.com'}]]);
+  dom.window.GM_getValue=(key,fallback)=>storage.get(key)??fallback;dom.window.GM_setValue=(key,value)=>storage.set(key,structuredClone(value));dom.window.CSS={escape:value=>value};
+  Object.defineProperty(dom.window.HTMLElement.prototype,'offsetWidth',{get:()=>200});
+  try{dom.window.eval(bundle.outputFiles[0].text);await new Promise(resolve=>setTimeout(resolve,250));const root=dom.window.document.querySelector('#kareer-root').shadowRoot;root.querySelector('#kr-pebble-toggle-btn')?.click();root.querySelector('#kr-toggle-btn').click();assert.ok(root.textContent.includes('0 FAILED'));assert.equal(root.textContent.includes('Required value missing or rejected.'),false);}finally{dom.window.close();}
+});
+
 test('field report uses current detected fields as its single source of truth', () => {
   const fields = [
     { id: 'verified' },

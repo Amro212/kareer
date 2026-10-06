@@ -38,6 +38,33 @@ function boot(html, ats = 'greenhouse', scripts=false) {
 }
 afterEach(() => { dom?.window.close(); setPlatform(createGmHost()); });
 
+test('Greenhouse harvests unfiltered degree choices before profile matching or contextual inference',async()=>{
+  boot('<form id="application_form"><div class="education--container"><div class="education--form"><div class="field"><label for="degree">Degree *</label><input id="degree" role="combobox" aria-controls="choices"><div id="choices" role="listbox" hidden></div></div></div></div></form>');
+  saveProfile({...getProfile(),education:[{id:'education',institution:'University',degree:'Bachelor of Engineering'}]});
+  await detectAdapter().prepareSections(document,getProfile());
+  const input=document.querySelector('#degree'),menu=document.querySelector('#choices'),queries=[];
+  const render=()=>{menu.hidden=false;menu.innerHTML=input.value?'':'<div role="option">Bachelor degree</div><div role="option">Master degree</div>';};
+  input.onclick=render;input.oninput=()=>{queries.push(input.value);render();};
+  const fields=scanFormFields();await harvestComboboxOptions(fields);
+  assert.deepEqual(fields[0].options.map(option=>option.label),['Bachelor degree','Master degree']);
+  assert.equal(queries.includes('Bachelor of Engineering'),false);
+  saveApiKey('fixture-key');let sent;
+  globalThis.GM_xmlhttpRequest=request=>{sent=JSON.parse(request.data);request.onload({status:200,responseText:JSON.stringify({choices:[{message:{content:JSON.stringify({answers:[{fieldId:fields[0].id,value:'Bachelor degree'}]})}}]})});};
+  try{const response=await generateAutofillAnswers(normalizeFieldsForAI(fields));assert.equal(response.answers[0].value,'Bachelor degree');assert.ok(JSON.stringify(sent).includes('Master degree'));}finally{globalThis.GM_xmlhttpRequest=undefined;}
+});
+
+for(const labels of [['January','February'],['01','02']]) test(`Greenhouse harvests and matches month choices ${labels.join('/')}`,async()=>{
+  boot('<form id="application_form"><div class="education--container"><div class="education--form"><div class="field"><label for="start_month">Start month</label><input id="start_month" role="combobox" aria-controls="choices"><div id="choices" role="listbox" hidden></div></div></div></div></form>');
+  saveProfile({...getProfile(),education:[{id:'education',institution:'University',startDate:'2023-02'}]});
+  await detectAdapter().prepareSections(document,getProfile());
+  const input=document.querySelector('input'),menu=document.querySelector('#choices');
+  const render=()=>{menu.hidden=false;menu.innerHTML=labels.filter(label=>label.includes(input.value)).map(label=>`<div role="option">${label}</div>`).join('');};
+  input.onclick=render;input.oninput=render;
+  const [field]=scanFormFields();await harvestComboboxOptions([field]);
+  assert.deepEqual(field.options.map(option=>option.label),labels);
+  assert.equal(detectAdapter().resolveAnswer({...normalizeFieldsForAI([field])[0]},getProfile()).value,labels[1]);
+});
+
 for (const cancel of [false,true]) test(`embedded late degree discovery ${cancel?'honors Pause during refresh':'resolves the required equivalent choice'}`,async()=>{
   boot('<main><h1>Job Application</h1><iframe></iframe></main>');
   dom.reconfigure({url:'https://careers.example.com/jobs/1'});

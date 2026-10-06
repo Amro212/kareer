@@ -2225,7 +2225,8 @@ function renderHomeTab() {
   const stepMarker = adapter.stepMarker?.(document) || '';
 
   // Last error notice
-  const lastError = session?.errors?.length ? session.errors.at(-1).message : '';
+  const failedFields = summarizeFieldResults(getAllDetectedFields(), fieldResultsCache).failed;
+  const lastError = failedFields.length && session?.errors?.length ? session.errors.at(-1).message : '';
   const wfErrorHtml = lastError && !session?.reason?.includes(lastError)
     ? `<div style="font-size:11px;color:var(--kr-warning);padding:6px 10px;background:rgba(242,184,75,0.08);border-radius:6px;border:1px solid rgba(242,184,75,0.25);">${ICONS.alert} ${escapeHtml(lastError)}</div>`
     : '';

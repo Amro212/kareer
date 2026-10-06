@@ -14,6 +14,7 @@ import { prepareWorkdaySections, prepareWorkdayDependencies } from '../../src/co
 import { workdayAnswer, workdayValue, workdayOptionMatches, workdayNeedsFill } from '../../src/core/adapters/workday-fields.js';
 import { inspectValidation } from '../../src/core/validation.js';
 import { normalizeFieldsForAI } from '../../src/core/fields/normalize.js';
+import { isResumeField } from '../../src/core/resume.js';
 
 let dom;
 function boot(html) {
@@ -31,6 +32,36 @@ function boot(html) {
   saveProfile({ fullName: 'Test Applicant', email: 'test@example.com', phone: '+14165551234', country: 'Canada' });
 }
 afterEach(() => dom?.window.close());
+
+test('Phreesia captured generic uploader has canonical resume identity',()=>{
+  boot(readFileSync('fixtures/phreesia.wd1.myworkdayjobs.com-2026-10-06-03-17.html','utf8'));
+  const fields=scanFormFields(),file=fields.find(field=>field.type==='file');
+  assert.equal(file.ats.canonicalKey,'resume');assert.equal(isResumeField(file,fields),true);
+});
+
+test('Phreesia Enter-only skills commit every harvested skill and preserve tokens',async()=>{
+  boot(readFileSync('fixtures/phreesia.wd1.myworkdayjobs.com-2026-10-06-03-17.html','utf8'));
+  const input=document.querySelector('#skills--skills'),container=input.closest('[data-automation-id="multiSelectContainer"]');
+  const menu=document.createElement('div');menu.id='skill-results';menu.setAttribute('role','listbox');menu.hidden=true;container.append(menu);input.setAttribute('aria-controls',menu.id);
+  const accepted=['Python'];container.insertAdjacentHTML('afterbegin','<div data-automation-id="selectedItem" title="Python">Python</div>');
+  let searched=false,submits=0;
+  document.querySelector('form')?.addEventListener('submit',event=>{submits++;event.preventDefault();});
+  input.oninput=()=>{searched=false;menu.hidden=true;};
+  input.onkeydown=event=>{if(event.key!=='Enter')return;if(!event.defaultPrevented)submits++;if(!searched){searched=true;menu.hidden=false;menu.innerHTML=`<div role="option">${input.value}</div>`;}else{const skill=menu.textContent;accepted.push(skill);container.insertAdjacentHTML('afterbegin',`<div data-automation-id="selectedItem" title="${skill}">${skill}</div>`);input.value='';menu.hidden=true;searched=false;}};
+  saveProfile({fullName:'Test Applicant',skills:['Python','Java','JavaScript']});
+  const field=scanFormFields().find(field=>field.element===input);await harvestComboboxOptions([field]);
+  assert.equal(await fillField(field,['Python','Java','JavaScript']),true);
+  assert.deepEqual(accepted,['Python','Java','JavaScript']);assert.equal(submits,0);assert.equal(input.value,'');assert.equal((await verifyField(field,['Python','Java','JavaScript'])).verified,true);
+});
+
+test('Workday skill keyboard fallback never selects a replacement menu after the option click',async()=>{
+  const {input,menu}=prompt();input.closest('[data-automation-id="formField-source"]').setAttribute('data-automation-id','formField-skills');input.id='skills';
+  const selected=[];let searches=0;
+  input.addEventListener('keydown',event=>{if(event.key!=='Enter')return;if(++searches===1){menu.innerHTML='<div role="option">Java</div>';menu.firstElementChild.onclick=()=>{menu.innerHTML='<div role="option">Rust</div>';};}else{selected.push(menu.textContent);}});
+  const field=scanFormFields().find(field=>field.element===input);
+  await fillField({...field,options:[{value:'Java',label:'Java'}]},'Java');
+  assert.deepEqual(selected,[],'a replaced first result must not authorize Enter');
+});
 
 function prompt() {
   boot(`<main><form><div data-automation-id="sourceSection"><div data-automation-id="formField-source"><label for="source--source">How did you hear about us? *</label><div data-automation-id="multiSelectContainer"><input id="source--source" placeholder="Search" data-uxi-widget-type="selectinput"></div></div></div></form></main><div data-automation-id="activeListContainer" hidden></div>`);

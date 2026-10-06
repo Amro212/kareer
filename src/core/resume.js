@@ -18,6 +18,7 @@ const NON_RESUME_PATTERN = /\b(?:cover[\s-]*letter|portfolio|work[\s-]*sample|wr
 export function isResumeField(field, allFileFields) {
   if (!field || field.type !== 'file') return false;
   if (field.ats?.canonicalKey === 'coverLetter') return false;
+  if (field.ats?.canonicalKey === 'resume') return true;
   const text = [field.label, field.name, field.id, field.description,
     field.constraints?.accept].filter(Boolean).join(' ');
   // Explicit non-resume label — never attach the resume.

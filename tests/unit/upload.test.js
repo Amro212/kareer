@@ -26,6 +26,12 @@ function boot() {
 }
 
 beforeEach(boot);
+
+test('canonical Workday resume routing accepts a generic upload label after other fields',()=>{
+  const field={id:'file-upload-input-ref',type:'file',label:'Upload a file (5MB max)',ats:{adapter:'workday',canonicalKey:'resume'}};
+  assert.equal(isResumeField(field,[{id:'name',type:'text'},field]),true);
+  assert.equal(isResumeField({...field,ats:{adapter:'workday',canonicalKey:'coverLetter'}},[field]),false);
+});
 afterEach(() => {
   setPlatform(createGmHost());
   dom?.window.close();
