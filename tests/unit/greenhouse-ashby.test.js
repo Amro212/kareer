@@ -19,6 +19,7 @@ import {readFile} from 'node:fs/promises';
 import {harvestComboboxOptions,assertUniqueFields} from '../../src/core/fields/scanner.js';
 import {isResumeField} from '../../src/core/resume.js';
 
+
 let dom;
 function boot(html, ats = 'greenhouse', scripts=false) {
   dom?.window.close();
@@ -456,4 +457,30 @@ test('reproduce Greenhouse work eligibility question rejection and expanded drop
   closeCombobox(input);
   assert.equal(escapeDispatched, true, 'Escape must be dispatched to close React-select menu');
   assert.equal(bodyClicked, true, 'Click outside must be dispatched to dismiss floating menu');
+});
+
+
+for (const reverse of [false, true]) {
+  test(`Greenhouse reserves complete roles before partial employer rows (reverse=${reverse})`, async () => {
+    boot('<form id="application_form"><div id="employment_section"><div class="employment"><label>Company<input name="company" value="Acme"></label><label>Title<input name="title" value="Engineer"></label></div><div class="employment"><label>Company<input name="company" value="Acme"></label><label>Title<input name="title"></label></div><button id="add_employment" type="button">Add</button></div></form>');
+    const records=[{id:'engineer',company:'Acme',title:'Engineer'},{id:'manager',company:'Acme',title:'Manager'}];
+    saveProfile({fullName:'Test Applicant',workExperiences:reverse ? records.reverse() : records});
+    let adds=0;document.querySelector('#add_employment').onclick=()=>{adds++;};
+    const agent=createFieldAgent();
+    for (let retry=0;retry<2;retry++) {
+      const scanned=await agent.handle({action:'scan'});
+      if (scanned.fields.length) await agent.handle({action:'fill',answers:(await generateAutofillAnswers(scanned.fields)).answers});
+      assert.deepEqual([...document.querySelectorAll('.employment input[name="title"]')].map(input=>input.value),['Engineer','Manager']);
+      assert.deepEqual([...document.querySelectorAll('.employment')].map(row=>row.getAttribute('data-kareer-row')),['engineer','manager']);
+    }
+    assert.equal(adds,0);
+  });
+}
+
+test('Greenhouse genuinely competing partial roles stop before Add or mutation',async()=>{
+  boot('<form id="application_form"><div id="employment_section"><div class="employment"><label>Company<input value="Acme"></label><label>Title<input></label></div><button id="add_employment" type="button">Add</button></div></form>');
+  saveProfile({fullName:'Test Applicant',workExperiences:[{id:'engineer',company:'Acme',title:'Engineer'},{id:'manager',company:'Acme',title:'Manager'}]});
+  let adds=0;document.querySelector('#add_employment').onclick=()=>{adds++;};
+  await assert.rejects(createFieldAgent().handle({action:'scan'}),/ambiguous workExperiences/);
+  assert.equal(adds,0);assert.equal(document.querySelector('.employment label:nth-child(2) input').value,'');
 });
