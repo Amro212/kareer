@@ -300,12 +300,14 @@ export async function waitForComboboxSelection(element, target, timeoutMs = 2500
   let stableSince = null;
   const adapter = detectAdapter();
   const meta = adapter.fieldMetadata?.(element);
+  const targets = Array.isArray(target) ? target : [target];
   do {
     if (!element?.isConnected) return false;
     const valid = element.getAttribute('aria-invalid') !== 'true' && element.validity?.valid !== false;
-    const matches = valid && readComboboxSelection(element).some(value =>
-      optionKey(value) === optionKey(target) || Boolean(meta && adapter.optionMatches?.(meta, value, target))
-    );
+    const selected = readComboboxSelection(element);
+    const matches = valid && targets.length > 0 && targets.every(expected => selected.some(value =>
+      optionKey(value) === optionKey(expected) || Boolean(meta && adapter.optionMatches?.(meta, value, expected))
+    ));
     if (!matches) stableSince = null;
     else if (stableSince === null) stableSince = Date.now();
     else if (Date.now() - stableSince >= 200) return true;

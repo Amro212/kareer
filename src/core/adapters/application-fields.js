@@ -197,7 +197,10 @@ export function applicationAnswer(field, profile, options = {}) {
     // Resolve known aliases first; otherwise the page request handles this field.
     const labels={gender:'Gender',pronouns:'Pronouns',ethnicity:'Ethnicity',veteran_v2:'Veteran status',disability_v2:'Disability status',source:'Source'};
     const alias = labels[field.ats.canonicalKey] ? fixedProfileAnswer({...field,label:labels[field.ats.canonicalKey]}, profile, options) : null;
-    return alias?.value ? { ...answer, ...alias, provenance:answer.provenance } : { ...answer, value:'', ...(field.type === 'combobox' && !field.options?.length && options.allowSearch !== false && !['work_auth','sponsorship'].includes(field.ats.canonicalKey) ? {searchQuery:String(value)} : {}) };
+    // Greenhouse's school catalog is paginated: the unfiltered first page is
+    // not evidence that the saved institution is absent from the catalog.
+    const paginatedSchool = field.ats.adapter === 'greenhouse' && field.ats.canonicalKey === 'institution';
+    return alias?.value ? { ...answer, ...alias, provenance:answer.provenance } : { ...answer, value:'', ...(field.type === 'combobox' && (!field.options?.length || paginatedSchool) && options.allowSearch !== false && !['work_auth','sponsorship'].includes(field.ats.canonicalKey) ? {searchQuery:String(value)} : {}) };
   }
   return { ...answer, value: Array.isArray(value) ? matches.map(item => field.type === 'combobox' ? item.label : item.value) : field.type === 'combobox' ? matches[0].label : matches[0].value };
 }

@@ -1431,3 +1431,106 @@ test('Workday with autoContinue disabled advances past both review gates on a si
   }
 });
 
+test('engine.reset resets request limit and clears session errors so autofill can run again', async () => {
+  render(`<h2>My Information</h2>${input('field1', 'Question 1')}<button>Continue</button>`);
+  let requests = 0;
+  const engine = createApplicationEngine({
+    settleMs: 0,
+    transitionMs: 0,
+    answer: async () => {
+      requests++;
+      throw new Error('AI timeout');
+    },
+  });
+  try {
+    await engine.start(job());
+    const step = engine.session.steps[engine.session.currentStep];
+    assert.equal(step.requests, 1);
+    await engine.start();
+    assert.equal(step.requests, 2);
+    await engine.start();
+    assert.match(engine.session.reason, /Primary request limit reached/);
+
+    engine.reset();
+    assert.equal(step.requests, 0);
+    assert.equal(step.primary, false);
+    assert.equal(engine.session.status, 'idle');
+    assert.equal(engine.session.reason, '');
+
+    await engine.start();
+    assert.equal(step.requests, 1);
+  } finally {
+    engine.destroy();
+  }
+});
+
+
+test('Workday button dropdowns classify as an application rather than the retained job listing', () => {
+  dom.reconfigure({url:'https://ciena.wd5.myworkdayjobs.com/job/apply'});
+  render('<h2>Application Questions 1 of 2</h2><p>About the role</p><script type="application/ld+json">{"@type":"JobPosting"}</script><label id="question-label">Graduation date</label><button data-automation-id="selectWidget" aria-haspopup="listbox" aria-labelledby="question-label">Select One</button><button data-automation-id="bottom-navigation-next-button">Save and Continue</button>');
+  assert.equal(scanFormFields().length,1);
+  assert.equal(classifyPage().type,'application');
+});
+
+test('restored disabled empty questions do not block actionable fields on Resume', async () => {
+  dom.reconfigure({url:'https://boards.greenhouse.io/acme/jobs/42'});
+  render('<h2>Application</h2>'+input('email','Email')+'<label for="consent">Consent</label><input id="consent" type="checkbox" disabled>');
+  saveSettings({autoContinue:false});
+  const engine=createApplicationEngine({settleMs:0,navigationTimeoutMs:40,answer:workflowAnswers});
+  try {
+    await engine.start(job());
+    document.querySelector('#email').value='';
+    const field=scanFormFields().find(f=>f.id==='consent');
+    const {questionIdentity}=await import('../../src/core/navigation.js');
+    engine.session.steps[engine.session.currentStep].questions.consent=questionIdentity(field);
+    await engine.start();
+    assert.equal(document.querySelector('#email').value,'Applicant');
+    assert.equal(engine.session.reason,'Page filled. Auto Continue is off.');
+  } finally {engine.destroy();}
+});
+
+test('unrelated aria-busy region does not stop the application workflow', async () => {
+  render('<aside aria-busy="true">Loading recommendations</aside><h2>Application</h2>'+input());
+  saveSettings({autoContinue:false});
+  const engine=createApplicationEngine({settleMs:0,navigationTimeoutMs:40,answer:workflowAnswers});
+  try {await engine.start(job());assert.equal(document.querySelector('#name').value,'Applicant');}
+  finally {engine.destroy();}
+});
+
+test('Resume retries a failed primary request after its automatic budget was exhausted', async () => {
+  render('<h2>Application</h2>'+input());
+  saveSettings({autoContinue:false});
+  let calls=0;
+  const engine=createApplicationEngine({settleMs:0,answer:async fields=>{calls++;if(calls<=2)throw new Error('Provider unavailable');return workflowAnswers(fields);}});
+  try {
+    await engine.start(job());await engine.start();await engine.start();
+    assert.match(engine.session.reason,/Primary request limit/);
+    await engine.start();
+    assert.equal(calls,3);assert.equal(document.querySelector('#name').value,'Applicant');
+    assert.equal(engine.session.steps[engine.session.currentStep].requests,1);
+    assert.equal(engine.session.steps[engine.session.currentStep].repairs,0);
+  } finally {engine.destroy();}
+});
+
+test('Workday header language picker does not classify its entry screen as application fields', () => {
+  dom.reconfigure({url:'https://ciena.wd5.myworkdayjobs.com/job/apply'});
+  render('<header><button data-automation-id="utilityMenuButton" aria-haspopup="listbox">English</button></header><h1>Sign in</h1>');
+  assert.equal(classifyPage().type,'unrelated');
+});
+
+test('rescan reset clears step review so Autofill cannot accidentally advance the page',async()=>{
+  render('<h2>Application</h2>'+input());saveSettings({autoContinue:false});
+  const engine=createApplicationEngine({settleMs:0,answer:workflowAnswers});
+  try {
+    await engine.start(job());assert.equal(engine.stepReview,true);
+    engine.reset();
+    assert.equal(engine.stepReview,false);assert.equal(engine.session.active,false);
+  } finally {engine.destroy();}
+});
+
+test('captured Ciena questions classify as an application and retain four distinct button questions', async () => {
+  dom.reconfigure({url:'https://ciena.wd5.myworkdayjobs.com/en-US/Careers/job/Ottawa/Embedded-Software-Engineer---New-Grad_R031571/apply'});
+  document.body.innerHTML=await readFile(new URL('../../fixtures/ciena.wd5.myworkdayjobs.com-2026-10-07-03-13.html',import.meta.url),'utf8');
+  assert.equal(scanFormFields().length,4);
+  assert.equal(classifyPage().type,'application');
+});

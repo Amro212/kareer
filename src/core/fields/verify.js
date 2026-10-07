@@ -96,9 +96,8 @@ export async function verifyField(field, expectedValue) {
     case FIELD_TYPES.COMBOBOX: {
       if (Array.isArray(expectedValue)) {
         if (!field.ats?.multiple) return { verified: false, error: 'This field accepts one value' };
-        const results = [];
-        for (const value of expectedValue) results.push(await verifyCombobox(field.element, value));
-        return { verified: results.every(result => result.verified), actualValue: readComboboxSelection(field.element).join(', '), error: results.find(result => !result.verified)?.error };
+        const verified = await waitForComboboxSelection(field.element, expectedValue);
+        return { verified, actualValue: readComboboxSelection(field.element).join(', '), error: verified ? undefined : 'Expected choices did not remain accepted and stable' };
       }
       return await verifyCombobox(field.element, expectedValue);
     }

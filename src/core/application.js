@@ -109,7 +109,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
   }
   async function settleFields(snapshot, token, stage = 'form settling', fieldId) {
     const deadline = Date.now() + navigationTimeoutMs;
-    let previous = '', stableSince = Date.now();
+    let previous = '', stableSince = Date.now(), loading = false, disabledFields = [];
     do {
       if (!guard(token)) return false;
       const fields = scanPageFields();
@@ -121,7 +121,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       if (change === 'changed') return checkPage(snapshot, token, stage, fieldId);
       const state = JSON.stringify(fields.map(f => [f.id, questionIdentity(f), f.element.disabled, f.element.readOnly]));
       if (state !== previous) { previous = state; stableSince = Date.now(); }
-      const loading = Array.from(document.querySelectorAll('[aria-busy="true"]')).some(isVisible);
+      loading = Array.from(document.querySelectorAll('[aria-busy="true"]')).some(node => isVisible(node) && fields.some(field => node.contains(field.element)));
       const questions = session.steps[session.currentStep]?.questions || {};
       if (fields.some(f => Object.hasOwn(questions, f.id) && questions[f.id] !== questionIdentity(f))) {
         checkPage(snapshot, token, stage, fieldId);
@@ -129,13 +129,19 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         status('paused', 'A question or its options changed. Inspect the page before resuming.');
         return false;
       }
-      const disabled = fields.some(f => f.element.disabled &&
-        (!snapshot.fields.find(old => old.id === f.id)?.disabled || Object.hasOwn(questions, f.id) && empty(f)));
-      if (change === 'same' && !loading && !disabled && Date.now() - stableSince >= Math.min(settleMs, 200)) return checkPage(snapshot, token, stage, fieldId);
+      // Disabled controls present at the start are not pending actions, including
+      // remembered consent questions. Newly disabled dependencies still settle.
+      disabledFields = fields.filter(f => f.element.disabled && !snapshot.fields.find(old => old.id === f.id)?.disabled);
+      if (change === 'same' && !loading && !disabledFields.length && Date.now() - stableSince >= Math.min(settleMs, 200)) return checkPage(snapshot, token, stage, fieldId);
       if (Date.now() >= deadline) break;
       await delay(Math.min(50, Math.max(1, deadline - Date.now())));
     } while (true);
-    if (checkPage(snapshot, token, stage, fieldId)) status('paused', 'Form fields are still changing or disabled. Inspect the page before resuming.');
+    if (checkPage(snapshot, token, stage, fieldId)) {
+      const cause = disabledFields.length ? `These fields became disabled: ${disabledFields.map(f => f.label || f.id).join(', ')}.`
+        : loading ? 'The application form still reports aria-busy=true.' : 'The application controls kept changing.';
+      logger.warn(`Workflow settling timeout: stage=${stage}, fieldId=${fieldId || ''}, loading=${loading}, disabledIds=${disabledFields.map(f => f.id).join(',')}`);
+      status('paused', `Autofill paused during ${stage} after ${navigationTimeoutMs / 1000}s. ${cause} Resume Autofill retries the current page.`);
+    }
     return false;
   }
   function validation(fields = scanFormFields(), control = null) {
@@ -230,7 +236,13 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       if (!await settleFields(signature, token, 'before field action', original.id)) return false;
       const field = scanFormFields().find(f => f.id === original.id && f.type === 'file');
       if (!field) continue;
-      if (!empty(field) && !getSettings().overwriteExisting) continue;
+      if (!empty(field) && !getSettings().overwriteExisting) {
+        if (results.get(field.id)?.status === 'failed') {
+          const verified = await verifyField(field, meta?.name);
+          if (verified.verified) { results.set(field.id,{status:'verified',value:verified.actualValue,inferred:false,source:'profile',error:''}); emit(); }
+        }
+        continue;
+      }
       field.element.scrollIntoView?.({ block: 'center', behavior: 'instant' });
       const filled = await uploadResumeAndWait(field, { isCurrent: () => token === generation && Boolean(session?.active) });
       await delay(settleMs);
@@ -336,10 +348,14 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       field.options = original.options;
       field.element.scrollIntoView?.({ block: 'center', behavior: 'instant' });
       logger.info(`Field action [${entry.source === 'ai' ? 'AI' : entry.source === 'saved' ? 'Saved' : 'Profile'}]: id=${field.id}, label="${field.label}"`);
+      const started = Date.now();
       const filled = await fillField(field, entry.value);
+      const filledAt = Date.now();
       if (!await settleFields(signature, token, 'field action', field.id)) return false;
       const live = scanFormFields().find(f => f.id === field.id && f.label === field.label);
+      const settledAt = Date.now();
       const verified = filled && live ? await verifyField(live, entry.value) : { verified: false };
+      logger.info(`Timing[${field.id}]: fill=${filledAt-started}ms, settle=${settledAt-filledAt}ms, verify=${Date.now()-settledAt}ms`);
       // Phase 2's generic verifier only checks non-empty values. Workflow requires exact persistence.
       let exact = Boolean(field.ats?.adapter) || !['text', 'textarea', 'email', 'tel', 'url', 'number', 'contenteditable'].includes(field.type) || String(verified.actualValue ?? '').trim() === String(entry.value).trim();
       if (['select', 'radio'].includes(field.type) && !field.widget) exact = field.options.some(o => (String(o.value) === String(entry.value) || o.label === String(entry.value)) && String(o.value) === String(verified.actualValue));
@@ -617,7 +633,13 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
             if (cached) step.answers[field.id] = { fieldId: field.id, ...cached }; else missing.push(field);
           }
           if (missing.length) {
-            if ((step.requests || 0) >= 2) { status('paused', 'Primary request limit reached (2/2). Fill this page manually.'); return; }
+            if ((step.requests || 0) >= 2) {
+              step.primary = true;
+              saveSession(session);
+              if (targets.length) await applyAnswers(targets, Object.values(step.answers), token, signature);
+              status('paused', 'Primary request limit reached (2/2). Fill remaining fields manually.');
+              return;
+            }
             step.requests = (step.requests || 0) + 1;
             saveSession(session);
             status('running', `Generating answers for ${missing.length} fields.`);
@@ -631,12 +653,20 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
           if (targets.length && !await applyAnswers(targets, Object.values(step.answers), token, signature)) return;
         } else {
           // Recover persisted answers after a full document reload without another primary request.
-          if (!await applyResumeUploads(fields.filter(f => f.type === 'file' && isResumeField(f, fields) && empty(f)), token, signature)) return;
+          if (!await applyResumeUploads(fields.filter(f => f.type === 'file' && isResumeField(f, fields) && (empty(f) || results.get(f.id)?.status === 'failed')), token, signature)) return;
           await detectAdapter().prepareSections?.(document,getProfile(),{session,isCurrent:()=>guard(token)});
           await detectAdapter().prepareFields?.(document,getProfile(),{overwrite:false,isCurrent:()=>guard(token)});
           signature=observePage(scanPageFields());
           step.observation=signature;
           const missing = scanFormFields().filter(f => f.type !== 'file' && shouldFill(f) && unfilled(f));
+          const choices = missing.filter(f => f.type === 'combobox');
+          if (choices.length) {
+            // Closed menus lose scanned options. Re-discover cached choices
+            // before retrying; query text alone still cannot count as selection.
+            const queries = new Map(choices.map(f => [f.id,step.answers[f.id]?.value || detectAdapter().profileValue?.(f,getProfile())]).filter(([,value]) => typeof value === 'string' && value));
+            await harvestComboboxOptions(choices,queries);
+            if (!guard(token)) return;
+          }
           for (const field of normalizeFieldsForAI(missing)) {
             if (!field.ats?.canonicalKey || step.answers[field.fieldId]?.value !== '') continue;
             const refreshed = detectAdapter().resolveAnswer?.(field, getProfile(), {jobContext:session.job,allowSearch:false});
@@ -837,8 +867,15 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       }
       if (!compatibleSession()) return;
       session.stepReview = false;
-      const step=session.steps[session.currentStep];
-      if (step?.frameUrl && step.primary) step.retryRequested=true;
+      const step = session.steps[session.currentStep];
+      if (step) {
+        if (session.reason?.includes('Primary request limit reached')) {
+          step.requests = 0;
+          step.primary = false;
+        }
+        if (step.frameUrl && step.primary) step.retryRequested = true;
+      }
+      session.errors = [];
       session.active = true;
       status('running', 'Starting application workflow.');
       await tick();
@@ -853,6 +890,28 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       saveSession(session);
       status('running', 'Advancing to next step.');
       await tick();
+    },
+    reset() {
+      if (busy) this.pause();
+      results.clear();
+      if (session) {
+        session.errors = [];
+        session.active = false;
+        session.stepReview = false;
+        session.status = 'idle';
+        session.reason = '';
+        const current = session.steps[session.currentStep];
+        if (current) {
+          current.primary = false;
+          current.requests = 0;
+          current.repairs = 0;
+          current.lateRequests = 0;
+          current.clicks = 0;
+          current.answers = {};
+        }
+        saveSession(session);
+      }
+      emit();
     },
     pause() {
       generation++;

@@ -20,6 +20,7 @@ import {harvestComboboxOptions,assertUniqueFields} from '../../src/core/fields/s
 import {isResumeField} from '../../src/core/resume.js';
 import {build} from 'esbuild';
 import {readFileSync} from 'node:fs';
+import {resolveComboboxSearchAnswers} from '../../src/core/autofill.js';
 
 let dom;
 function boot(html, ats = 'greenhouse', scripts=false) {
@@ -37,6 +38,40 @@ function boot(html, ats = 'greenhouse', scripts=false) {
   saveProfile({ fullName: 'Test Applicant', email: 'test@example.com', phone: '+1 416 555 0199', country: 'Canada', city: 'Toronto', stateProvince: 'Ontario' });
 }
 afterEach(() => { dom?.window.close(); setPlatform(createGmHost()); });
+
+test('Greenhouse retry reuses its partial education row after an inferred degree choice',async()=>{
+  boot('<form id="application_form"><div id="education_section"><div class="education"><label>School<input id="school"></label><label>Degree<input id="degree"></label></div><button type="button" id="add_education">Add</button></div></form>');
+  const profile={education:[{id:'edu',institution:'university of guelph',degree:'Bachelor of Engineering'}]},session={};
+  let adds=0;document.querySelector('#add_education').onclick=()=>{adds++;document.querySelector('#add_education').insertAdjacentHTML('beforebegin','<div class="education"><label>School<input></label><label>Degree<input></label></div>');};
+  await detectAdapter().prepareSections(document,profile,{session});
+  document.querySelector('#degree').value='B.E/ B.Tech';
+  await detectAdapter().prepareSections(document,profile,{session});
+  assert.equal(adds,0);assert.equal(scanFormFields().find(field=>field.element.id==='school').ats.record.id,'edu');
+  assertUniqueFields(scanFormFields());
+});
+
+test('Greenhouse keeps an edited school row distinct from its replacement saved row',async()=>{
+  boot('<form id="application_form"><div id="education_section"><div class="education"><label>School<input id="school"></label></div><button type="button" id="add_education">Add</button></div></form>');
+  const profile={education:[{id:'edu',institution:'University of Guelph'}]},session={};
+  document.querySelector('#add_education').onclick=()=>document.querySelector('#add_education').insertAdjacentHTML('beforebegin','<div class="education"><label>School<input></label></div>');
+  await detectAdapter().prepareSections(document,profile,{session});document.querySelector('#school').value='Different University';
+  await detectAdapter().prepareSections(document,profile,{session});
+  assert.equal(document.querySelector('#school').value,'Different University');assertUniqueFields(scanFormFields());
+});
+
+test('Greenhouse searches a saved school beyond the harvested first catalog page',async()=>{
+  boot('<form id="application_form"><div id="education_section"><div class="education"><div class="field"><label for="school">School</label><input id="school" role="combobox" aria-controls="schools"><div id="schools" role="listbox" hidden></div></div></div></div></form>');
+  saveProfile({...getProfile(),education:[{id:'edu',institution:'university of guelph'}]});
+  await detectAdapter().prepareSections(document,getProfile());
+  const input=document.querySelector('#school'),menu=document.querySelector('#schools');
+  const render=()=>{menu.hidden=false;menu.innerHTML=input.value?'<div role="option">University of Guelph</div>':'<div role="option">Aalborg University</div><div role="option">Other</div>';};
+  input.onclick=render;input.oninput=render;input.onkeydown=e=>{if(e.key==='Escape')menu.hidden=true;};
+  const fields=scanFormFields();await harvestComboboxOptions(fields);
+  const response=await generateAutofillAnswers(normalizeFieldsForAI(fields));
+  assert.equal(response.answers[0].searchQuery,'university of guelph');
+  const resolved=await resolveComboboxSearchAnswers(fields,response);
+  assert.equal(resolved.answers[0].value,'University of Guelph');
+});
 
 test('Greenhouse harvests unfiltered degree choices before profile matching or contextual inference',async()=>{
   boot('<form id="application_form"><div class="education--container"><div class="education--form"><div class="field"><label for="degree">Degree *</label><input id="degree" role="combobox" aria-controls="choices"><div id="choices" role="listbox" hidden></div></div></div></div></form>');

@@ -95,6 +95,14 @@ export const ashbyAdapter = {
     return false;
   },
   uploadState(element) {
+    const parser = element?.closest('.ashby-application-form-autofill-input-root');
+    if (parser && /autofill completed/i.test(parser.textContent)) {
+      // Ashby's parser uploader hands the document to the separate Resume
+      // attachment widget. It does not retain a filename of its own.
+      const resumes = [...element.ownerDocument.querySelectorAll('.ashby-application-form-input-file input[type="file"]')]
+        .filter(input => !parser.contains(input) && this.fieldMetadata(input).ats?.canonicalKey === 'resume');
+      if (resumes.length === 1) return this.uploadState(resumes[0]);
+    }
     const root = element?.closest('.ashby-application-form-input-file');
     if (!root) return applicationUploadState(element, '.ashby-application-form-field-entry,[class*="fieldEntry"],.ashby-application-form-autofill-input-root,.field,.form-group', '.filename,[class*="fileName"],[class*="filename"],[data-file-name],.uploaded-file');
     const busy = root.getAttribute('aria-busy') === 'true' ||

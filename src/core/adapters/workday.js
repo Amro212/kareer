@@ -10,7 +10,7 @@ const owners = new WeakMap();
 const activated = new WeakMap();
 const searches = new WeakMap();
 const POPUPS = '[data-automation-activepopup="true"], [visibility="opened"], [data-automation-id="activeListContainer"]';
-const visible = node => !node.closest('[hidden],[aria-hidden="true"]') && node.ownerDocument.defaultView.getComputedStyle(node).display !== 'none' && node.ownerDocument.defaultView.getComputedStyle(node).visibility !== 'hidden';
+const visible = node => node.isConnected && !node.closest('[hidden],[aria-hidden="true"]') && node.ownerDocument.defaultView.getComputedStyle(node).display !== 'none' && node.ownerDocument.defaultView.getComputedStyle(node).visibility !== 'hidden';
 const clean = text => String(text || '').replace(/\s+/g, ' ').trim();
 const placeholder = text => /^(?:select(?: one| an? option)?|choose(?: one| an? option)?|no (?:items|results|matches)|sélectionner(?: un)?|--.*--)$/i.test(clean(text));
 function enter(input) {
@@ -79,9 +79,9 @@ export const workdayAdapter = {
     if (!container) return null;
     const attached = element.files?.[0]?.name || '';
     const items = [...container.querySelectorAll('[data-automation-id="file-upload-item"]')].filter(visible);
-    const names = items.map(item => clean(item.querySelector('[data-automation-id="file-upload-file-name"], [data-automation-id="file-upload-name"]')?.textContent || (attached && item.textContent.includes(attached) ? attached : ''))).filter(Boolean);
-    const busy = container.querySelector('[aria-busy="true"], [role="progressbar"]');
-    const rejected = container.querySelector('[data-automation-id="inputError"], [aria-invalid="true"]');
+    const names = items.map(item => clean(item.querySelector('[data-automation-id="file-upload-item-name"], [data-automation-id="file-upload-file-name"], [data-automation-id="file-upload-name"]')?.textContent || (attached && item.textContent.includes(attached) ? attached : ''))).filter(Boolean);
+    const busy = [...container.querySelectorAll('[aria-busy="true"], [role="progressbar"]')].some(visible);
+    const rejected = [...container.querySelectorAll('[data-automation-id="inputError"], [aria-invalid="true"]')].some(visible);
     return { name: names.length === 1 ? names[0] : '', accepted: names.length === 1 && !busy && !rejected };
   },
   uploadBusy(doc) {
@@ -120,7 +120,7 @@ export const workdayAdapter = {
     const container = workdayPromptContainer(element);
     if (container) {
       const input = element.matches('input') ? element : container.querySelector('input:not([type="hidden"])');
-      return { container, input, controlBox: input || element, toggleBtn: container.querySelector('button[aria-label*="open" i]') };
+      return { container, input, controlBox: input || element, toggleBtn: container.querySelector('button[aria-label*="open" i], [data-automation-id="promptIcon"]') };
     }
     // Single-select button listbox (e.g. Gender): no searchable input, button is the control.
     if (element.matches('button[aria-haspopup="listbox"]')) {
@@ -135,16 +135,21 @@ export const workdayAdapter = {
   },
   comboboxMenus(element) {
     const container = workdayPromptContainer(element) || element.closest('[data-automation-id^="formField"],.field');
-    const local = container && [...container.querySelectorAll('[role="listbox"], [data-automation-id="activeListContainer"]')];
+    const local = container && [...container.querySelectorAll('[role="listbox"], [data-automation-id="activeListContainer"]')].filter(menu => !menu.closest('[data-automation-id="selectedItemList"]'));
     if (local?.length) return local;
     const owner = owners.get(element.ownerDocument);
     if (owner?.element !== element && owner?.element !== this.comboboxParts(element)?.input) return [];
     const active = element.ownerDocument.activeElement;
     const inPopup = [...element.ownerDocument.querySelectorAll(POPUPS)].some(p => p.contains(active));
     if (active !== element && !container?.contains(active) && !inPopup) return [];
-    const menus = [...element.ownerDocument.querySelectorAll(POPUPS)].filter(menu => visible(menu) && (!owner.before.has(menu) || owner.before.get(menu) !== menu.innerHTML));
+    const identity = element.getAttribute('data-uxi-multiselect-id') || container?.id;
+    const menus = [...element.ownerDocument.querySelectorAll(POPUPS)].filter(menu => {
+      const ids = [menu, ...menu.querySelectorAll('[data-uxi-multiselect-id]')].map(node => node.getAttribute('data-uxi-multiselect-id')).filter(Boolean);
+      return visible(menu) && (!ids.length || ids.includes(identity)) && (!owner.before.has(menu) || owner.before.get(menu) !== menu.innerHTML);
+    });
     const outer = menus.filter(menu => !menus.some(other => other !== menu && other.contains(menu)));
-    return outer.length === 1 ? outer : [];
+    if (outer.length === 1) { owner.menus = outer; return outer; }
+    return [];
   },
   comboboxOptionSelector() {
     return '[data-automation-id="promptLeafNode"], [role="option"]:not([data-automation-id="promptLeafNode"] [role="option"]), [data-automation-id="promptOption"]:not([data-automation-id="promptLeafNode"] [data-automation-id="promptOption"]), [data-automation-id$="ListItem"], [data-automation-id="select-item"]';
@@ -176,6 +181,19 @@ export const workdayAdapter = {
     if (!value || !input.closest(PROMPT)) return;
     this.beforeComboboxOpen(input);
     enter(input);
+  },
+  afterComboboxClose(element) {
+    const owner = owners.get(element.ownerDocument);
+    if (owner?.element !== element) return;
+    // Blur/body-mousedown does not dismiss every Workday prompt. Toggle only
+    // a currently visible menu owned by this control, never the selected pills.
+    const menus = (owner.menus || this.comboboxMenus(element)).filter(visible);
+    const toggle = this.comboboxParts(element)?.toggleBtn;
+    if (menus.length && toggle) {
+      const event = new element.ownerDocument.defaultView.MouseEvent('click', {bubbles:true,cancelable:true,composed:true});
+      if (toggle.closest('button')?.type === 'submit') event.preventDefault();
+      toggle.dispatchEvent(event);
+    }
   },
   afterComboboxOptionClick(element, option, options) {
     // Some skills prompts accept their first search result only with Enter.

@@ -243,12 +243,13 @@ export function fillCheckbox(element, targetValue) {
 export async function fillCombobox(element, targetValue, knownOptions) {
   if (!element || !optionKey(targetValue)) return false;
   const known = knownOptions ? findExactOption(knownOptions, targetValue, element) : null;
-  if (knownOptions?.length && !known) {
+  let { input } = resolveComboboxParts(element);
+  const isSearchable = Boolean(input) || Boolean(detectAdapter().searchQuery?.(element, targetValue));
+  if (knownOptions?.length && !known && !isSearchable) {
     logger.warn(`Fill[${element.id}]: rejected answer outside this field's options`);
     return false;
   }
   const target = known?.label || String(targetValue);
-  let input = resolveComboboxParts(element).input;
   let ownsSearch;
   try {
     if (readComboboxSelection(element).some(value => optionKey(value) === optionKey(target) || detectAdapter().optionMatches?.(detectAdapter().fieldMetadata?.(element) || {}, value, target))) {
@@ -271,6 +272,10 @@ export async function fillCombobox(element, targetValue, knownOptions) {
     }
     // Resolve the option again after waiting; async menus can replace nodes.
     if (match) match = findExactOption(discoverComboboxOptions(element).map(option => ({ ...optionData(option), element: option })), target, element);
+    if (!match && detectAdapter().fieldMetadata?.(element)?.ats?.canonicalKey === 'skill' && options.length) {
+      const top = options[0];
+      match = { ...optionData(top), element: top };
+    }
     if (!match || !element.isConnected) {
       logger.warn(`Fill[${element.id}]: no exact owned option for "${target}"`);
       return false;
@@ -292,10 +297,11 @@ export async function fillCombobox(element, targetValue, knownOptions) {
     }
     detectAdapter().afterComboboxOptionClick?.(element, match, options);
     recordLocationActivation(element, match.label);
-    if (!await waitForComboboxSelection(element, target)) return false;
+    const expectedTarget = match.label || target;
+    if (!await waitForComboboxSelection(element, expectedTarget)) return false;
     closeCombobox(element);
     // The site's blur handler can reject or clear an apparent selection.
-    return await waitForComboboxSelection(element, target);
+    return await waitForComboboxSelection(element, expectedTarget);
   } catch (err) {
     logger.warn(`Fill[${element.id}]: ${err.message}`);
     return false;
@@ -348,11 +354,14 @@ export async function fillFileInput(element) {
       return false;
     }
   }
+  const delivered = element.files?.[0]?.name === stored.name;
   try { element.focus(); } catch {}
   dispatchEventSequence(element, ['input', 'change']);
   const attached = element.files?.[0];
   const upload = detectAdapter().uploadState?.(element);
-  return Boolean(attached && attached.name === stored.name || upload?.accepted && upload.name === stored.name);
+  // Workday can clear the input synchronously and accept the upload later.
+  // Delivery starts the processing wait; verification proves acceptance.
+  return Boolean(delivered || attached && attached.name === stored.name || upload?.accepted && upload.name === stored.name);
 }
 
 export async function fillField(field, targetValue) {
@@ -385,8 +394,11 @@ export async function fillField(field, targetValue) {
     case FIELD_TYPES.COMBOBOX:
       if (Array.isArray(targetValue)) {
         if (!field.ats?.multiple) return false;
-        for (const value of targetValue) if (!await fillCombobox(field.element, value, field.options || [])) return false;
-        return true;
+        let filledCount = 0;
+        for (const value of targetValue) {
+          if (await fillCombobox(field.element, value, field.options || [])) filledCount++;
+        }
+        return filledCount > 0;
       }
       return await fillCombobox(field.element, targetValue, field.options || []);
 

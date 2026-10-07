@@ -46,9 +46,12 @@ function visible(element) {
   return true;
 }
 
-function parserBusy(doc) {
+function parserBusy(doc, uploadElement) {
+  // A page may keep unrelated live regions busy. Only the upload's widget
+  // describes its processing state; standalone waits retain document scope.
+  const scope = uploadElement?.closest('.ashby-application-form-autofill-input-root,.ashby-application-form-input-file,.field,.form-group,[data-fkit-id],.resume-input,.upload,.file-upload') || uploadElement?.parentElement || doc;
   if (detectAdapter().uploadBusy?.(doc)) return true;
-  return Array.from(doc.querySelectorAll(`${BUSY}, [role="status"]`))
+  return [...(scope.matches?.(`${BUSY}, [role="status"]`) ? [scope] : []), ...scope.querySelectorAll(`${BUSY}, [role="status"]`)]
     .some(el => !el.closest(`#${UI_IDS.CONTAINER}`) && visible(el) &&
       (el.matches(BUSY) || /\b(parsing|processing|uploading|analyzing)\b/i.test(el.textContent)));
 }
@@ -62,17 +65,22 @@ function formState(doc) {
 }
 
 export async function waitForResumeParsing({ doc = document, isCurrent = () => true,
-  minimumMs = 3000, quietMs = 1000, timeoutMs = 15000, pollMs = 100 } = {}) {
+  minimumMs = 3000, quietMs = 1000, timeoutMs = 15000, pollMs = 100, uploadElement = null } = {}) {
   if (!parserHosts.has(detectAdapter().id)) return;
   const started = Date.now();
   const url = doc.location.href;
-  let previous = formState(doc), stableSince = started;
+  let previous = formState(doc), stableSince = started, busy = false, awaitingAcceptance = false;
   logger.info('Waiting for resume parsing and stable application fields.');
   while (Date.now() - started < timeoutMs) {
     if (!isCurrent() || doc.location.href !== url) throw new Error('Resume processing wait cancelled because the run or page changed.');
     const next = formState(doc);
     const changed = next.length !== previous.length || next.some(([el, value], i) => el !== previous[i]?.[0] || value !== previous[i]?.[1]);
-    const busy = parserBusy(doc);
+    const adapter = detectAdapter();
+    const upload = uploadElement && adapter.uploadState?.(uploadElement);
+    // Workday clears FileList before its upload item appears. Other adapters'
+    // unconfirmed filenames do not establish that a parser is running.
+    awaitingAcceptance = Boolean(adapter.id === 'workday' && upload?.accepted === false);
+    busy = parserBusy(doc, uploadElement) || Boolean(upload?.busy) || awaitingAcceptance;
     if (changed || busy) stableSince = Date.now();
     previous = next;
     if (!busy && Date.now() - started >= minimumMs && Date.now() - stableSince >= quietMs) {
@@ -81,11 +89,12 @@ export async function waitForResumeParsing({ doc = document, isCurrent = () => t
     }
     await delay(pollMs);
   }
-  throw new Error('Resume processing did not settle. Wait for the board to finish parsing, then retry Autofill.');
+  const cause = awaitingAcceptance ? 'Workday has not confirmed the resume attachment.' : busy ? 'The resume upload widget still reports processing.' : 'Application fields kept changing after the upload.';
+  throw new Error(`Resume wait timed out after ${timeoutMs / 1000}s. ${cause} Resume Autofill retries the current page.`);
 }
 
 export async function uploadResumeAndWait(field, options) {
   const filled = await fillField(field, '');
-  if (filled) await waitForResumeParsing(options);
+  if (filled) await waitForResumeParsing({ ...options, uploadElement:field.element });
   return filled;
 }

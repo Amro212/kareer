@@ -44,7 +44,10 @@ export async function prepareApplicationSections(doc, profile, adapter, recipes,
       const previous=progress[`${recipe.records}:${record.id}`];
       if (!candidates.length && previous && Number.isInteger(previous.index)) {
         const row=rows()[previous.index];
-        if (row && !Object.keys(values(row,adapter)).length) candidates=[row];
+        const actual=row && values(row,adapter);
+        // A degree can be inferred to a differently worded option while the
+        // school remains empty. Retry the row we own, preserving user identity.
+        if (row && (!Object.keys(actual).length || row.getAttribute('data-kareer-row')===record.id && (!actual[primary] || optionKey(actual[primary])===optionKey(record[primary])))) candidates=[row];
       }
       if (candidates.length > 1 || candidates.some(row => assigned.has(row))) throw new Error(`${adapter.label}: ambiguous ${recipe.records} matches. Review existing rows.`);
       if (candidates.length) { matched.set(record, candidates[0]); assigned.add(candidates[0]); }
@@ -87,6 +90,9 @@ export async function prepareApplicationSections(doc, profile, adapter, recipes,
       rowBindings.set(row, {record});
       progress[`${recipe.records}:${record.id}`] = {index:rows().indexOf(row)};
     }
+    // A user-edited identity is no longer this record's row. Retain its values
+    // but release the tool's annotation so a new saved row cannot duplicate IDs.
+    for (const row of rows()) if (!assigned.has(row)) row.removeAttribute('data-kareer-row');
   }
   if (!session) gmSet(key, Object.fromEntries(Object.entries(stored).slice(-20)));
 }

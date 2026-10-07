@@ -106,7 +106,7 @@ test('stuck parsing times out without filling fields or requesting AI', async ({
   await page.goto(kr.fixtureUrl('ats-race-fixture.html', ASHBY_HOST, '?ats=ashby&stuck'));
   await kr.openPanel(page);
   await page.locator('#kr-autofill-btn').click();
-  await expect(page.locator('#kr-main-panel')).toContainText('Resume processing did not settle', { timeout: 25000 });
+  await expect(page.locator('#kr-main-panel')).toContainText('resume upload widget still reports processing', { timeout: 25000 });
   await expect(page.locator('#email')).toHaveValue('');
   expect(kr.openrouter.requests).toHaveLength(0);
 });

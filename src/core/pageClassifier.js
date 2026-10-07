@@ -40,7 +40,9 @@ export function classifyPage(doc = document) {
   if (detectAdapter(doc.location, doc).confirmation?.(doc)) return {type:'confirmation',reason:'Application confirmation detected.'};
   if (/application (?:has been |was )?(?:submitted|received)|thank you for applying/i.test(text)) return { type: 'confirmation', reason: 'Application confirmation detected.' };
   if (/review (?:your )?application|final review|review and submit/i.test(headings)) return { type: 'review', reason: 'Ready for review. Final submission is manual.' };
-  const fields = Array.from(doc.querySelectorAll('input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=search]),textarea,select,[role=combobox],[contenteditable=true]')).some(isVisible);
+  const adapter = detectAdapter(doc.location, doc);
+  const fields = Array.from(doc.querySelectorAll('input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=search]),textarea,select,[role=combobox],[contenteditable=true],button,input[type=search]')).some(el => isVisible(el) &&
+    (!el.matches('button,input[type=search]') || !el.closest('header,nav,footer') && (el.matches('button[aria-haspopup=listbox]') || adapter.isCombobox?.(el))));
   if (fields) return { type: 'application', reason: 'Application fields detected.' };
   const final = Array.from(doc.querySelectorAll('button,input[type=submit],[role=button]')).filter(isVisible).some(el => /\bsubmit (?:my |your |the )?application\b|\bfinal submit\b|^submit$|^apply now$/i.test(visibleText(el) || el.value || el.getAttribute('aria-label') || ''));
   if (final) return { type: 'review', reason: 'Ready for review. Final submission is manual.' };

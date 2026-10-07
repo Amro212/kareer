@@ -2986,11 +2986,13 @@ function attachEventHandlers() {
   const rescanBtn = shadowRootRef.querySelector('#kr-rescan-btn');
   if (rescanBtn) {
     rescanBtn.onclick = () => {
+      applicationEngine?.reset?.();
+      autofillProgress.statusText = '';
       refreshDetectedFields();
       if (platform.capabilities.crossFrame) {
         refreshRemoteFieldCount({ force: true });
       }
-      logger.info(`Rescanned form: ${getAllDetectedFields().length} fields detected.`);
+      logger.info(`Rescanned and reset form: ${getAllDetectedFields().length} fields detected.`);
       updatePanelDOM();
     };
   }

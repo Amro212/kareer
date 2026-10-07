@@ -248,6 +248,12 @@ export function canonicalOptionMatches(canonical, actual, expected) {
     return normExpected === 'linkedin' && /^(?:linkedin jobs|linkedin\.com)$/.test(normActual);
   }
 
+  if (canonical === 'skill') {
+    const baseActual = actual.split(/\s*[\(\/]\s*/)[0].trim().toLowerCase();
+    const baseExpected = expected.split(/\s*[\(\/]\s*/)[0].trim().toLowerCase();
+    if (baseActual === baseExpected) return true;
+  }
+
   if (canonical === 'phone_country') {
     const cleaned = actual.replace(/\s*\(?\+\d+\)?\s*$/, '');
     if (canonicalNorm(cleaned) === normExpected) return true;

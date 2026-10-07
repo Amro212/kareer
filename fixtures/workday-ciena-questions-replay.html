@@ -1,0 +1,22 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Ciena questions workflow regression replay</title>
+<!-- Replay of the supplied Ciena Application Questions screenshot. The public
+     Ciena Debug capture is retained separately; signed-in question DOM was unavailable. -->
+<style>body{font:16px sans-serif}main{padding:24px}label{display:block;margin-top:20px}button{padding:10px}[hidden]{display:none}</style>
+<body><header><button data-automation-id="utilityMenuButton" aria-haspopup="listbox">English</button></header><main>
+<h1>Embedded Software Engineer - New Grad</h1><h2 data-automation-id="stepTitle">Application Questions 1 of 2</h2>
+<script type="application/ld+json">{"@type":"JobPosting","title":"Embedded Software Engineer - New Grad"}</script>
+<div data-automation-id="formField-transcript"><label for="transcript">Have you uploaded your most recent transcript?</label><button id="transcript" data-automation-id="selectWidget" aria-haspopup="listbox" aria-required="true" type="button">Select One</button></div>
+<div data-automation-id="formField-graduation"><label for="graduation">How long ago was your date of graduation?</label><button id="graduation" data-automation-id="selectWidget" aria-haspopup="listbox" aria-required="true" type="button">Select One</button></div>
+<div data-automation-id="formField-gpa"><label for="gpa">What is your GPA as a percentage?</label><button id="gpa" data-automation-id="selectWidget" aria-haspopup="listbox" aria-required="true" type="button">Select One</button></div>
+<div data-automation-id="formField-workauth"><label for="workauth">Are you legally entitled to work in Canada?</label><button id="workauth" data-automation-id="selectWidget" aria-haspopup="listbox" aria-required="true" type="button">Select One</button></div>
+<button data-automation-id="bottom-navigation-next-button" type="button">Save and Continue</button><div data-automation-id="activeListContainer" hidden></div>
+</main><script>
+const popup=document.querySelector('[data-automation-id="activeListContainer"]');
+document.body.addEventListener('mousedown',event=>{if(event.target===document.body){popup.hidden=true;document.querySelectorAll('main button[aria-expanded]').forEach(button=>button.setAttribute('aria-expanded','false'));}});
+for(const button of document.querySelectorAll('main button[aria-haspopup]'))button.onclick=()=>{
+  if(!popup.hidden){popup.hidden=true;return;}
+  const labels=button.id==='graduation'?['Less than one year','More than one year']:button.id==='gpa'?['80% or higher','Below 80%']:['Yes','No'];
+  popup.hidden=false;button.setAttribute('aria-expanded','true');
+  popup.replaceChildren(...labels.map(label=>{const option=document.createElement('div');option.setAttribute('role','option');option.textContent=label;option.onmousedown=()=>{button.textContent=label;button.setAttribute('aria-expanded','false');popup.hidden=true;};return option;}));
+};
+</script></body></html>

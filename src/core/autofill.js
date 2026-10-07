@@ -14,8 +14,14 @@ export async function resolveComboboxSearchAnswers(fields, response, context = {
   const searchFields = fields.filter(field => field.type === 'combobox' && queries.has(field.id));
   if (!searchFields.length) return response;
 
+  const catalogs = new Map(searchFields.map(field => [field.id, field.options]));
   await harvestComboboxOptions(searchFields, queries);
   if (context.isCurrent?.() === false) return response;
+  // An empty school search must still leave the harvested fallback choices
+  // available for contextual inference (e.g. Other).
+  for (const field of searchFields) {
+    if (!field.options.length && field.ats?.adapter === 'greenhouse' && field.ats.canonicalKey === 'institution') field.options = catalogs.get(field.id) || [];
+  }
   const discovered = searchFields.filter(field => field.options.length);
   if (!discovered.length) return response;
   try {

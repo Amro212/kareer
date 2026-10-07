@@ -420,11 +420,16 @@ export async function harvestComboboxOptions(fields, searchQueries = new Map()) 
     if (readComboboxSelection(element).length && !field.ats?.multiple && detectAdapter().needsFill?.(field, getProfile()) !== true) continue;
     let input = resolveComboboxParts(element).input;
     let ownsSearch;
+    const started = Date.now();
     try {
       await openCombobox(element);
       input = resolveComboboxParts(element).input;
       const saved = detectAdapter().profileValue?.(field, getProfile());
-      const rawQueries = searchQueries.has(field.id) ? [searchQueries.get(field.id)] : Array.isArray(saved) ? saved : [typeof saved === 'string' ? saved : ''];
+      const rawQueries = searchQueries.has(field.id)
+        ? (Array.isArray(searchQueries.get(field.id)) ? searchQueries.get(field.id) : [searchQueries.get(field.id)])
+        : (field.ats?.canonicalKey === 'skill' || field.ats?.multiple)
+          ? ['']
+          : [typeof saved === 'string' ? saved : ''];
       const queries = rawQueries.map(q => searchQueries.has(field.id) ? q : detectAdapter().searchQuery?.(field, q) ?? q);
       const discovered = [];
       for (const savedQuery of queries) {
@@ -439,7 +444,7 @@ export async function harvestComboboxOptions(fields, searchQueries = new Map()) 
         discovered.push(...options);
       }
       field.options = [...new Map(discovered.map(option => [JSON.stringify(option), option])).values()];
-      logger.info(`Harvest[${field.id}]: ${field.options.length} owned options`);
+      logger.info(`Harvest[${field.id}]: ${field.options.length} owned options in ${Date.now()-started}ms`);
     } catch (err) {
       field.options = [];
       logger.warn(`Harvest[${field.id}]: ${err.message}`);
