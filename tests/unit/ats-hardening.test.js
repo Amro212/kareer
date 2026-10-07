@@ -277,13 +277,13 @@ test('Greenhouse Location (City) typeahead harvests by typing the profile city',
   assert.equal(document.body.getAttribute('data-candidate-location'), 'Toronto, Ontario, Canada');
 });
 
-test('unset pronouns override model guesses and partial native options are rejected at AI boundary', async () => {
+test('unset pronouns reach contextual AI while partial native options are rejected', async () => {
   boot('lever');
   saveProfile({ pronouns: '' });
   globalThis.GM_xmlhttpRequest = options => options.onload({ status: 200, responseText: JSON.stringify({ choices: [{ message: { content: JSON.stringify({ answers: [{ fieldId: 'candidatePronounsCheckboxes', value: 'He/him' }, { fieldId: 'select', value: 'Alph' }] }) } }] }) });
   const pronouns = normalizeFieldsForAI(scanFormFields().filter(f => f.label === 'Pronouns'));
   const { answers } = await generateAutofillAnswers([...pronouns, { fieldId: 'select', type: 'select', label: 'Choice', options: [{ value: 'alpha', label: 'Alpha' }] }]);
-  assert.equal(answers.find(a => a.fieldId === 'candidatePronounsCheckboxes').value, '');
+  assert.equal(answers.find(a => a.fieldId === 'candidatePronounsCheckboxes').value, 'He/him');
   assert.equal(answers.some(a => a.fieldId === 'select'), false);
 });
 

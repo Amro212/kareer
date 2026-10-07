@@ -1,4 +1,5 @@
 import { UI_IDS } from './constants.js';
+import { detectAdapter } from './adapters/index.js';
 
 export function isVisible(element) {
   if (!element || element.hidden || element.closest(`#${UI_IDS.CONTAINER}, #${UI_IDS.INLINE_REWRITE}, script, style, template`)) return false;
@@ -26,11 +27,7 @@ export function visibleText(root = document.body) {
 export function classifyPage(doc = document) {
   const text = visibleText(doc.body);
   const headings = Array.from(doc.querySelectorAll('h1,h2,[role=heading]')).filter(isVisible).map(visibleText).join(' ');
-  // A background anti-abuse widget is not an application-wide autofill boundary.
-  // Its controls are excluded by the scanner; site validation still governs Continue.
-  const boundary = /assessment|identity verification|verify your identity|(?:recorded|video) interview|e-signature|electronic signature/i.exec(headings)
-    || /\bI (?:certify|attest|declare under penalty)|\b(?:sign electronically|provide your electronic signature|start (?:the |your )?(?:assessment|video interview)|verify your identity)\b/i.exec(text);
-  if (boundary) return { type: 'boundary', reason: `Manual action required: ${boundary[0]}.` };
+  if (detectAdapter(doc.location, doc).confirmation?.(doc)) return {type:'confirmation',reason:'Application confirmation detected.'};
   if (/application (?:has been |was )?(?:submitted|received)|thank you for applying/i.test(text)) return { type: 'confirmation', reason: 'Application confirmation detected.' };
   if (/review (?:your )?application|final review|review and submit/i.test(headings)) return { type: 'review', reason: 'Ready for review. Final submission is manual.' };
   const fields = Array.from(doc.querySelectorAll('input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=search]),textarea,select,[role=combobox],[contenteditable=true]')).some(isVisible);

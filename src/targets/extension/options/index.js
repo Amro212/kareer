@@ -110,6 +110,11 @@ const LINK_FIELDS = [
   { name: 'linkedin', label: 'LinkedIn URL', type: 'url', placeholder: 'e.g. https://linkedin.com/in/username' },
   { name: 'github', label: 'GitHub URL', type: 'url', placeholder: 'e.g. https://github.com/username' },
   { name: 'portfolio', label: 'Portfolio URL', type: 'url', placeholder: 'e.g. https://alexmorgan.dev', fullWidth: true },
+  { name: 'website', label: 'Website URL', type: 'url', placeholder: 'https://...' },
+  { name: 'additionalUrl', label: 'Additional URL', type: 'url', placeholder: 'https://...' },
+  { name: 'twitter', label: 'Twitter / X URL', type: 'url', placeholder: 'https://...' },
+  { name: 'behance', label: 'Behance URL', type: 'url', placeholder: 'https://...' },
+  { name: 'dribbble', label: 'Dribbble URL', type: 'url', placeholder: 'https://...' },
 ];
 
 const IDENTITY_FIELDS = [...CORE_CONTACT_FIELDS, ...ADDRESS_FIELDS, ...LINK_FIELDS];

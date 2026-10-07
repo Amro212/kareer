@@ -5,13 +5,10 @@ import {
   canonicalNorm,
   canonicalProfileValue,
   canonicalOptionMatches,
-  countryCode,
-  countryCodes,
-  countryNames,
-  isDeclineOption,
-  OPTIONAL_DISCLOSURE_KEYS,
+  eligibilityCanonicalKey,
 } from './canonical.js';
 import { isAllCapsHeading } from './lever.js';
+import { eligibilityValue } from './application-fields.js';
 
 export const LEVER_RECIPE_VERSION = 1;
 
@@ -32,34 +29,6 @@ const URL_MAPPINGS = [
   ['twitter', /twitter/i],
   ['website', /other|website|urls/i],
 ];
-
-function questionCountryCode(field) {
-  const raw = `${field.label || ''} ${field.description || ''}`;
-  const normalized = ` ${canonicalNorm(raw).replace(/[^\p{L}\p{N}]+/gu, ' ')} `;
-  if (/\b(?:u s|u s a|usa)\b/.test(normalized)) return 'US';
-  if (/\b(?:u k|uk)\b/.test(normalized)) return 'GB';
-  for (const code of countryCodes) {
-    const name = canonicalNorm(countryNames.of(code)).replace(/[^\p{L}\p{N}]+/gu, ' ');
-    if (name && normalized.includes(` ${name} `)) return code;
-  }
-  return '';
-}
-
-function eligibilityRecord(field, profile) {
-  const records = (profile.workEligibilities || []).filter(record => record?.enabled !== false && record.country);
-  if (!records.length) return null;
-  const target = questionCountryCode(field);
-  if (target) return records.find(record => countryCode(record.country) === target);
-  return records.length === 1 ? records[0] : undefined;
-}
-
-function combinedSponsorship(record, profile) {
-  const now = record ? record.sponsorshipNow : profile.sponsorshipNow;
-  const future = record ? record.sponsorshipFuture : profile.sponsorshipFuture;
-  if (now === 'Yes' || future === 'Yes') return 'Yes';
-  if (now === 'No' && future === 'No') return 'No';
-  return undefined;
-}
 
 export function leverCanonicalKey(element, container) {
   const name = element?.name || '';
@@ -92,8 +61,8 @@ export function leverCanonicalKey(element, container) {
   if (/how (?:did|do) you hear|where did you hear/i.test(labelText)) return 'source';
   if (/desired.*(?:salary|compensation|comp|pay)|compensation.*range|salary.*range/i.test(labelText)) return 'salary';
   if (/where do you live|current location|city.*(?:and|,).*state/i.test(labelText)) return 'location';
-  if (/authoriz.*(?:work|employment)|legally.*work/i.test(labelText)) return 'work_auth';
-  if (/require.*sponsorship|visa.*sponsorship|sponsor.*employment/i.test(labelText)) return 'sponsorship';
+  const eligibility = eligibilityCanonicalKey(labelText);
+  if (eligibility) return eligibility;
   if (/notice.*period/i.test(labelText)) return 'notice_period';
   if (/when can you start|earliest.*start.*date|start.*date/i.test(labelText)) return 'start_date';
   if (/linkedin/i.test(labelText)) return 'linkedin';
@@ -179,54 +148,41 @@ export function leverFieldMetadata(element) {
   return metadata;
 }
 
-export function leverValue(field, profile) {
+export function leverValue(field, profile, { jobContext } = {}) {
   const canonical = field.ats?.canonicalKey || leverCanonicalKey(field.element || field);
   if (!canonical) return undefined;
   if (['work_auth', 'sponsorship', 'sponsorship_now', 'sponsorship_future'].includes(canonical)) {
-    const record = eligibilityRecord(field, profile);
-    if (record === undefined) return undefined;
-    if (canonical === 'sponsorship' && /\bnow\b.*\bfuture\b|\bfuture\b.*\bnow\b/i.test(field.label || '')) {
-      return combinedSponsorship(record, profile);
-    }
-    if (record) return canonicalProfileValue(canonical, profile, record);
+    return eligibilityValue({...field,ats:{...field.ats,canonicalKey:canonical}},profile,jobContext) || undefined;
   }
   return canonicalProfileValue(canonical, profile);
 }
 
-export function leverAnswer(field, profile) {
+export function leverAnswer(field, profile, options = {}) {
   const canonical = field.ats?.canonicalKey || leverCanonicalKey(field.element || field);
-  const value = leverValue(field, profile);
-  const required = Boolean(field.required);
+  const value = leverValue(field, profile, options);
 
-  // If unset disclosure is required, fall back to "Prefer not to say" / decline option
-  if ((value === undefined || value === '') && OPTIONAL_DISCLOSURE_KEYS.has(canonical) && required && field.options?.length) {
-    const declineOption = field.options.find(opt => isDeclineOption(opt.label) || isDeclineOption(opt.value));
-    if (declineOption) {
-      return {
-        fieldId: field.fieldId || field.id,
-        value: field.type === 'combobox' ? declineOption.label : declineOption.value,
-        inferred: true,
-        provenance: 'inferred',
-        source: 'profile',
-      };
-    }
+  let resolvedValue = value;
+  let answerSource = 'profile';
+  if ((resolvedValue === undefined || resolvedValue === '') && field.label && profile.savedAnswers?.[field.label] !== undefined) {
+    resolvedValue = profile.savedAnswers[field.label];
+    answerSource = 'saved';
   }
 
-  if (value === undefined) return null;
+  if (resolvedValue === undefined) return null;
 
   const answer = {
     fieldId: field.fieldId || field.id,
-    value,
+    value: resolvedValue,
     inferred: false,
     provenance: 'saved',
-    source: 'profile',
+    source: answerSource,
   };
 
 
   const choice = field.widget || ['combobox', 'select', 'radio'].includes(field.type) || (field.type === 'checkbox' && field.ats?.multiple);
-  if (!choice || value === '') return answer;
+  if (!choice || resolvedValue === '') return answer;
 
-  const values = Array.isArray(value) ? value : [value];
+  const values = Array.isArray(resolvedValue) ? resolvedValue : [resolvedValue];
   const matched = values.map(target => {
     const matches = (field.options || []).filter(opt =>
       leverOptionMatches(field, opt.label, target) ||
@@ -247,15 +203,15 @@ export function leverAnswer(field, profile) {
 
   if (matched.some(opt => !opt)) {
     // If location combobox doesn't have options yet, set searchQuery to trigger async search
-    if (field.type === 'combobox' || field.widget === 'lever-location') {
-      const query = profile.city || (profile.location ? profile.location.split(',')[0].trim() : String(value));
+    if ((field.type === 'combobox' || field.widget === 'lever-location') && options.allowSearch !== false && !['work_auth','sponsorship','sponsorship_now','sponsorship_future'].includes(canonical)) {
+      const query = canonical === 'location' ? profile.city || (profile.location ? profile.location.split(',')[0].trim() : String(resolvedValue)) : String(resolvedValue);
       return { ...answer, value: '', searchQuery: query };
     }
     return { ...answer, value: '' };
   }
 
-  const answers = matched.map(opt => field.type === 'combobox' ? opt.label : opt.value);
-  return { ...answer, value: Array.isArray(value) ? answers : answers[0] };
+  const answers = matched.map(opt => answerSource === 'saved' ? (opt.label || opt.value) : (field.type === 'combobox' ? opt.label : opt.value));
+  return { ...answer, value: Array.isArray(resolvedValue) ? answers : answers[0] };
 }
 
 export function leverOptionMatches(field, actual, expected) {

@@ -227,7 +227,7 @@ test('Lever deterministic answer resolution binds candidate profile values', () 
   assert.equal(leverValue({ ats: { canonicalKey: 'linkedin' } }, profile), 'https://linkedin.com/in/janedoe');
   assert.equal(leverValue({ ats: { canonicalKey: 'salary' } }, profile), '140,000 USD');
   assert.equal(leverValue({ ats: { canonicalKey: 'work_auth' } }, profile), 'Yes');
-  assert.equal(leverValue({ ats: { canonicalKey: 'sponsorship' } }, profile), 'No');
+  assert.equal(leverValue({ ats: { canonicalKey: 'sponsorship_future' } }, profile), 'No');
   assert.equal(leverValue({ ats: { canonicalKey: 'notice_period' } }, profile), 'Two weeks');
 
   const ans = leverAnswer({ id: 'full_name', ats: { canonicalKey: 'full_name' } }, profile);
@@ -303,7 +303,7 @@ test('Lever eligibility answers use the question country and combined sponsorshi
   assert.equal(combinedSponsorship.value, 'Yes');
 });
 
-test('Lever EEO disclosures leave optional unset fields blank and fill required with Decline', () => {
+test('Lever unset EEO disclosures remain unresolved instead of overriding contextual answers with Decline', () => {
   const emptyProfile = {};
 
   // Optional gender field -> leaves blank
@@ -321,15 +321,15 @@ test('Lever EEO disclosures leave optional unset fields blank and fill required 
   const optAns = leverAnswer(optionalGender, emptyProfile);
   assert.equal(optAns.value, '');
 
-  // Required gender field with no profile value -> selects decline option
+  // Required gender field with no profile value -> remains available to page AI
   const requiredGender = {
     ...optionalGender,
     required: true,
   };
   const reqAns = leverAnswer(requiredGender, emptyProfile);
-  assert.equal(reqAns.value, 'decline');
-  assert.equal(reqAns.inferred, true);
-  assert.equal(reqAns.provenance, 'inferred');
+  assert.equal(reqAns.value, '');
+  assert.equal(reqAns.inferred, false);
+  assert.equal(reqAns.provenance, 'saved');
 
   // When profile HAS gender, matches candidate selection
   const filledAns = leverAnswer(requiredGender, { gender: 'Woman' });

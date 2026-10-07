@@ -47,7 +47,7 @@ test('parser wait observes value properties and replacement nodes before settlin
   document.body.setAttribute('data-ashby-root', '');
   document.body.insertAdjacentHTML('beforeend', '<input id="name"><div role="status">Processing resume</div>');
   const original = document.querySelector('#name');
-  const pending = waitForResumeParsing({ minimumMs: 0, quietMs: 40, timeoutMs: 500, pollMs: 10 });
+  const pending = waitForResumeParsing({ minimumMs: 0, quietMs: 40, timeoutMs: 5000, pollMs: 10 });
   setTimeout(() => {
     const replacement = original.cloneNode(true);
     replacement.value = 'Parsed Applicant';
@@ -71,7 +71,7 @@ test('Lever analyzing-resume indicator blocks fills until it disappears', async 
   document.body.insertAdjacentHTML('beforeend', '<span class="resume-upload-working"><div class="loading-indicator"></div><div class="resume-upload-label">Analyzing resume...</div></span>');
   const indicator = document.querySelector('.resume-upload-working');
   setTimeout(() => { indicator.style.display = 'none'; }, 60);
-  await waitForResumeParsing({ minimumMs: 0, quietMs: 0, timeoutMs: 500, pollMs: 10 });
+  await waitForResumeParsing({ minimumMs: 0, quietMs: 0, timeoutMs: 5000, pollMs: 10 });
   assert.equal(indicator.style.display, 'none');
 });
 

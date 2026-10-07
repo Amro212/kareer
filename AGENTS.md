@@ -58,15 +58,24 @@ The architecture, implementation roadmap, and engineering patterns follow two di
 9. **Tiered resolution & AI budget**:
    - Resolve fields hierarchically: (1) Deterministic canonical profile fields via ATS adapter selectors, (2) Exact saved answers for repeated questions (`savedAnswers[questionText]`), (3) Contextual AI fallback.
    - One primary AI request per page. Supply relevant saved record and row context for ambiguous fields and open-ended questions in this single page request rather than making per-row calls. Extra calls allowed only for user-initiated rewrites, repairs, or late dynamic fields.
-10. **Value provenance & controlled guessing**: The panel and engine distinguish
-    5 value states: **saved**, **inferred**, **guessed (yellow)**, **verified**,
-    and **unresolved**. Factual guessing on ambiguous or open-ended questions is
-    enabled by default, and Auto Submit may submit yellow guessed answers (explicitly
-    replacing the legacy strict "never invent facts" constraint). Provenance must
-    always be visually distinguished in the panel so users know what was verified
-    vs guessed.
-11. **Safety boundaries**: pause unconditionally for assessments, identity
-    verification, recorded interviews, e-signatures, and legal attestations.
+10. **Value provenance & context-grounded inference**: The panel and engine
+    distinguish 5 value states: **saved**, **inferred**, **guessed (yellow)**,
+    **verified**, and **unresolved**. Kareer is designed to infer answers from all
+    available context (profile facts, job description, resume, work country, and
+    saved answers), never inventing facts out of thin air. Required fields must be
+    completed to the best of the engine's ability: if deterministic resolution lacks
+    an exact option match or value, it must never return a dead-end empty answer
+    that suppresses AI—fall back to contextual AI inference. Auto Submit may submit
+    yellow guessed answers. Provenance must always be visually distinguished in the
+    panel so users know what was verified vs inferred/guessed.
+11. **Unblocked application filling & zero hard-block safeguards**:
+    The tool must never deadlock, freeze, or refuse to execute autofill. No safeguard,
+    legal disclaimer, attestation (such as "I certify" / "I attest"), e-signature,
+    assessment, or verification heading should ever trigger a page-wide pause, an
+    infinite pause loop, or disable primary Autofill/Resume execution. The engine's
+    mission is to autofill the entire page for the user to the best of its ability
+    using all available context, while honoring the user's Auto Continue and Auto
+    Submit settings.
 12. **Bounded retries**: never create an infinite fill or navigation loop.
 13. **Preserve licenses** for directly reused MIT/BSD code.
 14. **Architectural files**: Planned architectural files (ATS adapters, schemas,

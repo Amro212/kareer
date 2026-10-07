@@ -22,7 +22,7 @@ test.describe('single page autofill', () => {
     await kr.openPanel(page);
 
     await page.locator('#kr-autofill-btn').click();
-    await expect(page.locator('#kr-autofill-btn')).toBeEnabled({ timeout: 60000 });
+    await expect(page.locator('#kr-main-panel')).toContainText('Autofill complete. Review field statuses below.', { timeout: 60000 });
 
     // Exactly one primary AI request for the page.
     expect(kr.openrouter.requests.length).toBeGreaterThanOrEqual(1);
@@ -55,7 +55,7 @@ test.describe('single page autofill', () => {
     await page.goto(kr.fixtureUrl('phase2-form-fixture.html'));
     await kr.openPanel(page);
     await page.locator('#kr-autofill-btn').click();
-    await expect(page.locator('#kr-autofill-btn')).toBeEnabled({ timeout: 60000 });
+    await expect(page.locator('#kr-main-panel')).toContainText('Autofill complete. Review field statuses below.', { timeout: 60000 });
 
     const request = kr.openrouter.requests[0];
     const userContent = JSON.parse(request.body.messages.at(-1).content);
@@ -74,7 +74,7 @@ test.describe('single page autofill', () => {
     await page.goto(kr.fixtureUrl('phase2-form-fixture.html'));
     await kr.openPanel(page);
     await page.locator('#kr-autofill-btn').click();
-    await expect(page.locator('#kr-autofill-btn')).toBeEnabled({ timeout: 60000 });
+    await expect(page.locator('#kr-main-panel')).toContainText('Autofill complete. Review field statuses below.', { timeout: 60000 });
 
     await expect(page.locator('#portfolio_url')).toHaveValue('https://pre-existing-portfolio.example.com');
   });
