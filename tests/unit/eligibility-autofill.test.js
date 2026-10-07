@@ -9,6 +9,31 @@ import { leverAnswer, leverCanonicalKey } from '../../src/core/adapters/lever-fi
 import { classifyPage } from '../../src/core/pageClassifier.js';
 import { fillField } from '../../src/core/fields/fillers.js';
 import { saveProfile, saveApiKey } from '../../src/core/storage.js';
+import {resolveDiscoveredAnswers} from '../../src/core/autofill.js';
+import { workEligibilityAnswer } from '../../src/core/profile.js';
+
+test('generic authorization honors sponsorship qualifiers and time horizons',async()=>{
+  boot('<form></form>');
+  const record={country:'United States',workAuthorization:'Yes',sponsorshipNow:'No',sponsorshipFuture:'Yes'};
+  const answer=(suffix,changes={})=>workEligibilityAnswer(
+    {...question(`Are you authorized to work in the United States ${suffix}?`),ats:undefined},
+    {workEligibilities:[{...record,...changes}]}
+  );
+  assert.equal(answer('without sponsorship now or in the future').value,'no');
+  assert.equal(answer('without sponsorship in the future').value,'no');
+  assert.equal(answer('without sponsorship now').value,'yes');
+  assert.equal(answer('without sponsorship in the future',{sponsorshipNow:'Yes',sponsorshipFuture:'No'}).value,'yes');
+  assert.equal(answer('and do not require sponsorship now',{sponsorshipNow:'Yes'}).value,'no');
+  assert.equal(answer('without sponsorship now or in the future',{sponsorshipFuture:''}).value,'');
+  assert.equal(answer('without sponsorship now or in the future',{sponsorshipFuture:''}).provenance,'unresolved');
+  assert.equal(answer('without sponsorship now',{workAuthorization:'No',sponsorshipNow:''}).value,'no');
+  assert.equal(answer('without sponsorship now',{sponsorshipNow:''}).value,'');
+  assert.equal(workEligibilityAnswer({...question('Will you require sponsorship to be authorized to work in the United States now?'),ats:undefined},{workEligibilities:[record]}).value,'no');
+  saveProfile({fullName:'Test Applicant',workEligibilities:[{...record,sponsorshipNow:'Yes'}]});
+  const response=await generateAutofillAnswers([{...question('Are you authorized to work in the United States without sponsorship?'),ats:undefined}]);
+  assert.equal(response.answers[0].value,'no');
+  assert.equal(response.answers[0].provenance,'saved');
+});
 
 let dom;
 function boot(html, ats = 'greenhouse') {
@@ -30,6 +55,37 @@ function boot(html, ats = 'greenhouse') {
 afterEach(() => dom?.window.close());
 const options = [{value:'yes',label:'Yes'},{value:'no',label:'No'}];
 const question = (label,key='work_auth',ats='greenhouse') => ({id:'q',fieldId:'q',label,type:'select',options,ats:{adapter:ats,canonicalKey:key}});
+
+test('a harvested equivalent degree remains eligible for the primary contextual request', async () => {
+  boot('<form></form>','ashby');
+  saveProfile({fullName:'Test Candidate',educationLevel:'Bachelor'});
+  saveApiKey('fixture-key');
+  const field={fieldId:'degree',label:'Highest degree',type:'combobox',required:true,options:[{value:'Bachelor degree',label:'Bachelor degree'}],ats:{adapter:'ashby',canonicalKey:'highestDegree'}};
+  let calls=0;
+  globalThis.GM_xmlhttpRequest=request=>{
+    calls++;
+    assert.deepEqual(JSON.parse(JSON.parse(request.data).messages.at(-1).content).fieldsToFill.map(field=>field.fieldId),['degree']);
+    request.onload({status:200,responseText:JSON.stringify({choices:[{message:{content:JSON.stringify({answers:[{fieldId:'degree',value:'Bachelor degree'}]})}}]})});
+  };
+  const response=await generateAutofillAnswers([field]);
+  assert.equal(calls,1);
+  assert.equal(response.answers[0].value,'Bachelor degree');
+  assert.equal(response.answers[0].source,'ai');
+});
+
+test('late owned degree options receive one bounded contextual resolution',async()=>{
+  boot('<form></form>','ashby');
+  saveProfile({fullName:'Test Candidate',educationLevel:'Bachelor'});saveApiKey('fixture-key');
+  const fields=[{fieldId:'jcf2::degree',label:'Highest degree',type:'combobox',required:true,options:[{value:'Bachelor degree',label:'Bachelor degree'}],ats:{adapter:'ashby',canonicalKey:'highestDegree'}}];
+  let calls=0;
+  globalThis.GM_xmlhttpRequest=request=>{
+    calls++;
+    assert.deepEqual(JSON.parse(JSON.parse(request.data).messages.at(-1).content).fieldsToFill.map(field=>field.fieldId),['jcf2::degree']);
+    request.onload({status:200,responseText:JSON.stringify({choices:[{message:{content:JSON.stringify({answers:[{fieldId:'jcf2::degree',value:'Bachelor degree'}]})}}]})});
+  };
+  const answers=await resolveDiscoveredAnswers(fields,[{fieldId:'jcf2::degree',value:'',searchQuery:'Bachelor'}]);
+  assert.equal(calls,1);assert.equal(answers[0].value,'Bachelor degree');assert.equal(answers[0].source,'ai');
+});
 
 for (const resolve of [applicationAnswer,leverAnswer]) {
   test(`${resolve.name} keeps explicit countries and country aliases scoped`, () => {
@@ -100,6 +156,23 @@ test('eligibility option aliases distinguish negation from a negative answer', (
 });
 
 for (const ats of ['greenhouse','lever','ashby']) {
+  test(`${ats} unresolved canonical eligibility never falls back to a less specific saved Yes`, async () => {
+    boot('<form></form>',ats);
+    saveProfile({fullName:'Test Candidate',applicantNotes:'I will need sponsorship in the future and cannot work in New Zealand.',workEligibilities:[{country:'Canada',workAuthorization:'Yes',sponsorshipNow:'No',sponsorshipFuture:''}]});
+    saveApiKey('fixture-key');
+    let calls=0;
+    const fields=[question('Are you authorized to work in Canada without sponsorship now or in the future?','work_auth',ats),{...question('Are you authorized to work in NZ?','work_auth',ats),fieldId:'nz'}];
+    globalThis.GM_xmlhttpRequest = request => {
+      calls++;
+      const unresolved=JSON.parse(JSON.parse(request.data).messages.at(-1).content).fieldsToFill;
+      assert.deepEqual(unresolved.map(field=>field.fieldId),['q','nz']);
+      request.onload({status:200,responseText:JSON.stringify({choices:[{message:{content:JSON.stringify({answers:fields.map(field=>({fieldId:field.fieldId,value:'No',provenance:'inferred'}))})}}]})});
+    };
+    const result=await generateAutofillAnswers(fields,{jobContext:{workCountry:'Canada'}});
+    assert.equal(calls,1);
+    assert.ok(result.answers.every(answer=>answer.value==='no' && answer.source==='ai'));
+  });
+
   test(`${ats} fills eligibility wording and descriptive options from the saved profile`, async () => {
     boot('<form id="application_form"><div class="application-question field"><label class="application-label" for="q">Are you currently eligible to work in the country that you are applying for?</label><select id="q"><option value="">Select</option><option value="allowed">Yes, I am authorized to work</option><option value="denied">No, I am not authorized to work</option></select></div></form>',ats);
     const fields = scanFormFields();

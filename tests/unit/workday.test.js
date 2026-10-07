@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { readFileSync } from 'node:fs';
 import { detectAdapter } from '../../src/core/adapters/index.js';
 import { scanFormFields, harvestComboboxOptions, refreshField } from '../../src/core/fields/scanner.js';
-import { readComboboxSelection, setComboboxSearch, openCombobox, discoverComboboxOptions, waitForComboboxOptions } from '../../src/core/fields/combobox.js';
+import { readComboboxSelection, setComboboxSearch, openCombobox, closeCombobox, discoverComboboxOptions, waitForComboboxOptions } from '../../src/core/fields/combobox.js';
 import { fillField } from '../../src/core/fields/fillers.js';
 import { verifyField } from '../../src/core/fields/verify.js';
 import { saveProfile, saveApiKey } from '../../src/core/storage.js';
@@ -14,6 +14,7 @@ import { prepareWorkdaySections, prepareWorkdayDependencies } from '../../src/co
 import { workdayAnswer, workdayValue, workdayOptionMatches, workdayNeedsFill } from '../../src/core/adapters/workday-fields.js';
 import { inspectValidation } from '../../src/core/validation.js';
 import { normalizeFieldsForAI } from '../../src/core/fields/normalize.js';
+import { isResumeField } from '../../src/core/resume.js';
 
 let dom;
 function boot(html) {
@@ -31,6 +32,91 @@ function boot(html) {
   saveProfile({ fullName: 'Test Applicant', email: 'test@example.com', phone: '+14165551234', country: 'Canada' });
 }
 afterEach(() => dom?.window.close());
+
+test('Phreesia accepted upload survives Workday clearing its FileList',async()=>{
+  boot(readFileSync('fixtures/phreesia.wd1.myworkdayjobs.com-2026-10-06-03-57.html','utf8'));
+  const field=scanFormFields().find(field=>field.type==='file');
+  assert.equal(field.element.files.length,0);
+  assert.equal(field.currentValue,'resume.pdf');
+  assert.equal((await verifyField(field,'resume.pdf')).verified,true);
+});
+
+test('Workday selected pills are not search menus and do not prevent opening the prompt',async()=>{
+  boot(readFileSync('fixtures/phreesia.wd1.myworkdayjobs.com-2026-10-06-03-57.html','utf8'));
+  const input=document.querySelector('input[id$="--fieldOfStudy"]');
+  const container=input.closest('[data-automation-id="multiSelectContainer"]');
+  assert.deepEqual(discoverComboboxOptions(input),[],'selectedItemList is committed state, not available choices');
+  const menu=document.createElement('div');menu.setAttribute('data-automation-id','activeListContainer');menu.hidden=true;document.body.append(menu);
+  container.querySelector('[data-automation-id="promptIcon"]').onclick=()=>{menu.hidden=false;menu.innerHTML='<div data-automation-id="promptLeafNode">Electrical Engineering</div>';};
+  await openCombobox(input);
+  assert.equal(discoverComboboxOptions(input)[0]?.textContent,'Electrical Engineering');
+  let closed=0;container.querySelector('[data-automation-id="promptIcon"]').onclick=()=>{closed++;menu.hidden=true;};
+  closeCombobox(input);assert.equal(closed,1);assert.equal(menu.hidden,true);
+});
+
+test('Workday popup identity cannot be borrowed from another multiselect',async()=>{
+  const {input,menu}=prompt();input.setAttribute('data-uxi-multiselect-id','source-owner');
+  menu.setAttribute('data-uxi-multiselect-id','education-owner');
+  input.focus();
+  setComboboxSearch(input,'LinkedIn');
+  assert.deepEqual(discoverComboboxOptions(input),[]);
+});
+
+test('Workday close does not reopen a prompt after the site removes its committed popup',async()=>{
+  const {input,menu}=prompt();
+  input.parentElement.insertAdjacentHTML('beforeend','<span data-automation-id="promptIcon"></span>');let toggles=0;
+  input.parentElement.querySelector('[data-automation-id="promptIcon"]').onclick=()=>{toggles++;};
+  input.focus();setComboboxSearch(input,'LinkedIn');assert.equal(discoverComboboxOptions(input).length,1);
+  menu.remove();closeCombobox(input);assert.equal(toggles,0);
+});
+
+test('Workday verifies all selected skill tokens within one stability window',async()=>{
+  const {input}=prompt();input.id='skills';input.closest('[data-automation-id^="formField"]').setAttribute('data-automation-id','formField-skills');
+  const values=['Python','Java','JavaScript','SQL','React','Git','Docker','Linux'];
+  for(const value of values)input.parentElement.insertAdjacentHTML('afterbegin',`<div data-automation-id="selectedItem" title="${value}">${value}</div>`);
+  const field=scanFormFields().find(field=>field.element===input),started=Date.now();
+  assert.equal((await verifyField(field,values)).verified,true);
+  const elapsed=Date.now()-started;console.log(`Eight skill tokens verification: ${elapsed}ms`);
+  assert.ok(elapsed<1000,'one widget must not incur eight serial stability windows');
+});
+
+test('Workday rejects a token removed while the multi-value selection settles',async()=>{
+  const {input}=prompt();input.id='skills';input.closest('[data-automation-id^="formField"]').setAttribute('data-automation-id','formField-skills');
+  for(const value of ['Python','Java'])input.parentElement.insertAdjacentHTML('afterbegin',`<div data-automation-id="selectedItem" title="${value}">${value}</div>`);
+  const field=scanFormFields().find(field=>field.element===input);
+  setTimeout(()=>input.parentElement.querySelector('[title="Python"]').remove(),100);
+  assert.equal((await verifyField(field,['Python','Java'])).verified,false);
+});
+
+test('Phreesia captured generic uploader has canonical resume identity',()=>{
+  boot(readFileSync('fixtures/phreesia.wd1.myworkdayjobs.com-2026-10-06-03-17.html','utf8'));
+  const fields=scanFormFields(),file=fields.find(field=>field.type==='file');
+  assert.equal(file.ats.canonicalKey,'resume');assert.equal(isResumeField(file,fields),true);
+});
+
+test('Phreesia Enter-only skills commit every harvested skill and preserve tokens',async()=>{
+  boot(readFileSync('fixtures/phreesia.wd1.myworkdayjobs.com-2026-10-06-03-17.html','utf8'));
+  const input=document.querySelector('#skills--skills'),container=input.closest('[data-automation-id="multiSelectContainer"]');
+  const menu=document.createElement('div');menu.id='skill-results';menu.setAttribute('role','listbox');menu.hidden=true;container.append(menu);input.setAttribute('aria-controls',menu.id);
+  const accepted=['Python'];container.insertAdjacentHTML('afterbegin','<div data-automation-id="selectedItem" title="Python">Python</div>');
+  let searched=false,submits=0;
+  document.querySelector('form')?.addEventListener('submit',event=>{submits++;event.preventDefault();});
+  input.oninput=()=>{searched=false;menu.hidden=true;};
+  input.onkeydown=event=>{if(event.key!=='Enter')return;if(!event.defaultPrevented)submits++;if(!searched){searched=true;menu.hidden=false;menu.innerHTML=`<div role="option">${input.value}</div>`;}else{const skill=menu.textContent;accepted.push(skill);container.insertAdjacentHTML('afterbegin',`<div data-automation-id="selectedItem" title="${skill}">${skill}</div>`);input.value='';menu.hidden=true;searched=false;}};
+  saveProfile({fullName:'Test Applicant',skills:['Python','Java','JavaScript']});
+  const field=scanFormFields().find(field=>field.element===input);await harvestComboboxOptions([field]);
+  assert.equal(await fillField(field,['Python','Java','JavaScript']),true);
+  assert.deepEqual(accepted,['Python','Java','JavaScript']);assert.equal(submits,0);assert.equal(input.value,'');assert.equal((await verifyField(field,['Python','Java','JavaScript'])).verified,true);
+});
+
+test('Workday skill keyboard fallback never selects a replacement menu after the option click',async()=>{
+  const {input,menu}=prompt();input.closest('[data-automation-id="formField-source"]').setAttribute('data-automation-id','formField-skills');input.id='skills';
+  const selected=[];let searches=0;
+  input.addEventListener('keydown',event=>{if(event.key!=='Enter')return;if(++searches===1){menu.innerHTML='<div role="option">Java</div>';menu.firstElementChild.onclick=()=>{menu.innerHTML='<div role="option">Rust</div>';};}else{selected.push(menu.textContent);}});
+  const field=scanFormFields().find(field=>field.element===input);
+  await fillField({...field,options:[{value:'Java',label:'Java'}]},'Java');
+  assert.deepEqual(selected,[],'a replaced first result must not authorize Enter');
+});
 
 function prompt() {
   boot(`<main><form><div data-automation-id="sourceSection"><div data-automation-id="formField-source"><label for="source--source">How did you hear about us? *</label><div data-automation-id="multiSelectContainer"><input id="source--source" placeholder="Search" data-uxi-widget-type="selectinput"></div></div></div></form></main><div data-automation-id="activeListContainer" hidden></div>`);
@@ -542,4 +628,33 @@ test('CBC gender opens from its single-select button rather than its filter inpu
   assert.equal(document.querySelector('[data-automation-id="activeListContainer"]').hidden, false);
   assert.equal(discoverComboboxOptions(button).length, 1);
   assert.equal((await waitForComboboxOptions(button, 350, 'Man')).length, 1, 'saved Man must not hide visible Male');
+});
+
+test('harvestComboboxOptions skips multi-query search for skills when no explicit query provided', async () => {
+  boot('<div data-automation-id="multiSelectContainer"><div data-automation-id="formField-skills"><label for="skills--skills">Skills</label><input id="skills--skills" data-uxi-widget-type="selectinput"></div></div><div data-automation-id="activeListContainer" hidden></div>');
+  const input = document.getElementById('skills--skills');
+  let searchCount = 0;
+  input.addEventListener('input', () => { searchCount++; });
+  saveProfile({ fullName: 'Test', skills: ['Skill1', 'Skill2', 'Skill3', 'Skill4', 'Skill5'] });
+  const field = scanFormFields().find(f => f.element === input);
+  await harvestComboboxOptions([field]);
+  assert.equal(searchCount <= 1, true, 'skills must not query all 5 skills serially during page harvest');
+});
+
+for (const suggestion of ['LinkedIn','JavaScript']) test(`Workday Java search does not commit ${suggestion}`,async()=>{
+  const {input,accepted}=prompt();
+  input.id='skills--skills';input.closest('[data-automation-id="formField-source"]').setAttribute('data-automation-id','formField-skills');
+  document.querySelector('[data-automation-id="sourceSection"]').setAttribute('data-automation-id','skillsSection');
+  document.querySelector('label').setAttribute('for',input.id);document.querySelector('label').textContent='Skills';
+  const menu=document.querySelector('[data-automation-id="activeListContainer"]');
+  input.addEventListener('keydown',event=>{
+    if(event.key==='Enter' && input.value) {
+      menu.hidden=false;menu.innerHTML=`<div role="option">${suggestion}</div>`;
+      menu.firstElementChild.onclick=()=>{accepted.push(suggestion);input.parentElement.insertAdjacentHTML('afterbegin',`<div data-automation-id="selectedItem" title="${suggestion}">${suggestion}</div>`);input.value='';menu.hidden=true;};
+    }
+  });
+  const field=scanFormFields().find(field=>field.element===input);
+  assert.equal(field.ats.canonicalKey,'skill');
+  assert.equal(await fillField(field,'Java'),false);
+  assert.deepEqual(accepted,[],`${suggestion} must not be selected as a Java skill`);
 });

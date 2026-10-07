@@ -153,7 +153,7 @@ export function extractGroupLabel(elements = [], groupName = '') {
   }
 
   // 2. Check closest form group / question container
-  const container = firstEl.closest('.form-group, .field, [role="radiogroup"], [role="group"], .question, div');
+  const container = firstEl.closest('.form-group, .field, [role="radiogroup"], [role="group"], .question') || firstEl.closest('div');
   if (container) {
     // Check aria-label on container
     const ariaLabel = container.getAttribute('aria-label');
@@ -226,6 +226,14 @@ export function extractOptionLabel(element) {
   }
 
   return cleanText(element.id || 'Option');
+}
+
+// Native choices may all expose the browser default "on". Keep their owned
+// labels as identities when the HTML values cannot distinguish the choices.
+export function choiceValue(element, elements) {
+  const value = element.value;
+  return value && elements.filter(item => item.value === value).length === 1
+    ? value : extractOptionLabel(element);
 }
 
 function describedByText(node) {

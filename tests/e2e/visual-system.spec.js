@@ -33,6 +33,7 @@ test('HUD and every panel tab use Geist without overflow', async ({ kr }, info) 
   await kr.seed({ settings: { model: 'provider/' + 'long-model-name-'.repeat(12) } });
   const page = await kr.context.newPage();
   await page.goto(kr.fixtureUrl('phase2-form-fixture.html'));
+  await page.locator('.kr-pebble').click();
   await page.locator('#kr-hud').waitFor();
   const loaded = await fonts(page);
   expect(loaded).toHaveLength(2);
@@ -45,7 +46,7 @@ test('HUD and every panel tab use Geist without overflow', async ({ kr }, info) 
     await page.locator('#kr-main-panel').screenshot({ path: info.outputPath(`panel-${tab}.png`) });
   }
   await page.locator('[data-tab=home]').click();
-  await page.locator('#kr-capture-job').click();
+  await expect(page.locator('#kr-capture-job')).toHaveCount(0);
   await expect(page.locator('#kr-autofill-btn')).toBeVisible();
   await expect(page.locator('#kr-autofill-btn')).not.toHaveClass(/kr-btn-secondary/);
   await page.locator('#kr-main-panel').screenshot({ path: info.outputPath('panel-paused.png') });
@@ -74,7 +75,7 @@ test('workflow state presentation and error feedback remain inspectable', async 
     await page.goto(url);
     await kr.openPanel(page);
     await expect(page.locator('.kr-wf-reason')).toContainText(status);
-    await page.locator('#kr-main-panel').screenshot({ path: info.outputPath(`state-${status}.png`) });
+    await page.screenshot({ path: info.outputPath(`state-${status}.png`) });
   }
   kr.openrouter.status = 401;
   await page.locator('#kr-test-ai-btn').click();

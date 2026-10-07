@@ -8,11 +8,15 @@
 <label>Full Name<input id="name" required></label>
 <label>Email<input id="email" type="email" required></label>
 <label>LinkedIn URL<input id="linkedin"></label>
+<label>Why this role?<textarea id="why" required></textarea></label>
 <button type="submit">Submit Application</button></form></main>
 <script>
 const params = new URLSearchParams(location.search);
 if (params.get('ats') === 'ashby') document.body.setAttribute('data-ashby-root','');
-if (params.has('workflow')) document.querySelector('[type=submit]').remove();
+if (params.has('workflow')) {
+  const next = document.querySelector('[type=submit]');
+  next.type = 'button'; next.textContent = 'Continue';
+}
 document.body.dataset.submissions='0';
 document.querySelector('form').onsubmit=e=>{e.preventDefault();document.body.dataset.submissions=String(+document.body.dataset.submissions+1)};
 document.querySelector('#resume').addEventListener('change',()=>{

@@ -178,10 +178,16 @@ test('generic AI answers cannot override their AI source metadata', async () => 
   assert.equal(answers[0].source, 'ai');
 });
 
-test('frame agent rejects duplicate IDs before requesting answers', async () => {
+test('frame agent fills separate questions sharing an HTML ID', async () => {
   boot('lever');
   document.querySelector('main').innerHTML = '<label>First<input id="duplicate"></label><label>Second<input id="duplicate"></label>';
-  await assert.rejects(createFieldAgent().handle({ action: 'scan' }), /duplicate field/i);
+  const agent = createFieldAgent();
+  const scanned = await agent.handle({ action: 'scan' });
+  assert.equal(scanned.fields.length, 2);
+  assert.equal(new Set(scanned.fields.map(field => field.fieldId)).size, 2);
+  const filled = await agent.handle({ action: 'fill', answers: scanned.fields.map((field, index) => ({ fieldId: field.fieldId, value: index ? 'Second answer' : 'First answer' })) });
+  assert.equal(filled.results.every(result => result.status === 'verified'), true);
+  assert.deepEqual([...document.querySelectorAll('input')].map(input => input.value), ['First answer', 'Second answer']);
 });
 
 test('native choices reject partial matches and verification checks the requested option', async () => {
@@ -277,13 +283,14 @@ test('Greenhouse Location (City) typeahead harvests by typing the profile city',
   assert.equal(document.body.getAttribute('data-candidate-location'), 'Toronto, Ontario, Canada');
 });
 
-test('unset pronouns reach contextual AI while partial native options are rejected', async () => {
+test('unset pronouns use contextual AI and partial native options are rejected at AI boundary', async () => {
   boot('lever');
-  saveProfile({ pronouns: '' });
+  saveProfile({ pronouns: '', applicantNotes: 'Use he/him pronouns.' });
   globalThis.GM_xmlhttpRequest = options => options.onload({ status: 200, responseText: JSON.stringify({ choices: [{ message: { content: JSON.stringify({ answers: [{ fieldId: 'candidatePronounsCheckboxes', value: 'He/him' }, { fieldId: 'select', value: 'Alph' }] }) } }] }) });
   const pronouns = normalizeFieldsForAI(scanFormFields().filter(f => f.label === 'Pronouns'));
   const { answers } = await generateAutofillAnswers([...pronouns, { fieldId: 'select', type: 'select', label: 'Choice', options: [{ value: 'alpha', label: 'Alpha' }] }]);
   assert.equal(answers.find(a => a.fieldId === 'candidatePronounsCheckboxes').value, 'He/him');
+  assert.equal(answers.find(a => a.fieldId === 'candidatePronounsCheckboxes').source, 'ai');
   assert.equal(answers.some(a => a.fieldId === 'select'), false);
 });
 

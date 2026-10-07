@@ -1,6 +1,6 @@
 import { FIELD_TYPES, UI_IDS } from '../constants.js';
 import { detectAdapter } from '../adapters/index.js';
-import { extractLabel, extractGroupLabel, extractOptionLabel, extractDescription } from './labels.js';
+import { extractLabel, extractGroupLabel, extractOptionLabel, extractDescription, choiceValue } from './labels.js';
 import { logger } from '../debug.js';
 import { getProfile } from '../storage.js';
 import { isResidenceLabel, locationMatches } from '../location.js';
@@ -159,14 +159,14 @@ export function scanFormFields(root = document) {
       const options = radioEls.map((r) => {
         const optionLabel = extractOptionLabel(r);
         return {
-          value: r.value || optionLabel,
+          value: choiceValue(r, radioEls),
           label: optionLabel || r.value,
           checked: r.checked,
         };
       });
 
       const checkedRadio = radioEls.find((r) => r.checked);
-      const currentValue = checkedRadio ? (checkedRadio.value || extractOptionLabel(checkedRadio)) : '';
+      const currentValue = checkedRadio ? choiceValue(checkedRadio, radioEls) : '';
 
       detectedFields.push({
         id: el.name || el.id || `jc_field_${++fieldCounter}`,
@@ -347,7 +347,7 @@ export function scanFormFields(root = document) {
     });
   }
 
-  return detectedFields.map(field => {
+  const fields = detectedFields.map(field => {
     if (field.widget) return field;
     const metadata = adapter.fieldMetadata?.(field.element);
     // Ordinary checkboxes retain their own option identity and label. Only
@@ -355,6 +355,8 @@ export function scanFormFields(root = document) {
     if (field.type === FIELD_TYPES.CHECKBOX && adapter.id !== 'workday' && !metadata?.ats?.canonicalKey) return field;
     return { ...field, ...metadata, id: metadata?.id || field.id };
   }).sort(compareDocumentOrder);
+  deduplicateFields(fields);
+  return fields;
 }
 
 function compareDocumentOrder(a, b) {
@@ -370,22 +372,25 @@ function compareDocumentOrder(a, b) {
 }
 
 export function deduplicateFields(fields) {
-  const counts = new Map();
+  // Reserve page IDs before suffixing so "email_2" cannot become a collision.
+  const reserved = new Set(fields.map(field => field.id));
+  const used = new Set();
   for (const field of fields) {
-    const n = (counts.get(field.id) || 0) + 1;
-    counts.set(field.id, n);
-    if (n > 1) {
-      const deduped = `${field.id}_${n}`;
-      logger.warn(`Duplicate field ID "${field.id}" renamed to "${deduped}"`);
-      field.id = deduped;
+    const original = field.id;
+    if (used.has(original)) {
+      let n = 2;
+      while (reserved.has(original + '_' + n)) n++;
+      field.id = original + '_' + n;
+      reserved.add(field.id);
     }
+    used.add(field.id);
   }
 }
 
 export function assertUniqueFields(fields) {
   const ids = new Set();
   for (const field of fields) {
-    if (ids.has(field.id)) throw new Error('Ambiguous duplicate field IDs. Inspect the page before filling.');
+    if (ids.has(field.id)) throw new Error('Field IDs must be unique.');
     ids.add(field.id);
   }
 }
@@ -420,11 +425,16 @@ export async function harvestComboboxOptions(fields, searchQueries = new Map()) 
     if (readComboboxSelection(element).length && !field.ats?.multiple && detectAdapter().needsFill?.(field, getProfile()) !== true) continue;
     let input = resolveComboboxParts(element).input;
     let ownsSearch;
+    const started = Date.now();
     try {
       await openCombobox(element);
       input = resolveComboboxParts(element).input;
       const saved = detectAdapter().profileValue?.(field, getProfile());
-      const rawQueries = searchQueries.has(field.id) ? [searchQueries.get(field.id)] : Array.isArray(saved) ? saved : [typeof saved === 'string' ? saved : ''];
+      const rawQueries = searchQueries.has(field.id)
+        ? (Array.isArray(searchQueries.get(field.id)) ? searchQueries.get(field.id) : [searchQueries.get(field.id)])
+        : (field.ats?.canonicalKey === 'skill' || field.ats?.multiple)
+          ? ['']
+          : [typeof saved === 'string' ? saved : ''];
       const queries = rawQueries.map(q => searchQueries.has(field.id) ? q : detectAdapter().searchQuery?.(field, q) ?? q);
       const discovered = [];
       for (const savedQuery of queries) {
@@ -439,7 +449,7 @@ export async function harvestComboboxOptions(fields, searchQueries = new Map()) 
         discovered.push(...options);
       }
       field.options = [...new Map(discovered.map(option => [JSON.stringify(option), option])).values()];
-      logger.info(`Harvest[${field.id}]: ${field.options.length} owned options`);
+      logger.info(`Harvest[${field.id}]: ${field.options.length} owned options in ${Date.now()-started}ms`);
     } catch (err) {
       field.options = [];
       logger.warn(`Harvest[${field.id}]: ${err.message}`);

@@ -3,9 +3,9 @@ import { STORAGE_KEYS } from './constants.js';
 import { logger } from './debug.js';
 import { platform } from './platform.js';
 import { findExactOption } from './fields/combobox.js';
-import { profileForAI, fixedProfileAnswer, formatStructuredBackground } from './profile.js';
+import { profileForAI, fixedProfileAnswer, workEligibilityAnswer, formatStructuredBackground } from './profile.js';
 import { adapterById, detectAdapter } from './adapters/index.js';
-import { OPTIONAL_DISCLOSURE_KEYS } from './adapters/canonical.js';
+import { isResidenceLabel, locationMatches } from './location.js';
 
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 const AUTOFILL_TIMEOUT_MS = 120000;
@@ -417,181 +417,12 @@ export async function testConnection() {
   }
 }
 
-/**
- * Executes autofill AI requests (split into structured and narrative passes)
- */
+/** Resolve saved values first, then use one primary request for the page. */
 export async function generateAutofillAnswers(normalizedFields, { allowSearch = true, jobContext = null, repairErrors = [] } = {}) {
   const settings = getSettings();
   const profile = getProfile();
   const resolvedJob = jobContext || gmGet(STORAGE_KEYS.JOB) || null;
-  if (normalizedFields.some(field => adapterById(field.ats?.adapter).resolveAnswer)) {
-    return generatePageAnswers(normalizedFields, { settings, profile, allowSearch, jobContext: resolvedJob, repairErrors });
-  }
-  const defaultModel = settings.model || 'google/gemini-2.0-flash';
-  const structuredModel = settings.structuredModel || defaultModel;
-  const narrativeModel = settings.narrativeModel || defaultModel;
-
-  if (!hasApiKey()) {
-    throw new Error('No OpenRouter API key configured. Please set your key in Settings.');
-  }
-
-  const structuredFields = normalizedFields.filter(field => !isNarrativeField(field));
-  const narrativeFields = normalizedFields.filter(field => isNarrativeField(field));
-
-  const structuredBg = formatStructuredBackground(profile);
-  const combinedResumeContext = structuredBg || profile.resumeContext || '';
-
-  const baseUserContext = {
-    applicantProfile: profileForAI(profile),
-    resumeContext: combinedResumeContext,
-    applicantNotes: profile.applicantNotes,
-    pageContext: {
-      url: window.location.href,
-      host: window.location.hostname,
-    },
-    jobContext: resolvedJob || jobContext,
-    repairErrors,
-  };
-
-  const tasks = [];
-  let totalLatencyMs = 0;
-
-  // Structured pass (deterministic, temperature 0.2)
-  if (structuredFields.length > 0) {
-    const structuredSystemPrompt = buildStructuredSystemPrompt({ allowSearch });
-    const structuredUserContent = JSON.stringify({
-      ...baseUserContext,
-      fieldsToFill: structuredFields,
-    });
-    tasks.push(
-      (async () => {
-        logger.info(`Structured autofill request: ${structuredFields.length} fields using ${structuredModel}`);
-        const result = await requestAiJson({
-          model: structuredModel,
-          messages: [
-            { role: 'system', content: structuredSystemPrompt },
-            { role: 'user', content: structuredUserContent },
-          ],
-          temperature: 0.2,
-          tag: 'Structured autofill',
-        });
-        return { type: 'structured', answers: result.answers, latencyMs: result.latencyMs };
-      })()
-    );
-  }
-
-  // Narrative pass (conversational human, temperature 0.6)
-  // If normalizedFields is empty, run the narrative pass with empty fields to preserve existing prompt inspection/test behavior
-  if (narrativeFields.length > 0 || normalizedFields.length === 0) {
-    const narrativeSystemPrompt = buildNarrativeSystemPrompt(profile, settings);
-    const narrativeUserContent = JSON.stringify({
-      ...baseUserContext,
-      fieldsToFill: narrativeFields,
-    });
-    tasks.push(
-      (async () => {
-        logger.info(`Narrative autofill request: ${narrativeFields.length} fields using ${narrativeModel}`);
-        const result = await requestAiJson({
-          model: narrativeModel,
-          messages: [
-            { role: 'system', content: narrativeSystemPrompt },
-            { role: 'user', content: narrativeUserContent },
-          ],
-          temperature: 0.6,
-          tag: 'Narrative autofill',
-        });
-
-        let answers = result.answers;
-        let voiceEditorUsed = false;
-        const enableVoiceEditor = settings.narrativeVoiceEditor !== false && settings.enableNarrativeVoiceEditor !== false && settings.enableVoiceEditor !== false;
-
-        // Optional second pass: Voice editor (temperature 0.5)
-        if (enableVoiceEditor && answers.length > 0) {
-          try {
-            logger.info(`Narrative voice-edit request: ${answers.length} fields using ${narrativeModel}`);
-            const editorSystemPrompt = buildNarrativeEditorSystemPrompt();
-            const editorUserContent = JSON.stringify({
-              answersToEdit: answers,
-              jobContext,
-              resumeContext: combinedResumeContext,
-            });
-            const editResult = await requestAiJson({
-              model: narrativeModel,
-              messages: [
-                { role: 'system', content: editorSystemPrompt },
-                { role: 'user', content: editorUserContent },
-              ],
-              temperature: 0.5,
-              tag: 'Narrative voice-edit',
-            });
-            const editedMap = new Map((editResult.answers || []).map(a => [a.fieldId, a.value]));
-            answers = answers.map(a => ({
-              ...a,
-              value: editedMap.has(a.fieldId) ? editedMap.get(a.fieldId) : a.value,
-            }));
-            voiceEditorUsed = true;
-          } catch (editErr) {
-            logger.warn(`Narrative voice-edit pass skipped or failed: ${editErr.message}`);
-          }
-        }
-
-        logger.info(`Narrative pass complete: ${answers.length} fields, voiceEditorUsed=${voiceEditorUsed}`);
-        return { type: 'narrative', answers, latencyMs: result.latencyMs };
-      })()
-    );
-  }
-
-  const results = await Promise.all(tasks);
-  const combinedRawAnswers = [];
-  for (const r of results) {
-    combinedRawAnswers.push(...r.answers);
-    totalLatencyMs = Math.max(totalLatencyMs, r.latencyMs);
-  }
-
-  const fieldsById = new Map(normalizedFields.map((f) => [f.fieldId, f]));
-  const seenIds = new Set();
-  const fixedAnswers = new Map(normalizedFields.map(field => {
-    const ans = fixedProfileAnswer(field, profile, { allowSearch });
-    if (ans && !ans.source) ans.source = 'profile';
-    return [field.fieldId, ans];
-  }).filter(([, answer]) => answer));
-  const candidateAnswers = [
-    ...combinedRawAnswers.filter(ans => !fixedAnswers.has(ans?.fieldId)).map(ans => ({ ...ans, source: 'ai' })),
-    ...fixedAnswers.values()
-  ];
-  const validatedAnswers = candidateAnswers.filter((ans) => {
-    if (!ans || !fieldsById.has(ans.fieldId) || seenIds.has(ans.fieldId)) {
-      logger.warn('AI returned an unknown or duplicate field ID (omitted)');
-      return false;
-    }
-    seenIds.add(ans.fieldId);
-    const field = fieldsById.get(ans.fieldId);
-    if (!allowSearch || field.type !== 'combobox' || ans.value !== '' ||
-        typeof ans.searchQuery !== 'string' || !ans.searchQuery.trim() || ans.searchQuery.length > 200) {
-      delete ans.searchQuery;
-    } else {
-      ans.searchQuery = ans.searchQuery.trim();
-    }
-    if (['combobox', 'select', 'radio'].includes(field.type) && ans.value !== '') {
-      const option = findExactOption(field.options || [], ans.value);
-      if (!option) {
-        logger.warn(`AI[${ans.fieldId}]: rejected answer outside ${field.options?.length || 0} owned options`);
-        return false;
-      }
-      ans.value = field.type === 'combobox' ? option.label : option.value;
-    }
-    if (!OPTION_FIELD_TYPES.has(field.type) && typeof ans.value === 'string') {
-      ans.value = stripModelDashes(ans.value);
-    }
-    return true;
-  });
-
-  logger.info(`Received ${validatedAnswers.length} valid answers from AI in ${totalLatencyMs}ms`);
-  return {
-    answers: validatedAnswers,
-    latencyMs: totalLatencyMs,
-    model: defaultModel,
-  };
+  return generatePageAnswers(normalizedFields, { settings, profile, allowSearch, jobContext: resolvedJob, repairErrors });
 }
 
 // Adapters with resolveAnswer send only unresolved questions in one page request.
@@ -599,23 +430,29 @@ export async function generateAutofillAnswers(normalizedFields, { allowSearch = 
 async function generatePageAnswers(fields, { settings, profile, allowSearch, jobContext, repairErrors }) {
   const answers = [], unresolved = [];
   for (const field of fields) {
-    const deterministic = adapterById(field.ats?.adapter).resolveAnswer?.(field, profile, { allowSearch, jobContext }) || fixedProfileAnswer(field, profile, { allowSearch });
+    const resolver = (field.ats?.adapter ? adapterById(field.ats.adapter) : detectAdapter()).resolveAnswer;
+    const eligibility = workEligibilityAnswer(field, profile, jobContext);
+    const fixed = fixedProfileAnswer(field, profile, { allowSearch });
+    const narrativeEligibility = (field.isNarrative || field.type === 'textarea') && /\b(?:authoriz|eligib|sponsor)/i.test(`${field.label} ${field.description || ''}`);
+    const adapterAnswer = !narrativeEligibility && resolver ? resolver(field, profile, { allowSearch, jobContext }) : null;
+    // A recognized recipe may need context for country, negation, or timing.
+    // Keep that unresolved result rather than substituting a simpler fallback.
+    const deterministic = adapterAnswer || (resolver && field.ats?.canonicalKey ? null : eligibility || fixed);
     const saved = profile.savedAnswers?.[field.label];
     const resolved = deterministic && deterministic.value !== '' && deterministic.value != null && (!Array.isArray(deterministic.value) || deterministic.value.length > 0);
     if (resolved || deterministic?.searchQuery) {
       if (!deterministic.source) deterministic.source = 'profile';
+      if (!deterministic.provenance) deterministic.provenance = deterministic.value ? 'saved' : 'unresolved';
       answers.push(deterministic);
     } else if (saved !== undefined && (!['combobox', 'select', 'radio'].includes(field.type) || findExactOption(field.options || [], saved, field))) {
       answers.push({ fieldId: field.fieldId, value: saved, inferred: false, provenance: 'saved', source: 'saved' });
     } else {
       unresolved.push(field);
-      // Keep an empty result when no API key is configured; with AI enabled,
-      // replace it with the contextual answer rather than treating it as settled.
-      if (deterministic) answers.push(deterministic);
+      if (deterministic) answers.push({ ...deterministic, source: 'profile', provenance: 'unresolved' });
     }
   }
   const model = settings.model || 'google/gemini-2.0-flash';
-  if (!unresolved.length) return { answers, latencyMs: 0, model };
+  if (!unresolved.length && fields.length) return { answers, latencyMs: 0, model };
   if (!hasApiKey()) return { answers, latencyMs: 0, model };
   const currentAdapter = detectAdapter();
   const tag = currentAdapter?.label ? `${currentAdapter.label} page` : 'ATS page';
@@ -623,8 +460,8 @@ async function generatePageAnswers(fields, { settings, profile, allowSearch, job
     logger.info(`Grounding ${unresolved.length} questions in job context: "${jobContext.title || 'Untitled'}" at "${jobContext.company || 'Unknown'}" (${jobContext.description.length} chars)`);
   }
   const result = await requestAiJson({ model, tag, messages: [
-    { role: 'system', content: `${buildStructuredSystemPrompt({ allowSearch })}\n${NARRATIVE_VOICE_RULES}\n${getNarrativeStyleExamples(profile, settings)}\nFor declared multiple-choice fields only, value may be an array of exact owned option labels. Use all available profile, resume, notes, job, and saved-answer context for ambiguous factual or open-ended questions. Label uncertain context-based estimates with provenance=guessed and inferred=true, and grounded contextual answers provenance=inferred. Never invent facts out of thin air. Select only labels from this field's owned options. Answer every supplied application question, including eligibility, disclosures, and acknowledgments.` },
-    { role: 'user', content: JSON.stringify({ applicantProfile: profileForAI(profile), resumeContext: formatStructuredBackground(profile) || profile.resumeContext, applicantNotes: profile.applicantNotes, jobContext, repairErrors, fieldsToFill: unresolved }) },
+    { role: 'system', content: `${buildStructuredSystemPrompt({ allowSearch })}\n${CANDIDATE_VOICE_PROFILE}\n${NARRATIVE_VOICE_RULES}\n${getNarrativeStyleExamples(profile, settings)}\nFor declared multiple-choice fields only, value may be an array of exact owned option labels. Use all available profile, resume, notes, job, and saved-answer context for ambiguous factual or open-ended questions. Label uncertain context-based estimates with provenance=guessed and inferred=true, and grounded contextual answers provenance=inferred. Never invent facts out of thin air. Select only labels from this field's owned options. Answer every supplied application question, including eligibility, disclosures, and acknowledgments.` },
+    { role: 'user', content: JSON.stringify({ applicantProfile: profileForAI(profile), resumeContext: formatStructuredBackground(profile) || profile.resumeContext, applicantNotes: profile.applicantNotes, pageContext: { url: window.location.href, host: window.location.hostname }, jobContext, repairErrors, fieldsToFill: unresolved }) },
   ] });
   const byId = new Map(unresolved.map(field => [field.fieldId, field]));
   const seen = new Set();
@@ -639,7 +476,9 @@ async function generatePageAnswers(fields, { settings, profile, allowSearch, job
       const values = Array.isArray(answer.value) ? answer.value : [answer.value];
       const options = values.map(value => findExactOption(field.options || [], value,field));
       if (options.some(option => !option)) continue;
-      answer.value = Array.isArray(answer.value) ? options.map(option => field.type === 'combobox' ? option.label : option.value) : field.type === 'combobox' ? options[0].label : options[0].value;
+      const residence = profileForAI(profile).location;
+      if (isResidenceLabel(field.label) && residence && options.some(option => !locationMatches(option.label, residence) && !locationMatches(residence, option.label))) continue;
+      answer.value = Array.isArray(answer.value) ? options.map(option => field.type === 'combobox' ? option.label : option.value) : (field.type === 'combobox' ? options[0].label : options[0].value);
     }
     if (!allowSearch || field.type !== 'combobox' || answer.value !== '' || typeof answer.searchQuery !== 'string' || answer.searchQuery.length > 200) delete answer.searchQuery;
     answer.source = 'ai';

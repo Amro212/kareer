@@ -27,6 +27,18 @@ test('legacy profiles gain unset fields without losing their context', () => {
   assert.equal(profile.applicantNotes, 'Personal notes');
 });
 
+test('implicit eligibility uses the job country and never the sole applicant country', async () => {
+  saveProfile({ workEligibilities: [{ country: 'Canada', workAuthorization: 'Yes', sponsorshipNow: 'No', sponsorshipFuture: 'No' }, { country: 'United States', workAuthorization: 'No', sponsorshipNow: 'Yes', sponsorshipFuture: 'No' }] });
+  const fields = [{ fieldId: 'eligible', label: 'Are you eligible to work in the country in which you are applying?', type: 'radio', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] }];
+  respond([{ fieldId: 'eligible', value: 'yes' }]);
+  assert.equal((await generateAutofillAnswers(fields, { jobContext: { workCountry: 'United States' } })).answers[0].value, 'no');
+  const unresolved = await generateAutofillAnswers(fields, { jobContext: { workCountry: '', locationAmbiguous: true } });
+  assert.equal(JSON.parse(payload.messages[1].content).fieldsToFill[0].fieldId, 'eligible');
+  assert.equal(unresolved.answers[0].source, 'ai');
+  fields[0].label = 'Are you authorized to work in Canada?';
+  assert.equal((await generateAutofillAnswers(fields, { jobContext: { workCountry: 'United States' } })).answers[0].value, 'yes');
+});
+
 test('residence grounding recognizes Canadian abbreviations without choosing another Toronto', async () => {
   saveProfile({ location: 'Toronto, Ontario' });
   const field = { fieldId: 'residence', label: 'Current location', type: 'combobox', options: [
@@ -37,6 +49,31 @@ test('residence grounding recognizes Canadian abbreviations without choosing ano
   saveProfile({ location: 'Toronto' });
   const ambiguous = await generateAutofillAnswers([field]);
   assert.equal(ambiguous.answers[0].value, '');
+});
+
+test('required eligibility with no saved country record or exact option reaches one contextual request', async () => {
+  saveProfile({ workEligibilities: [{ country: 'Canada', workAuthorization: 'Yes' }], applicantNotes: 'I am not authorized to work in the United States.' });
+  const field = { fieldId: 'eligible', required: true, label: 'Are you authorized to work in the United States?', type: 'radio', options: [{ value: 'not-authorized', label: 'I am not authorized' }, { value: 'authorized', label: 'I am authorized' }] };
+  respond([{ fieldId: 'eligible', value: 'not-authorized', provenance: 'inferred' }]);
+  const result = await generateAutofillAnswers([field], { jobContext: { workCountry: 'United States' } });
+  assert.equal(JSON.parse(payload.messages[1].content).fieldsToFill.length, 1);
+  assert.equal(result.answers.length, 1);
+  assert.equal(result.answers[0].value, 'not-authorized');
+  assert.equal(result.answers[0].source, 'ai');
+  saveProfile({ workEligibilities: [{ country: 'United States', workAuthorization: 'No' }] });
+  const noExactOption = await generateAutofillAnswers([field], { jobContext: { workCountry: 'United States' } });
+  assert.equal(noExactOption.answers[0].value, 'not-authorized');
+  assert.equal(noExactOption.answers[0].source, 'ai');
+});
+
+test('explicit uppercase US overrides the job country and authorization explanations use AI', async () => {
+  saveProfile({ workEligibilities: [{ country: 'Canada', workAuthorization: 'Yes' }, { country: 'United States', workAuthorization: 'No' }], applicantNotes: 'I hold a Canadian open work permit valid until 2028.' });
+  const field = { fieldId: 'eligible', label: 'Are you legally authorized to work in US?', type: 'radio', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] };
+  assert.equal((await generateAutofillAnswers([field], { jobContext: { workCountry: 'Canada' } })).answers[0].value, 'no');
+  respond([{ fieldId: 'details', value: 'I hold an open work permit valid until 2028.', provenance: 'inferred' }]);
+  const result = await generateAutofillAnswers([{ fieldId: 'details', type: 'textarea', label: 'Please explain your work authorization status in Canada.' }], { jobContext: { workCountry: 'Canada' } });
+  assert.equal(result.answers[0].value, 'I hold an open work permit valid until 2028.');
+  assert.equal(result.answers[0].source, 'ai');
 });
 
 test('Location (City) uses profile location like other residence questions', async () => {
@@ -80,6 +117,13 @@ test('location grounding leaves duplicate matches and exhausted searches unresol
   assert.equal(final.answers[0].searchQuery, undefined);
 });
 
+test('a city-only owned location option remains compatible with the saved full residence', async () => {
+  saveProfile({ location: 'Toronto, Ontario, Canada' });
+  respond([{ fieldId: 'residence', value: 'toronto' }]);
+  const { answers } = await generateAutofillAnswers([{ fieldId: 'residence', label: 'Location (City)', type: 'select', required: true, options: [{ value: 'toronto', label: 'Toronto' }, { value: 'ottawa', label: 'Ottawa' }] }]);
+  assert.equal(answers[0].value, 'toronto');
+});
+
 test('primary and repair requests carry explicit country-scoped answers', async () => {
   saveProfile({ workCountry: 'Canada', workAuthorization: 'Yes', sponsorshipNow: 'No', sponsorshipFuture: 'Yes', gender: 'Woman', expectedSalary: '95000', salaryCurrency: 'CAD', applicantNotes: 'Older conflicting notes' });
   await generateAutofillAnswers([], { repairErrors: [{ message: 'Required answer' }] });
@@ -115,7 +159,7 @@ test('source dropdowns use only owned LinkedIn options; missing option stays emp
   assert.equal(answers.find(a => a.fieldId === 'missing').searchQuery, 'LinkedIn');
 });
 
-test('unset demographics accept contextual AI while explicit decline maps to the offered choice', async () => {
+test('unset demographics use contextual inference while explicit decline maps to offered choice', async () => {
   saveProfile({ disabilityStatus: 'Prefer not to answer' });
   respond([{ fieldId: 'gender', value: 'Man' }, { fieldId: 'disability', value: 'No' }]);
   const { answers } = await generateAutofillAnswers([
@@ -123,6 +167,7 @@ test('unset demographics accept contextual AI while explicit decline maps to the
     { fieldId: 'disability', label: 'Disability status', type: 'select', options: [{ value: 'no', label: 'No' }, { value: 'decline', label: 'I do not wish to answer' }] },
   ]);
   assert.equal(answers.find(a => a.fieldId === 'gender').value, 'Man');
+  assert.equal(answers.find(a => a.fieldId === 'gender').source, 'ai');
   assert.equal(answers.find(a => a.fieldId === 'disability').value, 'decline');
 });
 

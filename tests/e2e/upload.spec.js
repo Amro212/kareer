@@ -41,11 +41,12 @@ for (const [ats, host] of [['ashby', ASHBY_HOST], ['lever', LEVER_HOST]]) {
     await page.locator('#kr-autofill-btn').click();
     await expect(page.locator('#kr-autofill-btn')).toBeEnabled({ timeout: 60000 });
     await expect(page.locator('body')).toHaveAttribute('data-parse', 'complete');
-    if (ats === 'lever') expect(requestAt).toBeGreaterThanOrEqual(Number(await page.locator('body').getAttribute('data-parsed-at')));
+    expect(requestAt).toBeGreaterThanOrEqual(Number(await page.locator('body').getAttribute('data-parsed-at')));
     await expect(page.locator('#name')).toHaveValue('Parsed Applicant');
     await expect(page.locator('#email')).toHaveValue(PROFILE.email);
     await expect(page.locator('body')).toHaveAttribute('data-submissions', '0');
-    expect(kr.openrouter.requests).toHaveLength(ats === 'ashby' ? 0 : 1);
+    await expect(page.locator('#why')).not.toHaveValue('');
+    expect(kr.openrouter.requests).toHaveLength(1);
   });
 }
 
@@ -55,14 +56,15 @@ test('resume parsing honors overwrite and workflow target rescanning', async ({ 
   const page = await kr.context.newPage();
   await page.goto(kr.fixtureUrl('ats-race-fixture.html', ASHBY_HOST, '?ats=ashby&workflow'));
   await kr.openPanel(page);
-  await page.locator('#kr-capture-job').click();
+  await expect(page.locator('#kr-capture-job')).toHaveCount(0);
   await page.locator('#kr-autofill-btn').click();
   await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Auto Continue is off.', { timeout: 60000 });
   await expect(page.locator('body')).toHaveAttribute('data-parse', 'complete');
   await expect(page.locator('#name')).toHaveValue(PROFILE.fullName);
   await expect(page.locator('#email')).toHaveValue(PROFILE.email);
   await expect(page.locator('#linkedin')).toHaveValue('https://linkedin.com/in/test');
-  expect(kr.openrouter.requests).toHaveLength(0);
+  await expect(page.locator('#why')).not.toHaveValue('');
+  expect(kr.openrouter.requests).toHaveLength(1);
 });
 
 test('pause during resume parsing prevents AI requests and later field fills', async ({ kr }) => {
@@ -94,7 +96,8 @@ test('embedded Ashby parser completes before the parent asks for answers', async
   await expect(frame.locator('#name')).toHaveValue('Parsed Applicant');
   await expect(frame.locator('#email')).toHaveValue(PROFILE.email);
   await expect(frame.locator('#linkedin')).toHaveValue('https://linkedin.com/in/test');
-  expect(kr.openrouter.requests).toHaveLength(0);
+  await expect(frame.locator('#why')).not.toHaveValue('');
+  expect(kr.openrouter.requests).toHaveLength(1);
 });
 
 test('stuck parsing times out without filling fields or requesting AI', async ({ kr }) => {
@@ -103,7 +106,7 @@ test('stuck parsing times out without filling fields or requesting AI', async ({
   await page.goto(kr.fixtureUrl('ats-race-fixture.html', ASHBY_HOST, '?ats=ashby&stuck'));
   await kr.openPanel(page);
   await page.locator('#kr-autofill-btn').click();
-  await expect(page.locator('#kr-main-panel')).toContainText('Resume processing did not settle', { timeout: 25000 });
+  await expect(page.locator('#kr-main-panel')).toContainText('resume upload widget still reports processing', { timeout: 25000 });
   await expect(page.locator('#email')).toHaveValue('');
   expect(kr.openrouter.requests).toHaveLength(0);
 });

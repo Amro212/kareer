@@ -6,7 +6,7 @@ import { scanFormFields } from '../../src/core/fields/scanner.js';
 import { normalizeFieldsForAI } from '../../src/core/fields/normalize.js';
 import { generateAutofillAnswers } from '../../src/core/ai.js';
 import { verifyField } from '../../src/core/fields/verify.js';
-import { saveProfile } from '../../src/core/storage.js';
+import { saveProfile, saveApiKey } from '../../src/core/storage.js';
 import { createFieldAgent } from '../../src/core/agent.js';
 import { classifyPage } from '../../src/core/pageClassifier.js';
 import { fillField } from '../../src/core/fields/fillers.js';
@@ -19,6 +19,9 @@ import {readFile} from 'node:fs/promises';
 import {harvestComboboxOptions,assertUniqueFields} from '../../src/core/fields/scanner.js';
 import {isResumeField} from '../../src/core/resume.js';
 
+import {build} from 'esbuild';
+import {readFileSync} from 'node:fs';
+import {resolveComboboxSearchAnswers} from '../../src/core/autofill.js';
 
 let dom;
 function boot(html, ats = 'greenhouse', scripts=false) {
@@ -36,6 +39,146 @@ function boot(html, ats = 'greenhouse', scripts=false) {
   saveProfile({ fullName: 'Test Applicant', email: 'test@example.com', phone: '+1 416 555 0199', country: 'Canada', city: 'Toronto', stateProvince: 'Ontario' });
 }
 afterEach(() => { dom?.window.close(); setPlatform(createGmHost()); });
+
+test('Greenhouse retry reuses its partial education row after an inferred degree choice',async()=>{
+  boot('<form id="application_form"><div id="education_section"><div class="education"><label>School<input id="school"></label><label>Degree<input id="degree"></label></div><button type="button" id="add_education">Add</button></div></form>');
+  const profile={education:[{id:'edu',institution:'university of guelph',degree:'Bachelor of Engineering'}]},session={};
+  let adds=0;document.querySelector('#add_education').onclick=()=>{adds++;document.querySelector('#add_education').insertAdjacentHTML('beforebegin','<div class="education"><label>School<input></label><label>Degree<input></label></div>');};
+  await detectAdapter().prepareSections(document,profile,{session});
+  document.querySelector('#degree').value='B.E/ B.Tech';
+  await detectAdapter().prepareSections(document,profile,{session});
+  assert.equal(adds,0);assert.equal(scanFormFields().find(field=>field.element.id==='school').ats.record.id,'edu');
+  assertUniqueFields(scanFormFields());
+});
+
+test('Greenhouse keeps an edited school row distinct from its replacement saved row',async()=>{
+  boot('<form id="application_form"><div id="education_section"><div class="education"><label>School<input id="school"></label></div><button type="button" id="add_education">Add</button></div></form>');
+  const profile={education:[{id:'edu',institution:'University of Guelph'}]},session={};
+  document.querySelector('#add_education').onclick=()=>document.querySelector('#add_education').insertAdjacentHTML('beforebegin','<div class="education"><label>School<input></label></div>');
+  await detectAdapter().prepareSections(document,profile,{session});document.querySelector('#school').value='Different University';
+  await detectAdapter().prepareSections(document,profile,{session});
+  assert.equal(document.querySelector('#school').value,'Different University');assertUniqueFields(scanFormFields());
+});
+
+test('Greenhouse searches a saved school beyond the harvested first catalog page',async()=>{
+  boot('<form id="application_form"><div id="education_section"><div class="education"><div class="field"><label for="school">School</label><input id="school" role="combobox" aria-controls="schools"><div id="schools" role="listbox" hidden></div></div></div></div></form>');
+  saveProfile({...getProfile(),education:[{id:'edu',institution:'university of guelph'}]});
+  await detectAdapter().prepareSections(document,getProfile());
+  const input=document.querySelector('#school'),menu=document.querySelector('#schools');
+  const render=()=>{menu.hidden=false;menu.innerHTML=input.value?'<div role="option">University of Guelph</div>':'<div role="option">Aalborg University</div><div role="option">Other</div>';};
+  input.onclick=render;input.oninput=render;input.onkeydown=e=>{if(e.key==='Escape')menu.hidden=true;};
+  const fields=scanFormFields();await harvestComboboxOptions(fields);
+  const response=await generateAutofillAnswers(normalizeFieldsForAI(fields));
+  assert.equal(response.answers[0].searchQuery,'university of guelph');
+  const resolved=await resolveComboboxSearchAnswers(fields,response);
+  assert.equal(resolved.answers[0].value,'University of Guelph');
+});
+
+test('Greenhouse harvests unfiltered degree choices before profile matching or contextual inference',async()=>{
+  boot('<form id="application_form"><div class="education--container"><div class="education--form"><div class="field"><label for="degree">Degree *</label><input id="degree" role="combobox" aria-controls="choices"><div id="choices" role="listbox" hidden></div></div></div></div></form>');
+  saveProfile({...getProfile(),education:[{id:'education',institution:'University',degree:'Bachelor of Engineering'}]});
+  await detectAdapter().prepareSections(document,getProfile());
+  const input=document.querySelector('#degree'),menu=document.querySelector('#choices'),queries=[];
+  const render=()=>{menu.hidden=false;menu.innerHTML=input.value?'':'<div role="option">Bachelor degree</div><div role="option">Master degree</div>';};
+  input.onclick=render;input.oninput=()=>{queries.push(input.value);render();};
+  const fields=scanFormFields();await harvestComboboxOptions(fields);
+  assert.deepEqual(fields[0].options.map(option=>option.label),['Bachelor degree','Master degree']);
+  assert.equal(queries.includes('Bachelor of Engineering'),false);
+  saveApiKey('fixture-key');let sent;
+  globalThis.GM_xmlhttpRequest=request=>{sent=JSON.parse(request.data);request.onload({status:200,responseText:JSON.stringify({choices:[{message:{content:JSON.stringify({answers:[{fieldId:fields[0].id,value:'Bachelor degree'}]})}}]})});};
+  try{const response=await generateAutofillAnswers(normalizeFieldsForAI(fields));assert.equal(response.answers[0].value,'Bachelor degree');assert.ok(JSON.stringify(sent).includes('Master degree'));}finally{globalThis.GM_xmlhttpRequest=undefined;}
+});
+
+for(const labels of [['January','February'],['01','02']]) test(`Greenhouse harvests and matches month choices ${labels.join('/')}`,async()=>{
+  boot('<form id="application_form"><div class="education--container"><div class="education--form"><div class="field"><label for="start_month">Start month</label><input id="start_month" role="combobox" aria-controls="choices"><div id="choices" role="listbox" hidden></div></div></div></div></form>');
+  saveProfile({...getProfile(),education:[{id:'education',institution:'University',startDate:'2023-02'}]});
+  await detectAdapter().prepareSections(document,getProfile());
+  const input=document.querySelector('input'),menu=document.querySelector('#choices');
+  const render=()=>{menu.hidden=false;menu.innerHTML=labels.filter(label=>label.includes(input.value)).map(label=>`<div role="option">${label}</div>`).join('');};
+  input.onclick=render;input.oninput=render;
+  const [field]=scanFormFields();await harvestComboboxOptions([field]);
+  assert.deepEqual(field.options.map(option=>option.label),labels);
+  assert.equal(detectAdapter().resolveAnswer({...normalizeFieldsForAI([field])[0]},getProfile()).value,labels[1]);
+});
+
+for (const cancel of [false,true]) test(`embedded late degree discovery ${cancel?'honors Pause during refresh':'resolves the required equivalent choice'}`,async()=>{
+  boot('<main><h1>Job Application</h1><iframe></iframe></main>');
+  dom.reconfigure({url:'https://careers.example.com/jobs/1'});
+  const host=createGmHost(),commands=[];
+  let discovered=false,accepted=false,calls=0,paused=false;
+  const field=()=>({fieldId:'degree',label:'Highest degree',type:'combobox',required:true,options:discovered?[{value:'Bachelor degree',label:'Bachelor degree'}]:[],ats:{adapter:'ashby',canonicalKey:'highestDegree'}});
+  setPlatform({...host,capabilities:{...host.capabilities,crossFrame:true},framesList:async()=>[{frameId:1,isTop:false,fieldCount:1}],frameCommand:async(id,command)=>{
+    commands.push(command);
+    if(command.action==='stepState'){
+      if(cancel && discovered && !paused){paused=true;engine.pause();}
+      return {adapter:'ashby',pageType:'application',url:'https://jobs.ashbyhq.com/acme/1/application',signature:'degree-form',fieldCount:1,canSubmit:true,canContinue:false,errors:accepted?[]:[{fieldId:'degree',message:'Required degree'}]};
+    }
+    if(command.action==='scan')return {fields:[field()]};
+    if(command.action==='searchOptions'){discovered=true;return {fields:[field()]};}
+    if(command.action==='fill'){
+      accepted=command.answers[0].value==='Bachelor degree';
+      return {results:command.answers.map(answer=>({fieldId:answer.fieldId,status:accepted?'verified':'failed',value:answer.value}))};
+    }
+    return {results:[]};
+  }});
+  saveProfile({fullName:'Test Applicant',educationLevel:'Bachelor'});saveApiKey('fixture-key');saveSettings({autoContinue:false,autoSubmit:false});
+  globalThis.GM_xmlhttpRequest=request=>{calls++;request.onload({status:200,responseText:JSON.stringify({choices:[{message:{content:JSON.stringify({answers:[{fieldId:'jcf1::degree',value:'Bachelor degree'}]})}}]})});};
+  const engine=createApplicationEngine({settleMs:0});
+  try {
+    await engine.start();
+    assert.equal(calls,cancel?0:1);assert.equal(accepted,!cancel);
+    assert.equal(commands.filter(command=>command.action==='searchOptions').length,1);
+    assert.equal(engine.session.reason,cancel?'Paused by user.':'Embedded page filled. Review the application before proceeding.');
+  } finally {engine.destroy();globalThis.GM_xmlhttpRequest=undefined;}
+});
+
+test('generic native radios with duplicate HTML values fill and rescan the saved choice',async()=>{
+  boot('<fieldset><legend>Preferred schedule</legend><label><input type="radio" name="schedule">Morning</label><label><input type="radio" name="schedule">Evening</label></fieldset>');
+  dom.reconfigure({url:'https://example.com/jobs/1/apply'});
+  saveProfile({...getProfile(),savedAnswers:{'Preferred schedule':'Evening'}});
+  const [field]=scanFormFields();
+  const response=await generateAutofillAnswers(normalizeFieldsForAI([field]));
+  assert.equal(await fillField(field,response.answers[0].value),true);
+  assert.equal((await verifyField(field,response.answers[0].value)).verified,true);
+  assert.equal(scanFormFields()[0].currentValue,'Evening');
+});
+
+test('captured 1Password radios retain distinct answers despite default HTML values', async () => {
+  boot(readFileSync('fixtures/ashby-1password-2026-10-02-captured.html','utf8'),'ashby');
+  const field=scanFormFields().find(field=>field.label.includes('Size of company'));
+  assert.equal(field.options.length,5);
+  assert.equal(new Set(field.options.map(option=>option.value)).size,5);
+  assert.equal(await fillField(field,'101-999'),true);
+  assert.equal((await verifyField(field,'101-999')).verified,true);
+  assert.equal(scanFormFields().find(item=>item.id===field.id).currentValue,'101-999');
+});
+
+test('Ashby checkbox disclosures select only the requested answer with duplicate on values', async () => {
+  boot('<form data-ashby-root><fieldset><legend>Disability status</legend><label><input type="checkbox" name="disability">Yes</label><label><input type="checkbox" name="disability">No</label><label><input type="checkbox" name="disability">Prefer not to say</label></fieldset></form>','ashby');
+  saveProfile({...getProfile(),disabilityStatus:'No'});
+  const [field]=scanFormFields();
+  const response=await generateAutofillAnswers(normalizeFieldsForAI([field]));
+  assert.equal(response.answers[0].value,'No');
+  assert.equal(await fillField(field,response.answers[0].value),true);
+  assert.deepEqual([...document.querySelectorAll('input')].map(input=>input.checked),[false,true,false]);
+  assert.equal((await verifyField(field,response.answers[0].value)).verified,true);
+});
+
+test('captured Ashby multi-checkbox questions retain their title and owned choices', async () => {
+  boot(readFileSync('fixtures/ashby-1password-2026-10-02-captured.html','utf8'),'ashby');
+  const fields=scanFormFields();
+  const languages=fields.find(field=>field.label.includes('lanugages'));
+  assert.equal(languages?.widget,'ats-choice');
+  assert.equal(languages.ats.multiple,true);
+  assert.equal(languages.options.length,8);
+  const values=languages.options.slice(0,2).map(option=>option.value);
+  assert.equal(await fillField(languages,values),true);
+  assert.equal(languages.elements.filter(element=>element.checked).length,2);
+  assert.equal((await verifyField(languages,values)).verified,true);
+  assert.equal(fields.filter(field=>field.type==='checkbox' && languages.elements.includes(field.element)).length,0);
+  const consent=document.querySelectorAll('.ashby-application-form-input-checkbox-group')[2].querySelector('input');
+  assert.ok(fields.some(field=>field.type==='checkbox' && field.element===consent));
+});
 
 for (const ats of ['greenhouse', 'ashby']) {
   test(`${ats} resolves canonical names and contact fields without an API key`, async () => {
@@ -252,6 +395,31 @@ test('embedded submission countdown cancellation prevents submit', async () => {
   const {engine,commands}=embeddedHost({cancel:true});
   try {await engine.start();assert.equal(engine.session.status,'paused');assert.equal(commands.some(c=>c.action==='fill'),true);assert.equal(commands.some(c=>c.action==='submit'),false);}
   finally {engine.destroy();}
+});
+
+test('destroying the parent cancels an in-progress fill in the actual embedded field agent', async () => {
+  boot('<main><h1>Job Application</h1><iframe></iframe></main>');
+  dom.reconfigure({url:'https://careers.example.com/jobs/1'});
+  const bundle=await build({stdin:{contents:"import {createFieldAgent} from './src/core/agent.js'; window.fixtureAgent=createFieldAgent();",resolveDir:process.cwd()},bundle:true,format:'iife',write:false});
+  const frame=new JSDOM('<h1>Job Application</h1><form id="application_form"><label for="first_name">First name</label><input id="first_name" required><label for="email">Email</label><input id="email" type="email" required></form>',{url:'https://job-boards.greenhouse.io/acme/jobs/1',runScripts:'dangerously',pretendToBeVisual:true});
+  frame.window.CSS={escape:value=>value};
+  frame.window.HTMLElement.prototype.scrollIntoView=()=>{};
+  Object.defineProperty(frame.window.HTMLElement.prototype,'offsetWidth',{get:()=>200});
+  frame.window.GM_getValue=(key,fallback)=>key==='kr:profile'?getProfile():fallback;
+  frame.window.GM_setValue=()=>{};
+  frame.window.eval(bundle.outputFiles[0].text);
+  const commands=[],host=createGmHost();
+  setPlatform({...host,capabilities:{...host.capabilities,crossFrame:true},framesList:async()=>[{frameId:1,isTop:false,fieldCount:2}],frameCommand:async(id,command)=>{commands.push(command.action);return frame.window.fixtureAgent.handle(command);}});
+  saveSettings({autoContinue:true,autoSubmit:true});
+  const engine=createApplicationEngine({settleMs:0,transitionMs:0,submitCountdownMs:0});
+  frame.window.document.querySelector('#first_name').addEventListener('input',()=>engine.destroy(),{once:true});
+  try {
+    await engine.start();
+    assert.equal(frame.window.document.querySelector('#first_name').value,'Test');
+    assert.equal(frame.window.document.querySelector('#email').value,'');
+    assert.ok(commands.includes('cancel'));
+    assert.equal(commands.includes('submit'),false);
+  } finally {engine.destroy();frame.window.close();}
 });
 
 test('embedded submission continues when attestation text appears in the host',async()=>{
@@ -484,3 +652,27 @@ test('Greenhouse genuinely competing partial roles stop before Add or mutation',
   await assert.rejects(createFieldAgent().handle({action:'scan'}),/ambiguous workExperiences/);
   assert.equal(adds,0);assert.equal(document.querySelector('.employment label:nth-child(2) input').value,'');
 });
+
+for (const suffix of ['05-29', '05-31', '05-36']) {
+  test(`captured Ashby ${suffix} keeps phone and texting consent as separate questions`, async () => {
+    boot(readFileSync(new URL(`../../fixtures/jobs.ashbyhq.com-2026-10-07-${suffix}.html`, import.meta.url), 'utf8'), 'ashby');
+    const fields = scanFormFields();
+    assertUniqueFields(fields);
+    const phone = fields.find(field => field.type === 'tel');
+    assert.equal(phone.ats.canonicalKey, 'phone');
+    const consent = fields.find(field => field.elements?.some(element => element.name === 'communicationConsent'));
+    if (suffix === '05-36') { assert.equal(consent, undefined); return; }
+    assert.notEqual(consent.id, phone.id);
+    assert.equal(consent.ats.canonicalKey, '');
+    assert.match(consent.label, /receive text message updates/i);
+    assert.equal(consent.required, false);
+    assert.equal(detectAdapter().profileValue(consent, getProfile()), undefined);
+    await fillField(phone, '+14165550199');
+    await fillField(consent, 'notGiven');
+    assert.equal((await verifyField(phone, '+14165550199')).verified, true);
+    assert.equal((await verifyField(consent, 'notGiven')).verified, true);
+    const rescanned = scanFormFields();
+    assert.equal(rescanned.find(field => field.id === phone.id).type, 'tel');
+    assert.equal(rescanned.find(field => field.id === consent.id).currentValue, 'notGiven');
+  });
+}

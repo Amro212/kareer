@@ -35,6 +35,159 @@ const job = () => ({ title: 'Engineer', company: 'Example', listingUrl: 'https:/
 
 const workflowAnswers = async fields => ({ answers: fields.map(f => ({ fieldId: f.fieldId, value: 'Applicant' })) });
 
+test('an unresolved required canonical answer receives bounded contextual repair',async()=>{
+  dom.reconfigure({url:'https://jobs.ashbyhq.com/acme/1/application'});
+  render('<h1>Job Application</h1><form data-ashby-root>'+input('email','Email')+'</form>');
+  saveSettings({autoContinue:false});
+  let calls=0;
+  const engine=createApplicationEngine({settleMs:0,answer:async fields=>{
+    calls++;
+    return {answers:fields.map(field=>({fieldId:field.fieldId,value:calls===1?'':'test@example.com',source:'ai',inferred:true}))};
+  }});
+  try {
+    await engine.start();
+    assert.equal(calls,2);
+    assert.equal(document.querySelector('#email').value,'test@example.com');
+    assert.equal(engine.session.reason,'Page filled. Auto Continue is off.');
+  } finally {engine.destroy();}
+});
+
+test('destroy during initialization does not restore a session or register observers', async () => {
+  render('<h1>Job Application</h1>' + input());
+  let emissions = 0;
+  const engine = createApplicationEngine({ onChange: () => emissions++ });
+  const initializing = engine.initialize();
+  engine.destroy();
+  await initializing;
+  assert.equal(engine.session, null);
+  assert.equal(emissions, 0);
+});
+
+test('destroy during a request discards queued job context and late emissions', async () => {
+  render('<h1>Engineer A</h1>' + input() + '<button>Continue</button>');
+  let release, emissions = 0;
+  const engine = createApplicationEngine({ settleMs: 0, answer: () => new Promise(resolve => { release = resolve; }), onChange: () => emissions++ });
+  const pending = engine.start(captureJob());
+  while (!release) await new Promise(resolve => setTimeout(resolve, 1));
+  const oldId = engine.session.id;
+  engine.updateJob({ ...engine.session.job, title: 'Engineer B' });
+  engine.destroy();
+  const count = emissions;
+  release({ answers: [{ fieldId: 'name', value: 'Late answer' }] });
+  await pending;
+  assert.equal(engine.session.id, oldId);
+  assert.equal(emissions, count);
+  assert.equal(gmGet('kr:sessions').length, 1);
+});
+
+test('queued automatic capture preserves a restored same-application POST redirect', async () => {
+  const old = createSession({ ...job(), applicationUrl: 'https://example.com/apply/42/step1', workCountry: 'Canada', workCountries: ['Canada'] });
+  old.active = true;
+  old.pendingUrl = old.job.applicationUrl;
+  old.pendingAt = Date.now();
+  saveSession(old);
+  globalThis.GM_getTab = callback => callback({ kareerSession: old.id });
+  dom.reconfigure({ url: 'https://example.com/apply/42/step2' });
+  render('<h1>Application · Experience</h1>' + input());
+  const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0 });
+  try {
+    const pending = engine.initialize();
+    engine.updateJob(captureJob());
+    await pending;
+    engine.updateJob(captureJob());
+    assert.equal(engine.session.id, old.id);
+    assert.equal(engine.session.job.title, 'Engineer');
+    assert.equal(engine.session.job.workCountry, 'Canada');
+  } finally { engine.destroy(); }
+});
+
+test('capture queued during initialization replaces stale same-URL job context', async () => {
+  const old = createSession({ ...job(), title: 'Engineer A', listingUrl: window.location.href, workCountry: 'United States' });
+  render('<h1>Engineer B</h1><div class="job__location">Canada</div>' + input());
+  const captured = captureJob();
+  const engine = createApplicationEngine();
+  try {
+    const initializing = engine.initialize();
+    engine.updateJob(captured);
+    await initializing;
+    assert.equal(engine.session.job.title, 'Engineer B');
+    assert.equal(engine.session.job.workCountry, 'Canada');
+    assert.notEqual(engine.session.id, old.id);
+    assert.equal(document.querySelector('#name').value, '');
+  } finally { engine.destroy(); }
+});
+
+test('a different job clears a paused workflow while a genuine step heading preserves it', async () => {
+  render('<h1>Engineer A</h1>' + input() + '<button>Continue</button>');
+  saveSettings({ autoContinue: false });
+  const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0 });
+  try {
+    await engine.start(captureJob());
+    const oldId = engine.session.id;
+    assert.equal(engine.stepReview, true);
+    render('<h1>My Information</h1>' + input() + '<button>Continue</button>');
+    engine.updateJob(captureJob());
+    assert.equal(engine.session.id, oldId);
+    assert.equal(engine.session.job.title, 'Engineer A');
+    render('<h1>Engineer B</h1>' + input() + '<button>Continue</button>');
+    engine.updateJob(captureJob());
+    assert.notEqual(engine.session.id, oldId);
+    assert.equal(engine.session.job.title, 'Engineer B');
+    assert.deepEqual(engine.session.answers, {});
+    assert.equal(engine.stepReview, false);
+  } finally { engine.destroy(); }
+});
+
+test('review-route recapture preserves the completed application session', async () => {
+  render('<h1>Engineer</h1>' + input() + '<button>Continue</button>');
+  document.querySelector('button').onclick = () => {
+    window.history.replaceState({}, '', '/jobs/42/review');
+    render('<h1>Review application</h1><button>Submit application</button>');
+  };
+  const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0 });
+  try {
+    await engine.start(captureJob());
+    const id = engine.session.id;
+    assert.equal(engine.session.status, 'review');
+    engine.updateJob(captureJob());
+    assert.equal(engine.session.id, id);
+    assert.equal(engine.session.status, 'review');
+    assert.equal(engine.session.completedSteps, 1);
+  } finally { engine.destroy(); }
+});
+
+for (const directReview of [false, true]) {
+  for (const separateUrl of [false, true]) {
+    test(`confirmation recapture preserves submission (${directReview ? 'direct review' : 'filled form'}, ${separateUrl ? 'new URL' : 'same URL'})`, async () => {
+      saveSettings({ autoContinue: true, autoSubmit: true });
+      const review = () => {
+        if (separateUrl) window.history.replaceState({}, '', '/jobs/42/review');
+        render('<h1>Review application</h1><button>Submit application</button>');
+        document.querySelector('button').onclick = () => {
+          if (separateUrl) window.history.replaceState({}, '', '/jobs/42/confirmation');
+          render('<h1>Application submitted</h1>');
+        };
+      };
+      if (directReview) review();
+      else {
+        render('<h1>Engineer</h1>' + input() + '<button>Continue</button>');
+        document.querySelector('button').onclick = review;
+      }
+      const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0, submitCountdownMs: 0 });
+      try {
+        await engine.start(captureJob());
+        const id = engine.session.id;
+        assert.equal(engine.session.status, 'confirmation');
+        engine.updateJob(captureJob());
+        assert.equal(engine.session.id, id);
+        assert.equal(engine.session.status, 'confirmation');
+        assert.equal(engine.session.submits, 1);
+        assert.equal(engine.session.completedSteps, directReview ? 0 : 1);
+      } finally { engine.destroy(); }
+    });
+  }
+}
+
 for (const workday of [false, true]) {
   test(`continuation preserves review edits with overwrite enabled (${workday ? 'Workday' : 'generic'})`, async () => {
     saveSettings({ autoContinue: false, overwriteExisting: true });
@@ -257,7 +410,7 @@ test('markerless conditional fields stay on one step', async () => {
   } finally { engine.destroy(); }
 });
 
-test('legacy workflow sessions require recapture without replaying uncertain answers', async () => {
+test('legacy workflow sessions get fresh automatic context without replaying uncertain answers', async () => {
   render(`${input()}<button>Continue</button>`);
   const legacy = createSession(job());
   delete legacy.identityVersion;
@@ -269,10 +422,13 @@ test('legacy workflow sessions require recapture without replaying uncertain ans
   const engine = createApplicationEngine({ answer: async fields => { requests++; return workflowAnswers(fields); } });
   try {
     await engine.initialize();
-    await engine.start();
     assert.equal(requests, 0);
-    assert.equal(engine.session.status, 'paused');
-    assert.match(engine.session.reason, /capture job/i);
+    assert.notEqual(engine.session.id, legacy.id);
+    assert.equal(engine.session.identityVersion, 2);
+    assert.equal(engine.session.status, 'idle');
+    assert.equal(engine.session.active, false);
+    assert.deepEqual(engine.session.history, []);
+    assert.equal(document.querySelector('#name').value, '');
   } finally { engine.destroy(); }
 });
 
@@ -388,16 +544,21 @@ test('baseline disabled controls do not prevent filling actionable questions', a
   } finally { engine.destroy(); }
 });
 
-test('duplicate field IDs revealed during filling prevent further writes and Continue', async () => {
+test('duplicate HTML IDs revealed during filling receive distinct answers without pausing', async () => {
   render(`<h2>My Information</h2>${input('city', 'City')}${input('postal', 'Postal Code')}<button>Continue</button>`);
-  document.querySelector('#city').oninput = () => document.querySelector('button').insertAdjacentHTML('beforebegin', '<input id="postal">');
+  document.querySelector('#city').oninput = () => {
+    document.querySelector('#city').oninput = null;
+    document.querySelector('button').insertAdjacentHTML('beforebegin', '<label>Alternate postal code<input id="postal"></label>');
+  };
+  saveSettings({ autoContinue: false });
   let clicks = 0;
   document.querySelector('button').onclick = () => clicks++;
   const engine = createApplicationEngine({ settleMs: 0, transitionMs: 0, answer: workflowAnswers });
   try {
     await engine.start(job());
-    assert.match(engine.session.reason, /duplicate field IDs/);
-    assert.equal(document.querySelector('#postal').value, '');
+    assert.equal(engine.session.reason, 'Page filled. Auto Continue is off.');
+    assert.deepEqual([...document.querySelectorAll('[id=postal]')].map(input => input.value), ['Applicant', 'Applicant']);
+    assert.equal(new Set(scanFormFields().map(field => field.id)).size, 3);
     assert.equal(clicks, 0);
   } finally { engine.destroy(); }
 });
@@ -1275,3 +1436,106 @@ test('Workday with autoContinue disabled advances past both review gates on a si
   }
 });
 
+test('engine.reset resets request limit and clears session errors so autofill can run again', async () => {
+  render(`<h2>My Information</h2>${input('field1', 'Question 1')}<button>Continue</button>`);
+  let requests = 0;
+  const engine = createApplicationEngine({
+    settleMs: 0,
+    transitionMs: 0,
+    answer: async () => {
+      requests++;
+      throw new Error('AI timeout');
+    },
+  });
+  try {
+    await engine.start(job());
+    const step = engine.session.steps[engine.session.currentStep];
+    assert.equal(step.requests, 1);
+    await engine.start();
+    assert.equal(step.requests, 2);
+    await engine.start();
+    assert.match(engine.session.reason, /Primary request limit reached/);
+
+    engine.reset();
+    assert.equal(step.requests, 0);
+    assert.equal(step.primary, false);
+    assert.equal(engine.session.status, 'idle');
+    assert.equal(engine.session.reason, '');
+
+    await engine.start();
+    assert.equal(step.requests, 1);
+  } finally {
+    engine.destroy();
+  }
+});
+
+
+test('Workday button dropdowns classify as an application rather than the retained job listing', () => {
+  dom.reconfigure({url:'https://ciena.wd5.myworkdayjobs.com/job/apply'});
+  render('<h2>Application Questions 1 of 2</h2><p>About the role</p><script type="application/ld+json">{"@type":"JobPosting"}</script><label id="question-label">Graduation date</label><button data-automation-id="selectWidget" aria-haspopup="listbox" aria-labelledby="question-label">Select One</button><button data-automation-id="bottom-navigation-next-button">Save and Continue</button>');
+  assert.equal(scanFormFields().length,1);
+  assert.equal(classifyPage().type,'application');
+});
+
+test('restored disabled empty questions do not block actionable fields on Resume', async () => {
+  dom.reconfigure({url:'https://boards.greenhouse.io/acme/jobs/42'});
+  render('<h2>Application</h2>'+input('email','Email')+'<label for="consent">Consent</label><input id="consent" type="checkbox" disabled>');
+  saveSettings({autoContinue:false});
+  const engine=createApplicationEngine({settleMs:0,navigationTimeoutMs:40,answer:workflowAnswers});
+  try {
+    await engine.start(job());
+    document.querySelector('#email').value='';
+    const field=scanFormFields().find(f=>f.id==='consent');
+    const {questionIdentity}=await import('../../src/core/navigation.js');
+    engine.session.steps[engine.session.currentStep].questions.consent=questionIdentity(field);
+    await engine.start();
+    assert.equal(document.querySelector('#email').value,'Applicant');
+    assert.equal(engine.session.reason,'Page filled. Auto Continue is off.');
+  } finally {engine.destroy();}
+});
+
+test('unrelated aria-busy region does not stop the application workflow', async () => {
+  render('<aside aria-busy="true">Loading recommendations</aside><h2>Application</h2>'+input());
+  saveSettings({autoContinue:false});
+  const engine=createApplicationEngine({settleMs:0,navigationTimeoutMs:40,answer:workflowAnswers});
+  try {await engine.start(job());assert.equal(document.querySelector('#name').value,'Applicant');}
+  finally {engine.destroy();}
+});
+
+test('Resume retries a failed primary request after its automatic budget was exhausted', async () => {
+  render('<h2>Application</h2>'+input());
+  saveSettings({autoContinue:false});
+  let calls=0;
+  const engine=createApplicationEngine({settleMs:0,answer:async fields=>{calls++;if(calls<=2)throw new Error('Provider unavailable');return workflowAnswers(fields);}});
+  try {
+    await engine.start(job());await engine.start();await engine.start();
+    assert.match(engine.session.reason,/Primary request limit/);
+    await engine.start();
+    assert.equal(calls,3);assert.equal(document.querySelector('#name').value,'Applicant');
+    assert.equal(engine.session.steps[engine.session.currentStep].requests,1);
+    assert.equal(engine.session.steps[engine.session.currentStep].repairs,0);
+  } finally {engine.destroy();}
+});
+
+test('Workday header language picker does not classify its entry screen as application fields', () => {
+  dom.reconfigure({url:'https://ciena.wd5.myworkdayjobs.com/job/apply'});
+  render('<header><button data-automation-id="utilityMenuButton" aria-haspopup="listbox">English</button></header><h1>Sign in</h1>');
+  assert.equal(classifyPage().type,'unrelated');
+});
+
+test('rescan reset clears step review so Autofill cannot accidentally advance the page',async()=>{
+  render('<h2>Application</h2>'+input());saveSettings({autoContinue:false});
+  const engine=createApplicationEngine({settleMs:0,answer:workflowAnswers});
+  try {
+    await engine.start(job());assert.equal(engine.stepReview,true);
+    engine.reset();
+    assert.equal(engine.stepReview,false);assert.equal(engine.session.active,false);
+  } finally {engine.destroy();}
+});
+
+test('captured Ciena questions classify as an application and retain four distinct button questions', async () => {
+  dom.reconfigure({url:'https://ciena.wd5.myworkdayjobs.com/en-US/Careers/job/Ottawa/Embedded-Software-Engineer---New-Grad_R031571/apply'});
+  document.body.innerHTML=await readFile(new URL('../../fixtures/ciena.wd5.myworkdayjobs.com-2026-10-07-03-13.html',import.meta.url),'utf8');
+  assert.equal(scanFormFields().length,4);
+  assert.equal(classifyPage().type,'application');
+});

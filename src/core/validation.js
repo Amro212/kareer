@@ -19,7 +19,10 @@ export function inspectValidation(fields, control = null, doc = document) {
     if ((!isVisible(el) && !(field.type === 'file' && isVisible(el.parentElement))) || el.disabled) continue;
     const ids = `${el.getAttribute('aria-errormessage') || ''} ${el.getAttribute('aria-describedby') || ''}`.trim().split(/\s+/);
     const nodes = ids.map(id => doc.getElementById(id)).filter(node => node && isVisible(node));
-    const invalid = el.getAttribute('aria-invalid') === 'true' || el.validity?.valid === false;
+    // ATS widgets can persist an attachment then clear the required native input.
+    // Acceptance replaces valueMissing only; explicit rejection still wins.
+    const acceptedUpload = field.type === 'file' && detectAdapter().uploadState?.(el)?.accepted;
+    const invalid = el.getAttribute('aria-invalid') === 'true' || el.validity?.valid === false && !(acceptedUpload && el.validity.valueMissing && !el.validity.customError);
     const missing = field.required && (field.widget ? field.ats?.multiple ? !detectAdapter().readChoice?.(field)?.length : detectAdapter().readChoice?.(field)?.length !== 1 : field.type === 'checkbox' ? !el.checked : field.type === 'radio' ? !(field.elements || [el]).some(r => r.checked) : !String(field.currentValue ?? '').trim());
     const messages = nodes.filter(node => invalid || isErrorMessage(node));
     messages.forEach(node => owned.add(node));

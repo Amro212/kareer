@@ -4,6 +4,17 @@ import { build } from 'esbuild';
 import { JSDOM } from 'jsdom';
 import { summarizeFieldResults } from '../../src/core/ui.js';
 
+test('panel hides historical required-field errors when its current FAILED count is zero',async()=>{
+  const bundle=await build({entryPoints:['src/targets/userscript/entry.js'],bundle:true,format:'iife',write:false});
+  const url='https://job-boards.greenhouse.io/acme/jobs/1';
+  const dom=new JSDOM('<h1>Engineer</h1><form id="application_form"><label for="email">Email</label><input id="email" type="email"></form>',{url,runScripts:'dangerously',pretendToBeVisual:true});
+  const session={id:'old-errors',identityVersion:2,currentUrl:url,job:{listingUrl:url,title:'Engineer'},status:'paused',reason:'No Next or Continue button found. Continue manually.',active:false,steps:{},answers:{},history:[],errors:[{fieldId:'removed',message:'Required value missing or rejected.'}]};
+  const storage=new Map([['kr:sessions',['old-errors']],['kr:sessions:old-errors',session],['kr:profile',{fullName:'Test Applicant',email:'test@example.com'}]]);
+  dom.window.GM_getValue=(key,fallback)=>storage.get(key)??fallback;dom.window.GM_setValue=(key,value)=>storage.set(key,structuredClone(value));dom.window.CSS={escape:value=>value};
+  Object.defineProperty(dom.window.HTMLElement.prototype,'offsetWidth',{get:()=>200});
+  try{dom.window.eval(bundle.outputFiles[0].text);await new Promise(resolve=>setTimeout(resolve,250));const root=dom.window.document.querySelector('#kareer-root').shadowRoot;root.querySelector('#kr-pebble-toggle-btn')?.click();root.querySelector('#kr-toggle-btn').click();assert.ok(root.textContent.includes('0 FAILED'));assert.equal(root.textContent.includes('Required value missing or rejected.'),false);}finally{dom.window.close();}
+});
+
 test('field report uses current detected fields as its single source of truth', () => {
   const fields = [
     { id: 'verified' },
@@ -94,6 +105,7 @@ test('panel autofill keeps field/source diagnostics without persisting applicant
     dom.window.eval(bundle.outputFiles[0].text);
     await new Promise(resolve => setTimeout(resolve, 30));
     const root = dom.window.document.querySelector('#kareer-root').shadowRoot;
+    root.querySelector('#kr-pebble-toggle-btn')?.click();
     root.querySelector('#kr-toggle-btn').click();
     root.querySelector('#kr-autofill-btn').click();
     for (let i = 0; i < 50 && !documentFilled(); i++) await new Promise(resolve => setTimeout(resolve, 100));
@@ -106,9 +118,136 @@ test('panel autofill keeps field/source diagnostics without persisting applicant
   } finally { dom.window.close(); }
 });
 
+test('an early Auto Submit click discovers embedded fields before the panel inspection finishes', async () => {
+  const bundle = await build({ stdin: { contents: `
+    import { createGmHost } from './src/core/hosts/gm.js';
+    import { setPlatform } from './src/core/platform.js';
+    import { bootstrapWhenReady } from './src/core/main.js';
+    const host = createGmHost();
+    setPlatform({ ...host, capabilities: { ...host.capabilities, crossFrame: true },
+      framesList: async () => [{ frameId: 1, isTop: false, fieldCount: 1, url: 'https://boards.greenhouse.io/embed/job_app?token=42' }],
+      frameCommand: async (id, command) => {
+        if (command.action === 'inspect') { await new Promise(resolve => setTimeout(resolve, 700)); return { fields: [] }; }
+        if (command.action === 'scan') { window.scanCalls++; return { fields: [{ fieldId: 'email', label: 'Email', type: 'email', options: [] }] }; }
+        if (command.action === 'fill') return { results: command.answers.map(a => ({ ...a, status: 'verified' })) };
+        return { fields: [], results: [] };
+      },
+    });
+    bootstrapWhenReady();
+  `, resolveDir: process.cwd() }, bundle: true, format: 'iife', write: false });
+  const dom = new JSDOM('<title>Job Application</title><body><h1>Engineer</h1><iframe src="https://boards.greenhouse.io/embed/job_app?token=42"></iframe></body>', { url: 'https://example.com/jobs/42', runScripts: 'dangerously', pretendToBeVisual: true });
+  const storage = new Map([['kr:profile', { fullName: 'Test Applicant', email: 'test@example.com' }], ['kr:settings', { autoSubmit: true }], ['kr:secrets', { apiKey: 'test-key' }]]);
+  dom.window.GM_getValue = (key, fallback) => storage.get(key) ?? fallback;
+  dom.window.GM_setValue = (key, value) => storage.set(key, structuredClone(value));
+  dom.window.CSS = { escape: value => value };
+  dom.window.scanCalls = 0;
+  try {
+    dom.window.eval(bundle.outputFiles[0].text);
+    await new Promise(resolve => setTimeout(resolve, 40));
+    const root = dom.window.document.querySelector('#kareer-root').shadowRoot;
+    root.querySelector('#kr-pebble-toggle-btn').click();
+    root.querySelector('#kr-toggle-btn').click();
+    root.querySelector('#kr-autofill-btn').click();
+    for (let i = 0; i < 30 && !dom.window.scanCalls; i++) await new Promise(resolve => setTimeout(resolve, 40));
+    assert.ok(dom.window.scanCalls > 0, 'early click must scan the announced frame');
+  } finally { dom.window.close(); }
+});
+
+test('leaving a job page cancels a pending standalone response before remount', async () => {
+  const bundle = await build({ entryPoints: ['src/targets/userscript/entry.js'], bundle: true, format: 'iife', write: false });
+  const dom = new JSDOM('<title>Job Application</title><body><h1>Job Application</h1><form><label for="why">Why this role?</label><textarea id="why" required></textarea></form></body>', { url: 'https://example.com/jobs/42', runScripts: 'dangerously', pretendToBeVisual: true });
+  const storage = new Map([['kr:profile', { fullName: 'Test Applicant', email: 'test@example.com' }], ['kr:secrets', { apiKey: 'test-key' }]]);
+  let request;
+  dom.window.GM_getValue = (key, fallback) => storage.get(key) ?? fallback;
+  dom.window.GM_setValue = (key, value) => storage.set(key, structuredClone(value));
+  dom.window.GM_xmlhttpRequest = options => { request = options; };
+  dom.window.CSS = { escape: value => value };
+  Object.defineProperty(dom.window.HTMLElement.prototype, 'offsetWidth', { get: () => 200 });
+  dom.window.HTMLElement.prototype.scrollIntoView = () => {};
+  try {
+    dom.window.eval(bundle.outputFiles[0].text);
+    await new Promise(resolve => setTimeout(resolve, 40));
+    let root = dom.window.document.querySelector('#kareer-root').shadowRoot;
+    root.querySelector('#kr-pebble-toggle-btn').click(); root.querySelector('#kr-toggle-btn').click(); root.querySelector('#kr-autofill-btn').click();
+    for (let i = 0; i < 40 && !request; i++) await new Promise(resolve => setTimeout(resolve, 30));
+    assert.ok(request);
+    dom.window.document.title = 'Videos';
+    dom.window.document.querySelector('h1').textContent = 'Videos';
+    dom.window.document.querySelector('form').remove();
+    await new Promise(resolve => setTimeout(resolve, 400));
+    assert.equal(dom.window.document.querySelector('#kareer-root'), null);
+    dom.window.document.querySelector('h1').textContent = 'Job Application';
+    const form = dom.window.document.createElement('form');
+    form.innerHTML = '<label for="why">Why this new role?</label><textarea id="why" required></textarea>';
+    dom.window.document.body.append(form);
+    await new Promise(resolve => setTimeout(resolve, 400));
+    root = dom.window.document.querySelector('#kareer-root').shadowRoot;
+    root.querySelector('#kr-pebble-toggle-btn').click(); root.querySelector('#kr-toggle-btn').click();
+    assert.equal(root.querySelector('#kr-autofill-btn').disabled, false);
+    request.onload({ status: 200, responseText: JSON.stringify({ choices: [{ message: { content: JSON.stringify({ answers: [{ fieldId: 'why', value: 'Old job answer' }] }) } }] }) });
+    await new Promise(resolve => setTimeout(resolve, 250));
+    assert.equal(dom.window.document.querySelector('#why').value, '');
+  } finally { dom.window.close(); }
+});
+
+for (const cancel of ['navigation', 'pause']) {
+  test(`pending embedded routing cannot start autofill after ${cancel}`, async () => {
+    const bundle = await build({ stdin: { contents: `
+      import { createGmHost } from './src/core/hosts/gm.js';
+      import { setPlatform } from './src/core/platform.js';
+      import { bootstrapWhenReady } from './src/core/main.js';
+      const host = createGmHost();
+      setPlatform({ ...host, capabilities: { ...host.capabilities, crossFrame: true },
+        framesList: async () => [{ frameId: 1, isTop: false, fieldCount: 1 }],
+        frameCommand: async (id, command) => {
+          if (command.action === 'stepState') {
+            if (!window.releaseRouting) await new Promise(resolve => window.releaseRouting = resolve);
+            return { adapter: 'ashby' };
+          }
+          return { fields: [], results: [] };
+        },
+      });
+      bootstrapWhenReady();
+    `, resolveDir: process.cwd() }, bundle: true, format: 'iife', write: false });
+    const html = '<title>Job Application</title><body><main data-ashby-root><h1>Engineer A</h1><form class="ashby-application-form"><label for="email">Email</label><input id="email" type="email" required></form></main></body>';
+    const dom = new JSDOM(html, {url:'https://example.com/jobs/a',runScripts:'dangerously',pretendToBeVisual:true});
+    const storage = new Map([['kr:profile',{fullName:'Test Applicant',email:'test@example.com'}],['kr:settings',{autoContinue:false}]]);
+    dom.window.GM_getValue=(key,fallback)=>storage.get(key) ?? fallback;
+    dom.window.GM_setValue=(key,value)=>storage.set(key,structuredClone(value));
+    dom.window.CSS={escape:value=>value};
+    Object.defineProperty(dom.window.HTMLElement.prototype,'offsetWidth',{get:()=>200});
+    dom.window.HTMLElement.prototype.scrollIntoView=()=>{};
+    try {
+      dom.window.eval(bundle.outputFiles[0].text);
+      await new Promise(resolve=>setTimeout(resolve,80));
+      let root=dom.window.document.querySelector('#kareer-root').shadowRoot;
+      root.querySelector('#kr-pebble-toggle-btn').click();root.querySelector('#kr-toggle-btn').click();root.querySelector('#kr-autofill-btn').click();
+      for(let i=0;i<30 && !dom.window.releaseRouting;i++) await new Promise(resolve=>setTimeout(resolve,20));
+      assert.ok(dom.window.releaseRouting);
+      if(cancel==='navigation') {
+        dom.window.document.title='Videos';
+        dom.window.document.body.innerHTML='<h1>Videos</h1>';
+        dom.window.history.pushState({},'', '/videos');
+        await new Promise(resolve=>setTimeout(resolve,350));
+        assert.equal(dom.window.document.querySelector('#kareer-root'),null);
+        dom.window.document.title='Job Application';
+        dom.window.document.body.innerHTML='<main data-ashby-root><h1>Engineer B</h1><form class="ashby-application-form"><label for="email">Email</label><input id="email" type="email" required></form></main>';
+        dom.window.history.pushState({},'', '/jobs/b');
+        await new Promise(resolve=>setTimeout(resolve,350));
+        assert.ok(dom.window.document.querySelector('#kareer-root'));
+      } else {
+        root.querySelector('#kr-pause-autofill-btn').onclick();
+      }
+      dom.window.releaseRouting();
+      await new Promise(resolve=>setTimeout(resolve,650));
+      assert.equal(dom.window.document.querySelector('#email').value,'');
+    } finally {dom.window.close();}
+  });
+}
+
 test('workflow shows verified completion count and retained structural diagnostic', async () => {
   const bundle = await build({ entryPoints: ['src/targets/userscript/entry.js'], bundle: true, format: 'iife', write: false });
-  const dom = new JSDOM('<body></body>', { url: 'https://example.com/apply', runScripts: 'dangerously' });
+  const dom = new JSDOM('<title>Job Application</title><body></body>', { url: 'https://example.com/apply', runScripts: 'dangerously' });
   const storage = new Map([
     ['kr:sessions', ['diagnostic']],
     ['kr:sessions:diagnostic', {
@@ -125,6 +264,7 @@ test('workflow shows verified completion count and retained structural diagnosti
     dom.window.eval(bundle.outputFiles[0].text);
     await new Promise(resolve => setTimeout(resolve, 30));
     const root = dom.window.document.querySelector('#kareer-root').shadowRoot;
+    root.querySelector('#kr-pebble-toggle-btn')?.click();
     root.querySelector('#kr-toggle-btn').click();
     assert.match(root.textContent, /1\s+step completed/);
     assert.equal(root.querySelector('[data-tab=review]'), null);
@@ -139,7 +279,7 @@ test('workflow shows verified completion count and retained structural diagnosti
 
 test('profile sections save and reload explicit answers while preserving legacy context', async () => {
   const bundle = await build({ entryPoints: ['src/targets/userscript/entry.js'], bundle: true, format: 'iife', write: false });
-  const dom = new JSDOM('<body></body>', { url: 'https://example.com/apply', runScripts: 'dangerously' });
+  const dom = new JSDOM('<title>Job Application</title><body></body>', { url: 'https://example.com/apply', runScripts: 'dangerously' });
   const storage = new Map([['kr:profile', { fullName: 'Test Applicant', resumeContext: 'Existing detailed resume', applicantNotes: 'Existing custom notes', futureField: 'preserve' }]]);
   dom.window.GM_getValue = (key, fallback) => storage.get(key) ?? fallback;
   dom.window.GM_setValue = (key, value) => storage.set(key, value);
@@ -150,6 +290,7 @@ test('profile sections save and reload explicit answers while preserving legacy 
     dom.window.eval(bundle.outputFiles[0].text);
     await new Promise(resolve => setTimeout(resolve, 30));
     const root = dom.window.document.querySelector('#kareer-root').shadowRoot;
+    root.querySelector('#kr-pebble-toggle-btn')?.click();
     root.querySelector('#kr-toggle-btn').click();
     root.querySelector('[data-tab=profile]').click();
     const values = { workCountry: 'Canada', workAuthorization: 'Yes', sponsorshipNow: 'No', sponsorshipFuture: 'Yes', workArrangement: 'Remote', willingToRelocate: 'No', travelAvailability: 'Up to 25%', startDate: '2026-10-01', noticePeriod: 'Two weeks', expectedSalary: '95000', salaryCurrency: 'CAD', salaryPeriod: 'Annual', educationLevel: "Bachelor's degree", yearsExperience: '3', languages: 'English, French', gender: 'Woman', pronouns: 'she/her', raceEthnicity: 'Prefer not to answer', disabilityStatus: 'Prefer not to answer', veteranStatus: 'No' };
@@ -187,8 +328,9 @@ test('bundled panel mounts once and captures a job using GM storage', async () =
     await new Promise(resolve => setTimeout(resolve, 30));
     const root = dom.window.document.querySelector('#kareer-root');
     assert.ok(root?.shadowRoot, 'Persistent Shadow DOM panel mounts');
+    root.shadowRoot.querySelector('#kr-pebble-toggle-btn').click();
     root.shadowRoot.querySelector('#kr-toggle-btn').click();
-    root.shadowRoot.querySelector('#kr-capture-job').click();
+    assert.equal(root.shadowRoot.querySelector('#kr-capture-job'), null);
     assert.match(root.shadowRoot.textContent, /Software Engineer/);
     assert.match(root.shadowRoot.textContent, /Company unknown \(uncertain\)/);
     assert.equal(storage.get('kr:job').applicationUrl, 'https://example.com/apply/42');
@@ -209,7 +351,7 @@ test('bundled panel mounts once and captures a job using GM storage', async () =
 
 test('settings export downloads portable backup without the API key', async () => {
   const bundle = await build({ entryPoints: ['src/targets/userscript/entry.js'], bundle: true, format: 'iife', write: false });
-  const dom = new JSDOM('<body></body>', { url: 'https://example.com/apply', runScripts: 'dangerously' });
+  const dom = new JSDOM('<title>Job Application</title><body></body>', { url: 'https://example.com/apply', runScripts: 'dangerously' });
   const storage = new Map();
   storage.set('kr:profile', { fullName: 'Export Me' });
   storage.set('kr:secrets', { apiKey: 'fixture-stored-secret' });
@@ -230,6 +372,7 @@ test('settings export downloads portable backup without the API key', async () =
     dom.window.eval(bundle.outputFiles[0].text);
     await new Promise((resolve) => setTimeout(resolve, 30));
     const root = dom.window.document.querySelector('#kareer-root').shadowRoot;
+    root.querySelector('#kr-pebble-toggle-btn')?.click();
     root.querySelector('#kr-toggle-btn').click();
     root.querySelector('[data-tab=settings]').click();
     assert.ok(root.querySelector('#kr-export-data'));
@@ -267,3 +410,25 @@ test('userscript yields when the extension panel root is already present', async
     dom.window.close();
   }
 });
+
+for (const scenario of ['current', 'pending', 'ambiguous', 'unrelated']) {
+  test(`userscript panel restores only matching generic application sessions (${scenario})`, async () => {
+    const bundle = await build({ entryPoints: ['src/targets/userscript/entry.js'], bundle: true, format: 'iife', write: false });
+    const url = 'https://example.com/applications/42/personal';
+    const title = scenario === 'unrelated' ? 'Videos' : 'Personal Information';
+    const dom = new JSDOM(`<title>${title}</title><h1>${title}</h1><form><label for="email">Email</label><input id="email" type="email"></form>`, { url, runScripts: 'dangerously', pretendToBeVisual: true });
+    const session = { id: 'job-42', identityVersion: 2, currentUrl: scenario === 'pending' ? url.replace('/personal', '/start') : url, pendingUrl: scenario === 'pending' ? url : '', job: { title: 'Engineer', listingUrl: url.replace('/personal', '/start'), applicationUrl: url }, history: [], steps: {}, answers: {}, errors: [], active: false, status: 'idle' };
+    const ids = scenario === 'ambiguous' ? ['job-42', 'job-43'] : ['job-42'];
+    const storage = new Map([['kr:sessions', ids], ['kr:sessions:job-42', session], ['kr:sessions:job-43', { ...session, id: 'job-43' }]]);
+    dom.window.GM_getValue = (key, fallback) => storage.get(key) ?? fallback;
+    dom.window.GM_setValue = (key, value) => storage.set(key, structuredClone(value));
+    dom.window.CSS = { escape: value => value };
+    try {
+      dom.window.eval(bundle.outputFiles[0].text);
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const root = dom.window.document.querySelector('#kareer-root');
+      assert.equal(Boolean(root), ['current', 'pending'].includes(scenario));
+      assert.deepEqual(storage.get('kr:sessions'), ids);
+    } finally { dom.window.close(); }
+  });
+}

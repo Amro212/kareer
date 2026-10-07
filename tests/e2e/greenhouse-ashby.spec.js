@@ -11,7 +11,7 @@ for(const [ats,host,query] of [['greenhouse',GREENHOUSE_HOST,'?select2'],['green
     await expect(page.locator('#first_name')).toHaveValue('Test');await expect(page.locator('#country')).toHaveValue('Canada');
     await expect(page.locator('.education')).toHaveCount(2);await expect(page.locator('.education input').nth(3)).toHaveValue('Master');
     expect(await page.locator('#cover_letter').evaluate(el=>el.files.length)).toBe(0);expect(kr.openrouter.requests).toHaveLength(0);
-    await page.reload();await kr.openPanel(page);await page.locator('#kr-capture-job').click();await page.locator('#kr-autofill-btn').click();
+    await page.reload();await kr.openPanel(page);await expect(page.locator('#kr-capture-job')).toHaveCount(0);await page.locator('#kr-autofill-btn').click();
     await expect(page.locator('.education')).toHaveCount(2);await expect(page.locator('.education input').nth(3)).toHaveValue('Master');expect(kr.openrouter.requests).toHaveLength(0);
   });
 }

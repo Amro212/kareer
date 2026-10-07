@@ -1,5 +1,5 @@
 import { captureJob, safeUrl } from './jobs.js';
-import { createSession, restoreSession, saveSession, bindTab } from './sessions.js';
+import { createSession, restoreSession, saveSession, bindTab, matchesSession } from './sessions.js';
 import { classifyPage, isVisible } from './pageClassifier.js';
 import { inspectValidation } from './validation.js';
 import { findContinue, inspectContinue, inspectSubmit, pageSignature, isDisabled, observePage, comparePages, workflowLabel, questionIdentity } from './navigation.js';
@@ -26,29 +26,61 @@ const shouldFill = field => detectAdapter().needsFill?.(field, getProfile()) ?? 
 const runnable = new Set(['running', 'captcha', 'waiting', 'submitting']);
 
 export function createApplicationEngine({ answer = generateAutofillAnswers, onChange = () => {}, settleMs = 180, transitionMs = 1200, navigationTimeoutMs = transitionMs === 0 ? 0 : 10000, submitCountdownMs = 5000 } = {}) {
-  let session = null, busy = false, generation = 0, timer = null, observer = null, interval = null, cancelDelay = null, unsubscribeNavigation = null;
+  let session = null, busy = false, generation = 0, timer = null, observer = null, interval = null, cancelDelay = null, unsubscribeNavigation = null, disposed = false;
   const delay = ms => new Promise(resolve => {
     let t = null;
     cancelDelay = () => { clearTimeout(t); cancelDelay = null; resolve(); };
     t = setTimeout(() => { cancelDelay = null; resolve(); }, ms);
   });
   const results = new Map();
+  let pendingJob = null;
   let lastEmission = '';
   let lastObservationLog = '';
+  function updateJob(job) {
+      if (disposed) return;
+      pendingJob = job;
+      if (!session || busy) return;
+      pendingJob = null;
+      if (JSON.stringify(session.job) === JSON.stringify(job)) return;
+      // Preserve the listing description across form-only application steps.
+      const previous = session.job;
+      if (job.applicationStep && previous?.title) job = { ...job, title: previous.title };
+      const samePage = Boolean(job.listingUrl && job.listingUrl === previous?.listingUrl || job.applicationUrl && job.applicationUrl === previous?.applicationUrl);
+      const differentJob = previous?.jobId && job.jobId && previous.jobId !== job.jobId || samePage && previous?.title && job.title && previous.title !== job.title;
+      if (differentJob || !matchesSession(session, window.location.href)) {
+        session = createSession(job);
+        results.clear();
+        emit();
+        return;
+      }
+      const hasLocation = Boolean(job.location || job.workCountries?.length);
+      session.job = samePage && !job.applicationStep ? job : { ...job,
+        title: previous?.title || job.title,
+        company: job.company || previous?.company,
+        location: job.location || previous?.location,
+        workCountries: hasLocation ? job.workCountries : previous?.workCountries,
+        workCountry: hasLocation ? job.workCountry : previous?.workCountry,
+        locationAmbiguous: hasLocation ? job.locationAmbiguous : previous?.locationAmbiguous,
+        description: previous?.description || job.description,
+      };
+      saveSession(session);
+      emit();
+  }
   function compatibleSession() {
     if (session.identityVersion === 2) return true;
-    status('paused', 'Step tracking was updated. Click Capture Job once to start a compatible session.');
+    status('paused', 'Step tracking was updated. Reload this job page to start a compatible session.');
     return false;
   }
   function completeStep() {
+    session.currentUrl = window.location.href;
     const step = session.steps[session.currentStep];
     if (step && !step.completed) {
       step.completed = true;
       session.completedSteps++;
       session.pendingStep = '';
       session.pendingUrl = '';
-      saveSession(session);
     }
+    saveSession(session);
   }
   function checkPage(snapshot, token, stage, fieldId) {
     if (!guard(token)) return false;
@@ -77,19 +109,15 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
   }
   async function settleFields(snapshot, token, stage = 'form settling', fieldId) {
     const deadline = Date.now() + navigationTimeoutMs;
-    let previous = '', stableSince = Date.now();
+    let previous = '', stableSince = Date.now(), loading = false, disabledFields = [];
     do {
       if (!guard(token)) return false;
       const fields = scanPageFields();
-      if (new Set(fields.map(f => f.id)).size !== fields.length) {
-        status('paused', 'Ambiguous duplicate field IDs. Fill this page manually.');
-        return false;
-      }
       const change = comparePages(snapshot, observePage(fields));
       if (change === 'changed') return checkPage(snapshot, token, stage, fieldId);
       const state = JSON.stringify(fields.map(f => [f.id, questionIdentity(f), f.element.disabled, f.element.readOnly]));
       if (state !== previous) { previous = state; stableSince = Date.now(); }
-      const loading = Array.from(document.querySelectorAll('[aria-busy="true"]')).some(isVisible);
+      loading = Array.from(document.querySelectorAll('[aria-busy="true"]')).some(node => isVisible(node) && fields.some(field => node.contains(field.element)));
       const questions = session.steps[session.currentStep]?.questions || {};
       if (fields.some(f => Object.hasOwn(questions, f.id) && questions[f.id] !== questionIdentity(f))) {
         checkPage(snapshot, token, stage, fieldId);
@@ -97,13 +125,19 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         status('paused', 'A question or its options changed. Inspect the page before resuming.');
         return false;
       }
-      const disabled = fields.some(f => f.element.disabled &&
-        (!snapshot.fields.find(old => old.id === f.id)?.disabled || Object.hasOwn(questions, f.id) && empty(f)));
-      if (change === 'same' && !loading && !disabled && Date.now() - stableSince >= Math.min(settleMs, 200)) return checkPage(snapshot, token, stage, fieldId);
+      // Disabled controls present at the start are not pending actions, including
+      // remembered consent questions. Newly disabled dependencies still settle.
+      disabledFields = fields.filter(f => f.element.disabled && !snapshot.fields.find(old => old.id === f.id)?.disabled);
+      if (change === 'same' && !loading && !disabledFields.length && Date.now() - stableSince >= Math.min(settleMs, 200)) return checkPage(snapshot, token, stage, fieldId);
       if (Date.now() >= deadline) break;
       await delay(Math.min(50, Math.max(1, deadline - Date.now())));
     } while (true);
-    if (checkPage(snapshot, token, stage, fieldId)) status('paused', 'Form fields are still changing or disabled. Inspect the page before resuming.');
+    if (checkPage(snapshot, token, stage, fieldId)) {
+      const cause = disabledFields.length ? `These fields became disabled: ${disabledFields.map(f => f.label || f.id).join(', ')}.`
+        : loading ? 'The application form still reports aria-busy=true.' : 'The application controls kept changing.';
+      logger.warn(`Workflow settling timeout: stage=${stage}, fieldId=${fieldId || ''}, loading=${loading}, disabledIds=${disabledFields.map(f => f.id).join(',')}`);
+      status('paused', `Autofill paused during ${stage} after ${navigationTimeoutMs / 1000}s. ${cause} Resume Autofill retries the current page.`);
+    }
     return false;
   }
   function validation(fields = scanFormFields(), control = null) {
@@ -117,6 +151,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     return errors;
   }
   function emit() {
+    if (disposed) return;
     const state = JSON.stringify([session, busy, [...results]]);
     if (state === lastEmission) return;
     lastEmission = state;
@@ -197,7 +232,12 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       if (!await settleFields(signature, token, 'before field action', original.id)) return false;
       const field = scanFormFields().find(f => f.id === original.id && f.type === 'file');
       if (!field) continue;
-      if (!empty(field) && !getSettings().overwriteExisting) continue;
+      if (!empty(field) && !getSettings().overwriteExisting) {
+        // A preceding parser can attach the Resume widget before its turn.
+        const verified = await verifyField(field, meta?.name);
+        if (verified.verified) { results.set(field.id,{status:'verified',value:verified.actualValue,inferred:false,source:'profile',error:''}); emit(); }
+        continue;
+      }
       field.element.scrollIntoView?.({ block: 'center', behavior: 'instant' });
       const filled = await uploadResumeAndWait(field, { isCurrent: () => token === generation && Boolean(session?.active) });
       await delay(settleMs);
@@ -262,7 +302,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       if (token !== generation) return true;
       const next = classifyPage();
       if (next.type === 'confirmation') {
-        if (step) completeStep();
+        completeStep();
         status('confirmation', next.reason);
         return true;
       }
@@ -274,8 +314,9 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
   async function applyAnswers(fields, answers, token, signature) {
     const byId = new Map(answers.map(a => [a.fieldId, a]));
     for (const original of fields) {
-      if (!await settleFields(signature, token, 'before field action', original.id)) return false;
-      const field = scanFormFields().find(f => f.id === original.id && f.label === original.label && f.type === original.type);
+      if (!checkPage(signature, token, 'before field action', original.id)) return false;
+      const currentFields = scanFormFields();
+      const field = currentFields.find(f => f.id === original.id && f.label === original.label && f.type === original.type);
       const entry = byId.get(original.id);
       if (!entry || entry.value === '' || entry.value == null) {
         if (original.required && entry && entry.value === '') {
@@ -291,7 +332,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         }
         continue;
       }
-      const replacement = scanFormFields().find(f => f.id === original.id);
+      const replacement = currentFields.find(f => f.id === original.id);
       const question = session.steps[session.currentStep]?.questions[original.id];
       if (replacement && (!field || question && question !== questionIdentity(replacement))) {
         status('paused', 'A question or its options changed. Inspect the page before resuming.');
@@ -301,11 +342,15 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       if (field.type === 'file') continue;
       field.options = original.options;
       field.element.scrollIntoView?.({ block: 'center', behavior: 'instant' });
+      logger.info(`Field action [${entry.source === 'ai' ? 'AI' : entry.source === 'saved' ? 'Saved' : 'Profile'}]: id=${field.id}, label="${field.label}"`);
+      const started = Date.now();
       const filled = await fillField(field, entry.value);
-      await delay(settleMs);
+      const filledAt = Date.now();
       if (!await settleFields(signature, token, 'field action', field.id)) return false;
       const live = scanFormFields().find(f => f.id === field.id && f.label === field.label);
+      const settledAt = Date.now();
       const verified = filled && live ? await verifyField(live, entry.value) : { verified: false };
+      logger.info(`Timing[${field.id}]: fill=${filledAt-started}ms, settle=${settledAt-filledAt}ms, verify=${Date.now()-settledAt}ms`);
       // Phase 2's generic verifier only checks non-empty values. Workflow requires exact persistence.
       let exact = Boolean(field.ats?.adapter) || !['text', 'textarea', 'email', 'tel', 'url', 'number', 'contenteditable'].includes(field.type) || String(verified.actualValue ?? '').trim() === String(entry.value).trim();
       if (['select', 'radio'].includes(field.type) && !field.widget) exact = field.options.some(o => (String(o.value) === String(entry.value) || o.label === String(entry.value)) && String(o.value) === String(verified.actualValue));
@@ -332,14 +377,14 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     if (!await settleFields(signature, token, 'option harvesting')) return [];
     let response = await answer(normalizeFieldsForAI(fields), { jobContext: session.job, ...context });
     if (!await settleFields(signature, token, 'AI response')) return [];
-    if (response.answers.some(a => a.searchQuery)) response = await resolveComboboxSearchAnswers(fields, response);
+    if (response.answers.some(a => a.searchQuery)) response = await resolveComboboxSearchAnswers(fields, response, {jobContext:session.job,isCurrent:()=>guard(token)});
     if (!await settleFields(signature, token, 'option search')) return [];
     return response.answers;
   }
   async function repair(errors, step, token, signature) {
     const blocked=errors.every(error=>{
       const field=scanFormFields().find(field=>field.id===error.fieldId);
-      return field?.type==='file' || field?.ats?.canonicalKey && step.answers[field.id]?.value==='';
+      return field?.type==='file' || answer === generateAutofillAnswers && !hasApiKey() && field?.ats?.canonicalKey && step.answers[field.id]?.value==='';
     });
     if (blocked) {status('paused','Required saved values or documents are unavailable. Review the highlighted questions before resuming.');return false;}
     if (answer === generateAutofillAnswers && !hasApiKey()) {status('paused','Required answers or documents need manual input. Add saved answers or an API key before resuming.');return false;}
@@ -444,7 +489,12 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
           const discovered=await command('searchOptions',{queries:searches});
           if (!current()) return true;
           await refresh();
-          for (const entry of resolveDiscoveredAnswers((discovered.fields || []).map(field=>({...field,fieldId:remoteFieldId(state.frameId,field.fieldId)})), response.answers)) step.answers[entry.fieldId]=entry;
+          if (!current()) return true;
+          const resolved = await resolveDiscoveredAnswers((discovered.fields || []).map(field=>({...field,fieldId:remoteFieldId(state.frameId,field.fieldId)})), response.answers, {jobContext:session.job,isCurrent:current});
+          if (!current()) return true;
+          await refresh();
+          if (!current()) return true;
+          for (const entry of resolved) step.answers[entry.fieldId]=entry;
         }
       }
       step.primary=true;
@@ -538,7 +588,6 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         if (page.type !== 'application') { status('paused', page.reason); return; }
         const fields = scanFormFields();
         let signature = observePage(scanPageFields());
-        if (new Set(fields.map(f => f.id)).size !== fields.length) { status('paused', 'Ambiguous duplicate field IDs. Fill this page manually.'); return; }
         session.currentUrl = window.location.href;
         session.pendingUrl = '';
         let step = session.steps[session.currentStep];
@@ -578,7 +627,13 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
             if (cached) step.answers[field.id] = { fieldId: field.id, ...cached }; else missing.push(field);
           }
           if (missing.length) {
-            if ((step.requests || 0) >= 2) { status('paused', 'Primary request limit reached (2/2). Fill this page manually.'); return; }
+            if ((step.requests || 0) >= 2) {
+              step.primary = true;
+              saveSession(session);
+              if (targets.length) await applyAnswers(targets, Object.values(step.answers), token, signature);
+              status('paused', 'Primary request limit reached (2/2). Fill remaining fields manually.');
+              return;
+            }
             step.requests = (step.requests || 0) + 1;
             saveSession(session);
             status('running', `Generating answers for ${missing.length} fields.`);
@@ -592,12 +647,20 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
           if (targets.length && !await applyAnswers(targets, Object.values(step.answers), token, signature)) return;
         } else {
           // Recover persisted answers after a full document reload without another primary request.
-          if (!await applyResumeUploads(fields.filter(f => f.type === 'file' && isResumeField(f, fields) && empty(f)), token, signature)) return;
+          if (!await applyResumeUploads(fields.filter(f => f.type === 'file' && isResumeField(f, fields) && (empty(f) || results.get(f.id)?.status === 'failed')), token, signature)) return;
           await detectAdapter().prepareSections?.(document,getProfile(),{session,isCurrent:()=>guard(token)});
           await detectAdapter().prepareFields?.(document,getProfile(),{overwrite:false,isCurrent:()=>guard(token)});
           signature=observePage(scanPageFields());
           step.observation=signature;
           const missing = scanFormFields().filter(f => f.type !== 'file' && shouldFill(f) && unfilled(f));
+          const choices = missing.filter(f => f.type === 'combobox');
+          if (choices.length) {
+            // Closed menus lose scanned options. Re-discover cached choices
+            // before retrying; query text alone still cannot count as selection.
+            const queries = new Map(choices.map(f => [f.id,step.answers[f.id]?.value || detectAdapter().profileValue?.(f,getProfile())]).filter(([,value]) => typeof value === 'string' && value));
+            await harvestComboboxOptions(choices,queries);
+            if (!guard(token)) return;
+          }
           for (const field of normalizeFieldsForAI(missing)) {
             if (!field.ats?.canonicalKey || step.answers[field.fieldId]?.value !== '') continue;
             const refreshed = detectAdapter().resolveAnswer?.(field, getProfile(), {jobContext:session.job,allowSearch:false});
@@ -714,15 +777,23 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       status('paused', 'Workflow limit reached. Continue manually.');
     } catch (error) {
       if (token === generation && session) status('paused', `Workflow stopped: ${error.message}`);
-    } finally { busy = false; emit(); }
+    } finally { busy = false; if (!disposed) { if (pendingJob) updateJob(pendingJob); emit(); } }
   }
   return {
     get session() { return session; },
     get busy() { return busy; },
     get stepReview() { return Boolean(session?.stepReview); },
     async initialize() {
-      session = await restoreSession();
-      if (session) bindTab(session);
+      const restored = await restoreSession();
+      if (disposed) return;
+      session = restored;
+      if (session && session.identityVersion !== 2) session = null;
+      if (session) {
+        bindTab(session);
+        // restoreSession also approves bounded POST redirects between steps.
+        session.currentUrl = window.location.href;
+      }
+      if (session && pendingJob) updateJob(pendingJob);
       if (session && compatibleSession() && session.active && session.pendingStep === session.currentStep && Date.now() - session.pendingAt < 120000) {
         const previous = session.steps[session.currentStep];
         const page = classifyPage();
@@ -739,8 +810,11 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         try {
           const job = captureJob();
           if (job?.pendingHydration) await job.pendingHydration;
+          if (disposed) return;
+          session = createSession(job);
         } catch { /* Ignore early DOM access */ }
       }
+      if (pendingJob) updateJob(pendingJob);
       emit();
       const checkNativeStepAdvance = () => {
         if (!session || !session.stepReview) return;
@@ -774,31 +848,28 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       interval = setInterval(() => void tick(), 1500);
       await tick();
     },
-    async capture() {
-      if (busy) return;
-      generation++;
-      const job = captureJob();
-      session = createSession(job);
-      emit();
-      if (session?.job?.pendingHydration) {
-        await session.job.pendingHydration;
-        saveSession(session);
-        emit();
-      }
-    },
+    updateJob,
     async start(job) {
-      if (busy) return;
+      if (busy || disposed) return;
       generation++;
       if (job || !session) session = createSession(job || captureJob());
       if (session?.job?.pendingHydration) {
         await session.job.pendingHydration;
+        if (disposed) return;
         saveSession(session);
         emit();
       }
       if (!compatibleSession()) return;
       session.stepReview = false;
-      const step=session.steps[session.currentStep];
-      if (step?.frameUrl && step.primary) step.retryRequested=true;
+      const step = session.steps[session.currentStep];
+      if (step) {
+        if (session.reason?.includes('Primary request limit reached')) {
+          step.requests = 0;
+          step.primary = false;
+        }
+        if (step.frameUrl && step.primary) step.retryRequested = true;
+      }
+      session.errors = [];
       session.active = true;
       status('running', 'Starting application workflow.');
       await tick();
@@ -814,6 +885,28 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       status('running', 'Advancing to next step.');
       await tick();
     },
+    reset() {
+      if (busy) this.pause();
+      results.clear();
+      if (session) {
+        session.errors = [];
+        session.active = false;
+        session.stepReview = false;
+        session.status = 'idle';
+        session.reason = '';
+        const current = session.steps[session.currentStep];
+        if (current) {
+          current.primary = false;
+          current.requests = 0;
+          current.repairs = 0;
+          current.lateRequests = 0;
+          current.clicks = 0;
+          current.answers = {};
+        }
+        saveSession(session);
+      }
+      emit();
+    },
     pause() {
       generation++;
       if (session?.frameOwner) void platform.frames.command(session.frameOwner.frameId,{action:'cancel'}).catch(()=>{});
@@ -823,6 +916,10 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       if (session) status('paused', 'Paused by user.');
     },
     tick,
-    destroy() { generation++; clearTimeout(timer); cancelDelay?.(); clearInterval(interval); observer?.disconnect(); unsubscribeNavigation?.(); },
+    destroy() {
+      disposed = true; pendingJob = null; generation++;
+      if (session?.frameOwner) void platform.frames.command(session.frameOwner.frameId,{action:'cancel'}).catch(()=>{});
+      clearTimeout(timer); cancelDelay?.(); clearInterval(interval); observer?.disconnect(); unsubscribeNavigation?.();
+    },
   };
 }

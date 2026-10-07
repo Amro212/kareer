@@ -7,7 +7,7 @@ import { scanFormFields, deduplicateFields } from '../../src/core/fields/scanner
 import { fillFileInput } from '../../src/core/fields/fillers.js';
 import { verifyField } from '../../src/core/fields/verify.js';
 import { normalizeFieldsForAI } from '../../src/core/fields/normalize.js';
-import { waitForResumeParsing, isResumeField } from '../../src/core/resume.js';
+import { waitForResumeParsing, isResumeField, uploadResumeAndWait } from '../../src/core/resume.js';
 
 let dom;
 
@@ -17,7 +17,7 @@ function boot() {
     <label for="resume">Resume</label>
     <input id="resume" name="resume" type="file" accept=".pdf" required>
   </body>`, { url: 'https://example.com/apply', pretendToBeVisual: true });
-  for (const key of ['window', 'document', 'HTMLElement', 'HTMLInputElement', 'File', 'Event', 'Element']) {
+  for (const key of ['window', 'document', 'location', 'HTMLElement', 'HTMLInputElement', 'File', 'Event', 'Element']) {
     globalThis[key] = dom.window[key];
   }
   globalThis.CSS = { escape: (value) => value };
@@ -26,9 +26,55 @@ function boot() {
 }
 
 beforeEach(boot);
+
+test('canonical Workday resume routing accepts a generic upload label after other fields',()=>{
+  const field={id:'file-upload-input-ref',type:'file',label:'Upload a file (5MB max)',ats:{adapter:'workday',canonicalKey:'resume'}};
+  assert.equal(isResumeField(field,[{id:'name',type:'text'},field]),true);
+  assert.equal(isResumeField({...field,ats:{adapter:'workday',canonicalKey:'coverLetter'}},[field]),false);
+});
 afterEach(() => {
   setPlatform(createGmHost());
   dom?.window.close();
+});
+
+test('Workday waits for asynchronous acceptance after clearing the delivered FileList',async()=>{
+  dom.reconfigure({url:'https://acme.myworkdayjobs.com/job/apply'});
+  document.body.innerHTML='<div data-fkit-id="resumeAttachments--attachments"><label>Resume</label><input type="file"></div>';
+  const host=createGmHost();host.capabilities.fileUpload=true;host.documentsGet=async()=>({name:'resume.pdf',buffer:new Uint8Array([1]).buffer});setPlatform(host);
+  const input=document.querySelector('input');
+  input.onchange=()=>{
+    Object.defineProperty(input,'files',{configurable:true,value:[]});
+    setTimeout(()=>input.insertAdjacentHTML('afterend','<div data-automation-id="file-upload-item"><div data-automation-id="file-upload-item-name">resume.pdf</div><div data-automation-id="file-upload-successful">Successfully Uploaded!</div></div>'),160);
+  };
+  const [field]=scanFormFields();
+  assert.equal(await uploadResumeAndWait(field,{minimumMs:0,quietMs:0,pollMs:10,timeoutMs:1500}),true);
+  assert.equal((await verifyField(field,'resume.pdf')).verified,true);
+});
+
+test('Ashby accepted resume survives a cleared input and stays scoped to its upload widget', async () => {
+  document.body.setAttribute('data-ashby-root', '');
+  document.body.innerHTML = '<div class="ashby-application-form-field-entry"><label for="resume">Resume</label><div class="ashby-application-form-input-file"><input id="resume" type="file"><div class="ashby-application-form-input-file-filename">resume.pdf</div><button>Replace</button><button aria-label="Remove file"></button></div></div><div class="ashby-application-form-input-file"><input id="cover" type="file"><button>Upload File</button></div>';
+  const fields = scanFormFields();
+  const resume = fields.find(f => f.id === 'resume');
+  assert.equal(resume.currentValue, 'resume.pdf');
+  assert.equal((await verifyField(resume, 'resume.pdf')).verified, true);
+  assert.equal((await verifyField(fields.find(f => f.id === 'cover'), '')).verified, false);
+  assert.equal((await verifyField(resume, 'different.pdf')).verified, false);
+});
+
+test('Ashby synchronous acceptance is an upload success even when React clears files', async () => {
+  document.body.setAttribute('data-ashby-root', '');
+  document.body.innerHTML = '<div class="ashby-application-form-input-file"><input id="resume" type="file"></div>';
+  const host = createGmHost();
+  host.capabilities.fileUpload = true;
+  host.documentsGet = async () => ({ name: 'resume.pdf', buffer: new Uint8Array([1]).buffer });
+  setPlatform(host);
+  const input = document.querySelector('input');
+  input.onchange = () => {
+    Object.defineProperty(input, 'files', { configurable: true, value: [] });
+    input.insertAdjacentHTML('afterend', '<div class="ashby-application-form-input-file-filename">resume.pdf</div><button>Replace</button>');
+  };
+  assert.equal(await fillFileInput(input), true);
 });
 
 test('scanner includes file inputs instead of skipping them', () => {
@@ -62,7 +108,7 @@ test('parser wait observes value properties and replacement nodes before settlin
 test('a stuck parser stops the run instead of authorizing fills', async () => {
   document.body.setAttribute('data-ashby-root', '');
   document.body.insertAdjacentHTML('beforeend', '<div aria-busy="true">Parsing</div>');
-  await assert.rejects(waitForResumeParsing({ minimumMs: 0, quietMs: 0, timeoutMs: 60, pollMs: 10 }), /did not settle/);
+  await assert.rejects(waitForResumeParsing({ minimumMs: 0, quietMs: 0, timeoutMs: 60, pollMs: 10 }), /resume upload widget still reports processing/);
 });
 
 test('Lever analyzing-resume indicator blocks fills until it disappears', async () => {
@@ -138,3 +184,49 @@ test('deduplicateFields renames duplicate IDs instead of throwing', () => {
   assert.equal(fields[3].id, 'last_name');
 });
 
+
+test('completed Ashby parser uploader does not require a filename on the parser-only widget', async () => {
+  document.body.setAttribute('data-ashby-root', '');
+  document.body.innerHTML = '<div class="ashby-application-form-autofill-input-root"><input id="parser" type="file"><div role="status">Autofill completed!</div></div><div class="ashby-application-form-field-entry"><label for="resume">Resume</label><div class="ashby-application-form-input-file"><input id="resume" type="file"><div class="ashby-application-form-input-file-filename">resume.pdf</div><button>Replace</button></div></div>';
+  assert.equal((await verifyField({type:'file',element:document.querySelector('#parser')},'resume.pdf')).verified,true);
+  await waitForResumeParsing({uploadElement:document.querySelector('#parser'),minimumMs:0,quietMs:0,pollMs:10,timeoutMs:80});
+});
+
+test('resume parser does not mistake an unrelated page spinner for upload activity', async () => {
+  document.body.setAttribute('data-ashby-root', '');
+  document.body.innerHTML = '<aside aria-busy="true">Loading recommendations</aside><form><div class="ashby-application-form-input-file"><input id="resume" type="file"><div class="ashby-application-form-input-file-filename">resume.pdf</div><button>Replace</button></div></form>';
+  await waitForResumeParsing({uploadElement:document.querySelector('#resume'),minimumMs:0,quietMs:0,pollMs:10,timeoutMs:80});
+});
+
+test('Ashby parser completion cannot borrow acceptance from a cover letter',async()=>{
+  document.body.setAttribute('data-ashby-root','');
+  document.body.innerHTML='<div class="ashby-application-form-autofill-input-root"><input id="parser" type="file"><div>Autofill completed!</div></div><div class="ashby-application-form-field-entry"><label for="cover">Cover Letter</label><div class="ashby-application-form-input-file"><input id="cover" type="file"><div class="ashby-application-form-input-file-filename">resume.pdf</div><button>Replace</button></div></div>';
+  assert.equal((await verifyField({type:'file',element:document.querySelector('#parser')},'resume.pdf')).verified,false);
+});
+
+test('deduplicateFields reserves actual suffixed IDs and stays idempotent', () => {
+  const fields = [{ id: 'email' }, { id: 'email' }, { id: 'email_2' }, { id: 'email' }];
+  deduplicateFields(fields);
+  assert.deepEqual(fields.map(field => field.id), ['email', 'email_3', 'email_2', 'email_4']);
+  deduplicateFields(fields);
+  assert.equal(new Set(fields.map(field => field.id)).size, fields.length);
+});
+
+test('Ashby actual file-item markup verifies resume and parser after FileList clears', async () => {
+  document.body.setAttribute('data-ashby-root', '');
+  document.body.innerHTML = '<div class="ashby-application-form-autofill-input-root"><input id="parser" type="file"><div data-highlight="positive"><h2>Autofill completed!</h2></div></div><div class="ashby-application-form-field-entry"><label class="ashby-application-form-question-title" for="resume">Resume</label><div class="ashby-application-form-input-file"><input id="resume" type="file" required><div class="ashby-application-form-input-file-item"><p class="_name_10xk4_41 ashby-application-form-input-file-item-name"><svg></svg><span>resume.pdf</span></p><button title="Delete file"></button></div><div class="ashby-application-form-input-file-dropzone"><button><span>Replace</span></button><p>or drag and drop here</p></div></div></div>';
+  const fields = scanFormFields();
+  for (const field of fields) {
+    assert.equal(field.currentValue, 'resume.pdf');
+    assert.equal((await verifyField(field, 'resume.pdf')).verified, true);
+    assert.equal((await verifyField(field, 'different.pdf')).verified, false);
+  }
+  const { inspectValidation } = await import('../../src/core/validation.js');
+  assert.deepEqual(inspectValidation(fields), []);
+  document.querySelector('#resume').setCustomValidity('Upload rejected.');
+  assert.equal(inspectValidation(fields).some(error => error.fieldId === 'resume'), true);
+  document.querySelector('#resume').setCustomValidity('');
+  document.querySelector('#resume').setAttribute('aria-invalid', 'true');
+  assert.equal((await verifyField(fields.find(f => f.id === 'resume'), 'resume.pdf')).verified, false);
+  assert.equal(inspectValidation(scanFormFields()).some(error => error.fieldId === 'resume'), true);
+});

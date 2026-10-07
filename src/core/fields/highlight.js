@@ -2,6 +2,7 @@ import { UI_IDS } from '../constants.js';
 
 let inlineRewriteEl = null;
 let currentFocusedNarrativeField = null;
+let inlineRewriteCleanup = null;
 
 export function scrollToField(element) {
   try {
@@ -223,23 +224,43 @@ export function initInlineRewriteBadge(onRewriteClick) {
 
   document.body.appendChild(inlineRewriteEl);
 
-  document.addEventListener('focusin', (e) => {
+  const badge = inlineRewriteEl;
+  const badgeDocument = document;
+  let focusTimer = null;
+  const onFocusIn = (e) => {
     const target = e.target;
     if (!target || typeof target.getAttribute !== 'function') return;
     if (target.tagName === 'TEXTAREA' || target.getAttribute('contenteditable') === 'true') {
       currentFocusedNarrativeField = target;
       positionRewriteBadge(target);
     }
-  });
+  };
 
-  document.addEventListener('focusout', (e) => {
-    setTimeout(() => {
+  const onFocusOut = () => {
+    clearTimeout(focusTimer);
+    focusTimer = setTimeout(() => {
+      if (inlineRewriteEl !== badge) return;
       const isHovered = inlineRewriteEl?.matches(':hover') || btn?.matches(':hover');
-      if (document.activeElement !== currentFocusedNarrativeField && !isHovered) {
+      if (badgeDocument.activeElement !== currentFocusedNarrativeField && !isHovered) {
         hideRewriteBadge();
       }
     }, 250);
-  });
+  };
+  badgeDocument.addEventListener('focusin', onFocusIn);
+  badgeDocument.addEventListener('focusout', onFocusOut);
+  inlineRewriteCleanup = () => {
+    clearTimeout(focusTimer);
+    badgeDocument.removeEventListener('focusin', onFocusIn);
+    badgeDocument.removeEventListener('focusout', onFocusOut);
+  };
+}
+
+export function destroyInlineRewriteBadge() {
+  inlineRewriteCleanup?.();
+  inlineRewriteCleanup = null;
+  inlineRewriteEl?.remove();
+  inlineRewriteEl = null;
+  currentFocusedNarrativeField = null;
 }
 
 function positionRewriteBadge(target) {
@@ -253,9 +274,11 @@ function positionRewriteBadge(target) {
   inlineRewriteEl.style.setProperty('left', `${Math.max(10, left)}px`, 'important');
   inlineRewriteEl.style.setProperty('display', 'block', 'important');
 
+  const badge = inlineRewriteEl;
   requestAnimationFrame(() => {
-    inlineRewriteEl.style.opacity = '1';
-    inlineRewriteEl.style.transform = 'translateY(0)';
+    if (inlineRewriteEl !== badge) return;
+    badge.style.opacity = '1';
+    badge.style.transform = 'translateY(0)';
   });
 }
 
@@ -263,8 +286,9 @@ function hideRewriteBadge() {
   if (!inlineRewriteEl) return;
   inlineRewriteEl.style.opacity = '0';
   inlineRewriteEl.style.transform = 'translateY(4px)';
+  const badge = inlineRewriteEl;
   setTimeout(() => {
-    if (inlineRewriteEl && inlineRewriteEl.style.opacity === '0') {
+    if (inlineRewriteEl === badge && inlineRewriteEl.style.opacity === '0') {
       inlineRewriteEl.style.setProperty('display', 'none', 'important');
     }
   }, 150);

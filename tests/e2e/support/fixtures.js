@@ -109,6 +109,8 @@ export const test = base.extend({
 
       /** Playwright's CSS engine pierces the panel's open shadow root. */
       async openPanel(page) {
+        await page.locator('#kr-pebble-toggle-btn, #kr-toggle-btn').first().waitFor({ timeout: 20000 });
+        if (await page.locator('.kr-pebble').count()) await page.locator('#kr-pebble-toggle-btn').click();
         const toggle = page.locator('#kr-toggle-btn');
         await toggle.waitFor({ timeout: 20000 });
         if (!(await page.locator('#kr-main-panel').count())) await toggle.click();

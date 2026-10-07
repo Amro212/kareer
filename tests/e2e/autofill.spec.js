@@ -10,6 +10,7 @@ const PROFILE = {
   workAuthorization: 'Yes',
   sponsorshipNow: 'No',
   sponsorshipFuture: 'No',
+  workEligibilities: [{ country: 'Canada', workAuthorization: 'Yes', sponsorshipNow: 'No', sponsorshipFuture: 'No' }, { country: 'United States', workAuthorization: 'No', sponsorshipNow: 'Yes', sponsorshipFuture: 'No' }],
   resumeContext: 'Software engineer who has shipped production web applications end to end.',
 };
 
@@ -36,7 +37,7 @@ test.describe('single page autofill', () => {
     await expect(page.locator('#experience_level')).not.toHaveValue('');
 
     // Radio groups and checkboxes actuate through the same fillers as before.
-    expect(await page.locator('input[name=work_auth_us]:checked').count()).toBe(1);
+    await expect(page.locator('input[name=work_auth_us][value=no]')).toBeChecked();
     expect(await page.locator('input[name=sponsorship_req]:checked').count()).toBe(1);
 
     // React-style controlled input needs the native setter path to stick.

@@ -29,9 +29,10 @@ import {
   highlightFailedField,
   clearHighlights,
   initInlineRewriteBadge,
+  destroyInlineRewriteBadge,
 } from './fields/highlight.js';
 import { startFormObserver, pauseFormObserver, resumeFormObserver, stopFormObserver } from './observer.js';
-import { collectRemoteFields, applyRemoteAnswers, searchRemoteOptions, listRemoteFrames, captureRemoteFixtures, isRemoteFieldId, applyRemoteResumeUploads, locateRemoteField, inspectRemoteFields } from './remote.js';
+import { collectRemoteFields, applyRemoteAnswers, searchRemoteOptions, listRemoteFrames, captureRemoteFixtures, isRemoteFieldId, applyRemoteResumeUploads, locateRemoteField, inspectRemoteFields, embeddedApplicationStates } from './remote.js';
 import { captureFixture, fixtureFileName } from './capture.js';
 import { createApplicationEngine } from './application.js';
 import { classifyPage } from './pageClassifier.js';
@@ -39,6 +40,7 @@ import { detectAdapter } from './adapters/index.js';
 import { rememberAnswer } from './memory.js';
 import { saveSession } from './sessions.js';
 import { captureJob } from './jobs.js';
+import { inspectContinue } from './navigation.js';
 
 let applicationEngine = null;
 let applicationState = null;
@@ -64,7 +66,7 @@ function resolveLiveFileElement(field, root = document) {
 let shadowRootRef = null;
 let currentTab = 'home';
 let panelVisible = false;
-let isPebble = false;
+let isPebble = true;
 let lastAiTestResult = null;
 let isAiTesting = false;
 
@@ -1463,9 +1465,11 @@ function refreshDetectedFields() {
  * this document to react to.
  */
 export function refreshRemoteFieldCount({ force = false } = {}) {
-  if (!platform.capabilities.crossFrame) return;
+  const panelRoot = shadowRootRef;
+  if (!panelRoot || !platform.capabilities.crossFrame) return;
   listRemoteFrames()
     .then(async (frames) => {
+      if (shadowRootRef !== panelRoot) return;
       const total = frames.reduce((sum, frame) => sum + frame.fieldCount, 0);
       const countsChanged = total !== remoteFieldCount || frames.length !== remoteFrameCount;
       const needsInspection = force || countsChanged || (total > 0 && !remoteFieldsCache.length);
@@ -1475,6 +1479,7 @@ export function refreshRemoteFieldCount({ force = false } = {}) {
           remoteFieldsCache = [];
         } else {
           const inspected = await inspectRemoteFields().catch(() => []);
+          if (shadowRootRef !== panelRoot) return;
           if (inspected.length) {
             remoteFieldsCache = inspected;
           }
@@ -1496,21 +1501,21 @@ let cancelAutofillDelay = null;
  * Second AI pass for comboboxes inside embedded frames whose options only appear
  * after a search, mirroring resolveComboboxSearchAnswers for the local document.
  */
-async function resolveRemoteSearchAnswers(response) {
+async function resolveRemoteSearchAnswers(response, context = {}) {
   const pending = response.answers.filter((answer) => isRemoteFieldId(answer.fieldId) && answer.searchQuery);
   if (!pending.length) return response;
 
   const discovered = await searchRemoteOptions(null, pending);
-  if (!discovered.length) return response;
+  if (!discovered.length || context.isCurrent?.() === false) return response;
 
   if (discovered.every(field => ['greenhouse','ashby','workday'].includes(field.ats?.adapter))) {
-    const resolved = resolveDiscoveredAnswers(discovered, pending);
+    const resolved = await resolveDiscoveredAnswers(discovered, pending, context);
     const byId = new Map(resolved.map(answer => [answer.fieldId,answer]));
     return {...response,answers:response.answers.map(answer => byId.get(answer.fieldId) || answer)};
   }
 
   try {
-    const resolved = await generateAutofillAnswers(discovered, { allowSearch: false });
+    const resolved = await generateAutofillAnswers(discovered, { ...context, allowSearch: false });
     const byId = new Map(resolved.answers.map((answer) => [answer.fieldId, answer]));
     return { ...response, answers: response.answers.map((answer) => byId.get(answer.fieldId) || answer) };
   } catch (err) {
@@ -1549,13 +1554,25 @@ function stopAutofillFlow(reason = 'Autofill paused by user. Progress and filled
 async function handleUnifiedAutofillClick() {
   if (applicationEngine?.busy || isAutofilling) return;
 
+  const routingToken = ++autofillGeneration;
+  const engine = applicationEngine;
+  const root = shadowRootRef;
+  const session = engine?.session;
+  const runUrl = window.location.href;
+  const current = () => routingToken === autofillGeneration && engine === applicationEngine &&
+    root === shadowRootRef && window.location.href === runUrl && (!session || session === engine?.session);
+
   const page = classifyPage();
   if (['captcha', 'confirmation'].includes(page.type)) {
     autofillProgress.statusText = page.reason;
     updatePanelDOM();
     return;
   }
-  if (!hasApiKey() && !detectAdapter().resolveAnswer && !remoteFieldsCache.some(field => field.ats?.adapter)) {
+  const adapter = detectAdapter();
+  const embeddedStates = await embeddedApplicationStates();
+  if (!current()) return;
+  const supportedEmbedded = embeddedStates.length > 0;
+  if (!hasApiKey() && !adapter.resolveAnswer && !supportedEmbedded && !remoteFieldsCache.some(field => field.ats?.adapter)) {
     alert('Please configure your OpenRouter API Key in Settings first.');
     currentTab = 'settings';
     updatePanelDOM();
@@ -1572,15 +1589,19 @@ async function handleUnifiedAutofillClick() {
     return;
   }
 
-  const session = applicationEngine?.session;
   // If waiting for step review (Workday or autoContinue off), advance to next step
   if (session?.stepReview) {
     void applicationEngine?.continueStep();
     return;
   }
 
-  // If a multi-step session exists (captured or in-progress), run the engine workflow
-  if (session || ['greenhouse','ashby'].includes(detectAdapter().id) || remoteFieldsCache.some(field=>['greenhouse','ashby'].includes(field.ats?.adapter))) {
+  // Capture creates context for every job. Single-page/embedded applications
+  // still use their field-agent flow; a session alone does not imply navigation.
+  const needsWorkflow = session?.active || session?.currentStep || ['workday', 'greenhouse', 'ashby'].includes(adapter.id) ||
+    Boolean(inspectContinue().control) || getSettings().autoSubmit;
+  const hasEmbeddedFields = remoteFieldsCache.length || (await listRemoteFrames()).length;
+  if (!current()) return;
+  if (supportedEmbedded || session && needsWorkflow && !hasEmbeddedFields) {
     void applicationEngine?.start();
     return;
   }
@@ -1590,6 +1611,7 @@ async function handleUnifiedAutofillClick() {
 }
 
 function handleUnifiedPauseClick() {
+  autofillGeneration++;
   applicationEngine?.pause();
   if (isAutofilling) {
     stopAutofillFlow('Autofill paused by user. Progress and filled fields preserved.');
@@ -1738,9 +1760,9 @@ async function executeAutofillFlow() {
     if (aiResponse.answers.some(answer => answer.searchQuery)) {
       autofillProgress.statusText = 'Searching for missing combobox options...';
       updatePanelDOM();
-      aiResponse = await resolveComboboxSearchAnswers(aiTargetFields, aiResponse);
+      aiResponse = await resolveComboboxSearchAnswers(aiTargetFields, aiResponse, {jobContext:currentJob,isCurrent:()=>token===autofillGeneration && window.location.href===runUrl});
       if (token !== autofillGeneration) return;
-      aiResponse = await resolveRemoteSearchAnswers(aiResponse);
+      aiResponse = await resolveRemoteSearchAnswers(aiResponse, {jobContext:currentJob,isCurrent:()=>token===autofillGeneration && window.location.href===runUrl});
       if (token !== autofillGeneration) return;
     }
     const answersMap = new Map(aiResponse.answers.map((a) => [a.fieldId, a]));
@@ -1786,10 +1808,6 @@ async function executeAutofillFlow() {
 
         scrollToField(field.element);
         highlightActiveField(field.element);
-
-        // Brief delay for visual animation (interruptible)
-        await autofillSleep(100);
-        if (token !== autofillGeneration) break;
 
         const didFill = await fillField(field, answer.value);
         if (token !== autofillGeneration) break;
@@ -2210,7 +2228,8 @@ function renderHomeTab() {
   const stepMarker = adapter.stepMarker?.(document) || '';
 
   // Last error notice
-  const lastError = session?.errors?.length ? session.errors.at(-1).message : '';
+  const failedFields = summarizeFieldResults(getAllDetectedFields(), fieldResultsCache).failed;
+  const lastError = failedFields.length && session?.errors?.length ? session.errors.at(-1).message : '';
   const wfErrorHtml = lastError && !session?.reason?.includes(lastError)
     ? `<div style="font-size:11px;color:var(--kr-warning);padding:6px 10px;background:rgba(242,184,75,0.08);border-radius:6px;border:1px solid rgba(242,184,75,0.25);">${ICONS.alert} ${escapeHtml(lastError)}</div>`
     : '';
@@ -2377,7 +2396,6 @@ function renderHomeTab() {
         <button class="kr-btn kr-btn-large" id="kr-autofill-btn" style="flex: 1;" ${btnDisabled ? 'disabled' : ''} ${btnTitle ? `title="${escapeHtml(btnTitle)}"` : ''}>
           ${btnContent}
         </button>
-        <button class="kr-btn kr-btn-secondary" id="kr-capture-job" title="Capture job listing" style="padding: 9px 12px;">${ICONS.briefcase}</button>
         <button class="kr-btn kr-btn-secondary ${wfIsRunning ? 'kr-btn-pause-active' : ''}" id="kr-pause-autofill-btn" style="padding: 9px 14px; font-size: 12px;" ${!wfIsRunning ? 'disabled' : ''} title="Pause autofill">
           ${wfIsRunning ? `${ICONS.pause} Pause` : 'Pause'}
         </button>
@@ -2722,7 +2740,6 @@ function renderDebugTab() {
     <div class="kr-card">
       <div class="kr-row">
         <span class="kr-card-title">Captured Job & Description</span>
-        <button class="kr-btn kr-btn-secondary" id="kr-recapture-job-btn" style="padding: 4px 8px; font-size: 10px;">Re-capture</button>
       </div>
       <div class="kr-row">
         <span class="kr-label">Title</span>
@@ -2731,6 +2748,14 @@ function renderDebugTab() {
       <div class="kr-row">
         <span class="kr-label">Company</span>
         <span class="kr-val" style="font-size: 11px;">${escapeHtml(currentJob?.company || 'None detected')}</span>
+      </div>
+      <div class="kr-row">
+        <span class="kr-label">Job Location</span>
+        <span class="kr-val" style="font-size: 11px;">${escapeHtml(currentJob?.location || 'Unknown')}</span>
+      </div>
+      <div class="kr-row">
+        <span class="kr-label">Work Country</span>
+        <span class="kr-val" style="font-size: 11px;">${escapeHtml(currentJob?.workCountry || 'Unknown or multiple countries — eligibility needs a country')}</span>
       </div>
       <div class="kr-row">
         <span class="kr-label">Description Status</span>
@@ -2837,8 +2862,6 @@ function updatePanelDOM() {
 
 function attachEventHandlers() {
   if (!shadowRootRef) return;
-  const capture = shadowRootRef.querySelector('#kr-capture-job');
-  if (capture) capture.onclick = () => applicationEngine?.capture();
 
   const resumePage = shadowRootRef.querySelector('#kr-resume-page');
   if (resumePage) {
@@ -2966,11 +2989,13 @@ function attachEventHandlers() {
   const rescanBtn = shadowRootRef.querySelector('#kr-rescan-btn');
   if (rescanBtn) {
     rescanBtn.onclick = () => {
+      applicationEngine?.reset?.();
+      autofillProgress.statusText = '';
       refreshDetectedFields();
       if (platform.capabilities.crossFrame) {
         refreshRemoteFieldCount({ force: true });
       }
-      logger.info(`Rescanned form: ${getAllDetectedFields().length} fields detected.`);
+      logger.info(`Rescanned and reset form: ${getAllDetectedFields().length} fields detected.`);
       updatePanelDOM();
     };
   }
@@ -3130,28 +3155,6 @@ function attachEventHandlers() {
     captureFixtureBtn.onclick = () => void saveFixtureSnapshot();
   }
 
-  const recaptureJobBtn = shadowRootRef.querySelector('#kr-recapture-job-btn');
-  if (recaptureJobBtn) {
-    recaptureJobBtn.onclick = async () => {
-      try {
-        recaptureJobBtn.textContent = 'Capturing...';
-        recaptureJobBtn.disabled = true;
-        const job = captureJob();
-        if (job?.pendingHydration) {
-          await job.pendingHydration;
-        }
-        if (applicationState?.session) {
-          applicationState.session.job = job;
-          saveSession(applicationState.session);
-        }
-        logger.info(`Re-captured job: "${job.title || 'Untitled'}" at "${job.company || 'Unknown'}" (${(job.description || '').length} chars)`);
-        updatePanelDOM();
-      } catch (err) {
-        logger.error(`Re-capture failed: ${err.message}`);
-        updatePanelDOM();
-      }
-    };
-  }
 
   // Debug: Clear logs
   const clearLogsBtn = shadowRootRef.querySelector('#kr-clear-logs-btn');
@@ -3234,8 +3237,16 @@ export function unmountUI() {
   applicationEngine?.destroy();
   applicationEngine = null;
   applicationState = null;
+  if (isAutofilling) stopAutofillFlow('Job page closed. Pending autofill stopped.');
   stopFormObserver();
+  destroyInlineRewriteBadge();
   shadowRootRef = null;
+  fieldResultsCache.clear();
+  detectedFieldsCache = [];
+  remoteFieldsCache = [];
+  remoteFieldCount = 0;
+  remoteFrameCount = 0;
+  autofillProgress = { current: 0, total: 0, statusText: '' };
 }
 
 export function mountUI() {
@@ -3252,6 +3263,9 @@ export function mountUI() {
 
   const rootElement = claim.root;
   if (!rootElement) return;
+
+  isPebble = true;
+  panelVisible = false;
 
   const shadow = rootElement.shadowRoot || rootElement.attachShadow({ mode: 'open' });
   shadowRootRef = shadow;
@@ -3322,6 +3336,7 @@ export function mountUI() {
     });
 
     applicationEngine = createApplicationEngine({ onChange: state => {
+      if (applicationState?.session?.id && applicationState.session.id !== state.session?.id) fieldResultsCache.clear();
       applicationState = state;
       for (const [id, result] of state.results) fieldResultsCache.set(id, result);
       refreshDetectedFields();
@@ -3334,7 +3349,13 @@ export function mountUI() {
 }
 
 export function toggleUIVisibility() {
+  if (!shadowRootRef) mountUI();
+  isPebble = false;
   panelVisible = !panelVisible;
   if (panelVisible) refreshDetectedFields();
   updatePanelDOM();
+}
+
+export function syncJobContext(job) {
+  applicationEngine?.updateJob(job);
 }

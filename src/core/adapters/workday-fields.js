@@ -220,6 +220,9 @@ export function workdayAnswer(field, profile) {
   const choice = field.widget || ['combobox', 'select', 'radio'].includes(field.type) || field.type === 'checkbox' && field.ats?.multiple;
   if (!choice || value === '' || field.type === 'checkbox' && !field.widget && !field.ats?.multiple) return answer;
   const values = Array.isArray(value) ? value : [value];
+  if (field.ats?.canonicalKey === 'skill') {
+    return { ...answer, value: values };
+  }
   const matched = values.map(target => {
     const matches = (field.options || []).filter(option => workdayOptionMatches(field, option.label, target) || key(option.value) === key(target));
     return matches.length === 1 ? matches[0] : null;
