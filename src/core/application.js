@@ -233,10 +233,9 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       const field = scanFormFields().find(f => f.id === original.id && f.type === 'file');
       if (!field) continue;
       if (!empty(field) && !getSettings().overwriteExisting) {
-        if (results.get(field.id)?.status === 'failed') {
-          const verified = await verifyField(field, meta?.name);
-          if (verified.verified) { results.set(field.id,{status:'verified',value:verified.actualValue,inferred:false,source:'profile',error:''}); emit(); }
-        }
+        // A preceding parser can attach the Resume widget before its turn.
+        const verified = await verifyField(field, meta?.name);
+        if (verified.verified) { results.set(field.id,{status:'verified',value:verified.actualValue,inferred:false,source:'profile',error:''}); emit(); }
         continue;
       }
       field.element.scrollIntoView?.({ block: 'center', behavior: 'instant' });

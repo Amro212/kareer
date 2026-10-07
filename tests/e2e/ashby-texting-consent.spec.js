@@ -16,9 +16,9 @@ for (const suffix of ['05-29', '05-31', '05-36']) {
       const resume = document.getElementById('_systemfield_resume');
       resume.onchange = () => {
         const root = resume.closest('.ashby-application-form-input-file');
-        root.querySelectorAll('.ashby-application-form-input-file-filename,button').forEach(node => node.remove());
+        root.querySelectorAll('.ashby-application-form-input-file-item-name,button').forEach(node => node.remove());
         const name = document.createElement('div');
-        name.className = 'ashby-application-form-input-file-filename';
+        name.className = 'ashby-application-form-input-file-item-name';
         name.textContent = resume.files[0].name;
         const replace = document.createElement('button');
         replace.type = 'button'; replace.textContent = 'Replace';
@@ -31,7 +31,7 @@ for (const suffix of ['05-29', '05-31', '05-36']) {
     await expect(page.locator('#_systemfield_name')).toHaveValue(profile.fullName);
     await expect(page.locator('#_systemfield_email')).toHaveValue(profile.email);
     expect((await page.locator('input[type=tel]').inputValue()).replace(/\D/g, '')).toBe('14165550199');
-    await expect(page.locator('.ashby-application-form-input-file-filename')).toHaveText('resume.pdf');
+    await expect(page.locator('.ashby-application-form-input-file-item-name')).toHaveText('resume.pdf');
     if (suffix !== '05-36') {
       await expect(page.locator('input[name=communicationConsent][value=notGiven]')).toBeChecked();
       await expect(page.locator('input[name=communicationConsent][value=given]')).not.toBeChecked();

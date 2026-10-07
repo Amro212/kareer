@@ -67,7 +67,10 @@ export const ashbyAdapter = {
       title.textContent = `${dateTitle} ${/^Month/i.test(element.options[0].textContent) ? 'Month' : 'Year'}`;
     }
     const metadata = applicationMetadata(element, 'ashby', {container,title,rowSelector:ROW});
-    if (!title) return metadata;
+    if (!title) {
+      const parser = element.closest('.ashby-application-form-autofill-input-root');
+      return parser ? { ...metadata, label: parser.querySelector('.ashby-application-form-autofill-input-title')?.textContent.trim() || 'Autofill from resume' } : metadata;
+    }
     return {
       ...metadata,
       id: metadata.id || container.getAttribute('data-field-path') || container.getAttribute('data-field-entry-id') || title.getAttribute('for') || element.id || element.name,
@@ -120,7 +123,7 @@ export const ashbyAdapter = {
       /^(?:loading|uploading|processing|parsing)$/.test(root.getAttribute('data-state') || '') ||
       Boolean(root.querySelector('[role="progressbar"], [aria-busy="true"]'));
     const failed = Boolean(root.querySelector('[role="alert"], [aria-invalid="true"]'));
-    const filename = root.querySelector('.ashby-application-form-input-file-filename, [class*="_fileName_"], [class*="_filename_"]');
+    const filename = root.querySelector('.ashby-application-form-input-file-item-name, .ashby-application-form-input-file-filename, [class*="_fileName_"], [class*="_filename_"]');
     // Ashby clears FileList after persisting an upload. Its filename and Replace
     // control belong to this widget, not a neighboring cover-letter upload.
     const replace = Array.from(root.querySelectorAll('button')).some(button => /^replace$/i.test(button.textContent.trim()));

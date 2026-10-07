@@ -211,3 +211,22 @@ test('deduplicateFields reserves actual suffixed IDs and stays idempotent', () =
   deduplicateFields(fields);
   assert.equal(new Set(fields.map(field => field.id)).size, fields.length);
 });
+
+test('Ashby actual file-item markup verifies resume and parser after FileList clears', async () => {
+  document.body.setAttribute('data-ashby-root', '');
+  document.body.innerHTML = '<div class="ashby-application-form-autofill-input-root"><input id="parser" type="file"><div data-highlight="positive"><h2>Autofill completed!</h2></div></div><div class="ashby-application-form-field-entry"><label class="ashby-application-form-question-title" for="resume">Resume</label><div class="ashby-application-form-input-file"><input id="resume" type="file" required><div class="ashby-application-form-input-file-item"><p class="_name_10xk4_41 ashby-application-form-input-file-item-name"><svg></svg><span>resume.pdf</span></p><button title="Delete file"></button></div><div class="ashby-application-form-input-file-dropzone"><button><span>Replace</span></button><p>or drag and drop here</p></div></div></div>';
+  const fields = scanFormFields();
+  for (const field of fields) {
+    assert.equal(field.currentValue, 'resume.pdf');
+    assert.equal((await verifyField(field, 'resume.pdf')).verified, true);
+    assert.equal((await verifyField(field, 'different.pdf')).verified, false);
+  }
+  const { inspectValidation } = await import('../../src/core/validation.js');
+  assert.deepEqual(inspectValidation(fields), []);
+  document.querySelector('#resume').setCustomValidity('Upload rejected.');
+  assert.equal(inspectValidation(fields).some(error => error.fieldId === 'resume'), true);
+  document.querySelector('#resume').setCustomValidity('');
+  document.querySelector('#resume').setAttribute('aria-invalid', 'true');
+  assert.equal((await verifyField(fields.find(f => f.id === 'resume'), 'resume.pdf')).verified, false);
+  assert.equal(inspectValidation(scanFormFields()).some(error => error.fieldId === 'resume'), true);
+});
