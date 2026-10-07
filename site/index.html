@@ -92,7 +92,7 @@
       <div class="kr-container">
         <div class="kr-hero-content">
           <div class="kr-hero-telemetry">
-            <span class="kr-badge kr-badge-lime" data-version-badge>v0.5.27</span>
+            <span class="kr-badge kr-badge-lime" data-version-badge>v0.5.28</span>
             <span class="kr-badge">OPEN SOURCE</span>
             <span class="kr-badge">CHROME + FIREFOX</span>
             <span class="kr-badge">LOCAL-FIRST BYOK</span>
@@ -220,21 +220,32 @@
                   <div class="kr-sim-input filled-inferred">2 weeks (available immediately upon offer)</div>
                 </div>
 
-                <div class="kr-sim-boundary-box">
-                  <div class="kr-sim-boundary-title">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path
-                        d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z">
-                      </path>
-                      <line x1="12" y1="9" x2="12" y2="13"></line>
-                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                    </svg>
-                    Safety Boundary: Legal Attestation &amp; Signature
+                <div class="kr-sim-field">
+                  <div class="kr-sim-label">
+                    <span>Work Authorization &amp; Sponsorship *</span>
+                    <span class="kr-sim-field-flag kr-flag-verified">✓ Verified (Profile)</span>
                   </div>
-                  <div class="kr-sim-boundary-desc">
-                    Autofill paused automatically. Kareer never signs legal disclosures, authorizations, or diversity
-                    surveys without candidate verification.
+                  <div class="kr-sim-input filled-verified">Authorized to work without sponsorship</div>
+                </div>
+
+                <div class="kr-sim-field">
+                  <div class="kr-sim-label">
+                    <span>Applicant Attestation &amp; Certification *</span>
+                    <span class="kr-sim-field-flag kr-flag-inferred">⚡ Inferred / Review</span>
+                  </div>
+                  <div class="kr-sim-input filled-inferred">I certify that all statements made in this application are true and complete.</div>
+                </div>
+
+                <div class="kr-sim-unblocked-callout">
+                  <div class="kr-sim-unblocked-title">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    Unblocked Execution · Zero Hard-Block Deadlocks
+                  </div>
+                  <div class="kr-sim-unblocked-desc">
+                    Certifications, attestations, and disclosures autofill unblocked using candidate facts and contextual AI. You retain final review before submission.
                   </div>
                 </div>
               </div>
@@ -304,11 +315,11 @@
                       <span><strong>14</strong> fields detected</span>
                     </div>
                     <div class="kr-sim-card-desc" id="sim-wf-desc">
-                      Application fields matched from saved profile context. Inspect verification before submission.
+                      14/14 application fields resolved unblocked. Inspect verification and provenance before submission.
                     </div>
                     <div class="kr-sim-mini-actions">
                       <button type="button" class="kr-btn kr-btn-secondary kr-btn-small"
-                        style="font-size: 0.75rem; padding: 4px 10px;">Capture Job</button>
+                        style="font-size: 0.75rem; padding: 4px 10px;">Rescan Fields</button>
                       <button type="button" class="kr-btn kr-btn-secondary kr-btn-small"
                         style="font-size: 0.75rem; padding: 4px 10px;">Start / Resume</button>
                       <button type="button" class="kr-btn kr-btn-secondary kr-btn-small"
@@ -323,11 +334,9 @@
                       <span class="kr-badge">14 FIELDS</span>
                     </div>
                     <div style="display: flex; gap: 4px; flex-wrap: wrap;">
-                      <span class="kr-badge kr-badge-success">4 VERIFIED</span>
-                      <span class="kr-badge kr-badge-warning">1 INFERRED</span>
-                      <span class="kr-badge" style="color: var(--kr-danger); border-color: rgba(240, 106, 106, 0.3);">1
-                        PAUSED</span>
-                      <span class="kr-badge">8 UNTOUCHED</span>
+                      <span class="kr-badge kr-badge-success">11 VERIFIED</span>
+                      <span class="kr-badge kr-badge-warning">3 INFERRED</span>
+                      <span class="kr-badge">0 FAILED</span>
                     </div>
                     <div class="kr-sim-review-list">
                       <div class="kr-sim-review-item">
@@ -349,16 +358,21 @@
                         </div>
                       </div>
                       <div class="kr-sim-review-item">
+                        <span class="kr-sim-review-field">Work Authorization</span>
+                        <div class="kr-sim-review-right">
+                          <span class="kr-badge kr-badge-success">VERIFIED</span>
+                        </div>
+                      </div>
+                      <div class="kr-sim-review-item">
                         <span class="kr-sim-review-field">Notice Period</span>
                         <div class="kr-sim-review-right">
                           <span class="kr-badge kr-badge-warning">INFERRED</span>
                         </div>
                       </div>
                       <div class="kr-sim-review-item">
-                        <span class="kr-sim-review-field">Candidate Signature</span>
+                        <span class="kr-sim-review-field">Applicant Certification</span>
                         <div class="kr-sim-review-right">
-                          <span class="kr-badge"
-                            style="color: var(--kr-danger); border-color: rgba(240, 106, 106, 0.3);">PAUSED</span>
+                          <span class="kr-badge kr-badge-warning">INFERRED</span>
                         </div>
                       </div>
                     </div>
@@ -547,11 +561,12 @@
                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
               </svg>
-              <h3 class="kr-feature-title">Truthful Grounding</h3>
+              <h3 class="kr-feature-title">Tiered Resolution &amp; Provenance</h3>
             </div>
             <p class="kr-feature-text">
-              Rigid prompt constraints enforce truthfulness. Kareer never invents employment dates, past companies,
-              metrics, or certifications. Missing data is flagged for manual input.
+              Resolves fields across three tiers: deterministic profile facts, exact saved answers, and contextual AI
+              fallback. Every field carries clear visual provenance (verified, saved, inferred, guessed) with zero
+              hallucinated facts.
             </p>
           </div>
 
@@ -561,11 +576,11 @@
                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <polyline points="9 18 15 12 9 6"></polyline>
               </svg>
-              <h3 class="kr-feature-title">Multi-Step Applications</h3>
+              <h3 class="kr-feature-title">Multi-Step &amp; Repeatable Sections</h3>
             </div>
             <p class="kr-feature-text">
-              Maintains session memory and application state as you progress through multi-page application flows on
-              platforms like Ashby, Workday, and Lever.
+              Maintains session memory across multi-page application flows on Ashby, Greenhouse, Lever, and Workday.
+              Reconciles parsed resume rows (education and work history) without duplicate records.
             </p>
           </div>
 
@@ -591,11 +606,11 @@
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
               </svg>
-              <h3 class="kr-feature-title">Human Review &amp; Safeguards</h3>
+              <h3 class="kr-feature-title">Unblocked Autofill &amp; Control</h3>
             </div>
             <p class="kr-feature-text">
-              Intentionally halts before electronic signatures, legal attestations, background check consents, and
-              interactive assessments so you maintain final authorization.
+              Never deadlocks or halts on legal disclaimers, certifications ('I certify'), or diversity surveys. Fills
+              completely unblocked with full provenance, while leaving submission strictly in your hands.
             </p>
           </div>
 
@@ -682,14 +697,21 @@
                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
-                Multi-page workflow navigation
+                Phone &amp; texting consent isolation
               </li>
               <li class="kr-ats-cap-item">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
-                Automated resume file attachment
+                Accepted resume verification &amp; parser handoff
+              </li>
+              <li class="kr-ats-cap-item">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                Multi-page workflow navigation
               </li>
             </ul>
           </div>
@@ -712,6 +734,13 @@
                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
+                Repeatable education &amp; job row retry reconciliation
+              </li>
+              <li class="kr-ats-cap-item">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
                 Embedded iframe orchestration
               </li>
               <li class="kr-ats-cap-item">
@@ -719,7 +748,7 @@
                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
-                Post-upload re-acquisition tolerance
+                Catalog search &amp; unguided option harvest
               </li>
             </ul>
           </div>
@@ -735,7 +764,14 @@
                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
-                Location typeahead commit
+                Location typeahead &amp; university Select2
+              </li>
+              <li class="kr-ats-cap-item">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                Parent posting description hydration for AI context
               </li>
               <li class="kr-ats-cap-item">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
@@ -765,21 +801,28 @@
                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
-                Automation ID detection
+                Automation ID &amp; custom combobox listboxes
               </li>
               <li class="kr-ats-cap-item">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
-                Multi-step progress tracking
+                Repeatable parsed-row reconciliation &amp; deduplication
               </li>
               <li class="kr-ats-cap-item">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
-                Dropdown commit stabilization
+                Skills search, Enter-commit &amp; token verification
+              </li>
+              <li class="kr-ats-cap-item">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                Multi-step progress tracking &amp; limit reset
               </li>
             </ul>
           </div>
@@ -1168,8 +1211,9 @@
             </summary>
             <div class="kr-faq-answer">
               Kareer has dedicated adapters for Ashby, Greenhouse, Lever, and Workday, handling custom selects, location
-              typeaheads, and multi-page flows. For other job boards and career pages, Kareer includes an intelligent
-              generic fallback engine supporting standard HTML inputs, textareas, selects, radios, and checkboxes.
+              typeaheads, repeatable section reconciliation (education and work history), and multi-page flows. For other
+              job boards and career pages, Kareer includes an intelligent generic fallback engine supporting standard
+              HTML inputs, textareas, selects, radios, and checkboxes.
             </div>
           </details>
 
@@ -1183,9 +1227,10 @@
             </summary>
             <div class="kr-faq-answer">
               By default, Kareer never automatically submits an application. It scans, fills, and presents all filled
-              fields for candidate review. An optional "Auto Submit" setting exists in Settings (default OFF) which only
-              activates if all required fields are validated, no errors exist, and the candidate has reviewed the page.
-              Kareer strictly halts before e-signatures, legal attestations, background checks, and assessments.
+              fields with clear visual provenance (verified, saved, inferred, guessed) for candidate review. An optional
+              "Auto Submit" setting exists in Settings (default OFF) which only activates if all required fields are
+              validated and no errors exist. Kareer fills applications unblocked—without artificial pauses on legal
+              attestations or disclosures—while leaving submission in your control.
             </div>
           </details>
 
@@ -1284,7 +1329,7 @@
   </footer>
 
   <!-- Scripts -->
-  <script src="script.js?v=0.5.27"></script>
+  <script src="script.js?v=0.5.28"></script>
 </body>
 
 </html>

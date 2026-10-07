@@ -1,3 +1,16 @@
+## Turn: 2026-10-07 - Documentation & public site alignment with unblocked execution, tiered provenance, and ATS capabilities
+
+- Target: `README.md`, `site/index.html`, `site/styles.css`, `site/script.js`.
+- Rationale: Core engine previously transitioned away from hard-block safety boundary pauses to unblocked execution with 5-state value provenance (`saved`, `inferred`, `guessed`, `verified`, `unresolved`), 3-tier hierarchical resolution, repeatable section reconciliation, and instrument panel styling. `README.md` and `site/` previously contained obsolete copy claiming automatic pauses for signatures/attestations/disclosures and lacked descriptions of repeatable rows and provenance.
+- Changes:
+  1. `README.md`: Updated Key Features to highlight 3-tier resolution, 5-state value provenance, unblocked application filling (zero deadlocks), and repeatable-section reconciliation across Ashby, Greenhouse, Lever, and Workday. Updated Step 4 and FAQ to explain candidate review control, unblocked attestation completion, and resolution hierarchy.
+  2. `site/index.html`: Replaced simulated "Safety Boundary: Paused" box with an unblocked Contextual Disclosure & Acknowledgment field (showing `✓ Verified` and `⚡ Inferred / Review` provenance with zero hard-block deadlocks). Updated simulated review list and badges (11 VERIFIED, 3 INFERRED, 0 FAILED). Updated Features and Supported Sites grids to reflect repeatable-section reconciliation, parent posting context hydration, and unblocked autofill. Updated FAQ and version tags to v0.5.28.
+  3. `site/styles.css`: Added `.kr-sim-unblocked-callout` styling with signal green accent aligned with design system tokens.
+  4. `site/script.js`: Updated interactive demo autofill simulation to report unblocked execution and 11 Verified / 3 Inferred provenance.
+- Verification:
+  - Impeccable mechanical detector: 0 defects (`impeccable detect --json site/index.html` returned `[]`).
+  - Unit tests: 454/454 passed (`npm test`, 0 failures).
+
 ## Turn: 2026-10-06 - Workday skills filling fix, 46s harvest lag elimination & primary limit reset mechanism
 
 - Target: extension and userscript on feature/ux-enhancements at v0.5.20.

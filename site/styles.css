@@ -636,18 +636,18 @@ p:last-child {
   color: var(--kr-warning);
 }
 
-.kr-sim-boundary-box {
+.kr-sim-unblocked-callout {
   margin-top: var(--kr-space-2);
   padding: var(--kr-space-3);
-  background: rgba(242, 184, 75, 0.06);
-  border: 1px solid rgba(242, 184, 75, 0.3);
+  background: rgba(163, 230, 53, 0.06);
+  border: 1px solid rgba(163, 230, 53, 0.25);
   border-radius: var(--kr-radius-sm);
 }
 
-.kr-sim-boundary-title {
+.kr-sim-unblocked-title {
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--kr-warning);
+  color: var(--kr-signal);
   display: flex;
   align-items: center;
   gap: var(--kr-space-2);
@@ -655,7 +655,7 @@ p:last-child {
   font-family: var(--kr-font-mono);
 }
 
-.kr-sim-boundary-desc {
+.kr-sim-unblocked-desc {
   font-size: 0.75rem;
   color: var(--kr-text-2);
   line-height: 1.4;

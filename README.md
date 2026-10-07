@@ -71,11 +71,16 @@ Unlike proprietary autofill extensions that store your sensitive resume data on 
 
 ## Key Features
 
-- 🎯 **High-Accuracy Field Detection**: Handles standard inputs, custom searchable comboboxes, multi-select dropdowns, date pickers, radios, and checkboxes.
-- 🤖 **Truthful Grounding**: Built-in prompts strictly forbid the AI from inventing credentials, dates, tools, or past jobs. If information is missing from your profile, the field is highlighted for manual input rather than hallucinated.
-- 🛡️ **Safety Boundaries**: Automatically pauses and alerts you when encountering e-signatures, background check consents, diversity disclosures, or interactive assessments.
-- ⚡ **Multi-Page Navigation**: Detects "Next" and "Continue" buttons across multi-step applications while remembering previously entered data.
-- ✍️ **Inline Narrative Rewrite**: Easily tweak open-ended essay questions ("Why do you want to work here?") with an inline AI rewrite tool to tailor answers to specific company values.
+- 🎯 **High-Accuracy Field Detection & Repeatable Sections**: Handles standard inputs, custom searchable comboboxes, multi-select dropdowns, date pickers, radios, checkboxes, and multi-row sections (such as education and work experience) across diverse ATS layouts.
+- ⚡ **Tiered Resolution & Value Provenance**: Resolves fields through a clear 3-tier hierarchy:
+  1. *Deterministic profile fields* via ATS adapter selectors.
+  2. *Exact saved answers* for repeated custom questions (`savedAnswers[questionText]`).
+  3. *Contextual AI fallback* using a single batched request per page.
+  Every field carries visual provenance: **verified (green)**, **saved**, **inferred**, **guessed (yellow)**, or **unresolved**.
+- 🤖 **Truthful Context-Grounded Grounding**: Inferences are strictly grounded in your resume, profile, applicant notes, work country, and captured job context. Built-in prompts forbid inventing credentials, dates, tools, or companies.
+- 🚀 **Unblocked Application Filling (Zero Deadlocks)**: Never freezes, deadlocks, or halts on legal disclaimers, certifications ("I certify"), attestations, or demographic disclosures. Fills the entire page unblocked to the best of its ability while honoring your Auto Continue and Auto Submit preferences.
+- 🔄 **Automated Job Capture & Multi-Step Continuity**: Automatically captures job titles, companies, and requirements on navigation. Tracks multi-page workflows, reconciles parsed resume rows without duplicating records, and provides instant rescan/engine reset to prevent request-limit stalls.
+- ✍️ **Inline Narrative Rewrite**: Easily tweak open-ended essay questions ("Why do you want to work here?") directly inside the form with an inline AI rewrite tool tailored to specific job requirements.
 - 🔒 **Ironclad Key Isolation**: Your OpenRouter API key is stored in sandboxed extension storage and used only by background workers. It is never exposed to page scripts or web DOM.
 
 ---
@@ -84,13 +89,13 @@ Unlike proprietary autofill extensions that store your sensitive resume data on 
 
 Kareer includes dedicated adapters for major Applicant Tracking Systems (ATS) as well as an intelligent generic fallback:
 
-| ATS / Platform | Adapter | Searchable Comboboxes | Multi-Page Steps | File Uploads |
-| :--- | :---: | :---: | :---: | :---: |
-| **Ashby** | ✅ Dedicated | ✅ Supported | ✅ Supported | ✅ Supported |
-| **Greenhouse** | ✅ Dedicated | ✅ Supported | ✅ Supported | ✅ Supported |
-| **Lever** | ✅ Dedicated | ✅ Supported | ✅ Supported | ✅ Supported |
-| **Workday** | ✅ Dedicated | ✅ Supported | ✅ Supported | ✅ Supported |
-| **Generic Forms** | ✅ Fallback | ✅ Standard HTML | ✅ Standard Forms | ✅ Standard Inputs |
+| ATS / Platform | Adapter | Searchable Comboboxes | Multi-Page Steps | File Uploads | Repeatable Rows |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Ashby** | ✅ Dedicated | ✅ Supported | ✅ Supported | ✅ Supported | ✅ Supported |
+| **Greenhouse** | ✅ Dedicated | ✅ Supported | ✅ Supported | ✅ Supported | ✅ Supported |
+| **Lever** | ✅ Dedicated | ✅ Supported | ✅ Supported | ✅ Supported | ✅ Supported |
+| **Workday** | ✅ Dedicated | ✅ Supported | ✅ Supported | ✅ Supported | ✅ Supported |
+| **Generic Forms** | ✅ Fallback | ✅ Standard HTML | ✅ Standard Forms | ✅ Standard Inputs | ✅ Preserved |
 
 ---
 
@@ -106,7 +111,7 @@ Kareer connects to AI models via [OpenRouter](https://openrouter.ai/), an API ag
 2. Navigate to **Keys** and click **Create Key**.
 3. Add a small credit balance (e.g., $3–$5 is typically enough for hundreds of applications).
    > [!TIP]
-   > We recommend the default model: **`google/gemini-2.0-flash`**. It is extremely fast, accurate at structured JSON output, and costs fractions of a cent per application.
+   > We recommend the default model: **`google/gemini-2.5-flash-lite`**. It is extremely fast, accurate at structured JSON output, and costs fractions of a cent per application. All testing was done using this model.
 
 ---
 
@@ -163,24 +168,27 @@ If you prefer userscripts:
 ### Step 4: Autofill Your First Job Application
 
 1. Navigate to any supported job application page (e.g., Greenhouse, Lever, Ashby, or Workday).
-2. The **Kareer** floating panel will appear on the right side of the screen.
-3. Click **Scan Fields** to inspect the form, or click **Autofill Application** to fill the form in one step.
-4. Review the filled values:
-   - **Green highlights**: Field verified and filled.
-   - **Yellow highlights**: Inferred or requires review.
-5. Review the final answers, upload your resume file if prompted, and submit when satisfied!
+2. The **Kareer** instrument panel appears on the right (or press `Alt+Shift+J` to toggle).
+3. Under the **Run** tab, job title and company metadata are automatically captured.
+4. Click **Autofill Application** (or **Scan Fields** to inspect detected fields).
+5. Inspect the filled values and provenance in the review list:
+   - **Green (Verified / Saved)**: Exact profile match or confirmed DOM-committed selection.
+   - **Yellow (Inferred / Guessed)**: Contextual AI fallback inference grounded in your resume, notes, and country facts.
+   - **Unresolved**: Questions lacking profile context, left open for your review.
+6. Verify your answers, upload your resume file if prompted, and submit when satisfied. (By default, **Auto Submit** is OFF so you maintain complete control).
 
 ---
 
 ## Safety & Privacy Guarantees
 
-Kareer is designed with strict boundaries to protect both your privacy and the integrity of your job search:
+Kareer is engineered with strict boundaries to protect both your privacy and the integrity of your job search:
 
 > [!IMPORTANT]
-> **Human-in-the-Loop Safeguards**
-> - **No Hallucinations**: Prompt constraints enforce truthful grounding. The model will never invent job titles, employment dates, or certifications.
-> - **Auto-Pause for Legal & Signature Fields**: Kareer intentionally pauses before e-signatures, background check authorizations, diversity surveys, and assessment tests.
-> - **No Stealth or Anti-Bot Bypass**: No `chrome.debugger` or CDP hacks. Kareer respects website security policies.
+> **Human-in-the-Loop & Transparent Automation**
+> - **Zero Fabrications**: Prompt constraints enforce truthful grounding. The model will never invent job titles, employment dates, certifications, or past companies.
+> - **Unblocked Filling, Candidate Control**: Kareer autofills applications unblocked—without freezing on legal certifications, attestations, or disclosure surveys—while keeping Auto Submit disabled by default so you retain final review before submitting.
+> - **5-State Value Provenance**: Every populated field distinguishes between `saved`, `inferred`, `guessed`, `verified`, and `unresolved`, so you always know which values came from exact profile facts versus contextual inference.
+> - **No Stealth or Anti-Bot Bypass**: No `chrome.debugger` or CDP hacks. DOM events use clean, native synthetic dispatches.
 > - **Complete Key Isolation**: Your API keys are kept in isolated background workers or userscript storage and are never exposed to the page DOM.
 
 For full details, please review our [SECURITY.md](./SECURITY.md).
@@ -285,7 +293,13 @@ If you encounter a form or ATS edge case that doesn't fill correctly:
 <details>
 <summary><b>Q: Why wasn't a specific field filled?</b></summary>
 
-- If a question cannot be answered from your saved profile or resume, Kareer skips it rather than guessing. Add the relevant detail (e.g., specific work authorization or salary expectations) to the **Applicant Notes** field in your profile.
+- Kareer resolves fields through a 3-tier hierarchy: deterministic profile facts, exact saved answers, and contextual AI inference. If an answer cannot be determined with confidence from your profile or resume context, it remains `unresolved` so you can manually answer it or add details to your **Applicant Notes**.
+</details>
+
+<details>
+<summary><b>Q: Does Kareer freeze on legal attestations or e-signatures?</b></summary>
+
+- No. Kareer follows an unblocked autofill policy: it completes questions, certifications, and disclosures using your saved profile facts and contextual inference rather than hard-pausing or freezing the page. However, **Auto Submit** is strictly disabled by default, giving you full control to inspect, edit, and sign before submitting.
 </details>
 
 ---

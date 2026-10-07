@@ -223,8 +223,14 @@ function initInteractiveDemo() {
 
         setTimeout(() => {
           if (progressBar) progressBar.style.transform = "scaleX(0.75)";
-          if (wfDesc) wfDesc.textContent = "Validating select choices, dates, and text inputs...";
-          simInputs.forEach((inp) => inp.classList.add("filled-verified"));
+          if (wfDesc) wfDesc.textContent = "Resolving deterministic profile fields and contextual questions...";
+          simInputs.forEach((inp, idx) => {
+            if (idx === 3 || idx === 5) {
+              inp.classList.add("filled-inferred");
+            } else {
+              inp.classList.add("filled-verified");
+            }
+          });
         }, 400);
 
         setTimeout(() => {
@@ -233,10 +239,10 @@ function initInteractiveDemo() {
             wfBadge.textContent = "READY FOR REVIEW";
             wfBadge.className = "kr-badge kr-badge-success";
           }
-          if (wfDesc) wfDesc.textContent = "13/14 fields verified. Safety boundary paused before electronic signature.";
+          if (wfDesc) wfDesc.textContent = "14/14 fields processed unblocked. 11 verified, 3 inferred from context.";
           actionBtn.disabled = false;
           actionBtn.textContent = "Re-run Autofill";
-          showFeedback("13 Verified, 1 Paused (Safety)");
+          showFeedback("11 Verified, 3 Inferred (Unblocked) ✓");
         }, 900);
       } else if (activeTab === "profile") {
         showFeedback("Profile saved locally ✓");
