@@ -33,13 +33,24 @@ export async function prepareApplicationSections(doc, profile, adapter, recipes,
     // Plan the entire section before any Add. Partial rows cannot consume a
     // stronger match; contradictory user identities are never overwritten.
     for (const record of records) {
+      const candidates = rows().filter(row => {
+        const actual = values(row, adapter);
+        return recipe.identity.every(name => actual[name] && optionKey(actual[name]) === optionKey(record[name]));
+      });
+      if (candidates.length > 1 || candidates.some(row => assigned.has(row))) throw new Error(`${adapter.label}: ambiguous ${recipe.records} matches. Review existing rows.`);
+      if (candidates.length) { matched.set(record, candidates[0]); assigned.add(candidates[0]); }
+    }
+    const completeRows = new Set(assigned);
+    for (const record of records) {
+      if (matched.has(record)) continue;
       let candidates = rows().filter(row => {
+        if (completeRows.has(row)) return false;
         const actual = values(row, adapter);
         return recipe.identity.some(name => actual[name]) && recipe.identity.every(name => !actual[name] || optionKey(actual[name]) === optionKey(record[name]));
       });
       const primary=recipe.identity[0];
       if (!candidates.length && records.filter(saved=>optionKey(saved[primary])===optionKey(record[primary])).length===1) {
-        candidates=rows().filter(row=>optionKey(values(row,adapter)[primary])===optionKey(record[primary]));
+        candidates=rows().filter(row=>!completeRows.has(row) && optionKey(values(row,adapter)[primary])===optionKey(record[primary]));
       }
       const previous=progress[`${recipe.records}:${record.id}`];
       if (!candidates.length && previous && Number.isInteger(previous.index)) {

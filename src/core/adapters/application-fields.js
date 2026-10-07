@@ -1,5 +1,5 @@
 import { parsePhoneNumberFromString } from 'libphonenumber-js/min';
-import { countryCode, explicitCountryCode, countryCodes, countryNames, eligibilityCanonicalKey, eligibilityOptionMatches } from './canonical.js';
+import { countryCode, explicitCountryCode, countryCodes, countryNames, eligibilityCanonicalKey, eligibilityOptionMatches, workAuthorizationValue } from './canonical.js';
 import { fixedProfileAnswer } from '../profile.js';
 import { optionKey, findExactOption, readComboboxSelection } from '../fields/combobox.js';
 import { locationMatches } from '../location.js';
@@ -132,12 +132,7 @@ export function eligibilityValue(field, profile, jobContext) {
   if (records.length !== 1) return '';
   const record = records[0];
   if (field.ats?.canonicalKey === 'work_auth') {
-    if (!/\bwithout\b.*(?:sponsor|visa)|\b(?:do not|not) (?:require|need).*sponsor/i.test(label)) return record.workAuthorization || '';
-    const sponsorship = /future|ever/i.test(label)
-      ? /now|current/i.test(label) ? [record.sponsorshipNow,record.sponsorshipFuture] : [record.sponsorshipFuture]
-      : [record.sponsorshipNow];
-    if (record.workAuthorization === 'No' || sponsorship.includes('Yes')) return 'No';
-    return record.workAuthorization === 'Yes' && sponsorship.every(value => value === 'No') ? 'Yes' : '';
+    return workAuthorizationValue(record, label);
   }
   if (field.ats?.canonicalKey === 'sponsorship_now') return record.sponsorshipNow || '';
   if (field.ats?.canonicalKey === 'sponsorship_future') return record.sponsorshipFuture || '';

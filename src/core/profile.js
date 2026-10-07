@@ -1,5 +1,5 @@
 import { isResidenceLabel, locationMatches } from './location.js';
-import { countryCode, countryNames, countryCodes } from './adapters/canonical.js';
+import { countryCode, countryNames, countryCodes, workAuthorizationValue, eligibilityCanonicalKey } from './adapters/canonical.js';
 
 const yesNo = ['Yes', 'No'];
 const disclosure = ['Yes', 'No', 'Prefer not to answer'];
@@ -335,12 +335,13 @@ export function workEligibilityAnswer(field, profile, job) {
     || (countryCode(profile.workCountry) === target ? profile : null) : null;
   let value = '';
   if (record) {
-    if (sponsorship) {
+    if (authorization && (!sponsorship || eligibilityCanonicalKey(text) === 'work_auth')) value = workAuthorizationValue(record, text);
+    else if (sponsorship) {
       const now = record.sponsorshipNow, future = record.sponsorshipFuture;
       value = /\bnow\b.*\bfuture\b|\bfuture\b.*\bnow\b/i.test(text)
         ? now === 'Yes' || future === 'Yes' ? 'Yes' : now === 'No' && future === 'No' ? 'No' : ''
         : /\bfuture\b/i.test(text) ? future : now;
-    } else value = record.workAuthorization;
+    }
     if (authorization && /\blive\b|\breside\b/i.test(text) && value !== 'No') value = '';
   }
   if (value && ['select', 'radio', 'combobox'].includes(field.type)) {

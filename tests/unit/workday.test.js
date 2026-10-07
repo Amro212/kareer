@@ -641,13 +641,20 @@ test('harvestComboboxOptions skips multi-query search for skills when no explici
   assert.equal(searchCount <= 1, true, 'skills must not query all 5 skills serially during page harvest');
 });
 
-test('Workday skills search does not commit an unrelated first suggestion',async()=>{
+for (const suggestion of ['LinkedIn','JavaScript']) test(`Workday Java search does not commit ${suggestion}`,async()=>{
   const {input,accepted}=prompt();
   input.id='skills--skills';input.closest('[data-automation-id="formField-source"]').setAttribute('data-automation-id','formField-skills');
   document.querySelector('[data-automation-id="sourceSection"]').setAttribute('data-automation-id','skillsSection');
   document.querySelector('label').setAttribute('for',input.id);document.querySelector('label').textContent='Skills';
+  const menu=document.querySelector('[data-automation-id="activeListContainer"]');
+  input.addEventListener('keydown',event=>{
+    if(event.key==='Enter' && input.value) {
+      menu.hidden=false;menu.innerHTML=`<div role="option">${suggestion}</div>`;
+      menu.firstElementChild.onclick=()=>{accepted.push(suggestion);input.parentElement.insertAdjacentHTML('afterbegin',`<div data-automation-id="selectedItem" title="${suggestion}">${suggestion}</div>`);input.value='';menu.hidden=true;};
+    }
+  });
   const field=scanFormFields().find(field=>field.element===input);
   assert.equal(field.ats.canonicalKey,'skill');
   assert.equal(await fillField(field,'Java'),false);
-  assert.deepEqual(accepted,[],'LinkedIn must not be selected as a Java skill');
+  assert.deepEqual(accepted,[],`${suggestion} must not be selected as a Java skill`);
 });

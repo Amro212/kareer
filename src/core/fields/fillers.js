@@ -272,10 +272,6 @@ export async function fillCombobox(element, targetValue, knownOptions) {
     }
     // Resolve the option again after waiting; async menus can replace nodes.
     if (match) match = findExactOption(discoverComboboxOptions(element).map(option => ({ ...optionData(option), element: option })), target, element);
-    if (!match && detectAdapter().fieldMetadata?.(element)?.ats?.canonicalKey === 'skill' && options.length) {
-      const top = options[0];
-      match = { ...optionData(top), element: top };
-    }
     if (!match || !element.isConnected) {
       logger.warn(`Fill[${element.id}]: no exact owned option for "${target}"`);
       return false;

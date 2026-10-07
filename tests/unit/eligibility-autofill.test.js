@@ -10,6 +10,30 @@ import { classifyPage } from '../../src/core/pageClassifier.js';
 import { fillField } from '../../src/core/fields/fillers.js';
 import { saveProfile, saveApiKey } from '../../src/core/storage.js';
 import {resolveDiscoveredAnswers} from '../../src/core/autofill.js';
+import { workEligibilityAnswer } from '../../src/core/profile.js';
+
+test('generic authorization honors sponsorship qualifiers and time horizons',async()=>{
+  boot('<form></form>');
+  const record={country:'United States',workAuthorization:'Yes',sponsorshipNow:'No',sponsorshipFuture:'Yes'};
+  const answer=(suffix,changes={})=>workEligibilityAnswer(
+    {...question(`Are you authorized to work in the United States ${suffix}?`),ats:undefined},
+    {workEligibilities:[{...record,...changes}]}
+  );
+  assert.equal(answer('without sponsorship now or in the future').value,'no');
+  assert.equal(answer('without sponsorship in the future').value,'no');
+  assert.equal(answer('without sponsorship now').value,'yes');
+  assert.equal(answer('without sponsorship in the future',{sponsorshipNow:'Yes',sponsorshipFuture:'No'}).value,'yes');
+  assert.equal(answer('and do not require sponsorship now',{sponsorshipNow:'Yes'}).value,'no');
+  assert.equal(answer('without sponsorship now or in the future',{sponsorshipFuture:''}).value,'');
+  assert.equal(answer('without sponsorship now or in the future',{sponsorshipFuture:''}).provenance,'unresolved');
+  assert.equal(answer('without sponsorship now',{workAuthorization:'No',sponsorshipNow:''}).value,'no');
+  assert.equal(answer('without sponsorship now',{sponsorshipNow:''}).value,'');
+  assert.equal(workEligibilityAnswer({...question('Will you require sponsorship to be authorized to work in the United States now?'),ats:undefined},{workEligibilities:[record]}).value,'no');
+  saveProfile({fullName:'Test Applicant',workEligibilities:[{...record,sponsorshipNow:'Yes'}]});
+  const response=await generateAutofillAnswers([{...question('Are you authorized to work in the United States without sponsorship?'),ats:undefined}]);
+  assert.equal(response.answers[0].value,'no');
+  assert.equal(response.answers[0].provenance,'saved');
+});
 
 let dom;
 function boot(html, ats = 'greenhouse') {

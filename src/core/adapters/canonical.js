@@ -311,3 +311,12 @@ export function canonicalOptionMatches(canonical, actual, expected) {
 export function isDeclineOption(text) {
   return /^(?:(?:i )?(?:do not wish to answer|don't wish to answer|prefer not to (?:answer|say|disclose)|decline to (?:answer|disclose|state|self-identify))|rather not answer|choose not to disclose|prefer not to state)(?:\s*\([^)]*\))?$/i.test(canonicalNorm(text));
 }
+
+export function workAuthorizationValue(record, label) {
+  if (!/\bwithout\b.*(?:sponsor|visa)|\b(?:do not|not) (?:require|need).*sponsor/i.test(label)) return record.workAuthorization || '';
+  const sponsorship = /future|ever/i.test(label)
+    ? /now|current/i.test(label) ? [record.sponsorshipNow,record.sponsorshipFuture] : [record.sponsorshipFuture]
+    : [record.sponsorshipNow];
+  if (record.workAuthorization === 'No' || sponsorship.includes('Yes')) return 'No';
+  return record.workAuthorization === 'Yes' && sponsorship.every(value => value === 'No') ? 'Yes' : '';
+}
