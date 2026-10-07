@@ -31,7 +31,7 @@ function locationCountries(text) {
   return [...new Set(found)];
 }
 
-export function isJobPage(doc = document) {
+export function isJobPage(doc = document, hasRestorableSession = false) {
   if (detectAdapter(doc.location || window.location, doc).id !== 'generic') return true;
   if (Array.from(doc.querySelectorAll('iframe[src]')).some(frame => {
     try { return detectAdapter(new URL(frame.src, doc.location?.href), null).id !== 'generic'; } catch { return false; }
@@ -40,7 +40,7 @@ export function isJobPage(doc = document) {
   const headings = [doc.title, ...Array.from(doc.querySelectorAll('h1,h2,[role="heading"]')).map(el => el.textContent.trim())];
   if (headings.some(text => /job description|about (?:the|this) (?:role|job)|\b(?:job|employment) application\b|apply for (?:this |the )?(?:job|role|position)/i.test(text))) return true;
   if (headings.some(text => /^review(?: your)? application$/i.test(text))) return true;
-  if (capturedJobs.has(doc) && headings.some(text => APPLICATION_STEP_HEADING.test(text))) return true;
+  if ((capturedJobs.has(doc) || hasRestorableSession) && headings.some(text => APPLICATION_STEP_HEADING.test(text))) return true;
   if (Array.from(doc.querySelectorAll('form,[role="form"]')).some(form => /\b(?:job|employment)[_-]application\b/i.test(`${form.id} ${form.getAttribute('name') || ''}`))) return true;
   if (doc.querySelector('form,[role="form"]') && headings.some(text => /^(?:application(?:\s*[·:—-]\s*.+)?|review(?: your)? application)$/i.test(text))) return true;
   if (headings.some(text => /\bcareers?\b/i.test(text)) && /(?:^|[/.])(?:careers?|jobs|openings)(?:[/.]|$)/i.test(doc.location?.href || '')) return true;

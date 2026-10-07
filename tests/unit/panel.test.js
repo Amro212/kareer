@@ -410,3 +410,25 @@ test('userscript yields when the extension panel root is already present', async
     dom.window.close();
   }
 });
+
+for (const scenario of ['current', 'pending', 'ambiguous', 'unrelated']) {
+  test(`userscript panel restores only matching generic application sessions (${scenario})`, async () => {
+    const bundle = await build({ entryPoints: ['src/targets/userscript/entry.js'], bundle: true, format: 'iife', write: false });
+    const url = 'https://example.com/applications/42/personal';
+    const title = scenario === 'unrelated' ? 'Videos' : 'Personal Information';
+    const dom = new JSDOM(`<title>${title}</title><h1>${title}</h1><form><label for="email">Email</label><input id="email" type="email"></form>`, { url, runScripts: 'dangerously', pretendToBeVisual: true });
+    const session = { id: 'job-42', identityVersion: 2, currentUrl: scenario === 'pending' ? url.replace('/personal', '/start') : url, pendingUrl: scenario === 'pending' ? url : '', job: { title: 'Engineer', listingUrl: url.replace('/personal', '/start'), applicationUrl: url }, history: [], steps: {}, answers: {}, errors: [], active: false, status: 'idle' };
+    const ids = scenario === 'ambiguous' ? ['job-42', 'job-43'] : ['job-42'];
+    const storage = new Map([['kr:sessions', ids], ['kr:sessions:job-42', session], ['kr:sessions:job-43', { ...session, id: 'job-43' }]]);
+    dom.window.GM_getValue = (key, fallback) => storage.get(key) ?? fallback;
+    dom.window.GM_setValue = (key, value) => storage.set(key, structuredClone(value));
+    dom.window.CSS = { escape: value => value };
+    try {
+      dom.window.eval(bundle.outputFiles[0].text);
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const root = dom.window.document.querySelector('#kareer-root');
+      assert.equal(Boolean(root), ['current', 'pending'].includes(scenario));
+      assert.deepEqual(storage.get('kr:sessions'), ids);
+    } finally { dom.window.close(); }
+  });
+}

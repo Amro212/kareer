@@ -1465,9 +1465,11 @@ function refreshDetectedFields() {
  * this document to react to.
  */
 export function refreshRemoteFieldCount({ force = false } = {}) {
-  if (!platform.capabilities.crossFrame) return;
+  const panelRoot = shadowRootRef;
+  if (!panelRoot || !platform.capabilities.crossFrame) return;
   listRemoteFrames()
     .then(async (frames) => {
+      if (shadowRootRef !== panelRoot) return;
       const total = frames.reduce((sum, frame) => sum + frame.fieldCount, 0);
       const countsChanged = total !== remoteFieldCount || frames.length !== remoteFrameCount;
       const needsInspection = force || countsChanged || (total > 0 && !remoteFieldsCache.length);
@@ -1477,6 +1479,7 @@ export function refreshRemoteFieldCount({ force = false } = {}) {
           remoteFieldsCache = [];
         } else {
           const inspected = await inspectRemoteFields().catch(() => []);
+          if (shadowRootRef !== panelRoot) return;
           if (inspected.length) {
             remoteFieldsCache = inspected;
           }
@@ -3234,10 +3237,16 @@ export function unmountUI() {
   applicationEngine?.destroy();
   applicationEngine = null;
   applicationState = null;
+  if (isAutofilling) stopAutofillFlow('Job page closed. Pending autofill stopped.');
   stopFormObserver();
   destroyInlineRewriteBadge();
   shadowRootRef = null;
-  if (isAutofilling) stopAutofillFlow('Job page closed. Pending autofill stopped.');
+  fieldResultsCache.clear();
+  detectedFieldsCache = [];
+  remoteFieldsCache = [];
+  remoteFieldCount = 0;
+  remoteFrameCount = 0;
+  autofillProgress = { current: 0, total: 0, statusText: '' };
 }
 
 export function mountUI() {

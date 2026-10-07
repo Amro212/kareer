@@ -4,6 +4,7 @@ import { platform, getHostName } from './platform.js';
 import { logger } from './debug.js';
 import { mountUI, unmountUI, syncJobContext, toggleUIVisibility, exportUserBackup } from './ui.js';
 import { captureJob, isJobPage } from './jobs.js';
+import { restoreSession } from './sessions.js';
 
 let pageObserver = null;
 let pageTimer = null;
@@ -42,8 +43,13 @@ export function bootstrap() {
   try {
     initializeStorage();
     registerMenuCommands();
-    const reconcile = () => {
-      if (!isJobPage()) {
+    let reconciliation = 0;
+    const reconcile = async () => {
+      const token = ++reconciliation;
+      const url = document.location.href;
+      const session = isJobPage() ? null : await restoreSession(url).catch(() => null);
+      if (token !== reconciliation || document.location.href !== url) return;
+      if (!isJobPage(document, Boolean(session))) {
         unmountUI();
         const root = document.getElementById(UI_IDS.CONTAINER);
         if (root?.getAttribute('data-kr-host') === getHostName()) root.remove();
