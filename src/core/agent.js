@@ -1,4 +1,4 @@
-import { scanFormFields, harvestComboboxOptions, assertUniqueFields, deduplicateFields, refreshField } from './fields/scanner.js';
+import { scanFormFields, harvestComboboxOptions, deduplicateFields, refreshField } from './fields/scanner.js';
 import { normalizeFieldsForAI } from './fields/normalize.js';
 import { fillField } from './fields/fillers.js';
 import { uploadResumeAndWait, isResumeField } from './resume.js';
@@ -44,7 +44,6 @@ export function createFieldAgent() {
     if (page.type === 'application') await detectAdapter().prepareFields?.(document, getProfile(), { overwrite: overwriteExisting,isCurrent });
     if (!isCurrent()) return {error:'Frame operation cancelled.'};
     const scanned = scanFormFields(document);
-    assertUniqueFields(scanned);
     cache = new Map(scanned.map((field) => [field.id, field]));
 
     const targets = scanned.filter((field) => field.type !== 'file' && unfilled(field, overwriteExisting));

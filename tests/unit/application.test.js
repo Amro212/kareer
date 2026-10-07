@@ -544,16 +544,21 @@ test('baseline disabled controls do not prevent filling actionable questions', a
   } finally { engine.destroy(); }
 });
 
-test('duplicate field IDs revealed during filling prevent further writes and Continue', async () => {
+test('duplicate HTML IDs revealed during filling receive distinct answers without pausing', async () => {
   render(`<h2>My Information</h2>${input('city', 'City')}${input('postal', 'Postal Code')}<button>Continue</button>`);
-  document.querySelector('#city').oninput = () => document.querySelector('button').insertAdjacentHTML('beforebegin', '<input id="postal">');
+  document.querySelector('#city').oninput = () => {
+    document.querySelector('#city').oninput = null;
+    document.querySelector('button').insertAdjacentHTML('beforebegin', '<label>Alternate postal code<input id="postal"></label>');
+  };
+  saveSettings({ autoContinue: false });
   let clicks = 0;
   document.querySelector('button').onclick = () => clicks++;
   const engine = createApplicationEngine({ settleMs: 0, transitionMs: 0, answer: workflowAnswers });
   try {
     await engine.start(job());
-    assert.match(engine.session.reason, /duplicate field IDs/);
-    assert.equal(document.querySelector('#postal').value, '');
+    assert.equal(engine.session.reason, 'Page filled. Auto Continue is off.');
+    assert.deepEqual([...document.querySelectorAll('[id=postal]')].map(input => input.value), ['Applicant', 'Applicant']);
+    assert.equal(new Set(scanFormFields().map(field => field.id)).size, 3);
     assert.equal(clicks, 0);
   } finally { engine.destroy(); }
 });

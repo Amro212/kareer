@@ -41,6 +41,17 @@ export const ashbyAdapter = {
   submitControl: doc => doc.querySelector('.ashby-application-form-submit-button'),
   confirmation: doc => Boolean(doc.querySelector('[class*="application-form-success-container"]')),
   fieldMetadata(element) {
+    // Ashby nests texting consent inside the phone entry; it is its own question.
+    const consent = element?.closest?.('.ashby-application-form-texting-consent-description');
+    if (consent && element.matches('input[type="radio"][name="communicationConsent"]')) {
+      return {
+        id: element.name,
+        label: (consent.querySelector('p')?.textContent || 'Receive text message updates about this application?').replace(/\s+/g, ' ').trim(),
+        description: '',
+        required: Boolean(element.required || element.getAttribute('aria-required') === 'true'),
+        ats: { adapter: 'ashby', version: 1, canonicalKey: '', multiple: false },
+      };
+    }
     const container = element?.closest?.('.ashby-application-form-field-entry,[class*="fieldEntry"],fieldset');
     const row = element.closest(ROW);
     let owner = element.parentElement;

@@ -347,7 +347,7 @@ export function scanFormFields(root = document) {
     });
   }
 
-  return detectedFields.map(field => {
+  const fields = detectedFields.map(field => {
     if (field.widget) return field;
     const metadata = adapter.fieldMetadata?.(field.element);
     // Ordinary checkboxes retain their own option identity and label. Only
@@ -355,6 +355,8 @@ export function scanFormFields(root = document) {
     if (field.type === FIELD_TYPES.CHECKBOX && adapter.id !== 'workday' && !metadata?.ats?.canonicalKey) return field;
     return { ...field, ...metadata, id: metadata?.id || field.id };
   }).sort(compareDocumentOrder);
+  deduplicateFields(fields);
+  return fields;
 }
 
 function compareDocumentOrder(a, b) {
@@ -370,22 +372,25 @@ function compareDocumentOrder(a, b) {
 }
 
 export function deduplicateFields(fields) {
-  const counts = new Map();
+  // Reserve page IDs before suffixing so "email_2" cannot become a collision.
+  const reserved = new Set(fields.map(field => field.id));
+  const used = new Set();
   for (const field of fields) {
-    const n = (counts.get(field.id) || 0) + 1;
-    counts.set(field.id, n);
-    if (n > 1) {
-      const deduped = `${field.id}_${n}`;
-      logger.warn(`Duplicate field ID "${field.id}" renamed to "${deduped}"`);
-      field.id = deduped;
+    const original = field.id;
+    if (used.has(original)) {
+      let n = 2;
+      while (reserved.has(original + '_' + n)) n++;
+      field.id = original + '_' + n;
+      reserved.add(field.id);
     }
+    used.add(field.id);
   }
 }
 
 export function assertUniqueFields(fields) {
   const ids = new Set();
   for (const field of fields) {
-    if (ids.has(field.id)) throw new Error('Ambiguous duplicate field IDs. Inspect the page before filling.');
+    if (ids.has(field.id)) throw new Error('Field IDs must be unique.');
     ids.add(field.id);
   }
 }

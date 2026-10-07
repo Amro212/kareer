@@ -203,3 +203,11 @@ test('Ashby parser completion cannot borrow acceptance from a cover letter',asyn
   document.body.innerHTML='<div class="ashby-application-form-autofill-input-root"><input id="parser" type="file"><div>Autofill completed!</div></div><div class="ashby-application-form-field-entry"><label for="cover">Cover Letter</label><div class="ashby-application-form-input-file"><input id="cover" type="file"><div class="ashby-application-form-input-file-filename">resume.pdf</div><button>Replace</button></div></div>';
   assert.equal((await verifyField({type:'file',element:document.querySelector('#parser')},'resume.pdf')).verified,false);
 });
+
+test('deduplicateFields reserves actual suffixed IDs and stays idempotent', () => {
+  const fields = [{ id: 'email' }, { id: 'email' }, { id: 'email_2' }, { id: 'email' }];
+  deduplicateFields(fields);
+  assert.deepEqual(fields.map(field => field.id), ['email', 'email_3', 'email_2', 'email_4']);
+  deduplicateFields(fields);
+  assert.equal(new Set(fields.map(field => field.id)).size, fields.length);
+});

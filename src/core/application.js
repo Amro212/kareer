@@ -113,10 +113,6 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     do {
       if (!guard(token)) return false;
       const fields = scanPageFields();
-      if (new Set(fields.map(f => f.id)).size !== fields.length) {
-        status('paused', 'Ambiguous duplicate field IDs. Fill this page manually.');
-        return false;
-      }
       const change = comparePages(snapshot, observePage(fields));
       if (change === 'changed') return checkPage(snapshot, token, stage, fieldId);
       const state = JSON.stringify(fields.map(f => [f.id, questionIdentity(f), f.element.disabled, f.element.readOnly]));
@@ -593,7 +589,6 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         if (page.type !== 'application') { status('paused', page.reason); return; }
         const fields = scanFormFields();
         let signature = observePage(scanPageFields());
-        if (new Set(fields.map(f => f.id)).size !== fields.length) { status('paused', 'Ambiguous duplicate field IDs. Fill this page manually.'); return; }
         session.currentUrl = window.location.href;
         session.pendingUrl = '';
         let step = session.steps[session.currentStep];

@@ -652,3 +652,27 @@ test('Greenhouse genuinely competing partial roles stop before Add or mutation',
   await assert.rejects(createFieldAgent().handle({action:'scan'}),/ambiguous workExperiences/);
   assert.equal(adds,0);assert.equal(document.querySelector('.employment label:nth-child(2) input').value,'');
 });
+
+for (const suffix of ['05-29', '05-31', '05-36']) {
+  test(`captured Ashby ${suffix} keeps phone and texting consent as separate questions`, async () => {
+    boot(readFileSync(new URL(`../../fixtures/jobs.ashbyhq.com-2026-10-07-${suffix}.html`, import.meta.url), 'utf8'), 'ashby');
+    const fields = scanFormFields();
+    assertUniqueFields(fields);
+    const phone = fields.find(field => field.type === 'tel');
+    assert.equal(phone.ats.canonicalKey, 'phone');
+    const consent = fields.find(field => field.elements?.some(element => element.name === 'communicationConsent'));
+    if (suffix === '05-36') { assert.equal(consent, undefined); return; }
+    assert.notEqual(consent.id, phone.id);
+    assert.equal(consent.ats.canonicalKey, '');
+    assert.match(consent.label, /receive text message updates/i);
+    assert.equal(consent.required, false);
+    assert.equal(detectAdapter().profileValue(consent, getProfile()), undefined);
+    await fillField(phone, '+14165550199');
+    await fillField(consent, 'notGiven');
+    assert.equal((await verifyField(phone, '+14165550199')).verified, true);
+    assert.equal((await verifyField(consent, 'notGiven')).verified, true);
+    const rescanned = scanFormFields();
+    assert.equal(rescanned.find(field => field.id === phone.id).type, 'tel');
+    assert.equal(rescanned.find(field => field.id === consent.id).currentValue, 'notGiven');
+  });
+}
