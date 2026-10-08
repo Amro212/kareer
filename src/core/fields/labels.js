@@ -33,6 +33,24 @@ export function extractLabel(element) {
     return cleanText(ariaLabel);
   }
 
+  // 1b. Check label attribute on element or shadow host
+  const labelAttr = element.getAttribute('label') || element.getRootNode?.()?.host?.getAttribute?.('label');
+  if (labelAttr && labelAttr.trim()) {
+    return cleanText(labelAttr);
+  }
+
+  // 1c. Check custom element slot or parent component label
+  const slotLabel = element.querySelector?.('[slot="label-content"], [data-test="checkbox-label"]');
+  if (slotLabel && slotLabel.textContent.trim()) {
+    return cleanText(slotLabel.textContent);
+  }
+
+  const dropzoneTitle = element.matches?.('spl-dropzone, [data-test*="resume"], [data-test*="apply"]') &&
+    element.closest('.form-section, [data-test*="container"]')?.querySelector('[data-test="section-title"], h2, h3, h4');
+  if (dropzoneTitle && dropzoneTitle.textContent.trim()) {
+    return cleanText(dropzoneTitle.textContent);
+  }
+
   // 2. Check aria-labelledby
   const ariaLabelledBy = element.getAttribute('aria-labelledby');
   if (ariaLabelledBy) {
@@ -133,6 +151,31 @@ export function extractLabel(element) {
   return 'Unknown Field';
 }
 
+function findGroupContainer(elements) {
+  if (!elements || elements.length === 0) return null;
+  const firstEl = elements[0];
+  const containerSelectors = '.form-group, .form-field, .fieldItem, .qa-radio-field, .qa-dropdown-field, .field, [role="radiogroup"], [role="group"], .question, fieldset';
+  let candidate = firstEl.closest(containerSelectors);
+  if (candidate && elements.every((el) => candidate.contains(el))) {
+    return candidate;
+  }
+  let common = firstEl.parentElement;
+  while (common && common !== firstEl.ownerDocument?.body) {
+    if (elements.every((el) => common.contains(el))) {
+      break;
+    }
+    common = common.parentElement;
+  }
+  if (common) {
+    const outer = common.closest(containerSelectors);
+    if (outer && elements.every((el) => outer.contains(el))) {
+      return outer;
+    }
+    return common;
+  }
+  return candidate || firstEl.closest('div');
+}
+
 /**
  * Extracts the overall question label for a group of radio buttons or checkboxes
  */
@@ -153,14 +196,14 @@ export function extractGroupLabel(elements = [], groupName = '') {
   }
 
   // 2. Check closest form group / question container
-  const container = firstEl.closest('.form-group, .field, [role="radiogroup"], [role="group"], .question') || firstEl.closest('div');
+  const container = findGroupContainer(elements);
   if (container) {
     // Check aria-label on container
     const ariaLabel = container.getAttribute('aria-label');
     if (ariaLabel && ariaLabel.trim()) return cleanText(ariaLabel);
 
     // Look for heading or label that is NOT wrapping one of the radio inputs
-    const headings = Array.from(container.querySelectorAll('label, legend, .label, .form-label, .field-label, h3, h4, h5, p, strong, span'));
+    const headings = Array.from(container.querySelectorAll('label, legend, .label, .form-label, .field-label, .field-title, .control-label, h3, h4, h5, p, strong, span'));
     for (const h of headings) {
       // Must not contain any of the radio elements
       const containsRadio = elements.some((el) => h.contains(el));
@@ -202,6 +245,13 @@ export function extractOptionLabel(element) {
     clone.querySelectorAll('input').forEach((input) => input.remove());
     const text = cleanText(clone.textContent);
     if (text) return text;
+  }
+
+  // 1b. Check custom element slot or parent component label
+  const slotLabel = element.querySelector?.('[slot="label-content"], [data-test="checkbox-label"]') ||
+    element.closest?.('oc-checkbox, .checkbox, [data-test*="checkbox"]')?.querySelector?.('[data-test="checkbox-label"], [slot="label-content"]');
+  if (slotLabel && slotLabel.textContent.trim()) {
+    return cleanText(slotLabel.textContent);
   }
 
   // 2. Check label[for="id"]

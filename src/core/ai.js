@@ -293,7 +293,7 @@ async function requestAiJson({ model, messages, temperature = 0.2, timeout = AUT
       const errJson = JSON.parse(response.responseText);
       if (errJson.error?.message) errorDetail = errJson.error.message;
     } catch {}
-    throw new Error(`OpenRouter Error (${response.status}): ${errorDetail}`);
+    throw new Error(`OpenRouter Error (${response.status}) using model ${model}: ${errorDetail}`);
   }
 
   let rawContent = '';

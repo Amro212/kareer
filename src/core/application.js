@@ -886,7 +886,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       await tick();
     },
     reset() {
-      if (busy) this.pause();
+      if (busy) this.pause(false);
       results.clear();
       if (session) {
         session.errors = [];
@@ -907,13 +907,13 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       }
       emit();
     },
-    pause() {
+    pause(userInitiated = true, reason = 'Paused by user.') {
       generation++;
       if (session?.frameOwner) void platform.frames.command(session.frameOwner.frameId,{action:'cancel'}).catch(()=>{});
       clearTimeout(timer);
       cancelDelay?.();
       busy = false;
-      if (session) status('paused', 'Paused by user.');
+      if (userInitiated && session) status('paused', reason);
     },
     tick,
     destroy() {

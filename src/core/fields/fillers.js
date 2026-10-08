@@ -72,6 +72,14 @@ export function fillTextInput(element, value) {
     element.focus();
   } catch {}
   setNativeInputValue(element, strVal);
+  try {
+    element.setAttribute?.('value', strVal);
+  } catch {}
+  const shadowInput = element.shadowRoot?.querySelector?.('input, textarea');
+  if (shadowInput) {
+    setNativeInputValue(shadowInput, strVal);
+    dispatchEventSequence(shadowInput, ['input', 'change']);
+  }
   dispatchEventSequence(element, ['input', 'change']);
   return true;
 }
@@ -84,6 +92,14 @@ export function fillTextarea(element, value) {
     element.focus();
   } catch {}
   setNativeInputValue(element, strVal);
+  try {
+    element.setAttribute?.('value', strVal);
+  } catch {}
+  const shadowInput = element.shadowRoot?.querySelector?.('textarea, input');
+  if (shadowInput) {
+    setNativeInputValue(shadowInput, strVal);
+    dispatchEventSequence(shadowInput, ['input', 'change']);
+  }
   dispatchEventSequence(element, ['input', 'change']);
   return true;
 }
@@ -236,6 +252,16 @@ export function fillCheckbox(element, targetValue) {
     element.focus();
   } catch {}
   setNativeChecked(element, shouldBeChecked);
+  if (element.tagName && element.tagName.includes('-')) {
+    try {
+      element.setAttribute?.('value', shouldBeChecked ? 'true' : 'false');
+    } catch {}
+  }
+  const shadowCheckbox = element.shadowRoot?.querySelector?.('input[type="checkbox"], input');
+  if (shadowCheckbox) {
+    setNativeChecked(shadowCheckbox, shouldBeChecked);
+    dispatchEventSequence(shadowCheckbox, ['click', 'input', 'change']);
+  }
   dispatchEventSequence(element, ['click', 'input', 'change']);
   return true;
 }

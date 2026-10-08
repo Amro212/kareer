@@ -1539,7 +1539,7 @@ function autofillSleep(ms) {
   });
 }
 
-function stopAutofillFlow(reason = 'Autofill paused by user. Progress and filled fields preserved.') {
+function stopAutofillFlow(reason = 'Autofill stopped.') {
   if (!isAutofilling) return;
   autofillGeneration++;
   cancelAutofillDelay?.();
@@ -1612,7 +1612,7 @@ async function handleUnifiedAutofillClick() {
 
 function handleUnifiedPauseClick() {
   autofillGeneration++;
-  applicationEngine?.pause();
+  applicationEngine?.pause(true, 'Paused by user.');
   if (isAutofilling) {
     stopAutofillFlow('Autofill paused by user. Progress and filled fields preserved.');
   }
@@ -1620,7 +1620,11 @@ function handleUnifiedPauseClick() {
 
 async function executeAutofillFlow() {
   if (isAutofilling || applicationEngine?.busy) return;
-  applicationEngine?.pause();
+  applicationEngine?.pause(false);
+  if (applicationEngine?.session?.status === 'paused') {
+    applicationEngine.session.status = 'running';
+    applicationEngine.session.reason = '';
+  }
   const token = ++autofillGeneration;
   const runUrl = window.location.href;
   const page = classifyPage();
@@ -1902,8 +1906,9 @@ async function executeAutofillFlow() {
     logger.info(`Autofill finished: ${report.filled} filled, ${report.failed.length} failed and ${report.untouched.length} untouched out of ${report.total} current fields.`);
   } catch (err) {
     if (token !== autofillGeneration) return;
-    logger.error('Autofill execution failed:', err);
-    autofillProgress.statusText = `Error: ${err.message}`;
+    const msg = err?.message || String(err);
+    logger.error(`Autofill execution failed: ${msg}`, err);
+    autofillProgress.statusText = `Error: ${msg}`;
   } finally {
     if (token === autofillGeneration) {
       isAutofilling = false;
@@ -2195,7 +2200,7 @@ function renderHomeTab() {
   const wfIsRunning = isAutofilling || wfStatus === 'running' || wfStatus === 'submitting';
   const wfIsDone = ['review', 'confirmation'].includes(wfStatus);
   const isStepReview = Boolean(session?.stepReview);
-  const wfIsPaused = !wfIsRunning && !isStepReview && (wfStatus === 'paused' || (!session?.active && session?.steps && Object.keys(session.steps).length > 0));
+  const wfIsPaused = !wfIsRunning && !isStepReview && wfStatus === 'paused';
   const wfIsWaiting = wfStatus === 'captcha' || page.type === 'captcha';
   const cardStateClass = wfIsRunning ? 'wf-running' : isStepReview ? 'wf-step-review' : wfIsDone ? 'wf-done' : (wfIsPaused || wfIsWaiting) ? 'wf-paused' : '';
 
@@ -2252,11 +2257,11 @@ function renderHomeTab() {
         <div><strong>Step filled:</strong> ${escapeHtml(reviewText)}</div>
       </div>
     `;
+  } else if (!isAutofilling && autofillProgress.statusText?.startsWith('Error:')) {
+    heroStatusHtml = `<div class="kr-wf-reason wf-error">${escapeHtml(autofillProgress.statusText)}</div>`;
   } else if (session?.reason) {
     const isErr = wfIsPaused || wfIsWaiting;
     heroStatusHtml = `<div class="kr-wf-reason ${isErr ? 'wf-error' : ''}">${escapeHtml(session.reason)}</div>`;
-  } else if (!isAutofilling && autofillProgress.statusText?.startsWith('Error:')) {
-    heroStatusHtml = `<div class="kr-wf-reason wf-error">${escapeHtml(autofillProgress.statusText)}</div>`;
   }
 
   // Profile strength & MVP check
@@ -2710,11 +2715,14 @@ function renderDebugTab() {
     ? '<span style="color: var(--kr-text-3);">No debug logs recorded yet.</span>'
     : logs.slice().reverse().map((l) => {
         const time = l.timestamp.split('T')[1]?.slice(0, 8) || '';
+        const metaText = l.meta && typeof l.meta === 'object' && Object.keys(l.meta).length > 0
+          ? ` <span style="color: var(--kr-text-3); font-size: 10px;">${escapeHtml(JSON.stringify(l.meta))}</span>`
+          : (l.meta && typeof l.meta === 'string' ? ` <span style="color: var(--kr-text-3); font-size: 10px;">${escapeHtml(l.meta)}</span>` : '');
         return `
           <div class="kr-log-item">
             <span class="kr-log-time">[${time}]</span>
             <span class="kr-log-level-${l.level}">[${l.level}]</span>
-            <span>${escapeHtml(l.message)}</span>
+            <span>${escapeHtml(l.message)}</span>${metaText}
           </div>
         `;
       }).join('');

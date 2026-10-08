@@ -6,7 +6,14 @@ import { logger } from './debug.js';
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const RESUME_PATTERN = /\b(?:resume|r[eé]sum[eé]|cv|curriculum[\s-]*vitae)\b/i;
-const NON_RESUME_PATTERN = /\b(?:cover[\s-]*letter|portfolio|work[\s-]*sample|writing[\s-]*sample|references?|transcript|certification|supplement|additional[\s-]*document)\b/i;
+const NON_RESUME_PATTERN = /\b(?:cover[\s-]*letter|portfolio|work[\s-]*sample|writing[\s-]*sample|references?|transcript|certification|supplement|additional[\s-]*document|avatar|headshot|profile[\s-]*(?:image|photo|picture|img)|photo|picture)\b/i;
+
+function isImageOnlyAccept(accept) {
+  if (!accept || typeof accept !== 'string') return false;
+  const parts = accept.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  if (!parts.length) return false;
+  return parts.every(p => /^image\/|\.(?:bmp|gif|jfif|jpe?g|png|tiff?|webp|svg|ico)$/i.test(p));
+}
 
 /**
  * Returns true when a file field looks like a resume/CV upload rather than a
@@ -19,8 +26,10 @@ export function isResumeField(field, allFileFields) {
   if (!field || field.type !== 'file') return false;
   if (field.ats?.canonicalKey === 'coverLetter') return false;
   if (field.ats?.canonicalKey === 'resume') return true;
-  const text = [field.label, field.name, field.id, field.description,
-    field.constraints?.accept].filter(Boolean).join(' ');
+  const acceptAttr = field.constraints?.accept || field.element?.getAttribute?.('accept') || '';
+  if (isImageOnlyAccept(acceptAttr)) return false;
+  if (field.element?.closest?.('oc-easy-apply, [data-test*="easy-apply"], [data-test*="prefill"]')) return false;
+  const text = [field.label, field.name, field.id, field.description, acceptAttr].filter(Boolean).join(' ');
   // Explicit non-resume label — never attach the resume.
   if (NON_RESUME_PATTERN.test(text)) return false;
   // Explicit resume label — always attach.
@@ -30,7 +39,10 @@ export function isResumeField(field, allFileFields) {
   if (['greenhouse','ashby'].includes(field.ats?.adapter)) return Boolean(field.element?.closest('.ashby-application-form-autofill-input-root'));
   // Ambiguous label (e.g. "Attach file"): only treat the first file field on
   // the page as a resume upload; later ones are likely cover letter or other.
-  if (allFileFields) return allFileFields[0] === field;
+  if (allFileFields) {
+    const candidateFileFields = allFileFields.filter(f => !isImageOnlyAccept(f.constraints?.accept || f.element?.getAttribute?.('accept') || ''));
+    return candidateFileFields[0] === field;
+  }
   return true;
 }
 const parserHosts = new Set(['ashby', 'lever', 'workday', 'greenhouse']);

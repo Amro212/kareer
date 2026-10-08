@@ -11,6 +11,8 @@ import { saveProfile, saveApiKey } from '../../src/core/storage.js';
 import { generateAutofillAnswers } from '../../src/core/ai.js';
 import { createFieldAgent } from '../../src/core/agent.js';
 import { inspectValidation } from '../../src/core/validation.js';
+import { isResumeField } from '../../src/core/resume.js';
+import { createApplicationEngine } from '../../src/core/application.js';
 
 let dom;
 function attachDom(html, url) {
@@ -307,5 +309,62 @@ test('Ashby and Lever choice groups preserve chronological DOM document order', 
   const leverLabels = leverFields.map(f => f.label || f.id);
   assert.equal(leverLabels[0], 'Full name');
   assert.equal(leverLabels[1], 'Pronouns');
+});
+
+test('captured ClearCompany fixture resolves all fields and human radio group labels', () => {
+  const html = readFileSync('./fixtures/brim.clearcompany.com-2026-10-07-21-51.html', 'utf8');
+  attachDom(html, 'https://brim.clearcompany.com/careers/jobs/840641b6-dd54-c100-145d-58d344e979bb/apply/0ddf36e7-e0fd-b520-76ca-ed43a270393c');
+  const fields = scanFormFields(dom.window.document);
+  assert.equal(fields.length, 32);
+  const labels = fields.map(f => f.label);
+  assert.ok(labels.includes('First Name *'));
+  assert.ok(labels.includes('City *'));
+  assert.ok(labels.includes('Type *'));
+  assert.ok(labels.includes('Did you Graduate? *'));
+  assert.ok(labels.includes('Are you legally eligible to work in the US or [REDACTED]? *'));
+  assert.ok(labels.includes('I Agree'));
+});
+
+test('captured SmartRecruiters fixture resolves custom elements, ignores avatar for resume, and extracts consent label', () => {
+  const html = readFileSync('./fixtures/jobs.smartrecruiters.com-2026-10-07-21-49.html', 'utf8');
+  attachDom(html, 'https://jobs.smartrecruiters.com/oneclick-ui/company/HextomInc/publication/5dfa4b27-4c3b-4e6d-8586-6210e032a9ae');
+  const fields = scanFormFields(dom.window.document);
+  assert.equal(fields.length, 15);
+  const allFiles = fields.filter(f => f.type === 'file');
+
+  const avatarField = fields.find(f => f.label.includes('Upload profile image'));
+  assert.ok(avatarField);
+  assert.equal(isResumeField(avatarField, allFiles), false);
+
+  const prefillDropzone = fields.find(f => f.id === 'apply-with-resume-container');
+  assert.ok(prefillDropzone);
+  assert.equal(isResumeField(prefillDropzone, allFiles), false);
+
+  const resumeField = fields.find(f => f.id === 'resume-upload');
+  assert.ok(resumeField);
+  assert.equal(isResumeField(resumeField, allFiles), true);
+
+  const consentField = fields.find(f => f.id === 'noPolicy');
+  assert.ok(consentField);
+  assert.match(consentField.label, /processing of your personal data/i);
+});
+
+test('pause by user is only set when pause is userInitiated', async () => {
+  attachDom('<div><input id="test"></div>', 'https://example.com');
+  const engine = createApplicationEngine({ answer: async () => ({ answers: [] }) });
+  await engine.initialize();
+  // Internal engine pause / reset must not set 'Paused by user.'
+  engine.pause(false);
+  assert.notEqual(engine.session?.reason, 'Paused by user.');
+  engine.reset();
+  assert.notEqual(engine.session?.reason, 'Paused by user.');
+
+  // When active session exists, only user initiated pause sets 'Paused by user.'
+  const startPromise = engine.start({ id: 'job-1', title: 'Test Job' });
+  engine.pause(true);
+  await startPromise;
+  assert.equal(engine.session?.status, 'paused');
+  assert.equal(engine.session?.reason, 'Paused by user.');
+  engine.destroy();
 });
 

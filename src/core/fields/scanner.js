@@ -28,7 +28,12 @@ function isVisible(el) {
 }
 
 function isInsideCopilot(el) {
-  return Boolean(el.closest(`#${UI_IDS.CONTAINER}`) || el.closest(`#${UI_IDS.INLINE_REWRITE}`));
+  let curr = el;
+  while (curr) {
+    if (curr.id === UI_IDS.CONTAINER || curr.id === UI_IDS.INLINE_REWRITE) return true;
+    curr = curr.parentElement || curr.getRootNode?.()?.host;
+  }
+  return false;
 }
 
 function isRequired(el, labelText) {
@@ -55,6 +60,8 @@ function buildFieldSelector(el) {
     if (el.name) return `[name="${CSS.escape(el.name)}"]`;
     const ariaLabel = el.getAttribute('aria-label');
     if (ariaLabel) return `[aria-label="${CSS.escape(ariaLabel)}"]`;
+    const dataTest = el.getAttribute('data-test');
+    if (dataTest) return `[data-test="${CSS.escape(dataTest)}"]`;
   } catch {}
   return '';
 }
@@ -68,6 +75,48 @@ function extractComboboxOptionsAndValue(el) {
     logger.info(`Scan[${el.id || '(combobox)'}]: ${options.length} owned options, committed=${Boolean(currentValue)}`);
   }
   return { options, currentValue };
+}
+
+function collectCandidatesWithShadow(root) {
+  const CANDIDATE_SELECTORS = `
+    input,
+    textarea,
+    select,
+    [contenteditable="true"],
+    [role="combobox"],
+    .select2-container,
+    button[aria-haspopup="listbox"],
+    spl-input,
+    spl-textarea,
+    spl-checkbox,
+    spl-autocomplete,
+    spl-phone-field,
+    spl-dropzone
+  `;
+  const list = [];
+  const visitedRoots = new Set();
+
+  function traverse(currentRoot) {
+    if (!currentRoot || visitedRoots.has(currentRoot)) return;
+    visitedRoots.add(currentRoot);
+
+    try {
+      const matched = Array.from(currentRoot.querySelectorAll(CANDIDATE_SELECTORS));
+      list.push(...matched);
+    } catch {}
+
+    try {
+      const all = currentRoot.querySelectorAll('*');
+      for (const el of all) {
+        if (el.shadowRoot) {
+          traverse(el.shadowRoot);
+        }
+      }
+    } catch {}
+  }
+
+  traverse(root);
+  return list;
 }
 
 export function scanFormFields(root = document) {
@@ -84,15 +133,16 @@ export function scanFormFields(root = document) {
     field.element.querySelectorAll('input, button').forEach(el => processedElements.add(el));
   }
 
-  const candidates = Array.from(root.querySelectorAll(`
-    input,
-    textarea,
-    select,
-    [contenteditable="true"],
-    [role="combobox"],
-    .select2-container,
-    button[aria-haspopup="listbox"]
-  `)).filter((el) => !isInsideCopilot(el) && !(el.closest('.select2-container') && !el.matches('.select2-container')) && !(el.matches('.select2-container') && !adapter.isCombobox?.(el)) && !el.closest('header,nav,footer,[role="banner"],[role="navigation"],[role="contentinfo"],.g-recaptcha,.h-captcha,[data-captcha]') && !/^(g-recaptcha-response|h-captcha-response|cf-turnstile-response)(?:$|-)/i.test(el.name || el.id || ''));
+  const allCandidates = collectCandidatesWithShadow(root);
+  const candidates = allCandidates.filter((el) => {
+    if (isInsideCopilot(el)) return false;
+    if (el.closest('.select2-container') && !el.matches('.select2-container')) return false;
+    if (el.matches('.select2-container') && !adapter.isCombobox?.(el)) return false;
+    if (el.closest('header,nav,footer,[role="banner"],[role="navigation"],[role="contentinfo"],.g-recaptcha,.h-captcha,[data-captcha]')) return false;
+    if (/^(g-recaptcha-response|h-captcha-response|cf-turnstile-response)(?:$|-)/i.test(el.name || el.id || '')) return false;
+    if (el.shadowRoot?.querySelector('input, textarea, select')) return false;
+    return true;
+  });
 
   for (const el of candidates) {
     if (processedElements.has(el)) continue;
@@ -104,10 +154,22 @@ export function scanFormFields(root = document) {
     if (adapter.id === 'workday' && el.matches('input:not([id]):not([name])') && !el.closest('[data-automation-id="multiSelectContainer"], [data-automation-id="multiselectInputContainer"]') && el.closest('[data-automation-id^="formField"]')?.querySelector('button[aria-haspopup="listbox"]')) continue;
 
     const tagName = el.tagName.toLowerCase();
-    const typeAttr = (el.getAttribute('type') || '').toLowerCase();
+    let typeAttr = (el.getAttribute('type') || '').toLowerCase();
+
+    if (tagName === 'spl-input') {
+      typeAttr = typeAttr || 'text';
+    } else if (tagName === 'spl-textarea') {
+      typeAttr = 'textarea';
+    } else if (tagName === 'spl-checkbox') {
+      typeAttr = 'checkbox';
+    } else if (tagName === 'spl-phone-field') {
+      typeAttr = 'tel';
+    } else if (tagName === 'spl-dropzone') {
+      typeAttr = 'file';
+    }
 
     // Skip non-fillable inputs
-    const isCombobox = el.matches(COMBO) || isCustomCombobox(el);
+    const isCombobox = el.matches(COMBO) || isCustomCombobox(el) || tagName === 'spl-autocomplete';
     if (typeAttr === 'hidden' || typeAttr === 'submit' || (typeAttr === 'button' && !isCombobox) || typeAttr === 'reset' || typeAttr === 'image' || typeAttr === 'password') {
       continue;
     }
@@ -118,9 +180,9 @@ export function scanFormFields(root = document) {
       const label = extractLabel(el);
       const description = extractDescription(el);
       const upload = adapter.uploadState?.(el);
-      const currentName = upload ? upload.accepted ? upload.name : '' : el.files?.[0]?.name || '';
+      const currentName = upload ? upload.accepted ? upload.name : '' : el.files?.[0]?.name || el.getAttribute?.('value') || '';
       detectedFields.push({
-        id: el.id || el.name || `jc_field_${++fieldCounter}`,
+        id: el.id || el.name || el.getAttribute?.('data-test') || `jc_field_${++fieldCounter}`,
         name: el.name || '',
         selector: buildFieldSelector(el),
         type: FIELD_TYPES.FILE,

@@ -26,11 +26,14 @@ function sanitizeString(str) {
 
 function sanitizeMeta(meta) {
   if (!meta) return undefined;
+  if (meta instanceof Error) {
+    return { name: meta.name, message: sanitizeString(meta.message), stack: sanitizeString(meta.stack) };
+  }
   try {
     const stringified = JSON.stringify(meta);
     return JSON.parse(sanitizeString(stringified));
   } catch {
-    return String(meta);
+    return sanitizeString(String(meta));
   }
 }
 

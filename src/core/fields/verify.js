@@ -46,7 +46,10 @@ export async function verifyField(field, expectedValue) {
     }
 
     case FIELD_TYPES.CHECKBOX: {
-      const isChecked = field.element.checked;
+      const shadowCheck = field.element.shadowRoot?.querySelector?.('input[type="checkbox"], input');
+      const isChecked = field.element.tagName && field.element.tagName.includes('-')
+        ? Boolean(field.element.checked || field.element.getAttribute?.('value') === 'true' || shadowCheck?.checked)
+        : Boolean(field.element.checked);
       const expectedChecked = expectedValue === true || ['true', 'yes', '1', 'checked'].includes(expectedStr);
       const matches = isChecked === expectedChecked;
       return {
@@ -126,7 +129,8 @@ export async function verifyField(field, expectedValue) {
     case FIELD_TYPES.URL:
     case FIELD_TYPES.NUMBER:
     default: {
-      const actualVal = (field.element.value || field.element.textContent || '').trim();
+      const shadowVal = field.element.shadowRoot?.querySelector?.('input, textarea')?.value;
+      const actualVal = (field.element.value || shadowVal || field.element.getAttribute?.('value') || field.element.textContent || '').trim();
       if (!expectedStr) {
         return { verified: true, actualValue: actualVal };
       }

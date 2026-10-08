@@ -1,3 +1,49 @@
+## Turn: 2026-10-07 - Fixes for ClearCompany & SmartRecruiters fixtures, user pause safeguard, error visibility & custom element discovery
+
+- Target: `src/core/application.js`, `src/core/ui.js`, `src/core/ai.js`, `src/core/debug.js`, `src/core/fields/labels.js`, `src/core/fields/scanner.js`, `src/core/fields/fillers.js`, `src/core/fields/verify.js`, `src/core/resume.js`, `tests/unit/ats-hardening.test.js`.
+- User-reported bugs & investigation:
+  1. `brim.clearcompany.com-2026-10-07-21-51.html`: Fields were detected (32 fields), but clicking Autofill resulted in immediate `[ERROR] Autofill execution failed:` and nothing filled.
+     - Root cause: Model configured in Settings (`google/gemini-2.5-flash-lite`) was rejected by OpenRouter (non-existent slug). `logger.error` serialized `err` via `JSON.stringify`, turning Error instances into `{}`. The panel debug log only rendered `entry.message` ("Autofill execution failed:") with no detail, and `renderHomeTab` showed stale `session.reason` ("Paused by user.") instead of `autofillProgress.statusText` ("Error: OpenRouter Error..."). Additionally, radio group labels on ClearCompany were resolving to container IDs (e.g. `f269fea3-3bc2...`) rather than enclosing question text.
+  2. `jobs.smartrecruiters.com-2026-10-07-21-49.html`: Only 1 field detected (`Upload profile image`), and clicking Autofill attached `My_Resume.pdf` to the avatar image input and displayed a false "Paused by user." state.
+     - Root cause: Web components (`<spl-input>`, `<spl-textarea>`, `<spl-checkbox>`, `<spl-autocomplete>`, `<spl-phone-field>`, `<spl-dropzone>`) were ignored by standard `querySelectorAll` because they are custom elements whose native inputs sit inside shadow roots. The avatar file input had no exclusion filter in `isResumeField`, so it was treated as the resume upload. Moreover, `executeAutofillFlow()` called `applicationEngine?.pause()`, which unconditionally set `session.status = 'paused'` and `session.reason = 'Paused by user.'` even though the user never pressed pause.
+  3. User mandate: *"paused by user" error should ONLY be thrown when the user PHYSICALLY presses "pause".*
+- Resolution:
+  1. `src/core/application.js`:
+     - Added `userInitiated` parameter to `pause(userInitiated = true, reason = 'Paused by user.')`.
+     - In `reset()`, calls `this.pause(false)` to halt timers without mutating status to `'paused'`.
+  2. `src/core/ui.js`:
+     - Updated `stopAutofillFlow(reason = 'Autofill stopped.')` to default to neutral stop copy.
+     - Updated `handleUnifiedPauseClick()` (when user physically clicks pause) to call `applicationEngine?.pause(true, 'Paused by user.')` and `stopAutofillFlow('Autofill paused by user. Progress and filled fields preserved.')`.
+     - Updated `executeAutofillFlow()` to call `applicationEngine?.pause(false)` and reset any stale paused status (`session.status = 'running'`).
+     - Updated error handling in `executeAutofillFlow()` to log `Autofill execution failed: ${msg}` so error reasons are directly visible in debug logs.
+     - Updated `renderHomeTab()` to prioritize `autofillProgress.statusText` starting with `Error:` over `session.reason`, ensuring runtime errors are prominently visible in the hero card.
+     - Updated `wfIsPaused` to only be true when `wfStatus === 'paused'`.
+     - Updated `renderDebugTab()` to display `l.meta` alongside log messages.
+  3. `src/core/ai.js`:
+     - Updated OpenRouter error formatting in `requestAiJson` to include the model name: `OpenRouter Error (${response.status}) using model ${model}: ${errorDetail}`.
+  4. `src/core/debug.js`:
+     - Updated `sanitizeMeta(meta)` to serialize `Error` objects (`name`, `message`, `stack`) instead of stringifying them to `{}`.
+  5. `src/core/fields/labels.js`:
+     - Added `findGroupContainer` traversing up common ancestors to `.form-group, .form-field, .fieldItem, .qa-radio-field, .qa-dropdown-field, [role="radiogroup"], fieldset` so ClearCompany radio questions correctly resolve to question titles.
+     - Added slot label, checkbox label, and dropzone container title resolution in `extractLabel` and `extractOptionLabel`.
+  6. `src/core/fields/scanner.js`:
+     - Added `collectCandidatesWithShadow(root)` recursively traversing open shadow roots and collecting custom elements (`spl-input`, `spl-textarea`, `spl-checkbox`, `spl-autocomplete`, `spl-phone-field`, `spl-dropzone`).
+     - Added shadow host deduplication and custom element type mapping.
+  7. `src/core/fields/fillers.js` & `src/core/fields/verify.js`:
+     - Handled custom elements with shadow root inputs while strictly preserving native input behavior (no overwriting of native checkbox `value` attribute).
+  8. `src/core/resume.js`:
+     - Added `isImageOnlyAccept` to reject avatar inputs that only accept image extensions.
+     - Added avatar/photo/headshot patterns to `NON_RESUME_PATTERN`.
+     - Excluded prefill/easy-apply import dropzones (`oc-easy-apply`, `[data-test*="easy-apply"]`) so only genuine application resume fields are uploaded to.
+  9. `tests/unit/ats-hardening.test.js`:
+     - Added 3 automated unit test specs:
+       - `captured ClearCompany fixture resolves all fields and human radio group labels` (verifies 32 fields and human question titles).
+       - `captured SmartRecruiters fixture resolves custom elements, ignores avatar for resume, and extracts consent label` (verifies 15 fields, avatar exclusion, easy-apply exclusion, resume identification, and consent notice extraction).
+       - `pause by user is only set when pause is userInitiated` (verifies internal lifecycle pauses and resets do not trigger "Paused by user.").
+- Verification:
+  - All 457 unit tests pass (`npm test`, 0 failures).
+  - Built v0.5.28 extension (Chrome & Firefox) and userscript artifacts (`npm run build`).
+
 ## Turn: 2026-10-07 - Documentation & public site alignment with unblocked execution, tiered provenance, and ATS capabilities
 
 - Target: `README.md`, `site/index.html`, `site/styles.css`, `site/script.js`.
