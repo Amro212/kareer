@@ -1,5 +1,5 @@
 import { setPlatform, platform } from '../../../core/platform.js';
-import { bootstrap } from '../../../core/main.js';
+import { bootstrap, refreshPageDetection } from '../../../core/main.js';
 import { toggleUIVisibility, refreshRemoteFieldCount } from '../../../core/ui.js';
 import { createExtensionHost } from './host.js';
 import { startAgent } from './agent.js';
@@ -24,6 +24,7 @@ async function start() {
       }
       if (message?.type === MSG.FRAMES_CHANGED) {
         refreshRemoteFieldCount();
+        refreshPageDetection();
         sendResponse({ ok: true });
       }
     });

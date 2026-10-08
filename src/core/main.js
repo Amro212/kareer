@@ -3,12 +3,20 @@ import { initializeStorage, resetAll } from './storage.js';
 import { platform, getHostName } from './platform.js';
 import { logger } from './debug.js';
 import { mountUI, unmountUI, syncJobContext, toggleUIVisibility, exportUserBackup } from './ui.js';
-import { captureJob, isJobPage } from './jobs.js';
+import { captureJob, detectJobPage } from './jobs.js';
 import { restoreSession } from './sessions.js';
+import { observeJobPage } from './jobObserver.js';
+import { accessibleRoots } from './domRoots.js';
+import { isVisible } from './pageClassifier.js';
 
 let pageObserver = null;
 let pageTimer = null;
 let unsubscribePageNavigation = null;
+let scheduleReconciliation = null;
+
+export function refreshPageDetection() {
+  scheduleReconciliation?.();
+}
 
 function registerMenuCommands() {
   if (!platform.capabilities.menuCommands) return;
@@ -44,12 +52,35 @@ export function bootstrap() {
     initializeStorage();
     registerMenuCommands();
     let reconciliation = 0;
+    let lastEvidence = '';
     const reconcile = async () => {
       const token = ++reconciliation;
       const url = document.location.href;
-      const session = isJobPage() ? null : await restoreSession(url).catch(() => null);
+      let evidence = detectJobPage();
+      if (!evidence.eligible) {
+        const session = await restoreSession(url).catch(() => null);
+        evidence = detectJobPage(document, Boolean(session));
+      }
+      if (!evidence.eligible && platform.capabilities.crossFrame) {
+        const iframes = accessibleRoots(document).flatMap(root => [...root.querySelectorAll('iframe')]).filter(isVisible);
+        if (iframes.length) {
+          const frames = await platform.frames.list().catch(() => []);
+          if (iframes.some(iframe => iframe.isConnected && isVisible(iframe) &&
+            frames.some(frame => !frame.isTop && frame.applicationEvidence?.eligible && frame.url === iframe.src))) {
+            evidence = { eligible: true, reasons: ['embedded-application'] };
+          }
+        }
+      }
       if (token !== reconciliation || document.location.href !== url) return;
-      if (!isJobPage(document, Boolean(session))) {
+      // A user can activate the panel while a frame/session lookup is pending.
+      const currentEvidence = detectJobPage();
+      if (currentEvidence.eligible) evidence = currentEvidence;
+      const signature = JSON.stringify(evidence);
+      if (signature !== lastEvidence) {
+        lastEvidence = signature;
+        logger.info('Page detection', evidence);
+      }
+      if (!evidence.eligible) {
         unmountUI();
         const root = document.getElementById(UI_IDS.CONTAINER);
         if (root?.getAttribute('data-kr-host') === getHostName()) root.remove();
@@ -63,23 +94,15 @@ export function bootstrap() {
       });
     };
     const schedule = () => {
-      clearTimeout(pageTimer);
-      pageTimer = setTimeout(reconcile, 250);
+      // Continuous hydration must not postpone detection indefinitely.
+      if (pageTimer) return;
+      pageTimer = setTimeout(() => { pageTimer = null; void reconcile(); }, 250);
     };
+    clearTimeout(pageTimer);
+    pageTimer = null;
+    scheduleReconciliation = schedule;
     pageObserver?.disconnect();
-    pageObserver = new MutationObserver(mutations => {
-      const relevant = mutations.some(mutation => {
-        const element = mutation.target.nodeType === 1 ? mutation.target : mutation.target.parentElement;
-        if (element?.closest(`#${UI_IDS.CONTAINER}, #${UI_IDS.INLINE_REWRITE}`)) return false;
-        if (element?.closest('title,script[type="application/ld+json"],h1,h2,[role="heading"],.job__location,.job-location,.ashby-job-posting-left-pane,[data-testid="job-location"],.job-description,.job__description')) return true;
-        if (mutation.type === 'characterData') return false;
-        return Array.from([...mutation.addedNodes, ...mutation.removedNodes]).some(node => node.nodeType === 1 &&
-          !node.matches(`#${UI_IDS.CONTAINER}, #${UI_IDS.INLINE_REWRITE}`) &&
-          (node.matches('main,h1,h2,form,input,textarea,iframe,script[type="application/ld+json"],.job__location,.job-description,.job__description') || node.querySelector('h1,h2,form,input,textarea,iframe,script[type="application/ld+json"]')));
-      });
-      if (relevant) schedule();
-    });
-    pageObserver.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+    pageObserver = observeJobPage(document, schedule);
     unsubscribePageNavigation?.();
     unsubscribePageNavigation = platform.navigation.onChange(schedule);
     reconcile();

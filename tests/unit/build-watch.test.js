@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 
-test('watch builds refresh copied CSS and HTML for both browsers', { timeout: 20000 }, async () => {
+// Three independent polling phases each allow 15s, plus copy/build startup.
+test('watch builds refresh copied CSS and HTML for both browsers', { timeout: 60000 }, async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kareer-build-watch-'));
   let child;
   let output = '';

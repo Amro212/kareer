@@ -39,7 +39,7 @@ import { classifyPage } from './pageClassifier.js';
 import { detectAdapter } from './adapters/index.js';
 import { rememberAnswer } from './memory.js';
 import { saveSession } from './sessions.js';
-import { captureJob } from './jobs.js';
+import { captureJob, activateJobPage } from './jobs.js';
 import { inspectContinue } from './navigation.js';
 
 let applicationEngine = null;
@@ -3357,6 +3357,7 @@ export function mountUI() {
 }
 
 export function toggleUIVisibility() {
+  activateJobPage();
   if (!shadowRootRef) mountUI();
   isPebble = false;
   panelVisible = !panelVisible;

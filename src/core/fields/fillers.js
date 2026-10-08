@@ -3,7 +3,7 @@ import { extractOptionLabel, extractLabel, choiceValue } from './labels.js';
 import { isResidenceLabel } from '../location.js';
 import { logger } from '../debug.js';
 import { isLeverLocation, isPlacesLocation, recordLocationActivation } from './combobox.js';
-import { optionKey, findExactOption, optionData, resolveComboboxParts, readComboboxSelection, discoverComboboxOptions, openCombobox, closeCombobox, setComboboxSearch, waitForComboboxOptions, waitForComboboxSelection, clickFieldControl } from './combobox.js';
+import { optionKey, findExactOption, optionData, resolveComboboxParts, readComboboxSelection, discoverComboboxOptions, openCombobox, closeCombobox, setComboboxSearch, captureComboboxSearch, waitForComboboxOptions, waitForComboboxSelection, clickFieldControl } from './combobox.js';
 import { platform } from '../platform.js';
 import { detectAdapter } from '../adapters/index.js';
 
@@ -282,7 +282,10 @@ export async function fillCombobox(element, targetValue, knownOptions) {
       closeCombobox(element);
       return await waitForComboboxSelection(element, target);
     }
+    // Opening awaits the widget. A user search during that wait owns the input.
+    ownsSearch = captureComboboxSearch(input);
     await openCombobox(element);
+    if (!ownsSearch()) return false;
     input = resolveComboboxParts(element).input;
     const location = isLeverLocation(element) || isPlacesLocation(element) || known && isResidenceLabel(extractLabel(element));
     ownsSearch = setComboboxSearch(input, location ? target.split(',')[0].trim() : detectAdapter().id === 'workday' && input ? (detectAdapter().searchQuery?.(element, target) || target) : '');

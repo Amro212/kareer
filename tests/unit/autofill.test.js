@@ -323,6 +323,20 @@ test('superseded location fill does not blur newer search with an existing chip'
   } finally { clearTimeout(timer); closeCombobox(field.input); }
 });
 
+test('a newer location query during opening is preserved before fill search starts', async () => {
+  const field = combo('location', ['Toronto', 'Ottawa', 'Montreal'], { selected: 'Toronto', delay: 700 });
+  let blurs = 0;
+  field.input.addEventListener('blur', () => blurs++);
+  field.input.addEventListener('focus', () => queueMicrotask(() => setComboboxSearch(field.input, 'Montreal')), {once:true});
+  try {
+    assert.equal(await fillCombobox(field.input, 'Ottawa'), false);
+    assert.equal(field.input.value, 'Montreal');
+    assert.deepEqual(field.clicked, []);
+    assert.equal(blurs, 0);
+    assert.equal(document.activeElement, field.input);
+  } finally { closeCombobox(field.input); }
+});
+
 test('duplicate full locations stay unresolved and final search cannot loop', async () => {
   const field = combo('location', ['London, Ontario, Canada', 'London, Ontario, Canada']);
   assert.equal(await fillCombobox(field.input, 'London, Ontario, Canada'), false);

@@ -36,7 +36,7 @@ async function read(tabId) {
 }
 
 /** Returns true when the panel's view of this tab's frames actually changed. */
-export function registerFrame(sender, { url, fieldCount, isTop }) {
+export function registerFrame(sender, { url, fieldCount, isTop, applicationEvidence }) {
   const tabId = sender?.tab?.id;
   const frameId = sender?.frameId;
   if (typeof tabId !== 'number' || typeof frameId !== 'number') return Promise.resolve(false);
@@ -44,11 +44,12 @@ export function registerFrame(sender, { url, fieldCount, isTop }) {
   return serialize(tabId, async () => {
     const frames = await read(tabId);
     const previous = frames.find((frame) => frame.frameId === frameId);
-    const entry = { frameId, url, fieldCount, isTop: Boolean(isTop), updatedAt: Date.now() };
+    const evidence = { eligible: applicationEvidence?.eligible === true };
+    const entry = { frameId, url, fieldCount, isTop: Boolean(isTop), applicationEvidence: evidence, updatedAt: Date.now() };
     await session().set({ [key(tabId)]: [entry, ...frames.filter((frame) => frame.frameId !== frameId)] });
 
     // Heartbeats repeat unchanged data; only a real change is worth notifying.
-    return !previous || previous.fieldCount !== fieldCount || previous.url !== url;
+    return !previous || previous.fieldCount !== fieldCount || previous.url !== url || previous.applicationEvidence?.eligible !== evidence.eligible;
   });
 }
 

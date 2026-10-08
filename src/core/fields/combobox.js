@@ -192,6 +192,12 @@ function menusClosed(element) {
     menu.hidden || menu.getAttribute('aria-hidden') === 'true' || element.ownerDocument.defaultView.getComputedStyle(menu).display === 'none');
 }
 
+export function captureComboboxSearch(input) {
+  const search = input && searchesByInput.get(input);
+  const value = input?.value;
+  return () => !input || input.isConnected && searchesByInput.get(input) === search && input.value === value;
+}
+
 export function setComboboxSearch(input, value) {
   if (!input) return () => true;
   // Identity, not just text: a newer search may reuse the same query later.

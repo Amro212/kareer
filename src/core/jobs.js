@@ -4,6 +4,7 @@ import { isVisible, visibleText } from './pageClassifier.js';
 import { detectAdapter } from './adapters/index.js';
 import { logger } from './debug.js';
 import { countryCode, countryNames, countryCodes } from './adapters/canonical.js';
+import { jobPageEvidence, findJobPosting } from './jobDetection.js';
 
 const JOB_HYDRATION_TIMEOUT_MS = 5000;
 const capturedJobs = new WeakMap();
@@ -31,24 +32,23 @@ function locationCountries(text) {
   return [...new Set(found)];
 }
 
+const manualPages = new WeakMap();
+
+export function activateJobPage(doc = document) {
+  manualPages.set(doc, doc.location?.href || '');
+}
+
+export function detectJobPage(doc = document, hasRestorableSession = false) {
+  const url = doc.location?.href || '';
+  if (manualPages.get(doc) === url) return { eligible: true, reasons: ['manual-activation'] };
+  manualPages.delete(doc);
+  const captured = capturedJobs.get(doc)?.job;
+  const continuity = hasRestorableSession || Boolean(captured && (captured.listingUrl === url || captured.applicationUrl === url));
+  return jobPageEvidence(doc, { continuity, stepHeading: APPLICATION_STEP_HEADING });
+}
+
 export function isJobPage(doc = document, hasRestorableSession = false) {
-  if (detectAdapter(doc.location || window.location, doc).id !== 'generic') return true;
-  if (Array.from(doc.querySelectorAll('iframe[src]')).some(frame => {
-    try { return detectAdapter(new URL(frame.src, doc.location?.href), null).id !== 'generic'; } catch { return false; }
-  })) return true;
-  if (Array.from(doc.querySelectorAll('script[type="application/ld+json"]')).some(script => /"JobPosting"/.test(script.textContent))) return true;
-  const headings = [doc.title, ...Array.from(doc.querySelectorAll('h1,h2,[role="heading"]')).map(el => el.textContent.trim())];
-  if (headings.some(text => /job description|about (?:the|this) (?:role|job)|\b(?:job|employment) application\b|apply for (?:this |the )?(?:job|role|position)/i.test(text))) return true;
-  if (headings.some(text => /^review(?: your)? application$/i.test(text))) return true;
-  if ((capturedJobs.has(doc) || hasRestorableSession) && headings.some(text => APPLICATION_STEP_HEADING.test(text))) return true;
-  if (Array.from(doc.querySelectorAll('form,[role="form"]')).some(form => /\b(?:job|employment)[_-]application\b/i.test(`${form.id} ${form.getAttribute('name') || ''}`))) return true;
-  if (doc.querySelector('form,[role="form"]') && headings.some(text => /^(?:application(?:\s*[·:—-]\s*.+)?|review(?: your)? application)$/i.test(text))) return true;
-  if (headings.some(text => /\bcareers?\b/i.test(text)) && /(?:^|[/.])(?:careers?|jobs|openings)(?:[/.]|$)/i.test(doc.location?.href || '')) return true;
-  if (doc.querySelector('article, .job-description, [itemprop="description"]') && Array.from(doc.querySelectorAll('a,button')).some(el => /^apply(?: now| for (?:this )?(?:job|position))?$/i.test(el.textContent.trim()))) return true;
-  return Array.from(doc.querySelectorAll('input[type="file"], input[type="email"], textarea')).some(field => {
-    const context = field.closest('form,[role="form"]')?.textContent || Array.from(field.labels || []).map(label => label.textContent).join(' ') || field.getAttribute('aria-label') || '';
-    return /\b(?:resume|curriculum vitae|cover letter|work experience|submit application)\b/i.test(context);
-  });
+  return detectJobPage(doc, hasRestorableSession).eligible;
 }
 
 export function safeUrl(value, base = window.location.href) {
@@ -119,17 +119,7 @@ export async function hydrateJob(job, doc = document) {
 }
 
 export function captureJob(doc = document) {
-  let posting;
-  const visit = value => {
-    if (!value || typeof value !== 'object' || posting) return;
-    if ([value['@type']].flat().includes('JobPosting')) { posting = value; return; }
-    for (const child of Object.values(value)) if (typeof child === 'object') {
-      if (Array.isArray(child)) child.forEach(visit); else visit(child);
-    }
-  };
-  for (const script of doc.querySelectorAll('script[type="application/ld+json"]')) {
-    try { visit(JSON.parse(script.textContent)); } catch { /* Ignore unrelated malformed metadata. */ }
-  }
+  const posting = findJobPosting(doc);
   const plain = html => {
     const el = doc.createElement ? doc.createElement('div') : document.createElement('div');
     el.innerHTML = String(html || '');

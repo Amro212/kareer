@@ -2,6 +2,8 @@ import { api } from '../shared/browser.js';
 import { MSG } from '../shared/protocol.js';
 import { scanFormFields } from '../../../core/fields/scanner.js';
 import { createFieldAgent } from '../../../core/agent.js';
+import { detectJobPage } from '../../../core/jobs.js';
+import { observeJobPage } from '../../../core/jobObserver.js';
 
 /**
  * Every frame runs an agent. It announces whether this frame holds form controls,
@@ -14,6 +16,7 @@ export function startAgent({ isTopFrame }) {
   const fieldAgent = createFieldAgent();
   let timer = null;
   let lastCount = -1;
+  let lastEvidence = '';
 
   function countFields() {
     try {
@@ -25,11 +28,14 @@ export function startAgent({ isTopFrame }) {
 
   function announce({ force = false } = {}) {
     const fieldCount = countFields();
+    const applicationEvidence = detectJobPage(document);
+    const signature = JSON.stringify(applicationEvidence);
     // Re-announce on an unchanged count only when the registry may have expired.
-    if (!force && fieldCount === lastCount && fieldCount === 0) return;
+    if (!force && fieldCount === lastCount && fieldCount === 0 && signature === lastEvidence) return;
     lastCount = fieldCount;
+    lastEvidence = signature;
     api.runtime.sendMessage(
-      { type: MSG.FRAME_ANNOUNCE, url: window.location.href, fieldCount, isTop: isTopFrame },
+      { type: MSG.FRAME_ANNOUNCE, url: window.location.href, fieldCount, isTop: isTopFrame, applicationEvidence },
       () => void api.runtime.lastError,
     );
   }
@@ -51,8 +57,7 @@ export function startAgent({ isTopFrame }) {
 
   announce({ force: true });
 
-  const observer = new MutationObserver(scheduleAnnounce);
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+  const observer = observeJobPage(document, scheduleAnnounce);
 
   // The registry expires entries after a minute of silence.
   const heartbeat = setInterval(() => announce({ force: true }), 30000);

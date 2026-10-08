@@ -7,6 +7,7 @@ import { isResidenceLabel, locationMatches } from '../location.js';
 import { isVisible as isPageVisible } from '../pageClassifier.js';
 import { isLeverLocation, isCustomCombobox } from './combobox.js';
 import { COMBO, discoverComboboxOptions, optionData, readComboboxSelection, resolveComboboxParts, openCombobox, closeCombobox, setComboboxSearch, waitForComboboxOptions } from './combobox.js';
+import { accessibleRoots, FORM_CONTROLS } from '../domRoots.js';
 
 let fieldCounter = 0;
 const scanStates = new WeakMap();
@@ -78,45 +79,7 @@ function extractComboboxOptionsAndValue(el) {
 }
 
 function collectCandidatesWithShadow(root) {
-  const CANDIDATE_SELECTORS = `
-    input,
-    textarea,
-    select,
-    [contenteditable="true"],
-    [role="combobox"],
-    .select2-container,
-    button[aria-haspopup="listbox"],
-    spl-input,
-    spl-textarea,
-    spl-checkbox,
-    spl-autocomplete,
-    spl-phone-field,
-    spl-dropzone
-  `;
-  const list = [];
-  const visitedRoots = new Set();
-
-  function traverse(currentRoot) {
-    if (!currentRoot || visitedRoots.has(currentRoot)) return;
-    visitedRoots.add(currentRoot);
-
-    try {
-      const matched = Array.from(currentRoot.querySelectorAll(CANDIDATE_SELECTORS));
-      list.push(...matched);
-    } catch {}
-
-    try {
-      const all = currentRoot.querySelectorAll('*');
-      for (const el of all) {
-        if (el.shadowRoot) {
-          traverse(el.shadowRoot);
-        }
-      }
-    } catch {}
-  }
-
-  traverse(root);
-  return list;
+  return accessibleRoots(root).flatMap(current => [...current.querySelectorAll(FORM_CONTROLS)]);
 }
 
 export function scanFormFields(root = document) {

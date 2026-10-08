@@ -1,10 +1,10 @@
 {
   "name": "kareer",
-  "version": "0.5.28",
+  "version": "0.5.37",
   "description": "Kareer — AI job application autofill for Chrome, Firefox, and Tampermonkey",
   "type": "module",
   "scripts": {
-    "test": "node --test tests/unit/*.test.js",
+    "test": "node --test --test-concurrency=1 tests/unit/*.test.js",
     "test:e2e": "playwright test",
     "build": "node tools/build.js",
     "build:userscript": "node tools/build.js --target=userscript",
