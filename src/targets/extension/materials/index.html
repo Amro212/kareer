@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{VISUAL_NAME}} · Application materials</title>
+  <link rel="stylesheet" href="../assets/theme.css">
+  <link rel="stylesheet" href="workspace.css">
+</head>
+<body>
+  <header class="workspace-header">
+    <div class="workspace-header-title">
+      <a class="brand" href="../options/index.html">{{VISUAL_NAME}}</a>
+      <h1>Application materials</h1>
+    </div>
+    <a class="nav-back" href="../options/index.html">← Profile &amp; settings</a>
+  </header>
+
+  <div class="workspace">
+    <aside class="jobs">
+      <h2>Saved jobs</h2>
+      <button class="secondary" id="new-job">+ New job</button>
+      <nav id="saved-jobs" aria-label="Saved application materials"></nav>
+      <p class="muted">Saved on this device. Writing uses your OpenRouter key.</p>
+    </aside>
+
+    <main>
+      <section>
+        <h2 id="job-heading">Prepare for a job</h2>
+        <div class="fields">
+          <label>Job title<input id="job-title" placeholder="Software Engineer"></label>
+          <label>Company<input id="job-company" placeholder="Company name"></label>
+        </div>
+        <label>Job description<textarea id="job-description" rows="5" placeholder="Paste or correct the job description…"></textarea></label>
+      </section>
+
+      <details id="base-details">
+        <summary>Base resume</summary>
+        <div class="details-body">
+          <p class="muted">Import or paste your resume. Saved profile facts take priority. Your original file stays intact.</p>
+          <label>Import PDF or Word<input id="base-file" type="file" accept=".pdf,.docx"></label>
+          <label>Resume text<textarea id="base-text" rows="10" placeholder="Paste resume text, or use your saved profile experience…"></textarea></label>
+          <button class="secondary" id="save-base">Save base resume</button>
+        </div>
+      </details>
+
+      <section class="document-controls">
+        <div class="tabs" role="tablist" aria-label="Document type">
+          <button id="tab-resume" role="tab" aria-selected="true">Resume</button>
+          <button id="tab-coverLetter" role="tab" aria-selected="false">Cover letter</button>
+        </div>
+        <div class="fields">
+          <label id="page-control">Resume length
+            <select id="page-target">
+              <option value="1">One page</option>
+              <option value="2">Two pages</option>
+            </select>
+          </label>
+          <label id="tone-control" hidden>Tone
+            <select id="tone">
+              <option value="professional">Professional</option>
+              <option value="warm">Warm</option>
+              <option value="direct">Direct</option>
+            </select>
+          </label>
+          <label id="length-control" hidden>Letter length
+            <select id="length">
+              <option value="short">Short · 150–200 words</option>
+              <option value="standard" selected>Standard · 250–350 words</option>
+              <option value="detailed">Detailed · 400–500 words</option>
+            </select>
+          </label>
+        </div>
+        <label>Writing instructions <span class="muted">(optional)</span><textarea id="instructions" rows="2" placeholder="Emphasize my API work; use straightforward language…"></textarea></label>
+        <div class="actions">
+          <button id="generate">Tailor resume</button>
+          <button class="secondary" id="cancel" hidden>Cancel</button>
+        </div>
+        <p id="feedback" class="feedback" role="status" aria-live="polite"></p>
+      </section>
+
+      <section id="editor-section">
+        <div class="section-heading">
+          <h2>Document editor</h2>
+          <span class="muted" id="document-status"></span>
+        </div>
+        <p class="muted" id="empty-editor">Generate a document to edit it here and preview the finished PDF.</p>
+        <div id="document-editor"></div>
+        <div class="actions" id="editor-actions" hidden>
+          <button id="save-document">Save changes</button>
+          <button class="secondary" data-download="pdf">Download PDF</button>
+          <button class="secondary" data-download="docx">Download Word</button>
+          <button class="secondary danger" id="delete-document">Delete document</button>
+        </div>
+      </section>
+
+      <section id="changes-section" hidden>
+        <h2>What changed</h2>
+        <div id="changes"></div>
+      </section>
+    </main>
+
+    <aside class="preview">
+      <div class="section-heading">
+        <h2>PDF preview</h2>
+        <span id="page-count" class="muted"></span>
+      </div>
+      <div id="pdf-preview"><p class="muted">Your finished document will appear here.</p></div>
+    </aside>
+  </div>
+  <script src="index.js"></script>
+</body>
+</html>

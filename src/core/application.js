@@ -13,6 +13,7 @@ import { verifyField } from './fields/verify.js';
 import { generateAutofillAnswers } from './ai.js';
 import { resolveComboboxSearchAnswers, resolveDiscoveredAnswers } from './autofill.js';
 import { platform } from './platform.js';
+import { snapshotMaterials, applyGeneratedMaterials, materialKind } from './materials.js';
 import { detectAdapter } from './adapters/index.js';
 import { logger } from './debug.js';
 import { applyRemoteResumeUploads, embeddedApplicationStates, remoteFieldId } from './remote.js';
@@ -33,6 +34,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     t = setTimeout(() => { cancelDelay = null; resolve(); }, ms);
   });
   const results = new Map();
+  let runMaterials = {};
   let pendingJob = null;
   let lastEmission = '';
   let lastObservationLog = '';
@@ -55,6 +57,8 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       }
       const hasLocation = Boolean(job.location || job.workCountries?.length);
       session.job = samePage && !job.applicationStep ? job : { ...job,
+        listingUrl: previous?.listingUrl || job.listingUrl,
+        jobId: previous?.jobId || job.jobId,
         title: previous?.title || job.title,
         company: job.company || previous?.company,
         location: job.location || previous?.location,
@@ -162,7 +166,10 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     session.status = value;
     session.reason = reason;
     const stayActive = runnable.has(value) || (value === 'review' && getSettings().autoSubmit);
-    if (!stayActive) session.active = false;
+    if (!stayActive) {
+      session.active = false;
+      if (session.materialRunRef && platform.capabilities.materials) void platform.materials.request('endRun', { sessionId: session.id, runRef: session.materialRunRef }).catch(() => {});
+    }
     saveSession(session);
     emit();
   }
@@ -225,7 +232,8 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     status('paused', `The page's Continue button stayed disabled after waiting ${navigationTimeoutMs / 1000}s. Auto Continue is still on; inspect the page before resuming.`);
   }
   async function applyResumeUploads(fields, token, signature) {
-    const files = fields.filter(f => f.type === 'file' && isResumeField(f, fields));
+    for (const entry of await applyGeneratedMaterials(fields, runMaterials, { isCurrent: () => guard(token) })) results.set(entry.fieldId, entry);
+    const files = fields.filter(f => f.type === 'file' && isResumeField(f, fields) && !runMaterials.resume);
     if (!platform.capabilities.fileUpload) return true;
     const meta = await platform.documents.meta();
     for (const original of files) {
@@ -254,7 +262,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
 
       emit();
     }
-    const remote = await applyRemoteResumeUploads({ overwriteExisting: getSettings().overwriteExisting });
+    const remote = await applyRemoteResumeUploads({ overwriteExisting: getSettings().overwriteExisting, materials: runMaterials });
     for (const entry of remote) results.set(entry.fieldId, entry);
     return true;
   }
@@ -454,8 +462,10 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         results.clear();
         if (!session.history.some(entry=>entry.signature===signature)) session.history.push({url:state.url,signature,at:new Date().toISOString()});
       }
+      const materialRevision = JSON.stringify(Object.values(runMaterials).map(record => record.revision));
+      if (step.materialRevision !== materialRevision) { step.uploaded = false; step.materialRevision = materialRevision; }
       if (platform.capabilities.fileUpload && !step.uploaded) {
-        const uploaded=await command('uploadResume',{overwriteExisting:getSettings().overwriteExisting});
+        const uploaded=await command('uploadResume',{overwriteExisting:getSettings().overwriteExisting, materials: runMaterials});
         if (!current()) return true;
         for (const entry of uploaded.results || []) results.set(remoteFieldId(state.frameId,entry.fieldId),entry);
         step.uploaded=true;
@@ -620,7 +630,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
           signature = observePage(scanPageFields());
           step.observation = signature;
           for (const field of scanFormFields()) step.questions[field.id] = questionIdentity(field);
-          const targets = scanFormFields().filter(f => f.type !== 'file' && shouldFill(f));
+          const targets = scanFormFields().filter(f => f.type !== 'file' && shouldFill(f) && !runMaterials[materialKind(f)]);
           const missing = [];
           for (const field of targets) {
             const cached = recallAnswer(session, field);
@@ -647,12 +657,12 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
           if (targets.length && !await applyAnswers(targets, Object.values(step.answers), token, signature)) return;
         } else {
           // Recover persisted answers after a full document reload without another primary request.
-          if (!await applyResumeUploads(fields.filter(f => f.type === 'file' && isResumeField(f, fields) && (empty(f) || results.get(f.id)?.status === 'failed')), token, signature)) return;
+          if (!await applyResumeUploads(fields, token, signature)) return;
           await detectAdapter().prepareSections?.(document,getProfile(),{session,isCurrent:()=>guard(token)});
           await detectAdapter().prepareFields?.(document,getProfile(),{overwrite:false,isCurrent:()=>guard(token)});
           signature=observePage(scanPageFields());
           step.observation=signature;
-          const missing = scanFormFields().filter(f => f.type !== 'file' && shouldFill(f) && unfilled(f));
+          const missing = scanFormFields().filter(f => f.type !== 'file' && shouldFill(f) && unfilled(f) && !runMaterials[materialKind(f)]);
           const choices = missing.filter(f => f.type === 'combobox');
           if (choices.length) {
             // Closed menus lose scanned options. Re-discover cached choices
@@ -675,8 +685,8 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
           if (step.lateRequests >= 2) { status('paused', 'Dynamic field limit reached (2/2). Inspect the page before resuming.'); return; }
           step.lateRequests++;
           saveSession(session);
-          const targets = late.filter(f => f.type !== 'file' && shouldFill(f));
-          if (!await applyResumeUploads(late.filter(f => f.type === 'file' && isResumeField(f, late)), token, signature)) return;
+          const targets = late.filter(f => f.type !== 'file' && shouldFill(f) && !runMaterials[materialKind(f)]);
+          if (!await applyResumeUploads(late, token, signature)) return;
           if (targets.length) {
             const answers = await request(targets, { allowSearch: false }, token, signature);
             if (!guard(token)) return;
@@ -781,6 +791,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
   }
   return {
     get session() { return session; },
+    ensureSession(job) { if (!session) { session = createSession(job || captureJob()); emit(); } return session; },
     get busy() { return busy; },
     get stepReview() { return Boolean(session?.stepReview); },
     async initialize() {
@@ -794,6 +805,8 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         session.currentUrl = window.location.href;
       }
       if (session && pendingJob) updateJob(pendingJob);
+      if (session?.active && platform.capabilities.materials) runMaterials = await snapshotMaterials(session, { resumeRun: true });
+      if (disposed) return;
       if (session && compatibleSession() && session.active && session.pendingStep === session.currentStep && Date.now() - session.pendingAt < 120000) {
         const previous = session.steps[session.currentStep];
         const page = classifyPage();
@@ -852,6 +865,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     async start(job) {
       if (busy || disposed) return;
       generation++;
+      const startGeneration = generation;
       if (job || !session) session = createSession(job || captureJob());
       if (session?.job?.pendingHydration) {
         await session.job.pendingHydration;
@@ -860,6 +874,8 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         emit();
       }
       if (!compatibleSession()) return;
+      if (platform.capabilities.materials) runMaterials = await snapshotMaterials(session, { persistRun: true });
+      if (disposed || startGeneration !== generation) return;
       session.stepReview = false;
       const step = session.steps[session.currentStep];
       if (step) {
@@ -877,6 +893,9 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     async continueStep() {
       if (busy || !session) return;
       generation++;
+      const continueGeneration = generation;
+      if (platform.capabilities.materials) runMaterials = await snapshotMaterials(session, { persistRun: true });
+      if (disposed || continueGeneration !== generation) return;
       session.stepReview = false;
       session.active = true;
       const current = session.steps[session.currentStep];
@@ -893,6 +912,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         session.active = false;
         session.stepReview = false;
         session.status = 'idle';
+        if (session.materialRunRef && platform.capabilities.materials) void platform.materials.request('endRun', { sessionId: session.id, runRef: session.materialRunRef }).catch(() => {});
         session.reason = '';
         const current = session.steps[session.currentStep];
         if (current) {

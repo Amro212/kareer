@@ -1,0 +1,8 @@
+<!doctype html><html><head><title>Engineer at Acme</title></head><body>
+<h1>Software Engineer</h1><div class="job-description">Acme seeks a software engineer to build reliable JavaScript APIs and services.</div>
+<form><label>Full name<input id="name" name="name" autocomplete="name"></label><label>Email<input id="email" type="email"></label>
+<label>Resume<input id="resume" type="file" accept=".pdf,.docx"></label><span id="resume-name"></span>
+<label>Cover letter<input id="cover" type="file" accept=".pdf,.docx"></label><span id="letter-name"></span>
+<label>Cover letter text<textarea id="letter-text"></textarea></label><button type="submit">Submit application</button></form>
+<script>document.querySelector('form').onsubmit=e=>e.preventDefault();for(const [id,label]of[['resume','resume-name'],['cover','letter-name']])document.getElementById(id).onchange=e=>document.getElementById(label).textContent=e.target.files[0]?.name||'';</script>
+</body></html>

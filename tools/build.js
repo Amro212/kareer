@@ -195,6 +195,7 @@ function extensionOptions(pkg, browser) {
       'background/index': path.join(extDir, 'background', 'index.js'),
       'options/index': path.join(extDir, 'options', 'index.js'),
       'popup/index': path.join(extDir, 'popup', 'index.js'),
+      'materials/index': path.join(extDir, 'materials', 'index.js'),
     },
     outdir: path.join(distDir, browser),
     format: 'iife',
@@ -221,7 +222,7 @@ function writeExtensionStaticFiles(pkg, browser) {
   const themeHash = crypto.createHash('sha256').update(themeStyles).digest('hex').slice(0, 12);
   fs.writeFileSync(path.join(outDir, 'assets', 'theme.css'), themeStyles);
 
-  for (const page of ['options', 'popup', 'first-run']) {
+  for (const page of ['options', 'popup', 'first-run', 'materials']) {
     const html = path.join(extDir, page, 'index.html');
     if (fs.existsSync(html)) {
       fs.mkdirSync(path.join(outDir, page), { recursive: true });
@@ -235,6 +236,20 @@ function writeExtensionStaticFiles(pkg, browser) {
       fs.mkdirSync(path.join(outDir, page), { recursive: true });
       fs.copyFileSync(js, path.join(outDir, page, 'index.js'));
     }
+  }
+  fs.copyFileSync(path.join(extDir, 'materials', 'workspace.css'), path.join(outDir, 'materials', 'workspace.css'));
+  fs.copyFileSync(path.join(rootDir, 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.worker.mjs'), path.join(outDir, 'materials', 'pdf.worker.mjs'));
+  const licenseDir = path.join(outDir, 'materials', 'licenses');
+  fs.mkdirSync(licenseDir, { recursive: true });
+  fs.copyFileSync(path.join(extDir, 'materials', 'Roboto-OFL.txt'), path.join(licenseDir, 'Roboto-OFL.txt'));
+  for (const file of ['CMU-OFL.txt', 'Charter-LICENSE.txt', 'README.txt']) {
+    fs.copyFileSync(path.join(extDir, 'materials', 'fonts', file), path.join(licenseDir, file));
+  }
+  fs.copyFileSync(path.join(rootDir, 'node_modules', 'pdfmake', 'src', '3rd-party', 'svg-to-pdfkit', 'LICENSE'), path.join(licenseDir, 'svg-to-pdfkit.txt'));
+  for (const dependency of ['pdfjs-dist', 'pdfmake', 'mammoth', 'docx']) {
+    const folder = path.join(rootDir, 'node_modules', dependency);
+    const license = ['LICENSE', 'LICENSE.md', 'LICENSE.txt'].find(file => fs.existsSync(path.join(folder, file)));
+    if (license) fs.copyFileSync(path.join(folder, license), path.join(licenseDir, `${dependency}.txt`));
   }
 
   const icons = path.join(extDir, 'icons');

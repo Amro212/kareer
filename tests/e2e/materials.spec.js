@@ -1,0 +1,357 @@
+import { test, expect } from './support/fixtures.js';
+import mammoth from 'mammoth';
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import fs from 'node:fs';
+
+const PROFILE = { fullName: 'Test Applicant', email: 'test.applicant@example.com', resumeContext: '',
+  workExperiences: [{ id: 'work1', title: 'Engineer', company: 'Acme', startDate: '2021-01', endDate: '2024-02', description: 'Built APIs. Reduced latency by 20%.' }], skills: ['JavaScript'] };
+
+function materialResponse(body) {
+  const input = JSON.parse(body.messages.at(-1).content);
+  if (!input.kind) return { choices: [{ message: { content: JSON.stringify({ answers: (input.fieldsToFill || []).map(f => ({ fieldId: f.fieldId, value: f.type === 'email' ? PROFILE.email : PROFILE.fullName })) }) } }] };
+  if (input.kind === 'source') return { choices: [{ message: { content: JSON.stringify({ name: 'Test Applicant', summary: 'Engineer building reliable APIs.', sections: [{ id: 'import_1', category: 'Experience', heading: 'Engineer Acme', facts: '2021 2024', bullets: ['Built APIs. Reduced latency by 20%.'] }] }) } }] };
+  const value = input.kind === 'coverLetter' ? { paragraphs: ['Dear Hiring Team,', 'I build APIs and would contribute to your engineering team.', 'Sincerely, Test Applicant'] }
+    : { summary: 'Engineer building reliable APIs.', sections: input.source.sections.map(s => ({ id: s.id, bullets: s.bullets })) };
+  return { choices: [{ message: { content: JSON.stringify(value) } }] };
+}
+
+async function message(page, operation, input = {}) {
+  const result = await page.evaluate(({ operation, input }) => chrome.runtime.sendMessage({ type: 'kr:materials', operation, input }), { operation, input });
+  if (result?.error && !result.status) throw new Error(result.error);
+  return result;
+}
+async function waitTask(workspace, task) {
+  await expect.poll(async () => (await message(workspace, 'status', { id: task.id })).status, { timeout: 45000 }).not.toBe('running');
+  const final = await message(workspace, 'status', { id: task.id });
+  expect(final.status, final.error).toBe('ready');
+  return final;
+}
+async function pdfText(bytes) {
+  const loading = getDocument({ data: Uint8Array.from(bytes), isEvalSupported: false, useWasm: false });
+  const pdf = await loading.promise;
+  let text = '';
+  for (let i = 1; i <= pdf.numPages; i++) text += (await (await pdf.getPage(i)).getTextContent()).items.map(item => item.str).join(' ');
+  await loading.destroy(); return text;
+}
+
+test('numeric prose reaches both active application documents without a numeric rejection', async ({ kr }) => {
+  await kr.seed({ profile: PROFILE, settings: { autoContinue: false, autoSubmit: false } });
+  kr.openrouter.streaming = true;
+  kr.openrouter.handler = body => {
+    const input = JSON.parse(body.messages.at(-1).content);
+    const response = materialResponse(body);
+    if (!['resume', 'coverLetter'].includes(input.kind)) return response;
+    expect(body.response_format.type).toBe('json_schema');
+    const value = JSON.parse(response.choices[0].message.content);
+    if (input.kind === 'resume') {
+      value.summary = 'Engineer supporting 10 services.';
+      value.sections.find(section => section.id === 'work1').bullets = ['Built APIs for 10 services.'];
+    } else value.paragraphs[1] = 'I build APIs for 10 services.';
+    response.choices[0].message.content = JSON.stringify(value);
+    return response;
+  };
+  const page = await kr.context.newPage();
+  await page.goto(kr.fixtureUrl('materials-fixture.html')); await kr.openPanel(page);
+  await page.locator('#cover').evaluate(el => el.accept = '.docx');
+  await page.locator('#kr-tailor-resume').click();
+  await page.locator('#kr-generate-cover-letter').click();
+  for (const kind of ['resume', 'coverLetter']) await expect(page.locator(`#kr-material-${kind}-status`)).toContainText('Ready', { timeout: 45000 });
+  await page.locator('#kr-autofill-btn').click();
+  await expect(page.locator('#resume-name')).toContainText('.pdf');
+  await expect(page.locator('#letter-name')).toContainText('.docx');
+  await expect(page.locator('#letter-text')).toHaveValue(/10 services/);
+  const resume = await page.locator('#resume').evaluate(async el => [...new Uint8Array(await el.files[0].arrayBuffer())]);
+  expect(await pdfText(resume)).toContain('10 services');
+  const letter = await page.locator('#cover').evaluate(async el => [...new Uint8Array(await el.files[0].arrayBuffer())]);
+  expect((await mammoth.extractRawText({ buffer: Buffer.from(letter) })).value).toContain('10 services');
+});
+
+test('panel generation activates separate documents for the next Autofill and exports real bytes', async ({ kr }, testInfo) => {
+  await kr.seed({ profile: PROFILE, settings: { autoContinue: false, autoSubmit: false } });
+  kr.openrouter.handler = materialResponse;
+  const page = await kr.context.newPage();
+  await page.goto(kr.fixtureUrl('materials-fixture.html'));
+  await kr.openPanel(page);
+  await page.locator('#kr-tailor-resume').click();
+  await expect(page.locator('#kr-material-resume-status')).toContainText('Ready', { timeout: 90000 });
+  expect(await page.locator('#resume').evaluate(el => el.files.length)).toBe(0);
+  await page.locator('#kr-generate-cover-letter').click();
+  await expect(page.locator('#kr-material-coverLetter-status')).toContainText('Ready', { timeout: 90000 });
+  // Material requests must not be reused as autofill-answer requests.
+  kr.openrouter.handler = body => {
+    const { fieldsToFill = [] } = JSON.parse(body.messages.at(-1).content);
+    return { choices: [{ message: { content: JSON.stringify({ answers: fieldsToFill.map(f => ({ fieldId: f.fieldId, value: f.type === 'email' ? PROFILE.email : PROFILE.fullName })) }) } }] };
+  };
+  await page.locator('#kr-autofill-btn').click();
+  await expect(page.locator('#resume-name')).toContainText('.pdf');
+  await expect(page.locator('#letter-name')).toContainText('.pdf');
+  await expect(page.locator('#letter-text')).toHaveValue(/I build APIs/);
+  const signatures = await page.evaluate(async () => Promise.all(['resume', 'cover'].map(async id => new TextDecoder().decode((await document.getElementById(id).files[0].arrayBuffer()).slice(0, 5)))));
+  expect(signatures).toEqual(['%PDF-', '%PDF-']);
+  const workspacePromise = kr.context.waitForEvent('page');
+  await page.locator('[data-material-open="resume"]').click();
+  const workspace = await workspacePromise;
+  await expect(workspace.locator('#document-editor')).toContainText('Built APIs');
+  await expect(workspace.locator('#pdf-preview canvas')).toHaveCount(1);
+  const downloadPromise = workspace.waitForEvent('download');
+  await workspace.locator('[data-download="docx"]').click();
+  await expect(workspace.locator('#feedback')).toContainText('Downloaded');
+  const downloaded = await downloadPromise;
+  const word = await mammoth.extractRawText({ buffer: fs.readFileSync(await downloaded.path()) });
+  expect(word.value).toContain('Built APIs');
+  await workspace.evaluate(() => window.scrollTo(0, 0));
+  await workspace.screenshot({ path: testInfo.outputPath('workspace-desktop.png'), fullPage: true });
+  await workspace.setViewportSize({ width: 650, height: 850 });
+  await workspace.screenshot({ path: testInfo.outputPath('workspace-compact.png'), fullPage: true });
+  await workspace.setViewportSize({ width: 1280, height: 850 });
+  await workspace.locator('#tab-coverLetter').click();
+  await workspace.locator('#tab-resume').click();
+  await workspace.locator('#tab-coverLetter').click();
+  await expect(workspace.locator('[data-paragraph="1"]')).toHaveValue(/I build APIs/);
+  await expect(workspace.locator('#pdf-preview')).toHaveAttribute('aria-busy', 'false');
+  await expect(workspace.locator('#pdf-preview canvas')).toHaveCount(1);
+  // Wait for the actual saved cover-letter PDF to finish rendering.
+  await expect(workspace.locator('#pdf-preview canvas')).toBeVisible();
+  await workspace.locator('#pdf-preview').screenshot({ path: testInfo.outputPath('cover-letter-preview.png') });
+  await workspace.locator('#tab-resume').click();
+  await expect(workspace.locator('#resume-summary')).toHaveValue('Engineer building reliable APIs.');
+  await expect(workspace.locator('#pdf-preview')).toHaveAttribute('aria-busy', 'false');
+  const oldName = await page.locator('#resume').evaluate(el => el.files[0].name);
+  await workspace.locator('#resume-summary').fill('Engineer focused on dependable APIs.');
+  await workspace.locator('#save-document').click();
+  await expect(workspace.locator('#feedback')).toContainText('Changes saved');
+  await page.locator('#kr-autofill-btn').click();
+  await expect.poll(() => page.locator('#resume').evaluate(el => el.files[0].name)).not.toBe(oldName);
+  const bytes = await page.locator('#resume').evaluate(async el => [...new Uint8Array(await el.files[0].arrayBuffer())]);
+  expect(await pdfText(bytes)).toContain('Engineer focused on dependable APIs.');
+  await page.evaluate(() => { window.resumeUploads = 0; document.querySelector('#resume').addEventListener('change', () => window.resumeUploads++); });
+  await page.locator('#kr-autofill-btn').click();
+  await expect(page.locator('#kr-autofill-btn')).toBeEnabled();
+  expect(await page.evaluate(() => window.resumeUploads)).toBe(0);
+  kr.openrouter.handler = materialResponse;
+  await workspace.locator('[data-rewrite="section:work1"]').click();
+  await expect(workspace.locator('#feedback')).toContainText('Ready', { timeout: 45000 });
+  await expect(workspace.locator('#resume-summary')).toHaveValue('Engineer focused on dependable APIs.');
+  await workspace.locator('#delete-document').click();
+  await expect(workspace.locator('#feedback')).toContainText('Document deleted');
+  const sessions = await kr.readStorage('kr:sessions');
+  expect((await kr.readStorage(`kr:sessions:${sessions[0]}`)).materialRefs.resume).toBeUndefined();
+});
+
+test('a generation finishing during Autofill is used only on the next run and later application steps', async ({ kr }) => {
+  await kr.seed({ profile: PROFILE, settings: { autoContinue: false, autoSubmit: false } }); kr.openrouter.handler = materialResponse;
+  const page = await kr.context.newPage(); await page.goto(kr.fixtureUrl('materials-fixture.html')); await kr.openPanel(page);
+  await page.locator('#kr-tailor-resume').click(); await expect(page.locator('#kr-material-resume-status')).toContainText('Ready', { timeout: 45000 });
+  await page.locator('#kr-autofill-btn').click(); await expect(page.locator('#resume-name')).toContainText('.pdf');
+  await expect(page.locator('#kr-autofill-btn')).toBeEnabled();
+  const previous = await page.locator('#resume').evaluate(el => el.files[0].name);
+  kr.openrouter.delayMs = 1500;
+  kr.openrouter.handler = body => { const reply = materialResponse(body), input = JSON.parse(body.messages.at(-1).content); if (input.kind === 'resume') { const data = JSON.parse(reply.choices[0].message.content); data.summary = 'Engineer focused on reliable delivery.'; reply.choices[0].message.content = JSON.stringify(data); } return reply; };
+  await page.locator('#kr-tailor-resume').click();
+  await expect(page.locator('#kr-material-resume-status')).toContainText('Writing');
+  await page.locator('#kr-autofill-btn').click();
+  await expect(page.locator('#kr-material-resume-status')).toContainText('Ready', { timeout: 45000 });
+  expect(await page.locator('#resume').evaluate(el => el.files[0].name)).toBe(previous);
+  await expect(page.locator('#kr-autofill-btn')).toBeEnabled();
+  await page.locator('#kr-autofill-btn').click();
+  await expect.poll(() => page.locator('#resume').evaluate(el => el.files[0].name)).not.toBe(previous);
+  expect(await pdfText(await page.locator('#resume').evaluate(async el => [...new Uint8Array(await el.files[0].arrayBuffer())]))).toContain('Engineer focused on reliable delivery.');
+  await expect(page.locator('#kr-autofill-btn')).toBeEnabled();
+  await page.locator('#kr-generate-cover-letter').click(); await expect(page.locator('#kr-material-coverLetter-status')).toContainText('Ready', { timeout: 45000 });
+  await page.evaluate(() => { document.querySelector('form').innerHTML = '<h2>Documents — next step</h2><label>Resume<input id="next-resume" type="file" accept=".pdf"></label><label>Cover letter<input id="next-letter" type="file" accept=".pdf"></label><label>Cover letter text<textarea id="next-text"></textarea></label><button type="submit">Submit application</button>'; });
+  await page.locator('#kr-autofill-btn').click();
+  await expect.poll(() => page.locator('#next-resume').evaluate(el => el.files.length)).toBe(1);
+  await expect.poll(() => page.locator('#next-letter').evaluate(el => el.files.length)).toBe(1);
+  await expect(page.locator('#next-text')).toHaveValue(/I build APIs/);
+});
+
+test('malformed regeneration retains the previous active file and offers retry', async ({ kr }) => {
+  await kr.seed({ profile: PROFILE });
+  kr.openrouter.handler = materialResponse;
+  const page = await kr.context.newPage();
+  await page.goto(kr.fixtureUrl('materials-fixture.html'));
+  await kr.openPanel(page);
+  await page.locator('#kr-tailor-resume').click();
+  await expect(page.locator('#kr-material-resume-status')).toContainText('Ready', { timeout: 90000 });
+  const before = await kr.readStorage('kr:sessions');
+  const session = await kr.readStorage(`kr:sessions:${before[0]}`);
+  kr.openrouter.handler = () => ({ choices: [{ message: { content: '{"sections":[]}' } }] });
+  await page.locator('#kr-tailor-resume').click();
+  await expect(page.locator('#kr-material-resume-status')).toContainText('empty', { timeout: 90000 });
+  const after = await kr.readStorage(`kr:sessions:${before[0]}`);
+  expect(after.materialRefs.resume).toEqual(session.materialRefs.resume);
+  await expect(page.locator('#kr-autofill-btn')).toBeEnabled();
+});
+
+test('cover letters generate independently, use DOCX-only fields, and fill text without another writing request', async ({ kr }) => {
+  await kr.seed({ profile: PROFILE, settings: { autoContinue: false, autoSubmit: false } });
+  kr.openrouter.handler = materialResponse; kr.openrouter.streaming = true;
+  const page = await kr.context.newPage(); await page.goto(kr.fixtureUrl('materials-fixture.html')); await kr.openPanel(page);
+  await page.locator('#cover').evaluate(el => el.accept = '.docx');
+  await page.locator('#kr-generate-cover-letter').click();
+  await expect(page.locator('#kr-material-coverLetter-status')).toContainText('Ready', { timeout: 45000 });
+  expect(kr.openrouter.requests).toHaveLength(1);
+  expect(kr.openrouter.requests[0].body.messages[0].content).toContain('Write in English.');
+  await page.locator('#kr-autofill-btn').click();
+  await expect(page.locator('#letter-name')).toContainText('.docx');
+  await expect(page.locator('#letter-text')).toHaveValue(/I build APIs/);
+  expect(await page.locator('#resume').evaluate(el => el.files.length)).toBe(0);
+  const bytes = await page.locator('#cover').evaluate(async el => [...new Uint8Array(await el.files[0].arrayBuffer())]);
+  expect((await mammoth.extractRawText({ buffer: Buffer.from(bytes) })).value).toContain('I build APIs');
+});
+
+test('materials persist through page navigation and are sent to cross-origin embedded forms', async ({ kr }) => {
+  await kr.seed({ profile: PROFILE, settings: { autoContinue: false, autoSubmit: false } });
+  kr.openrouter.handler = materialResponse; kr.openrouter.delayMs = 1200;
+  const page = await kr.context.newPage(); await page.goto(kr.fixtureUrl('materials-embedded.html')); await kr.openPanel(page);
+  await page.locator('#kr-tailor-resume').click();
+  await expect.poll(() => kr.openrouter.requests.length).toBe(1);
+  await page.reload(); await kr.openPanel(page);
+  await expect(page.locator('#kr-material-resume-status')).toContainText('Ready', { timeout: 45000 });
+  await page.locator('#kr-generate-cover-letter').click();
+  await expect(page.locator('#kr-material-coverLetter-status')).toContainText('Ready', { timeout: 45000 });
+  await page.locator('#kr-autofill-btn').click();
+  const frame = page.frameLocator('iframe');
+  await expect(frame.locator('#resume-name')).toContainText('.pdf');
+  await expect(frame.locator('#letter-name')).toContainText('.pdf');
+  await expect(frame.locator('#letter-text')).toHaveValue(/I build APIs/);
+  expect(await page.locator('#kareer-root').count()).toBe(1);
+  expect(await frame.locator('#kareer-root').count()).toBe(0);
+  expect(await pdfText(await frame.locator('#resume').evaluate(async el => [...new Uint8Array(await el.files[0].arrayBuffer())]))).toContain('Built APIs');
+});
+
+test('concurrent jobs stay isolated; cancellation and persisted interruption allow explicit retries', async ({ kr }) => {
+  await kr.seed({ profile: PROFILE }); kr.openrouter.handler = materialResponse; kr.openrouter.delayMs = 1000;
+  const pages = await Promise.all([kr.context.newPage(), kr.context.newPage()]);
+  for (const [i, page] of pages.entries()) { await page.goto(kr.fixtureUrl('materials-fixture.html', undefined, `?job=${i}`)); await kr.openPanel(page); }
+  await Promise.all(pages.map(page => page.locator('#kr-tailor-resume').click()));
+  for (const page of pages) await expect(page.locator('#kr-material-resume-status')).toContainText('Ready', { timeout: 45000 });
+  const ids = await kr.readStorage('kr:sessions');
+  const sessions = await Promise.all(ids.map(id => kr.readStorage(`kr:sessions:${id}`)));
+  expect(new Set(sessions.map(s => s.materialRefs.resume.id)).size).toBe(2);
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  await expect(workspace.locator('#new-job')).toBeEnabled();
+  const task = await message(workspace, 'start', { kind: 'resume', sessionId: sessions[0].id, job: sessions[0].job });
+  await message(workspace, 'cancel', { id: task.id });
+  await expect.poll(async () => (await message(workspace, 'status', { id: task.id })).status).toBe('error');
+  expect((await kr.readStorage(`kr:sessions:${sessions[0].id}`)).materialRefs.resume).toEqual(sessions[0].materialRefs.resume);
+  await kr.worker.evaluate(async () => {
+    await new Promise((resolve, reject) => { const req = indexedDB.open('kareer', 1); req.onsuccess = () => { const db = req.result, tx = db.transaction('files', 'readwrite'); tx.objectStore('files').put({ id: 'task:interrupted', owner: 'previous-worker', status: 'running' }, 'task:interrupted'); tx.oncomplete = () => { db.close(); resolve(); }; tx.onerror = () => reject(tx.error); }; });
+  });
+  const requests = kr.openrouter.requests.length;
+  const interrupted = await message(workspace, 'status', { id: 'task:interrupted' });
+  expect(interrupted.error).toContain('interrupted'); expect(kr.openrouter.requests.length).toBe(requests);
+  await waitTask(workspace, await message(workspace, 'start', { kind: 'resume', sessionId: sessions[0].id, job: sessions[0].job }));
+  expect((await kr.readStorage(`kr:sessions:${sessions[1].id}`)).materialRefs.resume).toEqual(sessions[1].materialRefs.resume);
+});
+
+test('workspace imports actual PDF and DOCX locally and offers recovery for unreadable files', async ({ kr }) => {
+  await kr.seed({ profile: PROFILE }); kr.openrouter.handler = materialResponse;
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  await expect(workspace.locator('#generate')).toBeEnabled();
+  await workspace.locator('#job-title').fill('Engineer'); await workspace.locator('#job-description').fill('Build JavaScript APIs.');
+  await workspace.locator('#generate').click(); await expect(workspace.locator('#feedback')).toContainText('Ready', { timeout: 45000 });
+  const record = await message(workspace, 'get', { id: (await message(workspace, 'list'))[0].id });
+  await workspace.locator('#base-details').evaluate(el => el.open = true);
+  for (const format of ['pdf', 'docx']) {
+    const file = record.files[format];
+    await workspace.locator('#base-file').setInputFiles({ name: file.name, mimeType: file.type, buffer: Buffer.from(file.data, 'base64') });
+    await expect(workspace.locator('#feedback')).toContainText('Resume text extracted');
+    await expect(workspace.locator('#base-text')).toHaveValue(/Built APIs/);
+  }
+  await workspace.locator('#base-file').setInputFiles({ name: 'broken.pdf', mimeType: 'application/pdf', buffer: Buffer.from('unreadable') });
+  await expect(workspace.locator('#feedback')).toHaveClass(/error/);
+  await expect(workspace.locator('#feedback')).toContainText('paste the resume text');
+  await expect(workspace.locator('#generate')).toBeEnabled();
+  await workspace.locator('#generate').click();
+  await expect(workspace.locator('#feedback')).toContainText('Ready', { timeout: 45000 });
+  await expect(workspace.locator('#document-editor h3')).toContainText(['Engineer — Acme', 'Skills']);
+  expect((await kr.readStorage('kr:profile')).workExperiences[0].title).toBe('Engineer');
+  const before = (await message(workspace, 'list'))[0].revision;
+  await workspace.locator('#resume-summary').fill('Long summary '.repeat(1800));
+  await workspace.locator('#save-document').click();
+  await expect(workspace.locator('#feedback')).toContainText('exceed the page target');
+  expect((await message(workspace, 'list'))[0].revision).toBe(before);
+});
+
+test('edits saved while generation is running survive its completion', async ({ kr }) => {
+  await kr.seed({ profile: PROFILE }); kr.openrouter.handler = materialResponse;
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  await expect(workspace.locator('#generate')).toBeEnabled();
+  const job = { localId: 'race', title: 'Engineer', description: 'Build JavaScript APIs.' };
+  const first = await waitTask(workspace, await message(workspace, 'start', { kind: 'resume', job }));
+  kr.openrouter.delayMs = 1800;
+  const second = await message(workspace, 'start', { kind: 'resume', job });
+  await message(workspace, 'cancel', { id: first.id });
+  await waitTask(workspace, second);
+  const record = await message(workspace, 'get', { id: first.material.id });
+  const regeneration = await message(workspace, 'start', { kind: 'resume', job });
+  record.model.summary = 'My deliberately saved wording.';
+  const saved = await message(workspace, 'save', { id: record.id, revision: record.revision, model: record.model });
+  await expect.poll(async () => (await message(workspace, 'status', { id: regeneration.id })).status, { timeout: 10000 }).toBe('error');
+  const latest = await message(workspace, 'get', { id: record.id });
+  expect(latest.revision).toBe(saved.revision);
+  expect(latest.model.summary).toBe('My deliberately saved wording.');
+});
+
+test('regeneration retains corrected job context and saved document options', async ({ kr }) => {
+  await kr.seed({ profile: PROFILE }); kr.openrouter.handler = materialResponse;
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  await expect(workspace.locator('#generate')).toBeEnabled();
+  const original = { localId: 'corrected', title: 'Engineer', description: 'Original job description.' };
+  const corrected = { ...original, title: 'API Engineer', company: 'Acme', description: 'Corrected job description: build JavaScript APIs.' };
+  await waitTask(workspace, await message(workspace, 'start', { kind: 'resume', job: corrected, jobEdited: true, options: { pageTarget: 2, instructions: 'Emphasize APIs.' } }));
+  const task = await message(workspace, 'start', { kind: 'resume', job: original });
+  expect(task.job.description).toBe(corrected.description);
+  const finished = await waitTask(workspace, task);
+  const record = await message(workspace, 'get', { id: finished.material.id });
+  expect(record.options.pageTarget).toBe(2);
+  expect(record.options.instructions).toBe('Emphasize APIs.');
+  expect(kr.openrouter.requests.at(-1).body.messages.at(-1).content).toContain('Corrected job description');
+});
+
+test('automatic full navigation keeps the document selected when Autofill began', async ({ kr }) => {
+  await kr.seed({ profile: { ...PROFILE, phone: '+1 555 0100', location: 'Toronto, Ontario, Canada', workCountry: 'Canada', workAuthorization: 'Yes' }, settings: { autoContinue: true, autoSubmit: false } });
+  kr.openrouter.handler = body => {
+    const input = JSON.parse(body.messages.at(-1).content);
+    if (input.kind) return materialResponse(body);
+    return { choices: [{ message: { content: JSON.stringify({ answers: (input.fieldsToFill || []).map(f => ({ fieldId: f.fieldId, value: f.type === 'checkbox' ? true : ['radio', 'select', 'combobox'].includes(f.type) ? f.options?.find(o => o.label && !/select|choose/i.test(o.label))?.label || '' : f.type === 'textarea' ? 'I build and ship software and have production application experience.' : f.type === 'tel' ? '+1 555 0100' : f.type === 'email' ? PROFILE.email : PROFILE.fullName })) }) } }] };
+  };
+  const page = await kr.context.newPage(), uploads = [];
+  page.on('console', event => { if (event.text().startsWith('MATERIAL_UPLOAD ')) uploads.push(JSON.parse(event.text().slice(16))); });
+  await page.addInitScript(() => document.addEventListener('DOMContentLoaded', () => {
+    const form = document.querySelector('form'); if (!form) return;
+    const label = document.createElement('label'); label.textContent = 'Resume';
+    const input = document.createElement('input'); input.type = 'file'; input.id = 'materials-resume'; input.accept = '.pdf';
+    input.onchange = () => console.log('MATERIAL_UPLOAD ' + JSON.stringify({ step: new URLSearchParams(location.search).get('step'), name: input.files[0]?.name }));
+    label.append(input); form.prepend(label);
+    if (new URLSearchParams(location.search).get('step') === '1') form.querySelector('button').onclick = () => {
+      if (form.checkValidity()) { const next = new URL(location.href); next.searchParams.set('step', '2'); location.href = next.href; }
+    };
+  }));
+  let generation;
+  let transition;
+  const nextStep = new Promise(resolve => { transition = resolve; });
+  await page.route('**/acme/materials-navigation*', async route => {
+    const secondStep = new URL(route.request().url()).searchParams.get('step') === '2';
+    if (secondStep) await waitTask(workspace, generation);
+    await route.fulfill({ contentType: 'text/html', body: fs.readFileSync('fixtures/phase3-application-fixture.html', 'utf8') });
+    if (secondStep) transition();
+  });
+  await page.goto(kr.fixtureUrl('acme/materials-navigation', undefined, '?step=1')); await kr.openPanel(page);
+  await page.locator('#kr-tailor-resume').click(); await expect(page.locator('#kr-material-resume-status')).toContainText('Ready', { timeout: 45000 });
+  const ids = await kr.readStorage('kr:sessions'), session = await kr.readStorage(`kr:sessions:${ids[0]}`);
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`); await expect(workspace.locator('#generate')).toBeEnabled();
+  const old = await message(workspace, 'get', { id: session.materialRefs.resume.id });
+  kr.openrouter.delayMs = 800;
+  generation = await message(workspace, 'start', { kind: 'resume', job: session.job, sessionId: session.id });
+  await page.locator('#kr-autofill-btn').click();
+  await page.waitForURL(/step=(?:2|review)/, { timeout: 45000 });
+  await nextStep;
+  await kr.openPanel(page);
+  await expect(page.locator('#kr-main-panel')).toContainText('Ready for review', { timeout: 60000 });
+  expect(uploads.find(u => u.step === '1')?.name).toBe(old.files.pdf.name);
+  expect(uploads.find(u => u.step === '2')?.name).toBe(old.files.pdf.name);
+  const latest = await message(workspace, 'get', { id: old.id });
+  expect(latest.revision).not.toBe(old.revision);
+});

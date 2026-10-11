@@ -35,6 +35,7 @@ test('Lever hydrated job and session remain plain data and survive filling and r
   await expect(page.locator('#name')).toHaveValue(PROFILE.fullName);
   await expect(page.locator('#email')).toHaveValue(PROFILE.email);
   await expect(page.locator('#kr-main-panel')).toContainText('Autofill complete. Review field statuses below.');
+  await expect.poll(async () => Object.keys((await kr.readStorage(`kr:sessions:${id}`))?.answers || {}).length).toBeGreaterThanOrEqual(2);
   const filled = await kr.readStorage(`kr:sessions:${id}`);
   expect(Object.keys(filled.answers).length).toBeGreaterThanOrEqual(2);
   expect(filled.job.description).toBe(DESCRIPTION);

@@ -14,6 +14,7 @@ test.describe('data migration', () => {
 
     const page = await kr.context.newPage();
     await page.goto(kr.optionsUrl());
+    await expect(page.locator('#save-key')).toBeEnabled();
 
     const downloadPromise = page.waitForEvent('download');
     await page.locator('#export-data').click();
@@ -44,6 +45,7 @@ test.describe('data migration', () => {
 
     const page = await kr.context.newPage();
     await page.goto(kr.optionsUrl());
+    await expect(page.locator('#save-key')).toBeEnabled();
     await page.locator('#import-file').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
 
     await expect(page.locator('#migration-feedback')).toContainText('Imported 2 records');
@@ -60,6 +62,7 @@ test.describe('data migration', () => {
 
     const page = await kr.context.newPage();
     await page.goto(kr.optionsUrl());
+    await expect(page.locator('#save-key')).toBeEnabled();
     await page.locator('#import-file').setInputFiles({ name: 'invalid.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ hello: 'world' })) });
 
     await expect(page.locator('#migration-feedback')).toContainText('Import failed');

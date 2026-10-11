@@ -12,6 +12,7 @@ import {
   gmGet,
 } from './storage.js';
 import { platform, getHostName } from './platform.js';
+import { snapshotMaterials, applyGeneratedMaterials, materialKind } from './materials.js';
 import { collectPortableData, exportPayload } from './migration.js';
 import { logger } from './debug.js';
 import { testConnection, generateAutofillAnswers, rewriteNarrativeField } from './ai.js';
@@ -44,6 +45,81 @@ import { inspectContinue } from './navigation.js';
 
 let applicationEngine = null;
 let applicationState = null;
+const materialStates = new Map();
+const materialKey = (sessionId, kind) => `${sessionId}:${kind}`;
+let materialsPollTimer = null;
+
+function renderMaterials() {
+  if (!platform.capabilities.materials) return '';
+  const session = applicationEngine?.session;
+  const readyCount = (session?.materialRefs?.resume ? 1 : 0) + (session?.materialRefs?.coverLetter ? 1 : 0);
+  return `<div class="kr-card" style="gap:8px;">
+    <div class="kr-row" style="margin-bottom:0;">
+      <span class="kr-card-title">Application Materials</span>
+      ${readyCount > 0 ? `<span class="kr-badge kr-badge-green">${readyCount} READY</span>` : '<span class="kr-badge" style="font-size:10px;color:var(--kr-text-3);">OPTIONAL</span>'}
+    </div>
+    <p style="font-size:12px;color:var(--kr-text-2);margin:2px 0 6px;line-height:1.4;">Tailored for this job. The next Autofill uses your new documents.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      ${['resume', 'coverLetter'].map(kind => {
+        const state = materialStates.get(materialKey(session?.id, kind));
+        const ready = Boolean(session?.materialRefs?.[kind]);
+        const running = state?.status === 'running';
+        const label = kind === 'resume' ? 'Tailor resume' : 'Generate cover letter';
+        const statusMsg = state?.status === 'error' ? state.error : running ? state.phase || 'Generating…' : ready ? 'Ready for next Autofill' : '';
+        return `<div style="display:flex;flex-direction:column;gap:4px;">
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button class="kr-btn kr-btn-secondary" id="${kind === 'resume' ? 'kr-tailor-resume' : 'kr-generate-cover-letter'}" style="flex:1;justify-content:center;padding:7px 10px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" ${running ? 'disabled' : ''}>${running ? 'Generating…' : ready ? 'Regenerate' : label}</button>
+            ${ready ? `<button class="kr-btn kr-btn-secondary kr-btn-small" data-material-open="${kind}" style="padding:4px 8px;font-size:11px;" title="Open in workspace">Open</button>` : ''}
+            ${running ? `<button class="kr-btn kr-btn-secondary kr-btn-small" data-material-cancel="${kind}" style="padding:4px 8px;font-size:11px;">Cancel</button>` : ''}
+          </div>
+          <div id="kr-material-${kind}-status" role="status" aria-live="polite" style="font-size:11px;overflow-wrap:anywhere;color:var(--kr-${state?.status === 'error' ? 'danger' : ready ? 'success' : 'text-2'});line-height:1.3;${statusMsg ? 'min-height:14px;' : ''}">${escapeHtml(statusMsg)}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="margin-top:6px;padding-top:8px;border-top:1px solid var(--kr-line);display:flex;justify-content:flex-end;">
+      <button class="kr-btn kr-btn-secondary kr-btn-small" data-material-open="workspace" title="Open materials workspace">Materials workspace ↗</button>
+    </div>
+  </div>`;
+}
+
+async function refreshMaterialStates() {
+  const session = applicationEngine?.session;
+  if (!session?.id || !platform.capabilities.materials) return;
+  try {
+    const current = await platform.materials.request('session', { sessionId: session.id });
+    if (applicationEngine?.session?.id !== session.id) return;
+    session.materialRefs = current?.materialRefs || {};
+    session.materialTasks = current?.materialTasks || {};
+    let changed = false, running = false;
+    for (const [kind, id] of Object.entries(session.materialTasks)) {
+      const key = materialKey(session.id, kind), previous = materialStates.get(key);
+      if (previous?.id === id && previous.status !== 'running') continue;
+      const state = await platform.materials.request('status', { id });
+      if (JSON.stringify(state) !== JSON.stringify(previous)) { materialStates.set(key, state); changed = true; }
+      if (state.status === 'running') running = true;
+    }
+    if (changed) updatePanelDOM();
+    if (running) { clearTimeout(materialsPollTimer); materialsPollTimer = setTimeout(() => void refreshMaterialStates(), 1000); }
+  } catch { /* A later click/reload can refresh unavailable status. Autofill remains available. */ }
+}
+
+async function generateMaterial(kind) {
+  const session = applicationEngine?.ensureSession(captureJob());
+  if (!session) return;
+  const key = materialKey(session.id, kind);
+  try {
+    materialStates.set(key, { status: 'running', phase: 'Starting generation' }); updatePanelDOM();
+    const task = await platform.materials.request('start', { kind, sessionId: session.id, job: session.job });
+    if (task.needsWorkspace) {
+      materialStates.set(key, { status: 'error', error: task.reason });
+      await platform.materials.request('open', { sessionId: session.id, kind });
+    } else {
+      materialStates.set(key, task); session.materialTasks = { ...session.materialTasks, [kind]: task.id };
+      clearTimeout(materialsPollTimer); materialsPollTimer = setTimeout(() => void refreshMaterialStates(), 500);
+    }
+  } catch (error) { materialStates.set(key, { status: 'error', error: error.message }); }
+  updatePanelDOM();
+}
 let panelHostDisconnectObserver = null;
 
 function resolveLiveElement(field) {
@@ -1662,6 +1738,10 @@ async function executeAutofillFlow() {
     deduplicateFields(detectedFieldsCache);
     const settings = getSettings();
     const overwrite = Boolean(settings.overwriteExisting);
+    const materials = await snapshotMaterials(applicationEngine?.session);
+    const generatedResults = await applyGeneratedMaterials(detectedFieldsCache, materials, { isCurrent: () => token === autofillGeneration });
+    for (const entry of generatedResults) fieldResultsCache.set(entry.fieldId, entry);
+    refreshDetectedFields();
 
     const shouldFill = (f) => {
       if (f.element?.disabled || f.element?.readOnly) return false;
@@ -1673,7 +1753,7 @@ async function executeAutofillFlow() {
       return !val || val === 'false' || val === '0' || String(val).trim().length === 0;
     };
     const allFileFields = detectedFieldsCache.filter(f => f.type === 'file');
-    const fileFields = allFileFields.filter(f => isResumeField(f, allFileFields) && shouldFill(f));
+    const fileFields = allFileFields.filter(f => isResumeField(f, allFileFields) && shouldFill(f) && !materials.resume);
     for (const field of fileFields) {
       if (token !== autofillGeneration) return;
       field.element = resolveLiveFileElement(field);
@@ -1692,7 +1772,7 @@ async function executeAutofillFlow() {
       }
 
     }
-    const remoteUploads = await applyRemoteResumeUploads({ overwriteExisting: overwrite });
+    const remoteUploads = await applyRemoteResumeUploads({ overwriteExisting: overwrite, materials });
     if (token !== autofillGeneration) return;
     for (const result of remoteUploads) {
       fieldResultsCache.set(result.fieldId, result);
@@ -1717,9 +1797,9 @@ async function executeAutofillFlow() {
       remoteFieldsCache = remoteFields.map((f) => ({ ...f, id: f.fieldId, fieldId: f.fieldId }));
     }
 
-    const aiTargetFields = targetFields.filter((f) => f.type !== 'file');
+    const aiTargetFields = targetFields.filter((f) => f.type !== 'file' && !materials[materialKind(f)]);
 
-    if (aiTargetFields.length === 0 && remoteFields.length === 0 && fileFields.length === 0 && remoteUploads.length === 0) {
+    if (aiTargetFields.length === 0 && remoteFields.length === 0 && fileFields.length === 0 && remoteUploads.length === 0 && generatedResults.length === 0) {
       autofillProgress.statusText = (detectedFieldsCache.length === 0 && remoteFieldCount === 0)
         ? 'No form fields detected on this page.'
         : 'All fields are already filled. Enable "Overwrite Existing Values" in Settings to overwrite.';
@@ -2412,6 +2492,7 @@ function renderHomeTab() {
       <button id="kr-pause-application" style="display:none;" aria-hidden="true" tabindex="-1"></button>
     </div>
 
+    ${renderMaterials()}
     ${renderFieldReviewSection()}
 
     <div class="kr-card">
@@ -2932,6 +3013,18 @@ function attachEventHandlers() {
   };
 
   const autofillBtn = shadowRootRef.querySelector('#kr-autofill-btn');
+  const tailor = shadowRootRef.querySelector('#kr-tailor-resume');
+  if (tailor) tailor.onclick = () => void generateMaterial('resume');
+  const letter = shadowRootRef.querySelector('#kr-generate-cover-letter');
+  if (letter) letter.onclick = () => void generateMaterial('coverLetter');
+  for (const button of shadowRootRef.querySelectorAll('[data-material-open]')) button.onclick = () => {
+    const session = applicationEngine?.ensureSession(captureJob());
+    void platform.materials.request('open', { sessionId: session?.id, id: session?.materialRefs?.[button.dataset.materialOpen]?.id, kind: button.dataset.materialOpen === 'workspace' ? undefined : button.dataset.materialOpen }).catch(error => logger.warn(error.message));
+  };
+  for (const button of shadowRootRef.querySelectorAll('[data-material-cancel]')) button.onclick = () => {
+    const state = materialStates.get(materialKey(applicationEngine?.session?.id, button.dataset.materialCancel));
+    if (state?.id) void platform.materials.request('cancel', { id: state.id });
+  };
   if (autofillBtn) {
     autofillBtn.onclick = handleAutofillAction;
   }
@@ -3350,7 +3443,7 @@ export function mountUI() {
       refreshDetectedFields();
       updatePanelDOM();
     } });
-    void applicationEngine.initialize();
+    void applicationEngine.initialize().then(() => refreshMaterialStates());
 
     logger.info('Kareer Shadow DOM UI mounted successfully.');
   }

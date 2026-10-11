@@ -73,6 +73,10 @@ async function init() {
     api.runtime.openOptionsPage();
     window.close();
   };
+  $('open-materials').onclick = async () => {
+    await sendMessage({ type: MSG.MATERIALS, operation: 'open' });
+    window.close();
+  };
 }
 
 init().catch((err) => {

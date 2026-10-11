@@ -72,9 +72,14 @@ export const platform = {
   },
   documents: {
     meta: () => host.documentsMeta(),
-    get: () => host.documentsGet(),
+    get: (selection) => host.documentsGet(selection),
     put: (doc) => host.documentsPut(doc),
     delete: () => host.documentsDelete(),
+  },
+  materials: {
+    // Operations: start/status/cancel, base/saveBase, get/list/save/delete,
+    // session/job, and open. Host implementations own files and API secrets.
+    request: (operation, input = {}) => host.materialsRequest?.(operation, input) ?? Promise.reject(new Error('Application materials require the extension.')),
   },
   openOptions: () => host.openOptions(),
 };

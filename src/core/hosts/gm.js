@@ -129,6 +129,7 @@ export function createGmHost() {
     // No navigation API: a constant marker keeps the engine on DOM comparison.
     navigationMarker: () => ({ id: 0, url: '', frameId: 0, kind: '', at: 0 }),
     navigationOnChange: () => () => {},
+    materialsRequest: async () => { throw new Error('Application materials require the Chrome or Firefox extension.'); },
     documentsMeta: async () => memoryStore.has('kr:resume-meta') ? memoryStore.get('kr:resume-meta') : null,
     documentsGet: async () => memoryStore.get('kr:resume') || null,
     documentsPut: async (doc) => {

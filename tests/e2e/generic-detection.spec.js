@@ -88,10 +88,11 @@ test('manual panel survives mutations on its URL and clears on unrelated navigat
   const popup = await kr.context.newPage();
   await popup.goto(kr.popupUrl());
   // Send the same extension command as the popup, targeting this test tab.
-  await kr.worker.evaluate(async url => {
+  const response = await kr.worker.evaluate(async url => {
     const tabs = await chrome.tabs.query({});
     return await chrome.tabs.sendMessage(tabs.find(tab => tab.url === url).id, {type:'kr:toggle-panel'});
   }, page.url());
+  expect(response).toEqual({ ok: true });
   await expect(page.locator('#kr-main-panel')).toBeVisible();
   await page.evaluate(() => { const field = document.createElement('textarea'); document.body.append(field); });
   await page.waitForTimeout(700);

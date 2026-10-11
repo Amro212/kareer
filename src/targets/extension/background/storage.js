@@ -2,6 +2,18 @@ import { api } from '../shared/browser.js';
 import { SECRET_KEYS, STORAGE_AREA } from '../shared/protocol.js';
 
 const area = () => api.storage[STORAGE_AREA];
+const sessionWrites = new Map();
+export function updateStoredSession(key, update) {
+  const next = (sessionWrites.get(key) || Promise.resolve()).catch(() => {}).then(async () => {
+    const previous = (await area().get(key))[key];
+    const value = update(previous);
+    if (value) await area().set({ [key]: value });
+    return value;
+  });
+  sessionWrites.set(key, next);
+  void next.finally(() => { if (sessionWrites.get(key) === next) sessionWrites.delete(key); }).catch(() => {});
+  return next;
+}
 
 function isSecret(key) {
   return SECRET_KEYS.includes(key);
@@ -25,6 +37,15 @@ export async function buildSnapshot() {
 
 export async function applySet(key, value) {
   if (isSecret(key)) throw new Error(`Refusing to write secret key "${key}" from a page context`);
+  // Document activation belongs to the background. A running content script
+  // can otherwise overwrite a just-completed generation with its old session.
+  if (key.startsWith('kr:sessions:') && value && typeof value === 'object') {
+    return updateStoredSession(key, previous => ({ ...value,
+      ...(previous?.materialRefs ? { materialRefs: previous.materialRefs } : {}),
+      ...(previous?.materialTasks ? { materialTasks: previous.materialTasks } : {}),
+      materialRunRef: previous?.materialRunRef || null,
+    }));
+  }
   await area().set({ [key]: value });
 }
 

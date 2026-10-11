@@ -41,7 +41,7 @@ for (const [ats, host] of [['ashby', ASHBY_HOST], ['lever', LEVER_HOST]]) {
     await page.locator('#kr-autofill-btn').click();
     await expect(page.locator('#kr-autofill-btn')).toBeEnabled({ timeout: 60000 });
     await expect(page.locator('body')).toHaveAttribute('data-parse', 'complete');
-    expect(requestAt).toBeGreaterThanOrEqual(Number(await page.locator('body').getAttribute('data-parsed-at')));
+    await expect.poll(() => requestAt).toBeGreaterThanOrEqual(Number(await page.locator('body').getAttribute('data-parsed-at')));
     await expect(page.locator('#name')).toHaveValue('Parsed Applicant');
     await expect(page.locator('#email')).toHaveValue(PROFILE.email);
     await expect(page.locator('body')).toHaveAttribute('data-submissions', '0');

@@ -1712,6 +1712,7 @@ async function init() {
   setupNavigation();
   updateSubnavBadges();
   handleInitialHash();
+  $('save-key').disabled = false;
 }
 
 function setupNavigation() {

@@ -6,6 +6,8 @@ import { bindTabSession, getTabSession, watchTabLifecycle } from './tabs.js';
 import { registerFrame, listFrames, dropFrame, dropTab } from './frames.js';
 import { recordNavigation, readNavigation, clearNavigation } from './navigation.js';
 import { putDocument, getDocument, documentMeta, deleteDocument } from './documents.js';
+import { handleMaterials } from './materials.js';
+import { encodeDocument, decodeDocument } from '../shared/binary.js';
 
 /**
  * MV3 workers are terminated when idle, so this file holds no durable state.
@@ -81,9 +83,10 @@ const handlers = {
   [MSG.NAV_STATE]: async (payload, sender) => readNavigation(payload?.tabId ?? sender?.tab?.id),
 
   [MSG.DOC_META]: async () => ({ meta: await documentMeta() }),
-  [MSG.DOC_GET]: () => getDocument(),
-  [MSG.DOC_PUT]: ({ name, type, mimeType, buffer }) => putDocument({ name, type: mimeType || type, buffer }),
+  [MSG.DOC_GET]: async ({ ref, format } = {}) => ref ? handleMaterials('document', { ref, format }) : encodeDocument(await getDocument()),
+  [MSG.DOC_PUT]: (payload) => { const { name, type, mimeType, buffer } = decodeDocument(payload); return putDocument({ name, type: mimeType || type, buffer }); },
   [MSG.DOC_DELETE]: () => deleteDocument(),
+  [MSG.MATERIALS]: ({ operation, input }, sender) => handleMaterials(operation, input, sender),
 };
 
 function deliver(payload, excludeTabId) {

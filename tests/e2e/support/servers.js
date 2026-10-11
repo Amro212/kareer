@@ -78,6 +78,8 @@ export async function startOpenRouterMock() {
       return { choices: [{ message: { content: JSON.stringify({ answers }) } }] };
     },
     status: 200,
+    streaming: false,
+    delayMs: 0,
   };
 
   const server = https.createServer({ key: pems.private, cert: pems.cert }, (req, res) => {
@@ -97,8 +99,19 @@ export async function startOpenRouterMock() {
         return;
       }
 
-      res.writeHead(state.status, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(payload));
+      const send = () => {
+        if (res.destroyed) return;
+        if (state.streaming && body.stream) {
+          res.writeHead(state.status, { 'Content-Type': 'text/event-stream' });
+          const content = payload.choices?.[0]?.message?.content || '';
+          for (let offset = 0; offset < content.length; offset += 31) res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: content.slice(offset, offset + 31) } }] })}\n\n`);
+          res.end('data: [DONE]\n\n');
+        } else {
+          res.writeHead(state.status, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(payload));
+        }
+      };
+      if (state.delayMs) setTimeout(send, state.delayMs); else send();
     });
   });
 
