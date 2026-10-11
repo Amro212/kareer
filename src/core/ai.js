@@ -1,5 +1,5 @@
 import { hasApiKey, getSettings, getProfile, gmGet } from './storage.js';
-import { STORAGE_KEYS } from './constants.js';
+import { STORAGE_KEYS, DEFAULT_SETTINGS } from './constants.js';
 import { logger } from './debug.js';
 import { platform } from './platform.js';
 import { findExactOption } from './fields/combobox.js';
@@ -322,7 +322,7 @@ async function requestAiJson({ model, messages, temperature = 0.2, timeout = AUT
 
 export async function testConnection() {
   const settings = getSettings();
-  const model = settings.model || 'google/gemini-2.0-flash';
+  const model = settings.model || DEFAULT_SETTINGS.model;
 
   if (!hasApiKey()) {
     logger.warn('Test AI invoked without an API key configured.');
@@ -451,7 +451,7 @@ async function generatePageAnswers(fields, { settings, profile, allowSearch, job
       if (deterministic) answers.push({ ...deterministic, source: 'profile', provenance: 'unresolved' });
     }
   }
-  const model = settings.model || 'google/gemini-2.0-flash';
+  const model = settings.model || DEFAULT_SETTINGS.model;
   if (!unresolved.length && fields.length) return { answers, latencyMs: 0, model };
   if (!hasApiKey()) return { answers, latencyMs: 0, model };
   const currentAdapter = detectAdapter();
@@ -498,7 +498,7 @@ async function generatePageAnswers(fields, { settings, profile, allowSearch, job
 export async function rewriteNarrativeField({ fieldLabel, currentValue, feedback, constraints }) {
   const settings = getSettings();
   const profile = getProfile();
-  const model = settings.narrativeModel || settings.model || 'google/gemini-2.0-flash';
+  const model = settings.narrativeModel || settings.model || DEFAULT_SETTINGS.model;
 
   if (!hasApiKey()) {
     throw new Error('No OpenRouter API key configured.');

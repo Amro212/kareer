@@ -16,7 +16,7 @@ export const STORAGE_KEYS = {
 };
 
 export const DEFAULT_SETTINGS = {
-  model: 'google/gemini-2.0-flash',
+  model: 'google/gemini-2.5-flash-lite',
   autofillEnabled: true,
   overwriteExisting: false,
   autoContinue: true,
@@ -53,6 +53,7 @@ export const DEFAULT_PROFILE = {
 };
 
 export const POPULAR_MODELS = [
+  'google/gemini-2.5-flash-lite',
   'google/gemini-2.0-flash',
   'anthropic/claude-3.5-sonnet',
   'openai/gpt-4o',

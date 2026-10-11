@@ -21,7 +21,8 @@ export function getSettings() {
 
 export function saveSettings(settings) {
   // Ensure we do not accidentally persist secrets in general settings
-  const cleanSettings = { ...settings };
+  const current = gmGet(STORAGE_KEYS.SETTINGS, {}) || {};
+  const cleanSettings = { ...current, ...settings };
   delete cleanSettings.apiKey;
   delete cleanSettings.openRouterApiKey;
   gmSet(STORAGE_KEYS.SETTINGS, cleanSettings);

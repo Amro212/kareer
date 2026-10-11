@@ -1,5 +1,5 @@
 import { TOKENS, VISUAL_NAME, installPanelFonts } from './theme.js';
-import { APP_VERSION, APP_NAME, POPULAR_MODELS, UI_IDS, FILL_STATUS, STORAGE_KEYS } from './constants.js';
+import { APP_VERSION, APP_NAME, POPULAR_MODELS, UI_IDS, FILL_STATUS, STORAGE_KEYS, DEFAULT_SETTINGS } from './constants.js';
 import { PROFILE_SECTIONS, PROFILE_FIELDS, calculateProfileStrength } from './profile.js';
 import {
   getSettings,
@@ -201,6 +201,7 @@ function resolveLiveFileElement(field, root = document) {
 let shadowRootRef = null;
 let currentTab = 'home';
 let panelVisible = false;
+let panelJustOpened = false;
 let isPebble = true;
 let userExplicitlyToggledPebble = false;
 let lastAutoExpandUrl = typeof window !== 'undefined' ? window.location?.href : '';
@@ -576,6 +577,9 @@ const STYLES = `
   flex-direction: column;
   overflow: hidden;
   z-index: 2147483647;
+}
+
+.kr-panel.kr-panel-animate {
   animation: krPanelSlideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -1757,7 +1761,7 @@ function checkAutoExpand() {
     lastAutoExpandUrl = window.location.href;
     userExplicitlyToggledPebble = false;
   }
-  if (userExplicitlyToggledPebble || !isPebble) return false;
+  if (userExplicitlyToggledPebble || panelVisible) return false;
   const adapter = detectAdapter();
   const page = classifyPage();
   const fieldCount = detectedFieldsCache.length + remoteFieldCount;
@@ -1765,6 +1769,8 @@ function checkAutoExpand() {
   const isFormOrApp = page.type === 'application' || fieldCount > 0;
   if ((isKnownAts || isFormOrApp) && page.type !== 'unrelated' && page.type !== 'listing') {
     isPebble = false;
+    panelJustOpened = true;
+    panelVisible = true;
     return true;
   }
   return false;
@@ -2297,100 +2303,17 @@ async function saveFixtureSnapshot() {
 
 function renderHud() {
   const status = getStatusInfo();
-  const fieldCount = detectedFieldsCache.length + remoteFieldCount;
-  const adapter = detectAdapter();
   const session = applicationState?.session;
   const wfStatus = session?.status || '';
   const wfIsRunning = wfStatus === 'running' || wfStatus === 'submitting';
-  const wfIsWaiting = wfStatus === 'captcha';
-  const profile = getProfile();
-  const strength = calculateProfileStrength(profile);
-
   const pebbleDotClass = isAutofilling || wfIsRunning ? 'running' : status.dotClass;
-  const pebbleHtml = `
-    <button type="button" class="kr-pebble" id="kr-pebble-toggle-btn" style="${isPebble ? '' : 'display: none;'}" title="Expand Kareer">
+
+  return `
+    <button type="button" class="kr-pebble" id="kr-pebble-toggle-btn" style="${panelVisible ? 'display: none;' : ''}" title="Open ${VISUAL_NAME}">
       <div class="kr-status-dot ${pebbleDotClass} kr-pebble-dot"></div>
       ${ICONS.brandMark}
     </button>
-  `;
-
-  if (isPebble) {
-    return pebbleHtml;
-  }
-
-  const dotClass = isAutofilling || wfIsRunning ? 'running' : status.dotClass;
-  const countBadge = fieldCount > 0
-    ? `<span class="kr-hud-badge kr-hud-badge-accent">${fieldCount}</span>`
-    : '';
-
-  let ctaContent = '';
-  if (isAutofilling || wfIsRunning) {
-    ctaContent = `
-      <button class="kr-hud-cta kr-hud-cta-running" id="kr-hud-autofill-btn" title="Autofill in progress">
-        <span class="kr-spin">${ICONS.spinner}</span>
-        <span>${autofillProgress.total > 0 ? `${autofillProgress.current}/${autofillProgress.total}` : 'Filling...'}</span>
-      </button>
-      <button class="kr-hud-icon-btn" id="kr-hud-pause-btn" title="Pause autofill">
-        ${ICONS.pause}
-      </button>
-    `;
-  } else if (session?.stepReview) {
-    ctaContent = `
-      <button class="kr-hud-cta" id="kr-hud-autofill-btn" style="background: rgba(163, 230, 53, 0.15); color: var(--kr-signal); border: 1px solid rgba(163, 230, 53, 0.4);" title="Step review complete. Advance to next step.">
-        ${ICONS.arrowRight}
-        <span>Next Step</span>
-      </button>
-    `;
-  } else if (wfStatus === 'paused') {
-    ctaContent = `
-      <button class="kr-hud-cta" id="kr-hud-autofill-btn" title="Resume application autofill">
-        ${ICONS.play}
-        <span>Resume</span>
-      </button>
-    `;
-  } else if (wfIsWaiting) {
-    ctaContent = `
-      <button class="kr-hud-cta" id="kr-hud-autofill-btn" style="background: rgba(242, 184, 75, 0.15); color: #F2B84B; border: 1px solid rgba(242, 184, 75, 0.4);" title="Action required on page">
-        ${ICONS.shield}
-        <span>Action Required</span>
-      </button>
-    `;
-  } else if (!strength.isMvpComplete) {
-    ctaContent = `
-      <button class="kr-hud-cta" id="kr-hud-autofill-btn" style="background: rgba(242, 184, 75, 0.12); color: var(--kr-warning); border: 1px solid rgba(242, 184, 75, 0.35);" title="Profile incomplete (${escapeHtml(strength.missingCore.join(', '))} required). Click to complete profile.">
-        ${ICONS.alert}
-        <span>Setup Profile</span>
-      </button>
-    `;
-  } else {
-    ctaContent = `
-      <button class="kr-hud-cta" id="kr-hud-autofill-btn" ${fieldCount === 0 ? 'disabled' : ''} title="Autofill fields on this page">
-        ${ICONS.play}
-        <span>Autofill</span>
-      </button>
-    `;
-  }
-
-  return `
-    ${pebbleHtml}
-    <div class="kr-hud-bar ${panelVisible ? 'kr-hud-expanded' : ''}" id="kr-hud">
-      <button type="button" class="kr-hud-brand" id="kr-toggle-btn" aria-expanded="${panelVisible}" title="${panelVisible ? 'Collapse panel' : 'Open Kareer Inspector'}">
-        <div class="kr-status-dot ${dotClass}"></div>
-        <div class="kr-hud-title">
-          <span class="kr-hud-brand-mark">${ICONS.brandMark}</span>
-          <span>${VISUAL_NAME}</span>
-        </div>
-        <span class="kr-hud-adapter">${escapeHtml(adapter.id === 'generic' ? 'Generic' : adapter.label)}</span>
-        ${countBadge}
-      </button>
-      ${ctaContent}
-      <button class="kr-hud-icon-btn" id="kr-hud-expand-btn" title="${panelVisible ? 'Collapse panel' : 'Open Inspector'}">
-        ${panelVisible ? ICONS.minimize : ICONS.maximize}
-      </button>
-      <button class="kr-hud-icon-btn" id="kr-hud-minimize-btn" title="Minimize to pebble">
-        ${ICONS.x}
-      </button>
-    </div>
+    <button type="button" id="kr-toggle-btn" style="display: none;" aria-hidden="true" title="Open ${VISUAL_NAME}"></button>
   `;
 }
 
@@ -3162,6 +3085,40 @@ function updatePanelDOM() {
   const dockTop = typeof settings.dockTop === 'number' ? settings.dockTop : 50;
   container.style.setProperty('--kr-dock-top', `${dockTop}%`);
 
+  const existingPanel = container.querySelector('#kr-main-panel');
+
+  if (panelVisible && existingPanel) {
+    // Panel is already open: update tabs and tab content in place without re-animating or rebuilding the drawer
+    let tabContent = '';
+    if (currentTab === 'home') tabContent = renderHomeTab();
+    else if (currentTab === 'profile') tabContent = renderProfileTab();
+    else if (currentTab === 'settings') tabContent = renderSettingsTab();
+    else if (currentTab === 'debug') tabContent = renderDebugTab();
+
+    const tabs = existingPanel.querySelectorAll('.kr-tab-btn');
+    tabs.forEach((tab) => {
+      if (tab.getAttribute('data-tab') === currentTab) {
+        tab.classList.add('active');
+      } else {
+        tab.classList.remove('active');
+      }
+    });
+
+    const modelChip = existingPanel.querySelector('.kr-model-chip');
+    if (modelChip) {
+      modelChip.textContent = settings.model;
+      modelChip.title = settings.model;
+    }
+
+    const contentEl = existingPanel.querySelector('.kr-content');
+    if (contentEl) {
+      setSafeHTML(contentEl, tabContent);
+    }
+
+    attachEventHandlers();
+    return;
+  }
+
   let panelHtml = '';
 
   if (panelVisible) {
@@ -3171,8 +3128,11 @@ function updatePanelDOM() {
     else if (currentTab === 'settings') tabContent = renderSettingsTab();
     else if (currentTab === 'debug') tabContent = renderDebugTab();
 
+    const animateClass = panelJustOpened ? 'kr-panel-animate' : '';
+    panelJustOpened = false;
+
     panelHtml = `
-      <div class="kr-panel" id="kr-main-panel">
+      <div class="kr-panel ${animateClass}" id="kr-main-panel">
         <div class="kr-header">
           <div class="kr-header-title">
             <span class="kr-brand-mark">${ICONS.brandMark}</span>
@@ -3208,9 +3168,11 @@ function updatePanelDOM() {
 }
 
 function makeDraggable(element, container) {
-  if (!element || !container) return;
+  if (!element || !container || element._krDraggable) return;
+  element._krDraggable = true;
   let isDown = false;
   let startY = 0;
+  let startX = 0;
   let moved = false;
 
   const onPointerDown = (e) => {
@@ -3223,18 +3185,22 @@ function makeDraggable(element, container) {
     }
     isDown = true;
     startY = e.clientY;
+    startX = e.clientX;
     moved = false;
-    try {
-      element.setPointerCapture?.(e.pointerId);
-    } catch {}
   };
 
   const onPointerMove = (e) => {
     if (!isDown) return;
     const dy = Math.abs(e.clientY - startY);
-    if (dy > 4) {
-      moved = true;
-      wasJustDragged = true;
+    const dx = Math.abs(e.clientX - startX);
+    if (dy > 4 || dx > 4) {
+      if (!moved) {
+        moved = true;
+        wasJustDragged = true;
+        try {
+          element.setPointerCapture?.(e.pointerId);
+        } catch {}
+      }
       const vh = (typeof window !== 'undefined' && window.innerHeight) || 800;
       const pct = Math.min(Math.max((e.clientY / vh) * 100, 5), 95);
       container.style.setProperty('--kr-dock-top', `${pct.toFixed(1)}%`);
@@ -3244,16 +3210,16 @@ function makeDraggable(element, container) {
   const onPointerUp = (e) => {
     if (!isDown) return;
     isDown = false;
-    try {
-      element.releasePointerCapture?.(e.pointerId);
-    } catch {}
     if (moved) {
+      try {
+        element.releasePointerCapture?.(e.pointerId);
+      } catch {}
       const vh = (typeof window !== 'undefined' && window.innerHeight) || 800;
       const pct = Math.min(Math.max((e.clientY / vh) * 100, 5), 95);
       void saveSettings({ dockTop: Math.round(pct) });
       setTimeout(() => {
         wasJustDragged = false;
-      }, 80);
+      }, 100);
     } else {
       wasJustDragged = false;
     }
@@ -3270,62 +3236,43 @@ function attachEventHandlers() {
 
   const container = shadowRootRef.querySelector('.kr-widget-container');
   const pebbleEl = shadowRootRef.querySelector('#kr-pebble-toggle-btn');
-  if (pebbleEl && container) makeDraggable(pebbleEl, container);
-  const hudEl = shadowRootRef.querySelector('#kr-hud');
-  if (hudEl && container) makeDraggable(hudEl, container);
+  if (pebbleEl && container) {
+    makeDraggable(pebbleEl, container);
+    pebbleEl.onclick = () => {
+      if (wasJustDragged) return;
+      userExplicitlyToggledPebble = false;
+      isPebble = false;
+      panelJustOpened = true;
+      panelVisible = true;
+      refreshDetectedFields();
+      updatePanelDOM();
+    };
+  }
+
+  const toggleBtn = shadowRootRef.querySelector('#kr-toggle-btn');
+  if (toggleBtn) {
+    toggleBtn.onclick = () => {
+      if (wasJustDragged) return;
+      userExplicitlyToggledPebble = false;
+      isPebble = false;
+      panelJustOpened = true;
+      panelVisible = true;
+      refreshDetectedFields();
+      updatePanelDOM();
+    };
+  }
 
   const resumePage = shadowRootRef.querySelector('#kr-resume-page');
   if (resumePage) {
     resumePage.onclick = () => void applicationEngine?.start();
   }
 
-  // Toggle button handlers
-  const toggleBtn = shadowRootRef.querySelector('#kr-toggle-btn');
-  if (toggleBtn) {
-    toggleBtn.onclick = () => {
-      if (wasJustDragged) return;
-      panelVisible = !panelVisible;
-      if (panelVisible) refreshDetectedFields();
-      updatePanelDOM();
-    };
-  }
-
-  const expandBtn = shadowRootRef.querySelector('#kr-hud-expand-btn');
-  if (expandBtn) {
-    expandBtn.onclick = () => {
-      if (wasJustDragged) return;
-      panelVisible = !panelVisible;
-      if (panelVisible) refreshDetectedFields();
-      updatePanelDOM();
-    };
-  }
-
-  // Pebble toggle
-  const pebbleBtn = shadowRootRef.querySelector('#kr-pebble-toggle-btn');
-  if (pebbleBtn) {
-    pebbleBtn.onclick = () => {
-      if (wasJustDragged) return;
-      userExplicitlyToggledPebble = false;
-      isPebble = false;
-      updatePanelDOM();
-    };
-  }
-
-  // Minimize HUD to pebble
-  const minimizeBtn = shadowRootRef.querySelector('#kr-hud-minimize-btn');
-  if (minimizeBtn) {
-    minimizeBtn.onclick = () => {
-      userExplicitlyToggledPebble = true;
-      isPebble = true;
-      panelVisible = false;
-      updatePanelDOM();
-    };
-  }
-
-  // Close panel handler
+  // Close panel handler (collapses directly to pebble)
   const closeBtn = shadowRootRef.querySelector('#kr-close-panel-btn');
   if (closeBtn) {
     closeBtn.onclick = () => {
+      userExplicitlyToggledPebble = true;
+      isPebble = true;
       panelVisible = false;
       updatePanelDOM();
     };
@@ -3556,9 +3503,9 @@ function attachEventHandlers() {
       e.preventDefault();
       const formData = new FormData(settingsForm);
 
-      let selectedModel = modelSelect?.value || 'google/gemini-2.0-flash';
+      let selectedModel = modelSelect?.value || DEFAULT_SETTINGS.model;
       if (selectedModel === 'custom' && customInput) {
-        selectedModel = customInput.value.trim() || 'google/gemini-2.0-flash';
+        selectedModel = customInput.value.trim() || DEFAULT_SETTINGS.model;
       }
 
       const newSettings = {

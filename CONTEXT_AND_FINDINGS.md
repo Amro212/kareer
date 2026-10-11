@@ -1,23 +1,44 @@
-## Turn: 2026-10-11 - Edge-attached floating control button, auto-expansion on application detection, profile fundamentals cleanup, and application materials redesign
+## Turn: 2026-10-11 - Settings persistence fix for chosen AI model and Gemini 2.5 Flash Lite default
+
+- Target: `src/core/storage.js`, `src/core/constants.js`, `src/core/ui.js`, `src/core/ai.js`, `tests/unit/navigation-lifecycle.test.js`.
+- User-reported bugs & investigation:
+  1. *Model reverted back to `google/gemini-2.0-flash` on new builds even after choosing and saving `google/gemini-2.5-flash-lite`*:
+     - Symptoms: The user configured and saved `google/gemini-2.5-flash-lite`, but on subsequent tests or builds the model chip and settings reverted back to `google/gemini-2.0-flash`.
+     - Root cause:
+       1. In `src/core/storage.js`, `saveSettings(settings)` performed a naive object overwrite (`gmSet(STORAGE_KEYS.SETTINGS, cleanSettings)`) without merging with existing stored settings (`gmGet(STORAGE_KEYS.SETTINGS, {})`).
+       2. When the launcher Pebble was dragged or its dock position updated (`saveSettings({ dockTop: Math.round(pct) })`), this partial save replaced the entire settings object in storage with only `{ dockTop }`, completely wiping `model` (along with `autofillEnabled`, `overwriteExisting`, etc.).
+       3. Subsequent calls to `getSettings()` merged `DEFAULT_SETTINGS` with `{ dockTop }`, causing `model` to fall back to `DEFAULT_SETTINGS.model` (`google/gemini-2.0-flash`).
+       4. Additionally, `google/gemini-2.5-flash-lite` was absent from `POPULAR_MODELS`, forcing it into the "custom" option, and fallbacks in `src/core/ui.js` and `src/core/ai.js` were hardcoded to `'google/gemini-2.0-flash'` rather than referencing `DEFAULT_SETTINGS.model`.
+     - Resolution:
+       1. `src/core/storage.js`: Updated `saveSettings(settings)` to merge incoming updates with existing stored settings (`{ ...current, ...settings }`), guaranteeing partial updates like `dockTop` never erase the saved `model` or other preferences.
+       2. `src/core/constants.js`: Set `DEFAULT_SETTINGS.model` to `'google/gemini-2.5-flash-lite'` (matching README recommendations and test suites) and added `'google/gemini-2.5-flash-lite'` to `POPULAR_MODELS` as a primary preset.
+       3. `src/core/ui.js` & `src/core/ai.js`: Unified model fallbacks to use `DEFAULT_SETTINGS.model`.
+       4. `tests/unit/navigation-lifecycle.test.js`: Added unit test `saveSettings merges partial updates preserving model and existing settings`.
+- Verification:
+  - `node --test tests/unit/navigation-lifecycle.test.js`: All 6 tests passed (including new settings merge spec).
+  - `node --test tests/unit/panel.test.js`: 18/18 tests passed.
+  - `npm test`: 514/514 unit tests passed (0 failures).
+  - `npm run build`: Built extension packages cleanly (v0.5.67).
+
+## Turn: 2026-10-11 - Edge-attached floating control button, auto-expansion on application detection, profile fundamentals cleanup, application materials redesign, and direct Pebble to Full View transition
 
 - Target: `src/core/constants.js`, `src/core/ui.js`.
-- Rationale & User Request:
-  1. Control panel button previously sat collapsed at a fixed bottom-right coordinate with excess whitespace, requiring manual clicks to view ATS detection and status.
-  2. Edge button now floats flush against the right browser edge (similar to Simplify), draggable vertically with persistent dock position stored in settings (`dockTop`).
-  3. Auto-expands from pebble into the compact HUD bar when a known ATS or application form is detected, presenting detected ATS name, field count, and quick 1-click Autofill CTA, while remembering explicit user minimization per URL.
-  4. In-panel Profile tab was cluttered with 25+ detailed dropdowns and demographic inputs. Cleaned up to focus on fundamentals (Core Identity & Contact, Profile Strength meter, and prominent "Open Settings ↗" navigation), while tucking detailed fields into a clean collapsed accordion to keep form persistence and tests intact.
-  5. Application Materials section in the "Run" tab suffered from empty wasted space and a crude "Generating..." status. Redesigned following `/impeccable` into stacked document cards with an elegant glowing signal-green progress shimmer bar, dynamic status phases, and integrated workspace link in the card header.
-- Turn changes:
-  1. `src/core/constants.js`: Added `dockTop: 50` default setting.
-  2. `src/core/ui.js`:
-     - Added edge docking styles: `.kr-widget-container` (`right: 0`), `.kr-pebble` (flush right edge, grab cursor, `border-radius: 12px 0 0 12px`), `.kr-hud-bar` (flush right edge, grab cursor), and `.kr-panel` right-docked drawer slide-in animation.
-     - Implemented `makeDraggable(element, container)` tracking vertical pointer drag along viewport height with settings persistence (`saveSettings({ dockTop })`) and click suppression on drag release.
-     - Implemented `checkAutoExpand()`: automatically expands pebble to HUD bar when `detectAdapter()` identifies a known ATS or `classifyPage()` detects an application, resetting minimization state on URL change.
-     - Preserved both `#kr-pebble-toggle-btn` and `#kr-hud-minimize-btn` in DOM with proper expand/collapse semantics to protect unit tests and E2E fixtures.
-     - Redesigned `renderProfileTab()`: renders Profile Strength meter, Background Records badge summary, Core Identity & Contact, Applicant Notes, and tucked Additional Disclosures into a collapsed details accordion.
-     - Updated `renderMaterials()`: converted squished columns into clean stacked rows (Tailor Resume & Cover Letter) with glowing animated progress bar, status feedback, Cancel action, and workspace header link.
+- User-reported bugs & investigation:
+  1. *Eliminated middle HUD stage (single click Pebble -> Full View)*:
+     - Feedback: The intermediate horizontal HUD bar created an unnecessary 2-click friction step to get to the actual inspector panel.
+     - Resolution: Completely eliminated the middle HUD stage. The UI now cleanly transitions between two states: the floating edge-docked Pebble and the full inspection drawer. Clicking the Pebble opens the full panel view directly with a single click. Auto-expansion on detected ATS/forms expands directly to the full panel. Clicking the close button (`×`) collapses directly back to the Pebble.
+  2. *HUD bar single click did not open the full panel*:
+     - Symptoms: Clicking the brand mark, title, or HUD bar area circled by the user had no effect.
+     - Root cause: `makeDraggable` eagerly called `element.setPointerCapture(e.pointerId)` on `pointerdown` before detecting any movement. In Chromium and Gecko, acquiring pointer capture on a container element diverts pointer events from children (`#kr-toggle-btn`), causing inconsistent down/up targets and swallowing native `click` events.
+     - Resolution: Removed premature pointer capture from `pointerdown`. Pointer capture is now lazily acquired only when the pointer actually moves past the 4px threshold (`dy > 4 || dx > 4`). Guarded `makeDraggable` with an idempotent property (`_krDraggable`) to prevent duplicate listener stacking. Single click on Pebble immediately expands to full view.
+  3. *Panel collapse/expand animation glitch on tab switching and clicks*:
+     - Symptoms: Switching tabs (Run -> Profile) or clicking buttons inside the open panel caused the panel to slide offscreen to the right and slide back in over 220ms.
+     - Root cause: `.kr-panel` had `animation: krPanelSlideIn 0.22s` attached unconditionally in CSS. `updatePanelDOM()` previously destroyed the entire `#kr-main-panel` DOM tree on every state update (`setSafeHTML(container, ...)`), forcing the browser to replay the keyframe animation (`translateX(100%) -> translateX(0)`) on every tab switch, form submit, and button click.
+     - Resolution: Scoped the slide-in animation strictly to `.kr-panel.kr-panel-animate` which only fires once upon opening from the closed state (`panelJustOpened`). Updated `updatePanelDOM()` to detect `existingPanel`: if the panel is already open, it updates the tab buttons and replaces `.kr-content` in place without recreating or re-animating the drawer DOM tree.
 - Verification:
-  - `npm test`: 513 of 513 unit tests passed (0 failures).
+  - `node --test tests/unit/panel.test.js`: 18/18 unit tests passed.
+  - `npm test`: 513/513 unit tests passed (0 failures).
+  - Build artifacts generated cleanly (`npm run build`).
 
 ## Turn: 2026-10-07 - Fixes for ClearCompany & SmartRecruiters fixtures, user pause safeguard, error visibility & custom element discovery
 
