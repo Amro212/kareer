@@ -81,6 +81,20 @@ test('cover letter validation rejects empty output and preserves paragraph struc
   assert.match(model.materialText(result), /Dear Hiring Team,\n\nI build APIs\./);
 });
 
+test('legacy letter paragraph blocks become separate paragraphs with a name-only signature', () => {
+  const source = model.buildMaterialSource(profile);
+  const result = model.validateMaterial('coverLetter', { paragraphs: [
+    'Dear Hiring Team,\n\nI supported 10 services.\n\nI welcome a conversation.',
+    `${source.name}\n${source.contact}`,
+  ] }, source);
+  assert.deepEqual(result.paragraphs, ['Dear Hiring Team,', 'I supported 10 services.', 'I welcome a conversation.', source.name]);
+  assert.deepEqual(model.validateMaterial('coverLetter', { paragraphs: [
+    'Dear Hiring Team,\r\n\r\nI supported 10 services.\r\n\r\nI welcome a conversation.', `${source.name}\r\n${source.contact}`,
+  ] }, source).paragraphs, result.paragraphs);
+  const custom = ['Dear Hiring Team,', 'Contact me about 10 services.', 'With appreciation,\nA custom signature'];
+  assert.deepEqual(model.validateMaterial('coverLetter', { paragraphs: custom }, source).paragraphs, custom);
+});
+
 test('material field routing distinguishes cover letter text, resume and unrelated uploads', () => {
   assert.equal(typeof upload.materialKind, 'function');
   assert.equal(upload.materialKind({ type: 'file', label: 'Cover letter' }, []), 'coverLetter');

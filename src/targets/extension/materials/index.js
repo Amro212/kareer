@@ -2,6 +2,7 @@ import { api, sendMessage } from '../shared/browser.js';
 import { MSG } from '../shared/protocol.js';
 import { decodeMaterial } from '../shared/binary.js';
 import { materialJobKey } from '../../../core/materials-model.js';
+import { APP_VERSION } from '../../../core/constants.js';
 import { extractResume, previewPdf, setupPdfWorker } from './import.js';
 
 setupPdfWorker(api.runtime.getURL('materials/pdf.worker.mjs'));
@@ -133,6 +134,7 @@ async function generate(rewrite = null) {
 }
 
 async function init() {
+  $('workspace-version').textContent = `Kareer v${APP_VERSION}`;
   const base = await request('base'); savedBaseText = base.text || ''; $('base-text').value = savedBaseText;
   const session = sessionId ? await request('session', { sessionId }) : null;
   if (session) { job = session.job; originJobKey = materialJobKey(job); }

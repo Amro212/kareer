@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { exportMaterial } from '../../src/targets/extension/materials/export.js';
 import { buildMaterialSource } from '../../src/core/materials-model.js';
 import mammoth from 'mammoth';
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import JSZip from 'jszip';
 
 test('export keeps the editable model cloneable and Word contains ordinary paragraphs', async () => {
@@ -62,6 +62,28 @@ test('cover letter has distinct serif stationery and right-aligned closing witho
   const model = { kind: 'coverLetter', name: 'Test Applicant', contact: 'test@example.com', paragraphs: ['Dear Hiring Team,', 'I build reliable APIs.', 'I would welcome a conversation.', 'Sincerely,\nTest Applicant'] };
   const exported = await exportMaterial(model, { company: 'Acme' });
   assert.equal(exported.pages, 1);
+  const loading = getDocument({ data: new Uint8Array(exported.files.pdf.buffer.slice(0)), fontExtraProperties: true, isEvalSupported: false, useWasm: false });
+  try {
+    const pdf = await loading.promise, page = await pdf.getPage(1);
+    const operators = await page.getOperatorList();
+    assert.equal(operators.argsArray[operators.fnArray.indexOf(OPS.setFillRGBColor)][0], '#e1e1e1');
+    const band = operators.argsArray[operators.fnArray.indexOf(OPS.constructPath)][2];
+    assert.deepEqual([...band].slice(0, 3), [0, 0, 612]);
+    assert.ok(Math.abs(band[3] - 93.6) < 0.001, 'full-width 93.6pt stationery band');
+    const { items } = await page.getTextContent();
+    for (const item of items.filter(i => i.str.trim())) assert.match(page.commonObjs.get(item.fontName).name, /Charter/);
+    const name = items.find(i => i.str === model.name && i.height === 28);
+    assert.ok(Math.abs(name.transform[4] + name.width / 2 - 306) < 0.1, '28pt name centered on Letter paper');
+    assert.equal(items.find(i => i.str === model.contact).height, 9);
+    assert.equal(items.filter(i => i.str === model.contact).length, 1);
+    const first = items.find(i => i.str === model.paragraphs[1]), next = items.find(i => i.str === model.paragraphs[2]);
+    assert.equal(first.height, 12); assert.equal(first.transform[4], 72); assert.equal(next.transform[4], 96);
+    const closing = items.find(i => i.str === 'Sincerely,');
+    assert.ok(Math.abs(closing.transform[4] + closing.width - 540) < 0.1);
+    assert.ok(closing.transform[5] < 75, 'closing inside reserved bottom margin');
+    assert.ok(name.transform[5] > 698.4, 'letterhead inside 93.6pt header band');
+    assert.equal(exported.templateVersion, 1);
+  } finally { await loading.destroy(); }
   const zip = await JSZip.loadAsync(exported.files.docx.buffer);
   const text = await mammoth.extractRawText({ buffer: Buffer.from(exported.files.docx.buffer) });
   assert.match(text.value, /Acme/);
@@ -71,6 +93,51 @@ test('cover letter has distinct serif stationery and right-aligned closing witho
   assert.match(header, /Charter/);
   assert.match(await zip.file('word/document.xml').async('string'), /w:jc w:val="right"/);
   assert.match(await zip.file('word/document.xml').async('string'), /w:br/);
+  assert.doesNotMatch(header + await zip.file('word/document.xml').async('string'), /Roboto/);
+});
+
+test('legacy letter exports split body blocks and remove the repeated contact signature', async () => {
+  const model = { kind: 'coverLetter', name: 'Test Applicant', contact: 'test@example.com', paragraphs: [
+    'Dear Hiring Team,\r\n\r\nI supported 10 services.\r\n\r\nI welcome a conversation.', 'Test Applicant\r\ntest@example.com',
+  ] };
+  const result = await exportMaterial(model, { company: 'Acme' });
+  assert.deepEqual(result.model.paragraphs, ['Dear Hiring Team,', 'I supported 10 services.', 'I welcome a conversation.', 'Test Applicant']);
+  const loading = getDocument({ data: new Uint8Array(result.files.pdf.buffer.slice(0)), isEvalSupported: false, useWasm: false });
+  try {
+    const { items } = await (await (await loading.promise).getPage(1)).getTextContent();
+    assert.equal(items.filter(i => i.str === model.contact).length, 1);
+    const signature = items.find(i => i.str === model.name && i.height === 12);
+    assert.ok(signature.transform[5] < 75);
+    assert.ok(Math.abs(signature.transform[4] + signature.width - 540) < 0.1);
+  } finally { await loading.destroy(); }
+});
+
+test('standard, detailed and overflowing letters retain all text with the closing on the final page', async () => {
+  const sentence = 'I build reliable APIs and maintain production systems for engineering teams.';
+  for (const [repeat, pages] of [[8, 1], [14, 1], [20, 2]]) {
+    const paragraphs = ['Dear Hiring Team,', ...Array.from({ length: 3 }, () => Array(repeat).fill(sentence).join(' ')), 'Sincerely,\nTest Applicant'];
+    const result = await exportMaterial({ kind: 'coverLetter', name: 'Test Applicant', contact: 'test@example.com', paragraphs }, { company: 'Acme' });
+    assert.equal(result.pages, pages);
+    const loading = getDocument({ data: new Uint8Array(result.files.pdf.buffer.slice(0)), fontExtraProperties: true, isEvalSupported: false, useWasm: false });
+    try {
+      const pdf = await loading.promise;
+      let body = '';
+      for (let number = 1; number <= pdf.numPages; number++) {
+        const page = await pdf.getPage(number); await page.getOperatorList();
+        const { items } = await page.getTextContent();
+        for (const item of items.filter(i => i.str.trim())) assert.match(page.commonObjs.get(item.fontName).name, /Charter/);
+        const signature = items.find(i => i.str === 'Sincerely,');
+        assert.equal(Boolean(signature), number === pdf.numPages);
+        if (signature) assert.ok(signature.transform[5] < 75);
+        const content = items.filter(i => i.height === 12 && i.str && i.transform[5] >= 75);
+        for (const item of content) assert.ok(item.transform[4] >= 72 && item.transform[4] + item.width <= 540.1, 'body stays inside horizontal margins');
+        body += content.map(i => i.str).join(' ') + ' ';
+      }
+      assert.equal((body.match(/I build reliable APIs/g) || []).length, repeat * 3);
+      const extracted = (await mammoth.extractRawText({ buffer: Buffer.from(result.files.docx.buffer) })).value;
+      assert.equal((extracted.match(/I build reliable APIs/g) || []).length, repeat * 3);
+    } finally { await loading.destroy(); }
+  }
 });
 
 test('cancelled generation stops export without changing the existing model', async () => {

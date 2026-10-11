@@ -72,8 +72,10 @@ export function validateMaterial(kind, output, source, { manual = false } = {}) 
   if (!output || typeof output !== 'object') throw new Error('AI returned invalid document data.');
   if (kind === 'coverLetter') {
     if (!Array.isArray(output.paragraphs) || !output.paragraphs.length || output.paragraphs.length > 30 || output.paragraphs.some(p => typeof p !== 'string')) throw new Error('Cover letter paragraphs are empty or invalid.');
-    const paragraphs = output.paragraphs.map(text).filter(Boolean);
+    const paragraphs = output.paragraphs.flatMap(p => p.replace(/\r\n?/g, '\n').split(/\n\s*\n/)).map(text).filter(Boolean);
     if (!paragraphs.length) throw new Error('Cover letter is empty.');
+    // Legacy AI output repeated the letterhead as its final signature block.
+    if (source.contact && paragraphs.at(-1) === `${source.name}\n${source.contact}`) paragraphs[paragraphs.length - 1] = source.name;
     return { kind, name: source.name, contact: source.contact, paragraphs };
   }
   if (!Array.isArray(output.sections) || !output.sections.length || output.sections.length > 100) throw new Error('Resume sections are empty or invalid.');

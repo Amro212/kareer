@@ -1,14 +1,17 @@
 import pdfMake from 'pdfmake/build/pdfmake.js';
 import fonts from './fonts/vfs.json' with { type: 'json' };
 import { Document, Packer, Paragraph, TextRun, Header, TabStopType, BorderStyle } from 'docx';
-import { DOCX_TYPE } from '../../../core/materials-model.js';
+import { DOCX_TYPE, validateMaterial } from '../../../core/materials-model.js';
+
+// Bump when document formatting changes so saved bytes cannot retain an older template.
+export const MATERIAL_TEMPLATE_VERSION = 1;
 
 pdfMake.addVirtualFileSystem(fonts);
 const fontFaces = {
   'CMU Serif': { normal: 'cmunrm.ttf', bold: 'cmunbx.ttf', italics: 'cmunti.ttf', bolditalics: 'cmunbi.ttf' },
   Charter: { normal: 'Charter Regular.ttf', bold: 'Charter Bold.ttf', italics: 'Charter Italic.ttf', bolditalics: 'Charter Bold Italic.ttf' },
 };
-pdfMake.addFonts(fontFaces);
+pdfMake.setFonts(fontFaces);
 
 const resumeStyles = {
   name: { fontSize: 25, bold: true, alignment: 'center', fontFeatures: ['smcp'], margin: [0, 0, 0, 1] },
@@ -35,7 +38,7 @@ function blocks(model, job) {
     { text: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }), style: 'opening' },
     ...(job.company ? [{ text: job.company, style: 'opening' }] : []),
     ...model.paragraphs.map((text, index) => {
-      const closing = index === model.paragraphs.length - 1 && text.length < 140 && text.split('\n').length <= 2 && /^(?:sincerely|regards|best(?: regards| wishes)?|kind regards|warm regards|yours(?: sincerely| faithfully| truly)?|respectfully),/i.test(text);
+      const closing = index === model.paragraphs.length - 1 && text.length < 140 && text.split('\n').length <= 2 && (text === model.name || /^(?:sincerely|regards|best(?: regards| wishes)?|kind regards|warm regards|yours(?: sincerely| faithfully| truly)?|respectfully),/i.test(text));
       return { text, style: closing ? 'closing' : 'body', leadingIndent: index > 1 && !closing ? 24 : 0 };
     })];
   if (model.summary) result.push({ text: 'Summary', style: 'section' }, { text: model.summary, style: 'body' });
@@ -117,6 +120,7 @@ export async function exportMaterial(model, job, pageTarget = 1, { fit = true, s
   const checkCancelled = () => { if (signal?.aborted) throw new Error(String(signal.reason || 'Generation cancelled.')); };
   checkCancelled();
   model = structuredClone(model);
+  if (model.kind === 'coverLetter') model = validateMaterial('coverLetter', model, model);
   let pdf = await makePdf(model, job);
   // Finite content-fitting pass. Every pass removes one lowest-priority item.
   if (fit && model.kind === 'resume') {
@@ -133,7 +137,7 @@ export async function exportMaterial(model, job, pageTarget = 1, { fit = true, s
   checkCancelled();
   const stem = [model.name || 'Applicant', job.company || job.title || 'Application', model.kind === 'resume' ? 'Resume' : 'Cover-Letter'].join('-').replace(/[^\p{L}\p{N}._-]+/gu, '-').slice(0, 140);
   const word = await Packer.toArrayBuffer(docxDocument(model, job));
-  return { model, pages: pdf.pages, files: {
+  return { model, templateVersion: MATERIAL_TEMPLATE_VERSION, pages: pdf.pages, files: {
     pdf: { name: `${stem}.pdf`, type: 'application/pdf', buffer: pdf.buffer, size: pdf.buffer.byteLength },
     docx: { name: `${stem}.docx`, type: DOCX_TYPE, buffer: word, size: word.byteLength },
   } };

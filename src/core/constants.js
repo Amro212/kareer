@@ -23,6 +23,7 @@ export const DEFAULT_SETTINGS = {
   autoSubmit: false,
   autopilot: false,
   narrativeVoiceEditor: true,
+  dockTop: 50,
 };
 
 export const DEFAULT_PROFILE = {

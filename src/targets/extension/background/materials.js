@@ -3,7 +3,7 @@ import { readApiKey, updateStoredSession } from './storage.js';
 import { readStored, writeStored, removeStored, listStored } from './documents.js';
 import { buildMaterialSource, validateMaterial, materialChanges, materialJobKey, mergeMaterialRewrite, MATERIAL_KINDS } from '../../../core/materials-model.js';
 import { DEFAULT_SETTINGS } from '../../../core/constants.js';
-import { exportMaterial } from '../materials/export.js';
+import { exportMaterial, MATERIAL_TEMPLATE_VERSION } from '../materials/export.js';
 import { encodeMaterial, encodeDocument } from '../shared/binary.js';
 
 const running = new Map();
@@ -15,6 +15,16 @@ const meta = record => record && ({ id: record.id, kind: record.kind, revision: 
 function stampFiles(record) {
   for (const file of Object.values(record.files)) file.name = file.name.replace(/\.(pdf|docx)$/, `-${record.revision.slice(0, 8)}.$1`);
   return record;
+}
+
+// Call under commit: migration must not overwrite concurrent edits or generation.
+async function readCurrentMaterial(id) {
+  const record = await readStored(id);
+  if (!record || record.templateVersion === MATERIAL_TEMPLATE_VERSION) return record;
+  const exported = await exportMaterial(record.model, record.job, record.options?.pageTarget || 1, { fit: false });
+  const current = stampFiles({ ...record, ...exported, revision: crypto.randomUUID() });
+  await writeStored(id, current);
+  return current;
 }
 
 export function materialWritingInstructions(kind) {
@@ -128,7 +138,7 @@ async function execute(task, options, controller) {
   // Extension API activity is bounded to the task, not an indefinitely alive worker.
   const heartbeat = setInterval(() => { void api.storage.local.get('kr:settings').catch(() => {}); }, 20000);
   try {
-    const initialDocument = await readStored(task.documentId);
+    const initialDocument = await commit(() => readCurrentMaterial(task.documentId));
     const previous = options.rewrite ? initialDocument : null;
     if (options.rewrite && (!previous || previous.revision !== options.rewrite.revision)) throw new Error('A newer document exists. Reopen it before rewriting.');
     const source = previous ? { ...previous.model, notes: previous.source.notes || '', text: '' } : await sourceForGeneration(controller);
@@ -207,7 +217,7 @@ export async function handleMaterials(operation, input = {}, sender = {}) {
       if (task?.status === 'running' && controller?.taskId === task.id) controller.abort('Generation cancelled. Previous documents remain available.');
       return { ok: true };
     }
-    case 'get': return encodeMaterial(await readStored(input.id));
+    case 'get': return commit(async () => encodeMaterial(await readCurrentMaterial(input.id)));
     case 'snapshot': return commit(async () => {
       const key = `kr:sessions:${input.sessionId}`, session = (await api.storage.local.get(key))[key];
       const jobKey = session && materialJobKey(session.job);
@@ -215,7 +225,8 @@ export async function handleMaterials(operation, input = {}, sender = {}) {
       if (frozen && frozen.revision === session.materialRunRef.revision && frozen.jobKey === jobKey) return { refs: session.materialRefs || {}, tasks: session.materialTasks || {}, runRef: session.materialRunRef, records: Object.fromEntries(Object.entries(frozen.records).map(([kind, record]) => [kind, encodeMaterial(record)])) };
       const records = {};
       for (const [kind, ref] of Object.entries(session?.materialRefs || {})) {
-        const record = await readStored(ref.id);
+        const stored = await readStored(ref.id);
+        const record = stored && materialJobKey(stored.job) === jobKey ? await readCurrentMaterial(ref.id) : null;
         records[kind] = record && materialJobKey(record.job) === jobKey ? record : { error: 'Selected document is unavailable for this job. Generate it again or delete it in the workspace.' };
       }
       let runRef = session?.materialRunRef;
@@ -276,13 +287,13 @@ export async function handleMaterials(operation, input = {}, sender = {}) {
       });
       return { ok: true };
     }
-    case 'document': {
-      const record = await readStored(input.ref?.id);
+    case 'document': return commit(async () => {
+      const record = await readCurrentMaterial(input.ref?.id);
       if (!record) throw new Error('Selected document was deleted. Generate a new version or use the original resume.');
       const file = record.files[input.format || 'pdf'];
       if (!file) throw new Error('Requested document format is unavailable.');
       return encodeDocument({ ...file, revision: record.revision });
-    }
+    });
     case 'open': {
       const query = new URLSearchParams();
       if (input.sessionId) query.set('session', input.sessionId);
