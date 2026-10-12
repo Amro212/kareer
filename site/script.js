@@ -8,7 +8,7 @@
 const LINKS = {
   github: "https://github.com/Amro212/kareer",
   chrome: null, // e.g. "https://chromewebstore.google.com/detail/kareer/..."
-  firefox: "https://amro212.github.io/kareer/downloads/kareer-firefox.xpi",
+  firefox: "https://kareer.itsamro.me/downloads/kareer-firefox.xpi",
   issues: "https://github.com/Amro212/kareer/issues",
   security: "https://github.com/Amro212/kareer/blob/master/SECURITY.md"
 };
