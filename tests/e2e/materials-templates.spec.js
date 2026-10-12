@@ -6,8 +6,11 @@ import { Document, Packer, Paragraph, TextRun } from 'docx';
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import JSZip from 'jszip';
 import fs from 'node:fs';
+import { MATERIAL_TEMPLATE_VERSION } from '../../src/targets/extension/materials/export.js';
 
 pdfMake.addVirtualFileSystem(roboto);
+// Reproduce the old renderer; the imported current exporter registers only its current fonts.
+pdfMake.setFonts({ Roboto: { normal: 'Roboto-Regular.ttf', bold: 'Roboto-Medium.ttf', italics: 'Roboto-Italic.ttf', bolditalics: 'Roboto-MediumItalic.ttf' } });
 const profile = { fullName: legacy.name, email: legacy.contact, workExperiences: [{ id: 'work1', title: 'Engineer', company: 'Acme', description: 'Built APIs.' }] };
 async function request(page, operation, input = {}) {
   const result = await page.evaluate(({ operation, input }) => chrome.runtime.sendMessage({ type: 'kr:materials', operation, input }), { operation, input });
@@ -94,7 +97,7 @@ test('legacy exports upgrade on every entry path without AI or lost wording; act
       const pdf = operation === 'document' ? result : (operation === 'snapshot' ? result.records[kind] : result).files.pdf;
       await assertPdf(bytes(pdf), kind);
       const current = await request(workspace, 'get', { id: old.id });
-      expect(current.templateVersion).toBe(1); expect(current.revision).not.toBe(old.revision);
+      expect(current.templateVersion).toBe(MATERIAL_TEMPLATE_VERSION); expect(current.revision).not.toBe(old.revision);
       expect(current.options).toEqual(old.options); expect(current.updatedAt).toBe(old.updatedAt);
       expect((await request(workspace, 'get', { id: old.id })).revision).toBe(current.revision);
       await assertWord(bytes(current.files.docx), kind);
@@ -152,9 +155,9 @@ test('fresh generation and saved edits use only current PDF and Word templates',
     await expect.poll(async () => (await request(workspace, 'status', { id: task.id })).status, { timeout: 45000 }).toBe('ready');
     const status = await request(workspace, 'status', { id: task.id });
     const record = await request(workspace, 'get', { id: status.material.id });
-    expect(record.templateVersion).toBe(1); await assertPdf(bytes(record.files.pdf), kind); await assertWord(bytes(record.files.docx), kind);
+    expect(record.templateVersion).toBe(MATERIAL_TEMPLATE_VERSION); await assertPdf(bytes(record.files.pdf), kind); await assertWord(bytes(record.files.docx), kind);
     const saved = await request(workspace, 'save', { id: record.id, revision: record.revision, model: record.model });
-    expect(saved.templateVersion).toBe(1); await assertPdf(bytes(saved.files.pdf), kind); await assertWord(bytes(saved.files.docx), kind);
+    expect(saved.templateVersion).toBe(MATERIAL_TEMPLATE_VERSION); await assertPdf(bytes(saved.files.pdf), kind); await assertWord(bytes(saved.files.docx), kind);
   }
   expect(kr.openrouter.requests).toHaveLength(2);
 });
@@ -172,5 +175,5 @@ test('reading an old document during regeneration does not masquerade as concurr
   await expect.poll(async () => (await request(workspace, 'status', { id: task.id })).status, { timeout: 45000 }).not.toBe('running');
   const finished = await request(workspace, 'status', { id: task.id }); expect(finished.status, finished.error).toBe('ready');
   const current = await request(workspace, 'get', { id: old.id });
-  expect(current.model.summary).toBe('Updated wording for 10 services.'); expect(current.templateVersion).toBe(1);
+  expect(current.model.summary).toBe('Updated wording for 10 services.'); expect(current.templateVersion).toBe(MATERIAL_TEMPLATE_VERSION);
 });

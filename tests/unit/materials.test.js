@@ -19,6 +19,16 @@ test('materials source uses authoritative profile facts and excludes disabled re
   assert.doesNotMatch(JSON.stringify(source), /Wrong title|Wrong dates|Private Co|Private details/);
 });
 
+test('tailoring ignores every imported resume field and uses only saved profile facts', () => {
+  const source = model.buildMaterialSource({ ...profile, resumeContext: 'RESUME_CONTEXT_ONLY' }, {
+    name: 'IMPORTED_NAME', contact: 'IMPORTED_CONTACT', text: 'IMPORTED_TEXT', summary: 'IMPORTED_SUMMARY',
+    sections: [{ id: 'import_1', category: 'Experience', heading: 'IMPORTED_ROLE', bullets: ['IMPORTED_BULLET'] }],
+  });
+  assert.doesNotMatch(JSON.stringify(source), /IMPORTED_|RESUME_CONTEXT_ONLY/);
+  assert.deepEqual(source.sections.map(s => s.id), ['work1', 'edu1', 'skills']);
+  assert.equal(source.summary, '');
+});
+
 test('resume AI output cannot replace protected job titles or dates', () => {
   assert.equal(typeof model.validateMaterial, 'function');
   const source = model.buildMaterialSource(profile);
@@ -41,14 +51,6 @@ test('numbers do not block resume summaries, bullets, cover letters or targeted 
   const rewritten = model.mergeMaterialRewrite(resume, { sections: [{ id: 'work1', bullets: ['Supported 12 services.'] }] }, 'section:work1');
   assert.deepEqual(model.validateMaterial('resume', rewritten, source).sections[0].bullets, ['Supported 12 services.']);
   assert.deepEqual(model.validateMaterial('coverLetter', { paragraphs: ['Dear Hiring Team,', 'I supported 10 services.'] }, source).paragraphs, ['Dear Hiring Team,', 'I supported 10 services.']);
-});
-
-test('section comparisons include omissions', () => {
-  assert.equal(typeof model.materialChanges, 'function');
-  const source = model.buildMaterialSource(profile);
-  const changes = model.materialChanges(source, { ...source, sections: source.sections.filter(s => s.id !== 'edu1') });
-  assert.ok(changes.some(change => change.id === 'edu1' && change.type === 'omitted'));
-  assert.ok(model.materialChanges(source, { ...source, sections: [...source.sections].reverse() }).some(change => change.type === 'reordered'));
 });
 
 test('jobs with identical titles have distinct material identities', () => {
@@ -108,12 +110,14 @@ test('generated skills cannot introduce a skill absent from source', () => {
   assert.throws(() => model.validateMaterial('resume', { sections: [{ id: 'skills', bullets: ['Rust'] }] }, source), /skill|unsupported/i);
 });
 
-test('imported roles match profile facts even when extracted with another id; disabled facts stay out of writing context', () => {
-  const source = model.buildMaterialSource(profile, { text: 'Wrong title at Acme. Intern Private Co. Private details', sections: [
+test('missing profile descriptions never fall back to imported resume achievements', () => {
+  const source = model.buildMaterialSource({ ...profile, workExperiences: [{ ...profile.workExperiences[0], description: '' }] }, { text: 'Wrong title at Acme. Intern Private Co. Private details', sections: [
     { id: 'import_1', category: 'Experience', heading: 'Wrong title — Acme', facts: 'Wrong dates', bullets: ['Imported accomplishment'] },
     { id: 'import_2', category: 'Experience', heading: 'Intern — Private Co', facts: '', bullets: ['Private details'] },
   ] });
   assert.equal(source.sections.filter(s => /Acme/.test(s.heading)).length, 1);
+  assert.deepEqual(source.sections[0].bullets, []);
+  assert.doesNotMatch(JSON.stringify(source), /Imported accomplishment/);
   assert.doesNotMatch(JSON.stringify(source), /Wrong title|Wrong dates|Private Co|Private details/);
 });
 
@@ -136,5 +140,5 @@ test('display metadata comes from saved facts, never unvalidated import properti
   });
   assert.equal(source.sections[0].location, 'Toronto · GPA 3.8');
   assert.doesNotMatch(JSON.stringify(source), /Invented/);
-  assert.equal(source.sections[1].heading, 'Engineer — Acme');
+  assert.equal(source.sections.length, 1);
 });

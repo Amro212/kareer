@@ -1,5 +1,13 @@
 # DESIGN.md
 
+## Application materials workspace
+
+- Prepare and Edit are distinct task tabs. Resume and Cover letter select the document independently; keep document context, save status and Save / Download PDF / Download Word / Delete at the top.
+- Tailoring uses saved profile facts only: enabled experience, education, projects, skills and applicant notes. Prepare names the profile as its source and links to it. Uploaded/base resumes and resume-context text do not supply tailoring content; this workspace has no resume import or diff view.
+- Edit shows a section list and one editable section (or cover-letter paragraph) at a time beside the saved PDF. Use flat separators, shared Geist typography and graphite tokens; restrained lime identifies selection and the current primary action.
+- Desktop keeps controls above independently scrolling section/editor/PDF regions. Compact layouts use horizontal section navigation and stack the bounded PDF beneath the editor; narrow layouts retain a sticky document toolbar.
+- Explicit Save refreshes the PDF. Unsaved edits show amber status and label the PDF as the saved version. Download saves current edits before exporting. Task/section switches retain drafts; switching documents or jobs offers Save / Discard / Stay. Failed saves retain drafts and prevent stale downloads.
+
 ## Product
 
 **Working name:** Kareer  

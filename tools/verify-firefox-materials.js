@@ -60,14 +60,16 @@ try{
  await wait(()=>document.querySelector('#pdf-preview canvas')&&!document.querySelector('#generate').disabled);
  const send=(operation,input={})=>browser.runtime.sendMessage({type:'kr:materials',operation,input});
  const records=await send('list'), record=await send('get',{id:records.find(r=>r.kind==='resume').id});
- for(const format of ['pdf','docx']){
-  const file=record.files[format],bytes=Uint8Array.from(atob(file.data),c=>c.charCodeAt(0)),transfer=new DataTransfer();
-  transfer.items.add(new File([bytes],file.name,{type:file.type}));document.querySelector('#base-file').files=transfer.files;
-  document.querySelector('#base-file').dispatchEvent(new Event('change',{bubbles:true}));
-  await wait(()=>document.querySelector('#feedback').textContent.includes('Resume text extracted'));
-  if(!document.querySelector('#base-text').value.includes('Built APIs'))throw Error(format+' text extraction failed');
- }
- await fetch(${JSON.stringify(base + '/result')},{method:'POST',body:JSON.stringify({surface:'workspace',preview:document.querySelectorAll('#pdf-preview canvas').length,pdf:atob(record.files.pdf.data).slice(0,5),word:atob(record.files.docx.data).slice(0,2),imports:true})});
+ const summary=document.querySelector('#resume-summary');summary.value='My Firefox draft.';summary.dispatchEvent(new Event('input',{bubbles:true}));
+ document.querySelector('#view-prepare').click();document.querySelector('#view-edit').click();
+ if(summary.value!=='My Firefox draft.')throw Error('Tabs lost the draft');
+ document.querySelector('[data-download="docx"]').click();
+ await wait(()=>document.querySelector('#feedback').textContent.includes('Downloaded'));
+ const saved=await send('get',{id:record.id});if(saved.model.summary!=='My Firefox draft.')throw Error('Download did not save the draft');
+ document.querySelector('[data-editor-section="work1"]').click();
+ if([...document.querySelectorAll('.editor-block')].filter(el=>!el.hidden).length!==1)throw Error('Editor did not focus one section');
+ if(document.querySelector('#base-file, #changes-section'))throw Error('Obsolete workflow is visible');
+ await fetch(${JSON.stringify(base + '/result')},{method:'POST',body:JSON.stringify({surface:'workspace',preview:document.querySelectorAll('#pdf-preview canvas').length,pdf:atob(saved.files.pdf.data).slice(0,5),word:atob(saved.files.docx.data).slice(0,2),edits:true})});
 }catch(error){await fetch(${JSON.stringify(base + '/result')},{method:'POST',body:JSON.stringify({surface:'workspace',error:error.message,feedback:document.querySelector('#feedback').textContent})});}
 })();`);
 const htmlPath = path.join(source, 'materials', 'index.html');
@@ -82,8 +84,8 @@ try {
   while (results.length < 2 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 250));
   assert.equal(results.length, 2, 'Firefox did not return application and workspace results');
   assert.deepEqual(results.find(r => r.surface === 'application'), { surface: 'application', resume: '%PDF-', letter: '%PDF-', text: true });
-  assert.deepEqual(results.find(r => r.surface === 'workspace'), { surface: 'workspace', preview: 1, pdf: '%PDF-', word: 'PK', imports: true });
-  console.log('Firefox materials smoke passed: generation, uploads, letter text, preview and PDF/DOCX imports.');
+  assert.deepEqual(results.find(r => r.surface === 'workspace'), { surface: 'workspace', preview: 1, pdf: '%PDF-', word: 'PK', edits: true });
+  console.log('Firefox materials smoke passed: generation, uploads, letter text, preview, focused editing and download saves.');
 } finally {
   await runner?.exit(); server.close();
   assert.ok(path.resolve(temporary).startsWith(path.resolve(os.tmpdir()) + path.sep));

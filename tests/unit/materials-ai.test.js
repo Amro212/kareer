@@ -8,14 +8,14 @@ const { writingRequest, materialWritingInstructions } = await import('../../src/
 const realFetch = globalThis.fetch;
 const input = { kind: 'coverLetter', source: {}, job: {} };
 
-test('materials request structured JSON for extraction, resumes and cover letters', async () => {
+test('materials request structured JSON for resumes and cover letters', async () => {
   globalThis.fetch = async (_url, options) => {
     const body = JSON.parse(options.body);
     assert.equal(body.response_format?.type, 'json_object');
     return Response.json({ choices: [{ message: { content: '{}' } }] });
   };
   try {
-    for (const kind of ['source', 'resume', 'coverLetter']) await writingRequest({ ...input, kind }, materialWritingInstructions(kind), new AbortController());
+    for (const kind of ['resume', 'coverLetter']) await writingRequest({ ...input, kind }, materialWritingInstructions(kind), new AbortController());
   } finally { globalThis.fetch = realFetch; }
 });
 

@@ -9,106 +9,71 @@
 </head>
 <body>
   <header class="workspace-header">
-    <div class="workspace-header-title">
-      <a class="brand" href="../options/index.html">{{VISUAL_NAME}}</a>
-      <h1>Application materials</h1>
-    </div>
-    <a class="nav-back" href="../options/index.html">← Profile &amp; settings</a>
+    <div class="workspace-header-title"><a class="brand" href="../options/index.html">{{VISUAL_NAME}}</a><h1>Application materials</h1></div>
+    <a class="nav-back" href="../options/index.html">Profile &amp; settings</a>
   </header>
-
   <div class="workspace">
     <aside class="jobs">
-      <h2>Saved jobs</h2>
-      <button class="secondary" id="new-job">+ New job</button>
+      <div class="section-heading"><h2>Saved jobs</h2><button class="secondary" id="new-job">New job</button></div>
       <nav id="saved-jobs" aria-label="Saved application materials"></nav>
-      <p class="muted">Saved on this device. Writing uses your OpenRouter key.</p>
-      <p class="muted" id="workspace-version"></p>
+      <div class="library-footer"><p class="muted">Documents stay on this device.</p><p class="muted" id="workspace-version"></p></div>
     </aside>
-
     <main>
-      <section>
-        <h2 id="job-heading">Prepare for a job</h2>
-        <div class="fields">
-          <label>Job title<input id="job-title" placeholder="Software Engineer"></label>
-          <label>Company<input id="job-company" placeholder="Company name"></label>
+      <div class="workspace-toolbar">
+        <div class="section-heading job-context"><div><h2 id="job-heading">Prepare for a job</h2><p id="company-heading" class="muted"></p></div><span id="document-status" role="status"></span></div>
+        <div class="document-toolbar">
+          <div class="tabs" role="tablist" aria-label="Document type">
+            <button id="tab-resume" role="tab" aria-selected="true" aria-controls="document-workspace">Resume</button>
+            <button id="tab-coverLetter" role="tab" aria-selected="false" aria-controls="document-workspace" tabindex="-1">Cover letter</button>
+          </div>
+          <div class="actions" id="editor-actions" hidden>
+            <button id="save-document">Save</button>
+            <button class="secondary" data-download="pdf">Download PDF</button>
+            <button class="secondary" data-download="docx">Download Word</button>
+            <button class="secondary danger" id="delete-document">Delete</button>
+          </div>
         </div>
-        <label>Job description<textarea id="job-description" rows="5" placeholder="Paste or correct the job description…"></textarea></label>
-      </section>
-
-      <details id="base-details">
-        <summary>Base resume</summary>
-        <div class="details-body">
-          <p class="muted">Import or paste your resume. Saved profile facts take priority. Your original file stays intact.</p>
-          <label>Import PDF or Word<input id="base-file" type="file" accept=".pdf,.docx"></label>
-          <label>Resume text<textarea id="base-text" rows="10" placeholder="Paste resume text, or use your saved profile experience…"></textarea></label>
-          <button class="secondary" id="save-base">Save base resume</button>
-        </div>
-      </details>
-
-      <section class="document-controls">
-        <div class="tabs" role="tablist" aria-label="Document type">
-          <button id="tab-resume" role="tab" aria-selected="true">Resume</button>
-          <button id="tab-coverLetter" role="tab" aria-selected="false">Cover letter</button>
-        </div>
-        <div class="fields">
-          <label id="page-control">Resume length
-            <select id="page-target">
-              <option value="1">One page</option>
-              <option value="2">Two pages</option>
-            </select>
-          </label>
-          <label id="tone-control" hidden>Tone
-            <select id="tone">
-              <option value="professional">Professional</option>
-              <option value="warm">Warm</option>
-              <option value="direct">Direct</option>
-            </select>
-          </label>
-          <label id="length-control" hidden>Letter length
-            <select id="length">
-              <option value="short">Short · 150–200 words</option>
-              <option value="standard" selected>Standard · 250–350 words</option>
-              <option value="detailed">Detailed · 400–500 words</option>
-            </select>
-          </label>
-        </div>
-        <label>Writing instructions <span class="muted">(optional)</span><textarea id="instructions" rows="2" placeholder="Emphasize my API work; use straightforward language…"></textarea></label>
-        <div class="actions">
-          <button id="generate">Tailor resume</button>
-          <button class="secondary" id="cancel" hidden>Cancel</button>
+        <div class="task-tabs" role="tablist" aria-label="Workspace view">
+          <button id="view-prepare" role="tab" aria-selected="true" aria-controls="prepare-panel">Prepare</button>
+          <button id="view-edit" role="tab" aria-selected="false" aria-controls="edit-panel" tabindex="-1">Edit</button>
         </div>
         <p id="feedback" class="feedback" role="status" aria-live="polite"></p>
-      </section>
-
-      <section id="editor-section">
-        <div class="section-heading">
-          <h2>Document editor</h2>
-          <span class="muted" id="document-status"></span>
-        </div>
-        <p class="muted" id="empty-editor">Generate a document to edit it here and preview the finished PDF.</p>
-        <div id="document-editor"></div>
-        <div class="actions" id="editor-actions" hidden>
-          <button id="save-document">Save changes</button>
-          <button class="secondary" data-download="pdf">Download PDF</button>
-          <button class="secondary" data-download="docx">Download Word</button>
-          <button class="secondary danger" id="delete-document">Delete document</button>
-        </div>
-      </section>
-
-      <section id="changes-section" hidden>
-        <h2>What changed</h2>
-        <div id="changes"></div>
-      </section>
-    </main>
-
-    <aside class="preview">
-      <div class="section-heading">
-        <h2>PDF preview</h2>
-        <span id="page-count" class="muted"></span>
       </div>
-      <div id="pdf-preview"><p class="muted">Your finished document will appear here.</p></div>
-    </aside>
+      <div id="document-workspace">
+        <section id="prepare-panel" role="tabpanel" aria-labelledby="view-prepare">
+          <div class="prepare-content">
+            <div class="prepare-heading"><h2>Tailor to the role</h2><p class="muted">Create a document for this job using your saved profile.</p></div>
+            <div class="profile-source"><div><h3>Source: your profile</h3><p class="muted">Experience, education, projects, skills, and notes from your profile provide the facts for each document.</p></div><a href="../options/index.html#profile">Review profile</a></div>
+            <div class="fields"><label>Job title<input id="job-title" placeholder="Software Engineer"></label><label>Company<input id="job-company" placeholder="Company name"></label></div>
+            <label>Job description<textarea id="job-description" rows="7" placeholder="Paste the job description…"></textarea></label>
+            <div class="writing-settings">
+              <h3>Writing preferences</h3>
+              <div class="fields">
+                <label id="page-control">Resume length<select id="page-target"><option value="1">One page</option><option value="2">Two pages</option></select></label>
+                <label id="tone-control" hidden>Tone<select id="tone"><option value="professional">Professional</option><option value="warm">Warm</option><option value="direct">Direct</option></select></label>
+                <label id="length-control" hidden>Letter length<select id="length"><option value="short">Short · 150–200 words</option><option value="standard" selected>Standard · 250–350 words</option><option value="detailed">Detailed · 400–500 words</option></select></label>
+              </div>
+              <label>Writing instructions <span class="muted">(optional)</span><textarea id="instructions" rows="2" placeholder="Emphasize my API work; use straightforward language…"></textarea></label>
+            </div>
+            <div class="actions"><button id="generate">Tailor resume</button><button class="secondary" id="cancel" hidden>Cancel</button><span class="muted">Writing uses your OpenRouter key.</span></div>
+          </div>
+        </section>
+        <section id="edit-panel" role="tabpanel" aria-labelledby="view-edit" hidden>
+          <div id="empty-editor" class="empty-state"><h2>Your document starts with your profile</h2><p class="muted">Add a job description in Prepare, then generate a document to edit and download.</p><button class="secondary" id="prepare-document">Go to Prepare</button></div>
+          <div class="edit-layout" id="editor-layout" hidden>
+            <nav id="editor-sections" aria-label="Document sections"></nav>
+            <section id="editor-section" aria-label="Document editor"><div id="document-editor"></div></section>
+            <aside class="preview"><div class="section-heading"><h2>PDF preview</h2><span id="page-count" class="muted"></span></div><p id="preview-status" class="muted">Saved version</p><div id="pdf-preview"></div></aside>
+          </div>
+        </section>
+      </div>
+    </main>
   </div>
+  <dialog id="draft-dialog" aria-labelledby="draft-title" aria-describedby="draft-description">
+    <h2 id="draft-title">Save your changes?</h2><p id="draft-description" class="muted">This document has unsaved edits. Save them before continuing, or discard them.</p>
+    <p id="draft-error" class="feedback error" role="alert"></p>
+    <div class="actions"><button id="draft-save">Save &amp; continue</button><button class="secondary danger" id="draft-discard">Discard edits</button><button class="secondary" id="draft-stay" autofocus>Stay here</button></div>
+  </dialog>
   <script src="index.js"></script>
 </body>
 </html>

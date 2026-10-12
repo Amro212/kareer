@@ -162,11 +162,8 @@ test('resume exports hyperlinks for contact and projects with clean readable lab
     workExperiences: [{ id: 'role', title: 'Engineer', company: 'Acme', location: 'https://acme.org', description: 'Built APIs.' }],
     projects: [
       { id: 'p1', name: 'Kareer', role: 'Lead', url: 'https://github.com/Amro212/kareer', description: 'Autofill extension.' },
-      { id: 'p2', name: 'Generic Proj', role: 'Dev', url: 'https://github.com', description: 'Bare github url.' }
-    ]
-  }, {
-    sections: [
-      { id: 'base_proj', category: 'Projects', heading: 'FlowMesh — Distributed Workflow Engine', facts: 'github.com/arivera/flowmesh · 2023-01 · Present', bullets: ['Workflow engine.'] }
+      { id: 'p2', name: 'Generic Proj', role: 'Dev', url: 'https://github.com', description: 'Bare github url.' },
+      { id: 'p3', name: 'FlowMesh', role: 'Distributed Workflow Engine', url: 'https://github.com/arivera/flowmesh', startDate: '2023-01', current: true, description: 'Workflow engine.' }
     ]
   });
   const exported = await exportMaterial(source, { company: 'Acme' });

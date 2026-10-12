@@ -3,13 +3,111 @@ import mammoth from 'mammoth';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import fs from 'node:fs';
 
+test('tailoring uses profile facts only even when an old base resume exists', async ({ kr }) => {
+  await kr.seed({ profile: { ...PROFILE, resumeContext: 'IMPORTED_CONTEXT' } }); kr.openrouter.handler = materialResponse;
+  await kr.worker.evaluate(async () => {
+    await new Promise((resolve, reject) => {
+      const req = indexedDB.open('kareer', 1);
+      req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains('files')) req.result.createObjectStore('files'); };
+      req.onsuccess = () => { const db = req.result, tx = db.transaction('files', 'readwrite');
+        tx.objectStore('files').put({ id: 'base', text: 'IMPORTED_TEXT', summary: 'IMPORTED_SUMMARY', sections: [{ id: 'import_1', heading: 'IMPORTED_ROLE', bullets: ['IMPORTED_BULLET'] }] }, 'base');
+        tx.oncomplete = () => { db.close(); resolve(); }; tx.onerror = () => reject(tx.error);
+      }; req.onerror = () => reject(req.error);
+    });
+  });
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  await expect(workspace.locator('#generate')).toBeEnabled();
+  const first = await waitTask(workspace, await message(workspace, 'start', { kind: 'resume', job: { localId: 'profile-only', description: 'Build APIs.' } }));
+  const record = await message(workspace, 'get', { id: first.material.id });
+  expect(JSON.stringify(record.source)).not.toContain('IMPORTED_');
+  expect(kr.openrouter.requests).toHaveLength(1);
+  expect(JSON.stringify(kr.openrouter.requests[0].body)).not.toContain('IMPORTED_');
+  await kr.seed({ profile: { ...PROFILE, workExperiences: [{ ...PROFILE.workExperiences[0], title: 'Senior Engineer' }] } });
+  await waitTask(workspace, await message(workspace, 'start', { kind: 'resume', job: record.job, options: { rewrite: { path: 'section:work1', revision: record.revision } } }));
+  const rewriteInput = JSON.parse(kr.openrouter.requests.at(-1).body.messages.at(-1).content);
+  expect(rewriteInput.source.sections[0].heading).toContain('Senior Engineer');
+  expect(rewriteInput.currentDocument.sections[0].heading).toContain('Senior Engineer');
+  await kr.seed({ profile: { workExperiences: [], education: [], projects: [], skills: [], resumeContext: 'IMPORTED_CONTEXT' } });
+  const missing = await message(workspace, 'start', { kind: 'resume', job: { localId: 'missing-profile', description: 'Build APIs.' } });
+  expect(missing.needsWorkspace).toBe(true); expect(missing.reason).toContain('Profile');
+  expect(kr.openrouter.requests).toHaveLength(2);
+});
+
+test('workspace tabs retain drafts and downloads save the current section edits', async ({ kr }, testInfo) => {
+  await kr.seed({ profile: PROFILE }); kr.openrouter.handler = materialResponse;
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  await expect(workspace.locator('#generate')).toBeEnabled();
+  await workspace.setViewportSize({ width: 1800, height: 1000 });
+  await workspace.locator('#job-title').fill('API Engineer'); await workspace.locator('#job-description').fill('Build dependable APIs.');
+  await workspace.screenshot({ path: testInfo.outputPath('workspace-prepare.png'), fullPage: true });
+  await workspace.locator('#generate').click(); await expect(workspace.locator('#feedback')).toContainText('Ready', { timeout: 45000 });
+  await expect(workspace.locator('#view-edit')).toHaveAttribute('aria-selected', 'true');
+  await expect(workspace.locator('#base-details, #changes-section')).toHaveCount(0);
+  await expect(workspace.locator('.editor-block:visible')).toHaveCount(1);
+  await workspace.locator('#resume-summary').fill('My current unsaved summary.');
+  await expect(workspace.locator('#document-status')).toContainText('Unsaved changes');
+  await workspace.locator('#view-prepare').click();
+  await workspace.locator('#instructions').fill('Emphasize observability.');
+  await workspace.locator('#view-edit').click();
+  await workspace.locator('#saved-jobs button').first().click();
+  await expect(workspace.locator('#draft-dialog')).not.toBeVisible();
+  await expect(workspace.locator('#resume-summary')).toHaveValue('My current unsaved summary.');
+  await workspace.locator('[data-editor-section="work1"]').click();
+  await workspace.locator('[data-section="0"]').fill('My current edited API achievement.');
+  await expect(workspace.locator('.editor-block:visible')).toHaveCount(1);
+  const downloadPromise = workspace.waitForEvent('download'); await workspace.locator('[data-download="pdf"]').click();
+  const download = await downloadPromise;
+  const text = await pdfText(fs.readFileSync(await download.path()));
+  expect(text).toContain('My current unsaved summary.'); expect(text).toContain('My current edited API achievement.');
+  await expect(workspace.locator('#document-status')).toContainText('Saved locally');
+  await expect(workspace.locator('#instructions')).toHaveValue('Emphasize observability.');
+  await expect(workspace.locator('[data-section="0"]')).toBeVisible();
+  await expect(workspace.locator('#pdf-preview')).toHaveAttribute('aria-busy', 'false');
+  const toolbar = await workspace.locator('#editor-actions').boundingBox(); expect(toolbar.y).toBeLessThan(170);
+  await workspace.screenshot({ path: testInfo.outputPath('workspace-desktop.png'), fullPage: true });
+  await workspace.setViewportSize({ width: 1280, height: 850 });
+  await workspace.screenshot({ path: testInfo.outputPath('workspace-laptop.png'), fullPage: true });
+  await workspace.setViewportSize({ width: 650, height: 850 });
+  await workspace.screenshot({ path: testInfo.outputPath('workspace-compact.png'), fullPage: true });
+  await workspace.setViewportSize({ width: 390, height: 844 });
+  expect(await workspace.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await workspace.screenshot({ path: testInfo.outputPath('workspace-narrow.png'), fullPage: true });
+  await workspace.locator('#view-edit').focus(); await workspace.keyboard.press('Home');
+  await expect(workspace.locator('#view-prepare')).toHaveAttribute('aria-selected', 'true');
+  await workspace.keyboard.press('End'); await expect(workspace.locator('#view-edit')).toHaveAttribute('aria-selected', 'true');
+});
+
+test('leaving a dirty document offers stay, discard, or save without losing failed saves', async ({ kr }) => {
+  await kr.seed({ profile: PROFILE }); kr.openrouter.handler = materialResponse;
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  await expect(workspace.locator('#generate')).toBeEnabled();
+  await workspace.locator('#job-description').fill('Build APIs.'); await workspace.locator('#generate').click();
+  await expect(workspace.locator('#feedback')).toContainText('Ready', { timeout: 45000 });
+  await workspace.locator('#resume-summary').fill('Keep my draft.');
+  await workspace.locator('#tab-coverLetter').click(); await expect(workspace.locator('#draft-dialog')).toBeVisible();
+  await workspace.locator('#draft-stay').click(); await expect(workspace.locator('#resume-summary')).toHaveValue('Keep my draft.');
+  await workspace.locator('#tab-coverLetter').click(); await workspace.locator('#draft-discard').click();
+  await expect(workspace.locator('#tab-coverLetter')).toHaveAttribute('aria-selected', 'true');
+  await workspace.locator('#tab-resume').click(); await expect(workspace.locator('#resume-summary')).not.toHaveValue('Keep my draft.');
+  await workspace.locator('#resume-summary').fill('Saved before switching.'); await workspace.locator('#new-job').click(); await workspace.locator('#draft-save').click();
+  await expect(workspace.locator('#view-prepare')).toHaveAttribute('aria-selected', 'true');
+  await workspace.locator('#saved-jobs button').first().click(); await expect(workspace.locator('#resume-summary')).toHaveValue('Saved before switching.');
+  await workspace.locator('#resume-summary').fill('Long summary '.repeat(1800)); await workspace.locator('#tab-coverLetter').click(); await workspace.locator('#draft-save').click();
+  await expect(workspace.locator('#draft-error')).toContainText('exceed the page target');
+  await expect(workspace.locator('#draft-dialog')).toBeVisible(); await workspace.locator('#draft-stay').click();
+  await expect(workspace.locator('#tab-resume')).toHaveAttribute('aria-selected', 'true');
+  await expect(workspace.locator('#resume-summary')).toHaveValue('Long summary '.repeat(1800));
+  let downloads = 0; workspace.on('download', () => downloads++);
+  await workspace.locator('[data-download="pdf"]').click(); await expect(workspace.locator('#feedback')).toContainText('exceed the page target');
+  await expect(workspace.locator('[data-download="pdf"]')).toBeEnabled(); expect(downloads).toBe(0);
+});
+
 const PROFILE = { fullName: 'Test Applicant', email: 'test.applicant@example.com', resumeContext: '',
   workExperiences: [{ id: 'work1', title: 'Engineer', company: 'Acme', startDate: '2021-01', endDate: '2024-02', description: 'Built APIs. Reduced latency by 20%.' }], skills: ['JavaScript'] };
 
 function materialResponse(body) {
   const input = JSON.parse(body.messages.at(-1).content);
   if (!input.kind) return { choices: [{ message: { content: JSON.stringify({ answers: (input.fieldsToFill || []).map(f => ({ fieldId: f.fieldId, value: f.type === 'email' ? PROFILE.email : PROFILE.fullName })) }) } }] };
-  if (input.kind === 'source') return { choices: [{ message: { content: JSON.stringify({ name: 'Test Applicant', summary: 'Engineer building reliable APIs.', sections: [{ id: 'import_1', category: 'Experience', heading: 'Engineer Acme', facts: '2021 2024', bullets: ['Built APIs. Reduced latency by 20%.'] }] }) } }] };
   const value = input.kind === 'coverLetter' ? { paragraphs: ['Dear Hiring Team,', 'I build APIs and would contribute to your engineering team.', 'Sincerely, Test Applicant'] }
     : { summary: 'Engineer building reliable APIs.', sections: input.source.sections.map(s => ({ id: s.id, bullets: s.bullets })) };
   return { choices: [{ message: { content: JSON.stringify(value) } }] };
@@ -107,6 +205,7 @@ test('panel generation activates separate documents for the next Autofill and ex
   await workspace.locator('#tab-coverLetter').click();
   await workspace.locator('#tab-resume').click();
   await workspace.locator('#tab-coverLetter').click();
+  await workspace.locator('[data-editor-section="paragraph:1"]').click();
   await expect(workspace.locator('[data-paragraph="1"]')).toHaveValue(/I build APIs/);
   await expect(workspace.locator('#pdf-preview')).toHaveAttribute('aria-busy', 'false');
   await expect(workspace.locator('#pdf-preview canvas')).toHaveCount(1);
@@ -129,6 +228,7 @@ test('panel generation activates separate documents for the next Autofill and ex
   await expect(page.locator('#kr-autofill-btn')).toBeEnabled();
   expect(await page.evaluate(() => window.resumeUploads)).toBe(0);
   kr.openrouter.handler = materialResponse;
+  await workspace.locator('[data-editor-section="work1"]').click();
   await workspace.locator('[data-rewrite="section:work1"]').click();
   await expect(workspace.locator('#feedback')).toContainText('Ready', { timeout: 45000 });
   await expect(workspace.locator('#resume-summary')).toHaveValue('Engineer focused on dependable APIs.');
@@ -273,27 +373,16 @@ test('concurrent jobs stay isolated; cancellation and persisted interruption all
   expect((await kr.readStorage(`kr:sessions:${sessions[1].id}`)).materialRefs.resume).toEqual(sessions[1].materialRefs.resume);
 });
 
-test('workspace imports actual PDF and DOCX locally and offers recovery for unreadable files', async ({ kr }) => {
+test('workspace points to profile facts and preserves the saved version when edits overflow', async ({ kr }) => {
   await kr.seed({ profile: PROFILE }); kr.openrouter.handler = materialResponse;
   const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
   await expect(workspace.locator('#generate')).toBeEnabled();
   await workspace.locator('#job-title').fill('Engineer'); await workspace.locator('#job-description').fill('Build JavaScript APIs.');
   await workspace.locator('#generate').click(); await expect(workspace.locator('#feedback')).toContainText('Ready', { timeout: 45000 });
-  const record = await message(workspace, 'get', { id: (await message(workspace, 'list'))[0].id });
-  await workspace.locator('#base-details').evaluate(el => el.open = true);
-  for (const format of ['pdf', 'docx']) {
-    const file = record.files[format];
-    await workspace.locator('#base-file').setInputFiles({ name: file.name, mimeType: file.type, buffer: Buffer.from(file.data, 'base64') });
-    await expect(workspace.locator('#feedback')).toContainText('Resume text extracted');
-    await expect(workspace.locator('#base-text')).toHaveValue(/Built APIs/);
-  }
-  await workspace.locator('#base-file').setInputFiles({ name: 'broken.pdf', mimeType: 'application/pdf', buffer: Buffer.from('unreadable') });
-  await expect(workspace.locator('#feedback')).toHaveClass(/error/);
-  await expect(workspace.locator('#feedback')).toContainText('paste the resume text');
-  await expect(workspace.locator('#generate')).toBeEnabled();
-  await workspace.locator('#generate').click();
-  await expect(workspace.locator('#feedback')).toContainText('Ready', { timeout: 45000 });
-  await expect(workspace.locator('#document-editor h3')).toContainText(['Engineer — Acme', 'Skills']);
+  await workspace.locator('#view-prepare').click();
+  await expect(workspace.locator('.profile-source')).toContainText('Source: your profile');
+  await expect(workspace.locator('#base-file, #base-text, #changes-section')).toHaveCount(0);
+  await workspace.locator('#view-edit').click();
   expect((await kr.readStorage('kr:profile')).workExperiences[0].title).toBe('Engineer');
   const before = (await message(workspace, 'list'))[0].revision;
   await workspace.locator('#resume-summary').fill('Long summary '.repeat(1800));

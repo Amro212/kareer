@@ -77,7 +77,7 @@ export const platform = {
     delete: () => host.documentsDelete(),
   },
   materials: {
-    // Operations: start/status/cancel, base/saveBase, get/list/save/delete,
+    // Operations: start/status/cancel, get/list/save/delete,
     // session/job, and open. Host implementations own files and API secrets.
     request: (operation, input = {}) => host.materialsRequest?.(operation, input) ?? Promise.reject(new Error('Application materials require the extension.')),
   },
