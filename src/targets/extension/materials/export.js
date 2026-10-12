@@ -1,10 +1,10 @@
 import pdfMake from 'pdfmake/build/pdfmake.js';
 import fonts from './fonts/vfs.json' with { type: 'json' };
-import { Document, Packer, Paragraph, TextRun, Header, TabStopType, BorderStyle } from 'docx';
+import { Document, Packer, Paragraph, TextRun, Header, TabStopType, BorderStyle, ExternalHyperlink } from 'docx';
 import { DOCX_TYPE, validateMaterial } from '../../../core/materials-model.js';
 
 // Bump when document formatting changes so saved bytes cannot retain an older template.
-export const MATERIAL_TEMPLATE_VERSION = 1;
+export const MATERIAL_TEMPLATE_VERSION = 6;
 
 pdfMake.addVirtualFileSystem(fonts);
 const fontFaces = {
@@ -32,8 +32,57 @@ const letterStyles = {
 const resumeMargins = [24.48, 12.96, 24.48, 15.84];
 const letterMargins = [72, 115, 72, 75];
 
+function formatContactRuns(contact) {
+  if (!contact) return [];
+  const parts = String(contact).split(/\s*[·•|\n]\s*/).map(s => s.trim()).filter(Boolean);
+  const runs = [];
+  let portfolioUsed = false;
+  for (const part of parts) {
+    let run = { text: part };
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(part)) {
+      run = { text: part, link: `mailto:${part}` };
+    } else if (/linkedin\.com/i.test(part)) {
+      run = { text: 'LinkedIn', link: /^https?:\/\//i.test(part) ? part : `https://${part}` };
+    } else if (/github\.com/i.test(part)) {
+      run = { text: 'GitHub', link: /^https?:\/\//i.test(part) ? part : `https://${part}` };
+    } else if (/twitter\.com|x\.com/i.test(part)) {
+      run = { text: 'Twitter', link: /^https?:\/\//i.test(part) ? part : `https://${part}` };
+    } else if (/behance\.net/i.test(part)) {
+      run = { text: 'Behance', link: /^https?:\/\//i.test(part) ? part : `https://${part}` };
+    } else if (/dribbble\.com/i.test(part)) {
+      run = { text: 'Dribbble', link: /^https?:\/\//i.test(part) ? part : `https://${part}` };
+    } else if (/^https?:\/\//i.test(part) || /^(?:www\.)?[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+(?:[/?#]\S*)?$/i.test(part)) {
+      const isPlain = /^[\d\s()+-.]+$/.test(part) || !part.includes('.');
+      if (!isPlain) {
+        const url = /^https?:\/\//i.test(part) ? part : `https://${part}`;
+        const label = portfolioUsed ? 'Website' : 'Portfolio';
+        portfolioUsed = true;
+        run = { text: label, link: url };
+      }
+    }
+    if (runs.length) runs.push({ text: ' · ' });
+    runs.push(run);
+  }
+  return runs.length ? runs : [{ text: contact }];
+}
+
+function formatRightLink(loc) {
+  if (!loc) return null;
+  const textLoc = String(loc).trim();
+  if (/github\.com/i.test(textLoc)) {
+    return { text: 'GitHub', link: /^https?:\/\//i.test(textLoc) ? textLoc : `https://${textLoc}` };
+  }
+  if (/linkedin\.com/i.test(textLoc)) {
+    return { text: 'LinkedIn', link: /^https?:\/\//i.test(textLoc) ? textLoc : `https://${textLoc}` };
+  }
+  if (/^https?:\/\//i.test(textLoc) || /^(?:www\.)?[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+(?:[/?#]\S*)?$/i.test(textLoc)) {
+    return { text: 'Website', link: /^https?:\/\//i.test(textLoc) ? textLoc : `https://${textLoc}` };
+  }
+  return { text: textLoc };
+}
+
 function blocks(model, job) {
-  const result = [{ text: model.name, style: 'name' }, { text: model.contact, style: 'contact' }];
+  const result = [{ text: model.name, style: 'name' }, { text: formatContactRuns(model.contact), style: 'contact' }];
   if (model.kind === 'coverLetter') return [...result,
     { text: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }), style: 'opening' },
     ...(job.company ? [{ text: job.company, style: 'opening' }] : []),
@@ -46,15 +95,30 @@ function blocks(model, job) {
   const order = category => ({ Skills: 0, Experience: 1, Projects: 2, Education: 4, Certifications: 5 }[category] ?? 3);
   for (const category of categories.sort((a, b) => order(a) - order(b))) {
     result.push({ text: ({ Skills: 'Technical Skills', Experience: 'Professional Experience' })[category] || category, style: 'section' });
-    for (const section of model.sections.filter(s => s.category === category)) {
-      if (section.title) {
-        result.push({ text: section.title, right: section.dates, style: 'title' });
-        if (section.subtitle || section.location) result.push({ text: section.subtitle, right: section.location, style: 'facts' });
+    for (const rawSection of model.sections.filter(s => s.category === category)) {
+      const isProject = category === 'Projects';
+      let section = rawSection;
+      if (isProject) {
+        const urlMatch = (String(section.link || '') + ' ' + String(section.location || '') + ' ' + String(section.facts || '') + ' ' + String(section.heading || ''))
+          .match(/(https?:\/\/[^\s·•|]+|(?:github\.com|gitlab\.com)[^\s·•|]+|[a-zA-Z0-9-]+\.(?:com|org|io|dev|app|net|me)\S*)/i);
+        const rawUrl = section.link || urlMatch?.[0];
+        const normalizedUrl = rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : null;
+        const headingParts = String(section.heading || '').split(/\s*—\s*/);
+        const title = section.title || headingParts[0] || section.heading;
+        const subtitle = section.subtitle || (headingParts.length > 1 ? headingParts.slice(1).join(' — ') : '');
+        const cleanDates = (section.dates || section.facts || '').split(/\s*[·•|]\s*/).filter(p => !/(?:https?:\/\/|github\.com|gitlab\.com|\.(?:com|org|io|dev|app|net|me))/i.test(p)).join(' · ');
+        const titleRun = normalizedUrl ? { text: title, link: normalizedUrl } : title;
+        result.push({ text: titleRun, right: cleanDates ? { text: cleanDates } : null, style: 'title' });
+        if (subtitle) result.push({ text: subtitle, style: 'facts' });
+      } else if (section.title) {
+        result.push({ text: section.title, right: section.dates ? { text: section.dates } : null, style: 'title' });
+        const right = formatRightLink(section.location);
+        if (section.subtitle || right) result.push({ text: section.subtitle || '', right, style: 'facts' });
       } else {
         if (section.heading !== category) result.push({ text: section.heading, style: 'title' });
-        if (section.facts) result.push({ text: section.facts, style: 'facts' });
+        if (section.facts) result.push({ text: formatContactRuns(section.facts), style: 'facts' });
       }
-      if (section.bullets.length) {
+      if (section.bullets?.length) {
         if (category === 'Skills' && section.bullets.some(s => /^[^:]+:/.test(s))) result.push(...section.bullets.map(text => ({ text, style: 'body' })));
         else result.push(category === 'Skills' ? { text: section.bullets.join(' · '), style: 'body' } : { ul: [...section.bullets], style: 'bullet' });
       }
@@ -66,7 +130,16 @@ function blocks(model, job) {
 async function makePdf(model, job) {
   const letter = model.kind === 'coverLetter', margins = letter ? letterMargins : resumeMargins;
   const content = blocks(model, job).flatMap(block => {
-    if (block.right) return [{ columns: [{ text: block.text, width: '*' }, { text: block.right, width: 'auto', alignment: 'right', bold: false }], style: block.style, columnGap: 12 }];
+    if (block.right) {
+      const leftCol = typeof block.text?.link === 'string'
+        ? { text: block.text.text, link: block.text.link, width: '*' }
+        : { text: block.text?.text || block.text, width: '*' };
+      const rightCol = typeof block.right?.link === 'string'
+        ? { text: block.right.text, link: block.right.link, width: 'auto', alignment: 'right', bold: false }
+        : { text: block.right.text || block.right, width: 'auto', alignment: 'right', bold: false };
+      return [{ columns: [leftCol, rightCol], style: block.style, columnGap: 12 }];
+    }
+    if (typeof block.text?.link === 'string') return [{ text: block.text.text, link: block.text.link, style: block.style }];
     if (block.ul) return block.ul.map(text => ({ columns: [{ text: '-', width: 7 }, { text, width: '*' }], style: 'bullet' }));
     if (block.style === 'section') return [block, { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 612 - margins[0] - margins[2], y2: 0, lineWidth: 0.5 }], margin: [0, 0, 0, 2] }];
     return [block];
@@ -96,8 +169,26 @@ function docxDocument(model, job) {
   for (const block of blocks(model, job)) {
     const style = styles[block.style];
     const run = { font, size: style.fontSize * 2, bold: style.bold, italics: style.italics, smallCaps: ['name', 'section'].includes(block.style) };
+    if (Array.isArray(block.text)) {
+      paragraphs.push(new Paragraph({
+        children: block.text.map(item => typeof item.link === 'string'
+          ? new ExternalHyperlink({ children: [new TextRun({ ...run, text: item.text, style: 'Hyperlink' })], link: item.link })
+          : new TextRun({ ...run, text: item.text })),
+        alignment: style.alignment,
+        indent: { left: Math.round((style.margin[0] || 0) * 20), firstLine: (block.leadingIndent || 0) * 20 },
+        spacing: { before: style.margin[1] * 20, after: (style.margin[3] + (block.style === 'section' ? 2 : 0)) * 20, line: Math.round(style.fontSize * 1.2 * 20), lineRule: 'exact' },
+        ...(letter && ['name', 'contact'].includes(block.style) ? { shading: { fill: 'E1E1E1' } } : {}),
+      }));
+      continue;
+    }
+    const rightRun = typeof block.right?.link === 'string'
+      ? new ExternalHyperlink({ children: [new TextRun({ ...run, text: `\t${block.right.text}`, bold: false, style: 'Hyperlink' })], link: block.right.link })
+      : (block.right ? new TextRun({ ...run, text: `\t${block.right.text || block.right}`, bold: false }) : null);
+    const leftRuns = typeof block.text?.link === 'string'
+      ? [new ExternalHyperlink({ children: [new TextRun({ ...run, text: block.text.text, style: 'Hyperlink' })], link: block.text.link })]
+      : null;
     for (const text of block.ul || [block.text || '']) paragraphs.push(new Paragraph({
-      children: [...(block.ul ? `- ${text}` : text).split('\n').map((line, index) => new TextRun({ ...run, text: line, break: index ? 1 : 0 })), ...(block.right ? [new TextRun({ ...run, text: `\t${block.right}`, bold: false })] : [])],
+      children: [...(leftRuns || (block.ul ? `- ${text}` : text).split('\n').map((line, index) => new TextRun({ ...run, text: line, break: index ? 1 : 0 }))), ...(rightRun ? [rightRun] : [])],
       alignment: style.alignment,
       tabStops: block.right ? [{ type: TabStopType.RIGHT, position: Math.round(width * 20) }] : [],
       indent: { left: Math.round((style.margin[0] || 0) * 20), firstLine: (block.leadingIndent || 0) * 20 },

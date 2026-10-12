@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { exportMaterial } from '../../src/targets/extension/materials/export.js';
+import { exportMaterial, MATERIAL_TEMPLATE_VERSION } from '../../src/targets/extension/materials/export.js';
 import { buildMaterialSource } from '../../src/core/materials-model.js';
 import mammoth from 'mammoth';
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
@@ -82,7 +82,7 @@ test('cover letter has distinct serif stationery and right-aligned closing witho
     assert.ok(Math.abs(closing.transform[4] + closing.width - 540) < 0.1);
     assert.ok(closing.transform[5] < 75, 'closing inside reserved bottom margin');
     assert.ok(name.transform[5] > 698.4, 'letterhead inside 93.6pt header band');
-    assert.equal(exported.templateVersion, 1);
+    assert.equal(exported.templateVersion, MATERIAL_TEMPLATE_VERSION);
   } finally { await loading.destroy(); }
   const zip = await JSZip.loadAsync(exported.files.docx.buffer);
   const text = await mammoth.extractRawText({ buffer: Buffer.from(exported.files.docx.buffer) });
@@ -145,4 +145,82 @@ test('cancelled generation stops export without changing the existing model', as
   const source = buildMaterialSource({ fullName: 'Test Applicant' });
   await assert.rejects(exportMaterial(source, {}, 1, { signal: controller.signal }), /timed out/);
   assert.equal(source.name, 'Test Applicant');
+});
+
+test('resume exports hyperlinks for contact and projects with clean readable labels', async () => {
+  const source = buildMaterialSource({
+    fullName: 'Amro AbedMoosa',
+    email: 'amro@example.com',
+    phone: '9054621004',
+    city: 'Milton',
+    stateProvince: 'Ontario',
+    country: 'Canada',
+    linkedin: 'https://linkedin.com/in/amro-abedmoosa',
+    github: 'https://github.com/Amro212',
+    portfolio: 'https://amro.dev',
+    website: 'https://amro-personal.org',
+    workExperiences: [{ id: 'role', title: 'Engineer', company: 'Acme', location: 'https://acme.org', description: 'Built APIs.' }],
+    projects: [
+      { id: 'p1', name: 'Kareer', role: 'Lead', url: 'https://github.com/Amro212/kareer', description: 'Autofill extension.' },
+      { id: 'p2', name: 'Generic Proj', role: 'Dev', url: 'https://github.com', description: 'Bare github url.' }
+    ]
+  }, {
+    sections: [
+      { id: 'base_proj', category: 'Projects', heading: 'FlowMesh — Distributed Workflow Engine', facts: 'github.com/arivera/flowmesh · 2023-01 · Present', bullets: ['Workflow engine.'] }
+    ]
+  });
+  const exported = await exportMaterial(source, { company: 'Acme' });
+  assert.equal(exported.pages, 1);
+
+  // PDF verification
+  const loading = getDocument({ data: new Uint8Array(exported.files.pdf.buffer.slice(0)), isEvalSupported: false, useWasm: false });
+  try {
+    const page = await (await loading.promise).getPage(1);
+    const annotations = await page.getAnnotations();
+    const urls = annotations.map(a => a.url);
+    assert.ok(urls.includes('mailto:amro@example.com'));
+    assert.ok(urls.includes('https://linkedin.com/in/amro-abedmoosa'));
+    assert.ok(urls.includes('https://github.com/Amro212'));
+    assert.ok(urls.some(u => u.startsWith('https://amro.dev')));
+    assert.ok(urls.some(u => u.startsWith('https://amro-personal.org')));
+    assert.ok(urls.some(u => u.startsWith('https://github.com/Amro212/kareer')));
+    assert.ok(urls.some(u => u.startsWith('https://github.com')));
+    assert.ok(urls.some(u => u.includes('github.com/arivera/flowmesh')));
+
+    const { items } = await page.getTextContent();
+    const text = items.map(i => i.str).join(' ');
+    assert.match(text, /LinkedIn/);
+    assert.match(text, /GitHub/);
+    assert.match(text, /Portfolio/);
+    assert.match(text, /Website/);
+    assert.match(text, /amro@example\.com/);
+    assert.doesNotMatch(text, /https:\/\/linkedin\.com/);
+    assert.doesNotMatch(text, /https:\/\/github\.com/);
+    assert.doesNotMatch(text, /https:\/\/amro\.dev/);
+    assert.doesNotMatch(text, /https:\/\/amro-personal\.org/);
+    assert.doesNotMatch(text, /github\.com\/arivera\/flowmesh/);
+
+    // Verify project titles are hyperlinked annotations
+    const kareerItem = items.find(i => i.str === 'Kareer');
+    assert.ok(kareerItem, 'Project title Kareer exists');
+    const flowMeshItem = items.find(i => i.str === 'FlowMesh');
+    assert.ok(flowMeshItem, 'Project title FlowMesh exists');
+  } finally { await loading.destroy(); }
+
+  // Word verification
+  const word = await mammoth.extractRawText({ buffer: Buffer.from(exported.files.docx.buffer) });
+  assert.match(word.value, /LinkedIn · GitHub · Portfolio · Website/);
+  assert.match(word.value, /Lead/);
+  assert.match(word.value, /Distributed Workflow Engine/);
+  assert.match(word.value, /- Built APIs/);
+  assert.doesNotMatch(word.value, /https:\/\/amro\.dev/);
+  assert.doesNotMatch(word.value, /github\.com\/arivera\/flowmesh/);
+
+  const zip = await JSZip.loadAsync(exported.files.docx.buffer);
+  const xml = await zip.file('word/document.xml').async('string');
+  const rels = await zip.file('word/_rels/document.xml.rels').async('string');
+  assert.match(xml, /w:hyperlink/);
+  assert.match(rels, /https:\/\/github\.com\/Amro212\/kareer/);
+  assert.match(rels, /https:\/\/amro\.dev/);
+  assert.match(rels, /github\.com\/arivera\/flowmesh/);
 });

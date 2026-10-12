@@ -1,3 +1,107 @@
+## Turn: 2026-10-11 - Enforce word-anchored hyperlinks and eliminate all raw URLs
+
+- Target: `src/core/materials-model.js`, `src/targets/extension/materials/export.js`, `tests/unit/materials-export.test.js`
+- User-reported findings & review:
+  1. *Raw URLs were still showing in various resume and cover letter contexts*:
+     - User feedback: Hyperlinks work and redirect correctly, but raw URLs were still showing. Required hyperlinks wrapped around words/statements (e.g., profile portfolio wrapped to "Portfolio", project titles hyperlinked directly with no raw URLs on subtitle/facts line) across both resume and cover letter. No raw URLs should be visible anywhere.
+     - Root-cause analysis:
+       - Projects from `base.sections` or imported resumes lacked a `title` property, causing `blocks()` to fall back to the unlinked heading and dumping the raw URL onto the facts line.
+       - Projects in `buildMaterialSource` were still injecting `r.url` into `facts` and `location`.
+       - `formatRightLink` in `export.js` stripped the protocol but still returned the bare domain/path label as text.
+       - `formatContactRuns` did not handle multiline breaks or arbitrary web domains/subdomains without `https://`, and dropped `profile.website` if `profile.portfolio` was populated.
+  2. *Resolution (/ponytail)*:
+     - Updated `buildMaterialSource` in [materials-model.js](file:///c:/VScode/job-copilot-extension/src/core/materials-model.js):
+       - Removed raw URLs from project `location` and `facts`.
+       - Included `profile.portfolio`, `profile.website`, and `profile.additionalUrl` in contact.
+       - Normalized imported base projects to extract `link`, strip raw URLs from `facts`, and split headings into `title` and `subtitle`.
+     - Updated `export.js`:
+       - Enhanced `formatContactRuns()` to parse multiline breaks and anchor arbitrary web URLs to "Portfolio" (and subsequent links to "Website"), preventing raw URLs from displaying.
+       - Enforced clean word labels in `formatRightLink()` ("Website", "GitHub", "LinkedIn") instead of raw domains.
+       - In `blocks()`, all Project entries (whether from profile or base/imports) extract project URLs, hyperlink project titles directly, clean URLs out of dates/facts, and omit raw URLs from subtitles.
+       - Bumped `MATERIAL_TEMPLATE_VERSION` to 6 to auto-re-export saved documents.
+     - Rebuilt extension to `v0.5.75` (`dist/kareer-firefox.xpi` and `dist/kareer-chrome.zip`).
+- Verification:
+  - `node --test tests/unit/materials-export.test.js`: All 8 unit tests passed (exit 0).
+  - `npm run build`: Exit 0; built cleanly.
+- Status: Completed.
+
+---
+
+## Turn: 2026-10-11 - Anchor text hyperlinks on words and project titles
+
+- Target: `src/core/materials-model.js`, `src/targets/extension/materials/export.js`, `tests/unit/materials-export.test.js`
+- User-reported findings & clarification:
+  1. *Hyperlinks were technically active, but raw URLs were still printed out in plain sight*:
+     - User clarified requirement: rather than printing full raw URLs, hyperlinks must be wrapped around clean words/statements:
+       - Contact header: profile links are wrapped around their field identity ("LinkedIn", "GitHub", "Portfolio", "Twitter", "Behance", "Dribbble") and email is wrapped around the email address with `mailto:`.
+       - Projects: project titles themselves are hyperlinked to their repository/project URL directly, and the raw URL is completely removed from the subtitle line, leaving the subtitle clean (e.g. just "Creator" or "Lead Developer").
+       - Visual aesthetic: clean monochrome (black text, no underline) preserving the LaTeX/CMU Serif aesthetic while remaining clickable in both PDF and Word.
+  2. *Resolution*:
+     - Updated `buildMaterialSource` in `src/core/materials-model.js` to preserve `section.link` on projects and include `profile.portfolio` alongside social channels.
+     - Updated `formatContactRuns()` in `export.js` to map raw URLs to clean profile field names ("LinkedIn", "GitHub", "Portfolio", "Twitter", "Behance", "Dribbble").
+     - Updated `blocks()`, `makePdf()`, and `docxDocument()` in `export.js`:
+       - Projects hyperlink their title directly (`{ text: section.title, link: projectUrl }` in PDF, `ExternalHyperlink` in Word).
+       - Project subtitle lines no longer display raw URLs on the right.
+       - Guarded against `String.prototype.link` collision (`typeof ...link === 'string'`).
+     - Bumped `MATERIAL_TEMPLATE_VERSION` to 5 for automatic document migration.
+     - Rebuilt extension packages cleanly (`v0.5.74`).
+- Verification:
+  - `node --test tests/unit/materials-export.test.js`: All 8 unit tests passed (exit 0).
+  - `npm run build`: Exit 0; extension and userscript built cleanly.
+- Status: Completed.
+
+---
+
+## Turn: 2026-10-11 - Ponytail hyperlink resolution and extension build fix
+
+- Target: `src/targets/extension/materials/export.js`, `tests/unit/materials-export.test.js`
+- User-reported findings:
+  1. *Fixes were still not reflected on exported resume PDF*:
+     - Root cause: A duplicate return statement at the end of `docxDocument` in `export.js` caused `npm run build` to fail (`esbuild: Unexpected "}"`). Consequently, the extension bundles (`dist/kareer-firefox.xpi`) were never updated, so the browser remained on the older build outputting raw URLs.
+     - Additionally, user clarified to focus strictly on hyperlinks and space utilization without altering bullets, headings, or phone numbers.
+  2. *Resolution (/ponytail)*:
+     - Fixed syntax error in `export.js`.
+     - Hyperlinked contact URLs (`mailto:`, `LinkedIn`, `GitHub`, web domains) and project links (`GitHub`, clean web labels) for both PDF (`link`) and DOCX (`ExternalHyperlink`), preserving all links (including bare github URLs) with compact labels.
+     - Left bullets (`-`), section titles, and phone numbers untouched.
+     - Bumped `MATERIAL_TEMPLATE_VERSION` to 4 so existing saved materials auto-re-export.
+     - Ran `npm run build` cleanly (v0.5.73) producing updated `dist/kareer-firefox.xpi` and `dist/kareer-chrome.zip`.
+- Verification:
+  - `node --test tests/unit/materials-export.test.js`: All 8 unit tests passed (exit 0).
+  - `npm run build`: Exit 0; extension and userscript built cleanly.
+- Status: Completed.
+
+---
+
+## Turn: 2026-10-11 - Hyperlink resume URLs, true bullet points, and section casing polish
+
+- Target: `src/targets/extension/materials/export.js`, `tests/unit/materials-export.test.js`
+- User-reported bugs & investigation:
+  1. *Raw URLs on generated resume PDF instead of clickable hyperlinks*:
+     - Symptoms: The generated PDF dumped raw URLs (`https://linkedin.com/in/...`, `https://github.com/...`) in the contact header and raw repo links on the right-hand column of projects. None were clickable PDF link annotations. Useless bare root URLs like `https://github.com` were rendered as right-hand facts for projects without repository slugs.
+     - Root cause: `blocks()` in `export.js` passed `model.contact` as flat unlinked text and `section.location` as raw unparsed text without pdfMake `link` attributes or docx `ExternalHyperlink` nodes.
+     - Resolution:
+       - Added `formatContactRuns()` in `export.js`: parses emails into `mailto:`, 10/11-digit phones into formatted `(XXX) XXX-XXXX` with `tel:`, LinkedIn into clickable `LinkedIn`, GitHub into clickable `GitHub`, and personal sites into domain-labeled links.
+       - Added `formatRightLink()`: omits bare root URLs (`https://github.com`, `https://linkedin.com`), parses specific project repo/demo URLs into compact clickable links (`GitHub`, clean domain labels) in both PDF and DOCX.
+       - Replaced ASCII hyphen bullets (`-`) with true typography bullet characters (`•`, U+2022).
+       - Normalized section category headings to Title Case (fixing `Additional experience` -> `Additional Experience`).
+       - Bumped `MATERIAL_TEMPLATE_VERSION` from 1 to 2 so stored documents automatically re-export with the new styling.
+- Verification:
+  - `node --test tests/unit/materials-export.test.js`: All 8 tests passed, including new test asserting PDF annotation URLs (`mailto:`, `tel:`, LinkedIn, GitHub, project repo), omission of bare github URL, formatted phone, true bullets, and DOCX `ExternalHyperlink` XML.
+  - `npm test`: 517/517 unit tests passed.
+- Status: Completed.
+
+---
+
+## Turn: 2026-10-11 - Update agent verification rule for targeted testing
+
+- Target: `AGENTS.md`
+- User mandate: Stop running the entire test suite after every minor change; run full test suites only for major changes when absolutely necessary. Running entire test suites consumes excessive memory and causes PC lag. Agents must run relevant tests only for the changes made.
+- Changes: Updated `AGENTS.md` Section 2 ("Verification & Testing") to explicitly prohibit running the entire test suite (`npm test` / `npm run test:e2e`) on minor changes and routine edits. Mandated running only targeted, relevant test files directly touching modified code (e.g., `node --test tests/unit/<test-file>.test.js`). Restricted full test suites strictly to major cross-cutting changes, release preparation, or explicit user requests.
+- Verification: Inspected updated `AGENTS.md` and verified git diff.
+- Status: Completed.
+
+---
+
 ## Turn: 2026-10-11 - Investigate persistent material HTTP 400 on Zen/Firefox
 
 - Target: extension, application materials on Zen (Firefox), v0.5.68, `google/gemini-2.5-flash-lite`; screenshot shows jobs.intuit.com. Autofill succeeds while both material tasks report a generic HTTP 400.
@@ -2835,3 +2939,9 @@ Narrative voice prompt updated and verified.
 - Full-browser verification finding: first completed v0.5.63 run had 147 passes, three opt-in skips and one Ashby saved-email retry failure: the panel reset to `Ready to start.` while retaining seven verified results and the correctly failed empty email. The isolated case passed. Reviewer identified a likely pre-existing startup race: UI starts `initialize()` without awaiting session restoration, while the test clicked as soon as the panel existed; delayed initialization can replace a just-started session. Updated only `tests/e2e/greenhouse-ashby.spec.js` to wait for the initial `Ready to start.` session before first Autofill. All original missing-values, preserved-name, saved-answer, email retry and no-duplicate-row assertions remain. The underlying early-click runtime race is documented separately and deferred, not represented as fixed by this materials change; its root cause remains inferred from code and observed state. Failure artifacts retained in `scratch/materials-review/ashby-full-suite-failure/`; full suite restarted after this test readiness correction.
 - Concurrent-work boundary: unrelated edits appeared in `src/core/ui.js` and `src/core/constants.js` after the verified v0.5.63 build, while this turn's tests were running. Preserved those edits. The v0.5.63 artifacts and verification here cover this materials fix; they do not certify the later concurrent UI source changes. Those changes need their own rebuild and verification.
 - Completed verification: full `npm run test:e2e -- --workers=2` exits successfully with 148 passed, three opt-in live-capture skips and zero failures (9.9 minutes), including every precise template migration/generation/download/race regression. Chrome and Firefox manifests remained v0.5.63 throughout this final run. Materials production source passed all 513 unit tests; final Firefox smoke passed; `git diff --check` is clean. Final review found no concrete remaining materials blockers. Reload v0.5.63, refresh the application page and reopen Materials to migrate old saved exports; the workspace displays its build version. Existing active application snapshots retain their selected bytes until a new run. No paid live-AI call or native Word visual pagination check was made in this turn. Separate SmartRecruiters job-title capture and inferred early-click startup race remain deferred; concurrent later UI edits remain outside this verification.
+- 2026-10-11 — Application-materials UX discovery (extension workspace; user screenshots). User reports cluttered setup/editor/diff content, excessive scrolling, and save/download/delete controls below the editor. Confirmed in `materials/index.html`, `workspace.css`, and `index.js`: all stages share one document flow; editor actions follow every section; changes compare entire section strings. Existing typography/colors use shared tokens, but repeated bordered blocks and spacing weaken DESIGN.md's compact, flat hierarchy. Additional design risks: switching jobs/document kinds replaces unsaved editor input; preview and downloads use saved export bytes while edits have no dirty indicator. Reviewed Impeccable, Ponytail, grill-me and brainstorming guidance; verified Superpowers discovery junction is already installed. No product implementation yet: interviewing the user about tab structure, editor navigation, review behavior and save semantics before settling the design. This turn changes only this findings log; tests/build/browser checks deferred until implementation. Existing unrelated `materials/export.js` edit preserved.
+- 2026-10-11 — Materials UX interview continuation: user selected Prepare / Edit / Changes tabs with PDF beside Edit and Changes and a persistent top document toolbar. Next decision is section navigation within Edit, to reduce scrolling independently of the page tabs. This turn updates only this log; no product code, build or tests yet.
+- 2026-10-11 — Materials UX interview: user selected a section list with one section open at a time in Edit. Proposed reusing section navigation in Changes and replacing whole-paragraph red/green treatment with labeled Original / Current text and focused phrase highlights; comparison layout awaiting user choice. Only this log changed; implementation and verification remain pending.
+- 2026-10-11 — Materials UX interview: user selected stacked Original / Current comparison with phrase-level highlights. Save semantics now under discussion: explicit Save with Download saving/exporting current edits is recommended; tabs/section navigation retain drafts, and leaving a dirty document should offer Save / Discard / Stay. Existing saved-preview/export behavior is the reason for this decision. Only this log changed; no runtime changes or tests yet.
+- 2026-10-11 — Materials UX interview: user selected explicit Save with Download saving/exporting the current draft. Confirmed the current Changes baseline shifts on a targeted rewrite (`background/materials.js` builds rewrite source from the previous model); manual saves compare to that stored source. Asked whether Original should be the stable first-tailoring source, latest-operation version, or a selectable comparison. Recommended stable first-tailoring source for total per-job changes; decision pending. Only this log changed; implementation and tests pending.
+- 2026-10-11 — Materials UX scope correction: user explicitly rejected the diff feature and any base-resume influence on tailoring. Earlier Changes-tab, phrase-highlighting and comparison-baseline decisions are superseded. Revised design: Prepare / Edit tabs; profile-only new resume/letter generation with explicit source copy and profile link; no workspace import/base-resume controls; section navigation with one editor section open; PDF alongside Edit; top Save/Download/Delete actions; explicit save and download of current edits; dirty-draft protection. Confirmed runtime currently merges stored base content into `buildMaterialSource`, can issue an additional AI extraction request, and computes/stores diffs in generation/save. Implementation scope must remove those production dependencies as well as the visible controls, update affected unit/E2E fixtures and documentation, and preserve existing saved exports and unrelated `materials/export.js` changes. Only this findings log changed this turn; revised design confirmation and implementation verification remain pending.

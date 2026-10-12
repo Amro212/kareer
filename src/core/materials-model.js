@@ -20,7 +20,7 @@ export function buildMaterialSource(profile = {}, base = {}) {
   for (const [key, category, heading, facts] of [
     ['workExperiences', 'Experience', r => [r.title, r.company].filter(Boolean).join(' — '), r => [r.location, r.startDate, r.current ? 'Present' : r.endDate].filter(Boolean).join(' · ')],
     ['education', 'Education', r => [r.degree, r.fieldOfStudy, r.institution].filter(Boolean).join(' — '), r => [r.startDate, r.current ? 'Present' : r.endDate, r.gpa ? `GPA ${r.gpa}` : ''].filter(Boolean).join(' · ')],
-    ['projects', 'Projects', r => [r.name, r.role].filter(Boolean).join(' — '), r => [r.url, r.startDate, r.current ? 'Present' : r.endDate].filter(Boolean).join(' · ')],
+    ['projects', 'Projects', r => [r.name, r.role].filter(Boolean).join(' — '), r => [r.startDate, r.current ? 'Present' : r.endDate].filter(Boolean).join(' · ')],
   ]) {
     for (const [index, record] of (profile[key] || []).entries()) {
       const id = record.id || `${key}_${index}`;
@@ -35,18 +35,41 @@ export function buildMaterialSource(profile = {}, base = {}) {
         title: text(record.title || record.degree || record.name),
         subtitle: [record.company || record.institution || record.role, record.fieldOfStudy].filter(Boolean).join(' — '),
         dates: [record.startDate, record.current ? 'Present' : record.endDate].filter(Boolean).join(' – '),
-        location: key === 'education' ? [record.location, record.gpa ? `GPA ${record.gpa}` : ''].filter(Boolean).join(' · ') : text(key === 'projects' ? record.url : record.location),
+        location: key === 'education' ? [record.location, record.gpa ? `GPA ${record.gpa}` : ''].filter(Boolean).join(' · ') : text(key === 'projects' ? '' : record.location),
+        link: key === 'projects' ? text(record.url) : '',
         bullets: lines(record.description || imported?.bullets?.join('\n')), protected: true });
     }
   }
   for (const section of base.sections || []) {
-    if (!known.has(section.id) && !matchedImports.has(section.id) && !(section.category === 'Skills' && profile.skills?.length)) sections.push({ id: text(section.id), category: text(section.category || 'Additional experience'), heading: text(section.heading), facts: text(section.facts), bullets: (section.bullets || []).map(text), protected: true });
+    if (!known.has(section.id) && !matchedImports.has(section.id) && !(section.category === 'Skills' && profile.skills?.length)) {
+      let sec = { id: text(section.id), category: text(section.category || 'Additional experience'), heading: text(section.heading), facts: text(section.facts), bullets: (section.bullets || []).map(text), protected: true };
+      if (sec.category === 'Projects') {
+        const urlMatch = String(sec.facts + ' ' + sec.heading).match(/(https?:\/\/[^\s·•|]+|(?:github\.com|gitlab\.com)[^\s·•|]+)/i);
+        const link = urlMatch ? (urlMatch[1].startsWith('http') ? urlMatch[1] : `https://${urlMatch[1]}`) : '';
+        const cleanFacts = sec.facts ? sec.facts.split(/\s*[·•|]\s*/).filter(p => !/(?:https?:\/\/|github\.com|gitlab\.com)/i.test(p)).join(' · ') : '';
+        const parts = sec.heading.split(/\s*—\s*/);
+        sec = { ...sec, title: sec.title || parts[0], subtitle: sec.subtitle || (parts.length > 1 ? parts.slice(1).join(' — ') : ''), dates: sec.dates || cleanFacts, facts: cleanFacts, link: sec.link || link, location: '' };
+      }
+      sections.push(sec);
+    }
   }
   const skills = (profile.skills || []).filter(s => typeof s === 'string' || s.enabled !== false).map(s => text(typeof s === 'string' ? s : s.name || s.skill)).filter(Boolean);
   if (skills.length) sections.push({ id: 'skills', category: 'Skills', heading: 'Skills', facts: '', bullets: skills, protected: true });
   return {
     kind: 'resume', name: text(profile.fullName || [profile.firstName, profile.lastName].filter(Boolean).join(' ') || base.name),
-    contact: [profile.email, profile.phone, [profile.city, profile.stateProvince, profile.country].filter(Boolean).join(', '), profile.linkedin, profile.github, profile.website].filter(Boolean).join(' · ') || text(base.contact),
+    contact: [
+      profile.email,
+      profile.phone,
+      [profile.city, profile.stateProvince, profile.country].filter(Boolean).join(', '),
+      profile.linkedin,
+      profile.github,
+      profile.portfolio,
+      profile.website,
+      profile.additionalUrl,
+      profile.twitter,
+      profile.behance,
+      profile.dribbble,
+    ].filter(Boolean).join(' · ') || text(base.contact),
     summary: text(base.summary), sections,
     text: base.sections?.length ? '' : text(base.text || profile.resumeContext), notes: text(profile.applicantNotes),
   };
