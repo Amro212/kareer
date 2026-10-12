@@ -139,7 +139,7 @@ test('fresh generation and saved edits use only current PDF and Word templates',
   await kr.seed({ profile });
   kr.openrouter.handler = body => {
     const input = JSON.parse(body.messages.at(-1).content);
-    expect(body.response_format.type).toBe('json_schema');
+    expect(body.response_format.type).toBe('json_object');
     const output = input.kind === 'coverLetter' ? { paragraphs: legacy.coverLetter.paragraphs } : { summary: legacy.resume.summary, sections: [{ id: 'work1', bullets: legacy.resume.sections[0].bullets }] };
     return { choices: [{ message: { content: JSON.stringify(output) } }] };
   };

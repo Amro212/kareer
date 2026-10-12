@@ -17,15 +17,14 @@ test('a mixed 25-field application uses one primary request and bounded fill tim
   expect(elapsed).toBeLessThan(14000);
 });
 
-test('unrelated pages stay clear, and a dynamically mounted application starts as a pebble', async ({ kr }) => {
+test('unrelated pages stay clear, and a dynamically mounted application opens the panel', async ({ kr }) => {
   const page = await kr.context.newPage();
   await page.route('**/ordinary-page', route => route.fulfill({ contentType: 'text/html', body: '<title>How to build a React application</title><h1>How to build a React application</h1><article>A resume tutorial</article><input type="search"><form id="comments"><textarea placeholder="Comment"></textarea></form>' }));
   await page.goto(kr.fixtureUrl('ordinary-page'));
   await page.waitForTimeout(700);
   await expect(page.locator('#kareer-root')).toHaveCount(0);
   await page.evaluate(() => { document.body.innerHTML = '<h1>Job Application</h1><div class="job__location">New York City, NY</div><form><label for="email">Email</label><input id="email" type="email"></form>'; });
-  await expect(page.locator('.kr-pebble')).toBeVisible();
-  await expect(page.locator('#kr-main-panel')).toHaveCount(0);
+  await expect(page.locator('#kr-main-panel')).toBeVisible();
   await expect.poll(async () => (await kr.readStorage('kr:job'))?.workCountry).toBe('United States');
   await kr.openPanel(page);
   await expect(page.locator('#kr-capture-job')).toHaveCount(0);
@@ -37,7 +36,7 @@ test('unrelated pages stay clear, and a dynamically mounted application starts a
   await page.evaluate(() => { const comment = document.createElement('textarea'); document.body.append(comment); comment.focus(); });
   await expect(page.locator('#kareer-inline-rewrite')).toHaveCount(0);
   await page.evaluate(() => { document.querySelector('h1').textContent = 'Job Application'; });
-  await expect(page.locator('.kr-pebble')).toBeVisible();
+  await expect(page.locator('#kr-main-panel')).toBeVisible();
   await page.locator('textarea').blur();
   await page.locator('textarea').focus();
   await expect(page.locator('#kareer-inline-rewrite')).toHaveCount(1);
@@ -50,7 +49,7 @@ for (const placement of ['head', 'body']) {
     const metadata = '<script id="job-metadata" type="application/ld+json">{"@type":"JobPosting","title":"Engineer","jobLocation":{"address":{"addressCountry":"US"}}}</script>';
     await page.route('**/metadata-replacement', route => route.fulfill({ contentType: 'text/html', body: `<head><title>Open role</title>${placement === 'head' ? metadata : ''}</head><body>${placement === 'body' ? metadata : ''}<h1>Engineer</h1><form><input type="email"></form></body>` }));
     await page.goto(kr.fixtureUrl('metadata-replacement'));
-    await expect(page.locator('.kr-pebble')).toBeVisible();
+    await expect(page.locator('#kr-main-panel')).toBeVisible();
     await expect.poll(async () => (await kr.readStorage('kr:job'))?.workCountry).toBe('United States');
     await page.evaluate(() => { const script = document.querySelector('#job-metadata'); script.textContent = script.textContent.replace('"US"', '"CA"'); });
     await expect.poll(async () => (await kr.readStorage('kr:job'))?.workCountry).toBe('Canada');
@@ -63,7 +62,7 @@ for (const [file, host, company] of [['ashby-sift-2026-10-02-captured.html', ASH
   test(`captures ${company} job location automatically from the reported live page`, async ({ kr }) => {
     const page = await kr.context.newPage();
     await page.goto(kr.fixtureUrl(file, host));
-    await expect(page.locator('.kr-pebble')).toBeVisible();
+    await expect(page.locator('#kr-main-panel')).toBeVisible();
     await expect.poll(async () => (await kr.readStorage('kr:job'))?.company).toBe(company);
     await expect.poll(async () => (await kr.readStorage('kr:job'))?.workCountry).toBe('United States');
     await kr.openPanel(page);

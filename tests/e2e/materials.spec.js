@@ -41,7 +41,7 @@ test('numeric prose reaches both active application documents without a numeric 
     const input = JSON.parse(body.messages.at(-1).content);
     const response = materialResponse(body);
     if (!['resume', 'coverLetter'].includes(input.kind)) return response;
-    expect(body.response_format.type).toBe('json_schema');
+    expect(body.response_format.type).toBe('json_object');
     const value = JSON.parse(response.choices[0].message.content);
     if (input.kind === 'resume') {
       value.summary = 'Engineer supporting 10 services.';
@@ -181,6 +181,34 @@ test('malformed regeneration retains the previous active file and offers retry',
   const after = await kr.readStorage(`kr:sessions:${before[0]}`);
   expect(after.materialRefs.resume).toEqual(session.materialRefs.resume);
   await expect(page.locator('#kr-autofill-btn')).toBeEnabled();
+});
+
+test('HTTP 400 exposes a safe provider reason and both documents recover on explicit retry', async ({ kr }) => {
+  await kr.seed({ profile: PROFILE, settings: { autoContinue: false, autoSubmit: false } });
+  kr.openrouter.status = 400;
+  kr.openrouter.handler = () => ({ error: { message: 'Provider returned error', metadata: {
+    raw: JSON.stringify({ error: { message: 'Invalid request payload: sk-or-v1-e2e-test-key' } }),
+  } } });
+  const page = await kr.context.newPage();
+  await page.goto(kr.fixtureUrl('materials-fixture.html')); await kr.openPanel(page);
+  for (const [kind, button] of [['resume', '#kr-tailor-resume'], ['coverLetter', '#kr-generate-cover-letter']]) {
+    await page.locator(button).click();
+    const status = page.locator(`#kr-material-${kind}-status`);
+    await expect(status).toContainText('400 using google/gemini-2.5-flash-lite');
+    await expect(status).toContainText('Invalid request payload');
+    await expect(status).not.toContainText('sk-or-v1-e2e-test-key');
+    await expect(page.locator('#kr-autofill-btn')).toBeEnabled();
+  }
+  expect(kr.openrouter.requests).toHaveLength(2);
+  kr.openrouter.status = 200; kr.openrouter.handler = materialResponse;
+  for (const [kind, button] of [['resume', '#kr-tailor-resume'], ['coverLetter', '#kr-generate-cover-letter']]) {
+    await page.locator(button).click();
+    await expect(page.locator(`#kr-material-${kind}-status`)).toContainText('Ready', { timeout: 45000 });
+  }
+  await page.locator('#kr-autofill-btn').click();
+  await expect(page.locator('#resume-name')).toContainText('.pdf');
+  await expect(page.locator('#letter-name')).toContainText('.pdf');
+  await expect(page.locator('#letter-text')).toHaveValue(/I build APIs/);
 });
 
 test('cover letters generate independently, use DOCX-only fields, and fill text without another writing request', async ({ kr }) => {
