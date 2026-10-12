@@ -142,3 +142,54 @@ test('display metadata comes from saved facts, never unvalidated import properti
   assert.doesNotMatch(JSON.stringify(source), /Invented/);
   assert.equal(source.sections.length, 1);
 });
+
+test('tailoring keeps a selected subset with grounded project keywords and relevance', () => {
+  const source = model.buildMaterialSource({ ...profile, projects: [{ id: 'cad', name: 'Mechanical design', description: 'Reconstructed components in SolidWorks and AutoCAD.' }] });
+  const result = model.validateMaterial('resume', { sections: [
+    { id: 'cad', title: 'Invented title', keywords: ['SolidWorks', 'AutoCAD'], relevance: 3, bullets: ['Reconstructed components in SolidWorks.'] },
+    { id: 'skills', bullets: ['AutoCAD', 'SQL'] },
+  ] }, source);
+  assert.deepEqual(result.sections.map(s => s.id), ['cad', 'skills']);
+  assert.equal(result.sections[0].title, 'Mechanical design');
+  assert.deepEqual(result.sections[0].keywords, ['SolidWorks', 'AutoCAD']);
+  assert.equal(result.sections[0].relevance, 3);
+  assert.match(model.materialText(result), /Mechanical design \| SolidWorks, AutoCAD/);
+  assert.deepEqual(source.sections.find(s => s.id === 'cad').bullets, ['Reconstructed components in SolidWorks and AutoCAD.']);
+});
+
+test('skills can come from explicit enabled descriptions when no skill chips are saved', () => {
+  const source = model.buildMaterialSource({ projects: [{ id: 'api', name: 'Integration', description: 'Built Python APIs and SQL queries.' },
+    { id: 'hidden', enabled: false, description: 'Used Rust.' }] });
+  const result = model.validateMaterial('resume', { sections: [{ id: 'api', bullets: ['Built Python APIs.'] }, { id: 'skills', bullets: ['Python', 'SQL'] }] }, source);
+  assert.deepEqual(result.sections.at(-1).bullets, ['Python', 'SQL']);
+  for (const skill of ['Rust', 'Java', 'Expert Python', 'Python developer']) {
+    assert.throws(() => model.validateMaterial('resume', { sections: [{ id: 'skills', bullets: [skill] }] }, source), /unsupported skill/i);
+  }
+});
+
+test('project keywords require evidence in that project and relevance must be bounded', () => {
+  const source = model.buildMaterialSource({ skills: ['Rust'], projects: [{ id: 'api', name: 'Integration', description: 'Built Python APIs.' }] });
+  for (const keywords of [['Rust'], ['Java'], 'Python', ['Python', 'Python', 'Python', 'Python', 'Python']]) {
+    assert.throws(() => model.validateMaterial('resume', { sections: [{ id: 'api', keywords, bullets: [] }] }, source), /keyword/i);
+  }
+  for (const relevance of [0, 4, '3', 1.5]) {
+    assert.throws(() => model.validateMaterial('resume', { sections: [{ id: 'api', relevance, bullets: [] }] }, source), /relevance/i);
+  }
+});
+
+test('manual saves and targeted rewrites retain tailoring metadata', () => {
+  const source = model.buildMaterialSource({ projects: [{ id: 'api', name: 'Integration', description: 'Built Python APIs.' }] });
+  const current = model.validateMaterial('resume', { sections: [{ id: 'api', keywords: ['Python'], relevance: 3, bullets: ['Built APIs.'] }] }, source);
+  const merged = model.mergeMaterialRewrite(current, { sections: [{ id: 'api', keywords: ['Rust'], relevance: 1, bullets: ['Built reliable APIs.'] }] }, 'section:api');
+  const saved = model.validateMaterial('resume', merged, source, { manual: true });
+  assert.deepEqual(saved.sections[0].keywords, ['Python']);
+  assert.equal(saved.sections[0].relevance, 3);
+  assert.deepEqual(saved.sections[0].bullets, ['Built reliable APIs.']);
+});
+
+test('skill grounding preserves punctuation and does not mistake C++ for C', () => {
+  const source = model.buildMaterialSource({ projects: [{ id: 'embedded', name: 'Controller', description: 'Built C++ firmware and C# tools with .NET.' }] });
+  const result = model.validateMaterial('resume', { sections: [{ id: 'skills', bullets: ['C++', 'C#', '.NET'] }] }, source);
+  assert.deepEqual(result.sections[0].bullets, ['C++', 'C#', '.NET']);
+  assert.throws(() => model.validateMaterial('resume', { sections: [{ id: 'skills', bullets: ['C'] }] }, source), /unsupported skill/i);
+});

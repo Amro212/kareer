@@ -4,7 +4,7 @@ import { Document, Packer, Paragraph, TextRun, Header, TabStopType, BorderStyle,
 import { DOCX_TYPE, validateMaterial } from '../../../core/materials-model.js';
 
 // Bump when document formatting changes so saved bytes cannot retain an older template.
-export const MATERIAL_TEMPLATE_VERSION = 6;
+export const MATERIAL_TEMPLATE_VERSION = 7;
 
 pdfMake.addVirtualFileSystem(fonts);
 const fontFaces = {
@@ -104,7 +104,9 @@ function blocks(model, job) {
         const rawUrl = section.link || urlMatch?.[0];
         const normalizedUrl = rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : null;
         const headingParts = String(section.heading || '').split(/\s*—\s*/);
-        const title = section.title || headingParts[0] || section.heading;
+        const baseTitle = section.title || headingParts[0] || section.heading;
+        const keywords = (section.keywords || []).filter(k => !baseTitle.toLowerCase().includes(k.toLowerCase()));
+        const title = [baseTitle, keywords.join(', ')].filter(Boolean).join(' | ');
         const subtitle = section.subtitle || (headingParts.length > 1 ? headingParts.slice(1).join(' — ') : '');
         const cleanDates = (section.dates || section.facts || '').split(/\s*[·•|]\s*/).filter(p => !/(?:https?:\/\/|github\.com|gitlab\.com|\.(?:com|org|io|dev|app|net|me))/i.test(p)).join(' · ');
         const titleRun = normalizedUrl ? { text: title, link: normalizedUrl } : title;
@@ -213,13 +215,20 @@ export async function exportMaterial(model, job, pageTarget = 1, { fit = true, s
   model = structuredClone(model);
   if (model.kind === 'coverLetter') model = validateMaterial('coverLetter', model, model);
   let pdf = await makePdf(model, job);
-  // Finite content-fitting pass. Every pass removes one lowest-priority item.
+  // Fit by relevance, independent of chronological display order; keep depth and skills.
   if (fit && model.kind === 'resume') {
     for (let attempt = 0; pdf.pages > pageTarget && attempt < 100; attempt++) {
       checkCancelled();
-      const section = [...model.sections].reverse().find(s => s.category !== 'Skills' && s.bullets.length > 1);
-      if (section) section.bullets.pop();
-      else if (model.sections.length > 1) model.sections.pop();
+      const entries = model.sections.filter(s => s.category !== 'Skills' && s.category !== 'Education')
+        .reverse().sort((a, b) => (a.relevance ?? 2) - (b.relevance ?? 2));
+      const weakest = entries[0], strongest = entries.at(-1);
+      const section = entries.find(s => s.bullets.length > (s.relevance === 3 ? 3 : 2));
+      if (entries.length > 1 && (weakest.relevance ?? 2) < (strongest.relevance ?? 2)) model.sections.splice(model.sections.indexOf(weakest), 1);
+      else if (section) section.bullets.pop();
+      else if (entries.length > 1) model.sections.splice(model.sections.indexOf(weakest), 1);
+      else if (weakest?.bullets.length > 1) weakest.bullets.pop();
+      else if (model.sections.some(s => s.category === 'Education' && s.bullets.length)) model.sections.findLast(s => s.category === 'Education' && s.bullets.length).bullets.pop();
+      else if (model.sections.filter(s => s.category === 'Education').length > 1) model.sections.splice(model.sections.findLastIndex(s => s.category === 'Education'), 1);
       else throw new Error(`Resume cannot fit ${pageTarget} page(s) at a readable size. Shorten the text or choose two pages.`);
       pdf = await makePdf(model, job);
     }

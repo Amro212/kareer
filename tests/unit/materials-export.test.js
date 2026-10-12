@@ -32,6 +32,36 @@ test('one-page fitting removes content with readable type and two-page export re
   assert.deepEqual(structuredClone(one.model), one.model);
 });
 
+test('overflow drops weaker experience before reducing stronger older evidence and keeps skills', async () => {
+  const description = Array.from({ length: 4 }, (_, i) => `Delivered integration ${i + 1} with Python and SQL, documented client requirements, tested API workflows and explained results to customer teams; `.repeat(12)).join('\n');
+  const source = buildMaterialSource({ fullName: 'Test Applicant', skills: ['Python', 'SQL'], workExperiences: [
+    { id: 'recent', title: 'Assistant', company: 'Recent Company', description },
+    { id: 'strong', title: 'Engineer', company: 'Earlier Company', description },
+  ] });
+  source.sections[0].relevance = 1; source.sections[1].relevance = 3;
+  assert.ok((await exportMaterial(source, {}, 1, { fit: false })).pages > 1);
+  const exported = await exportMaterial(source, {}, 1);
+  assert.equal(exported.pages, 1);
+  assert.deepEqual(exported.model.sections.map(s => s.id), ['strong', 'skills']);
+  assert.equal(exported.model.sections[0].bullets.length, 4);
+  assert.deepEqual(exported.model.sections[1].bullets, ['Python', 'SQL']);
+  assert.equal(source.sections.length, 3);
+});
+
+test('project keywords render beside the protected title in PDF and Word', async () => {
+  const source = buildMaterialSource({ fullName: 'Test Applicant', projects: [{ id: 'cad', name: 'Mechanical design', role: 'Team member', startDate: '2022-01', endDate: '2022-05', url: 'https://example.org/cad', description: 'Reconstructed components using SolidWorks and AutoCAD.' }] });
+  source.sections[0].keywords = ['SolidWorks', 'AutoCAD'];
+  const exported = await exportMaterial(source, {});
+  const word = await mammoth.extractRawText({ buffer: Buffer.from(exported.files.docx.buffer) });
+  assert.match(word.value, /Mechanical design \| SolidWorks, AutoCAD/);
+  const loading = getDocument({ data: new Uint8Array(exported.files.pdf.buffer.slice(0)), isEvalSupported: false, useWasm: false });
+  try {
+    const { items } = await (await (await loading.promise).getPage(1)).getTextContent();
+    assert.match(items.map(i => i.str).join(' '), /Mechanical design \| SolidWorks, AutoCAD/);
+    assert.ok(Math.abs(items.find(i => i.str.includes('Mechanical design')).transform[5] - items.find(i => i.str === '2022-01 – 2022-05').transform[5]) < 1);
+  } finally { await loading.destroy(); }
+});
+
 test('reference formatting keeps compact resume type, section order and embedded Word fonts', async () => {
   const source = buildMaterialSource({ fullName: 'Test Applicant', email: 'test@example.com',
     workExperiences: [{ id: 'role', title: 'Engineer', company: 'Acme', location: 'Toronto', startDate: '2024-01', current: true, description: 'Built reliable APIs.' }],

@@ -3,6 +3,49 @@ import mammoth from 'mammoth';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import fs from 'node:fs';
 
+test('selected evidence, project keywords and description-backed skills survive generation save and rewrite', async ({ kr }, testInfo) => {
+  await kr.seed({ profile: { fullName: 'Test Applicant', email: 'applicant@example.com',
+    workExperiences: [{ id: 'work1', title: 'Engineer', company: 'Acme', description: 'Built Python APIs for client integrations.' },
+      { id: 'other', title: 'Assistant', company: 'Other Company', description: 'Organized office supplies.' }],
+    projects: [{ id: 'cad', name: 'Mechanical design', description: 'Reconstructed components in SolidWorks and AutoCAD.' }],
+  } });
+  kr.openrouter.handler = body => {
+    const input = JSON.parse(body.messages.at(-1).content);
+    return { choices: [{ message: { content: JSON.stringify(input.rewrite ? { sections: [{ id: 'work1', bullets: ['Built reliable Python APIs for client integrations.'] }] } : {
+      summary: 'Engineer with client integration and CAD project experience.', sections: [
+        { id: 'work1', relevance: 3, bullets: ['Built Python APIs for client integrations.'] },
+        { id: 'cad', relevance: 2, keywords: ['SolidWorks', 'AutoCAD'], bullets: ['Reconstructed components in SolidWorks and AutoCAD.'] },
+        { id: 'skills', bullets: ['Python', 'SolidWorks', 'AutoCAD'] },
+      ],
+    }) } }] };
+  };
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  await expect(workspace.locator('#generate')).toBeEnabled();
+  await workspace.locator('#job-title').fill('Technical Solutions Engineer');
+  await workspace.locator('#job-description').fill('Explain technical solutions to clients. Build Python integrations and use SolidWorks CAD.');
+  await workspace.locator('#generate').click(); await expect(workspace.locator('#feedback')).toContainText('Ready', { timeout: 45000 });
+  expect(kr.openrouter.requests).toHaveLength(1);
+  await expect(workspace.locator('[data-editor-section="other"]')).toHaveCount(0);
+  await expect(workspace.locator('[data-editor-section="skills"]')).toHaveCount(1);
+  const records = await message(workspace, 'list'), record = await message(workspace, 'get', { id: records[0].id });
+  expect(record.model.sections.map(s => s.id)).toEqual(['work1', 'cad', 'skills']);
+  expect(record.model.sections[1].keywords).toEqual(['SolidWorks', 'AutoCAD']);
+  fs.writeFileSync(testInfo.outputPath('selected-resume.pdf'), Buffer.from(record.files.pdf.data, 'base64'));
+  const word = await mammoth.extractRawText({ buffer: Buffer.from(record.files.docx.data, 'base64') });
+  expect(word.value).toContain('Mechanical design | SolidWorks, AutoCAD');
+  expect(word.value).not.toContain('Other Company');
+  await workspace.locator('[data-editor-section="work1"]').click();
+  await workspace.locator('[data-section="0"]').fill('Built Python APIs for client integrations and documented workflows.');
+  await workspace.locator('#save-document').click(); await expect(workspace.locator('#feedback')).toContainText('Changes saved');
+  const saved = await message(workspace, 'get', { id: record.id });
+  expect(saved.revision).not.toBe(record.revision);
+  await waitTask(workspace, await message(workspace, 'start', { kind: 'resume', job: saved.job, options: { rewrite: { path: 'section:work1', revision: saved.revision } } }));
+  const rewritten = await message(workspace, 'get', { id: saved.id });
+  expect(rewritten.model.sections.slice(1)).toEqual(saved.model.sections.slice(1));
+  expect(rewritten.model.sections[0].relevance).toBe(3);
+  expect(kr.openrouter.requests).toHaveLength(2);
+});
+
 test('tailoring uses profile facts only even when an old base resume exists', async ({ kr }) => {
   await kr.seed({ profile: { ...PROFILE, resumeContext: 'IMPORTED_CONTEXT' } }); kr.openrouter.handler = materialResponse;
   await kr.worker.evaluate(async () => {
