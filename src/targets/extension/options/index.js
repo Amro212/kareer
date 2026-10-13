@@ -1,8 +1,9 @@
 import { api, sendMessage } from '../shared/browser.js';
 import { MSG } from '../shared/protocol.js';
 import { APP_VERSION, POPULAR_MODELS, DEFAULT_SETTINGS, DEFAULT_PROFILE, STORAGE_KEYS } from '../../../core/constants.js';
-import { PROFILE_SECTIONS, createWorkExperience, createEducation, createProject, createWorkEligibility, createLanguage, calculateProfileStrength } from '../../../core/profile.js';
+import { PROFILE_SECTIONS, createWorkExperience, createEducation, createProject, createWorkEligibility, createLanguage } from '../../../core/profile.js';
 import { exportPayload, importPayload } from '../../../core/migration.js';
+import { createProfileWorkspace } from './profile-workspace.js';
 
 let currentWork = [];
 let currentEducation = [];
@@ -10,6 +11,16 @@ let currentProjects = [];
 let currentSkills = [];
 let currentEligibilities = [];
 let currentLanguages = [];
+let profileWorkspace;
+let storedProfileSnapshot;
+let navigationBound = false;
+
+const controlIcons = {
+  up: '<path d="m6 14 6-6 6 6"/>',
+  down: '<path d="m6 10 6 6 6-6"/>',
+  remove: '<path d="m6 6 12 12M6 18 18 6"/>',
+};
+const controlIcon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${controlIcons[name]}</svg>`;
 
 function escapeHtml(str) {
   return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -164,87 +175,8 @@ async function readStore() {
   return snapshot;
 }
 
-function getLiveProfileForStrength() {
-  const city = $('pf-city')?.value || '';
-  const stateProvince = $('pf-stateProvince')?.value || '';
-  const country = $('pf-country')?.value || '';
-  const synthesizedLocation = [city, stateProvince, country].filter(Boolean).join(', ');
-  const firstName = $('pf-firstName')?.value || '';
-  const middleName = $('pf-middleName')?.value || '';
-  const lastName = $('pf-lastName')?.value || '';
-  const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ') || $('pf-fullName')?.value || '';
-  return {
-    fullName,
-    firstName,
-    middleName,
-    lastName,
-    preferredName: $('pf-preferredName')?.value || '',
-    preferredLastName: $('pf-preferredLastName')?.value || '',
-    email: $('pf-email')?.value || '',
-    phone: $('pf-phone')?.value || '',
-    phoneCountry: $('pf-phoneCountry')?.value || '',
-    phoneType: $('pf-phoneType')?.value || '',
-    phoneExtension: $('pf-phoneExtension')?.value || '',
-    birthDate: $('pf-birthDate')?.value || '',
-    streetAddress: $('pf-streetAddress')?.value || '',
-    addressLine2: $('pf-addressLine2')?.value || '',
-    addressLine3: $('pf-addressLine3')?.value || '',
-    city,
-    stateProvince,
-    postalCode: $('pf-postalCode')?.value || '',
-    country,
-    location: synthesizedLocation,
-    linkedin: $('pf-linkedin')?.value || '',
-    github: $('pf-github')?.value || '',
-    portfolio: $('pf-portfolio')?.value || '',
-    workExperiences: currentWork,
-    education: currentEducation,
-    projects: currentProjects,
-    skills: currentSkills,
-    workEligibilities: currentEligibilities,
-    languageRecords: currentLanguages,
-  };
-}
-
-function updateProfileStrength() {
-  const profile = getLiveProfileForStrength();
-  const strength = calculateProfileStrength(profile);
-  const fill = $('sidebar-strength-fill');
-  const val = $('sidebar-strength-value');
-  const tier = $('sidebar-strength-tier');
-
-  if (fill) {
-    fill.style.width = `${strength.percentage}%`;
-    fill.className = 'strength-fill ' + (strength.percentage >= 80 ? 'high' : strength.percentage >= 50 ? 'med' : 'low');
-  }
-  if (val) {
-    val.textContent = `${strength.percentage}%`;
-  }
-  if (tier) {
-    tier.textContent = strength.tierLabel;
-  }
-}
-
-function updateSubnavBadges() {
-  const setBadge = (id, count) => {
-    const el = $(id);
-    if (el) {
-      el.textContent = count > 0 ? String(count) : '';
-      el.style.display = count > 0 ? 'inline-block' : 'none';
-    }
-  };
-  setBadge('subnav-work-count', currentWork.length);
-  setBadge('subnav-edu-count', currentEducation.length);
-  setBadge('subnav-proj-count', currentProjects.length);
-  setBadge('subnav-skills-count', currentSkills.length);
-  setBadge('subnav-languages-count', currentLanguages.filter((l) => l && l.enabled !== false && String(l.language || '').trim()).length);
-  setBadge('subnav-eligibility-count', currentEligibilities.filter((e) => e && e.enabled !== false && String(e.country || '').trim()).length);
-  updateProfileStrength();
-  checkProfileDirty();
-}
-
 let savedProfileSnapshot = null;
-let saveHideTimeout = null;
+let bulkSaveError = false;
 
 function serializeCurrentProfile() {
   const form = $('profile-form');
@@ -276,18 +208,61 @@ function checkProfileDirty() {
   const dot = $('dock-status-dot');
   const message = $('dock-status-message');
   if (dock) {
-    if (saveHideTimeout) {
-      clearTimeout(saveHideTimeout);
-      saveHideTimeout = null;
-    }
+    dock.hidden = !isDirty;
     dock.classList.toggle('is-visible', isDirty);
     if (dot) {
-      dot.className = 'dock-dot' + (isDirty ? '' : ' saved');
+      dot.className = 'dock-dot' + (bulkSaveError ? ' error' : isDirty ? '' : ' saved');
     }
     if (message) {
-      message.textContent = isDirty ? 'Unsaved profile changes' : 'All changes saved';
+      message.textContent = bulkSaveError ? 'Save needs attention' : isDirty ? 'Unsaved profile changes' : 'All changes saved';
     }
+    if (!isDirty) bulkSaveError = false;
   }
+}
+
+function restoreProfileSection(id, values) {
+  const fields = $(`section-${id}`);
+  for (const input of fields.querySelectorAll('[name]')) {
+    if (Object.hasOwn(values, input.name)) input.value = values[input.name];
+  }
+  switch (id) {
+    case 'work': currentWork = structuredClone(values.workExperiences); renderWorkExperiencesList(); break;
+    case 'education': currentEducation = structuredClone(values.education); renderEducationList(); break;
+    case 'projects': currentProjects = structuredClone(values.projects); renderProjectsList(); break;
+    case 'skills': currentSkills = structuredClone(values.skills); renderSkillsChips(); break;
+    case 'languages': currentLanguages = structuredClone(values.languageRecords); renderLanguagesList(); break;
+    case 'eligibility': currentEligibilities = structuredClone(values.workEligibilities); renderEligibilityList(); break;
+  }
+}
+
+let profileSaveTail = Promise.resolve();
+let pendingProfileSaves = 0;
+
+function saveProfileFields(keys, values) {
+  // Multiple open sections can be saved in quick succession. Read and merge
+  // each patch after the preceding write has acknowledged its stored snapshot.
+  const write = profileSaveTail.catch(() => {}).then(() => persistProfileFields(keys, values));
+  pendingProfileSaves++;
+  $('floating-save-btn').disabled = true;
+  profileSaveTail = write;
+  return write.finally(() => {
+    pendingProfileSaves--;
+    $('floating-save-btn').disabled = pendingProfileSaves > 0;
+  });
+}
+
+async function persistProfileFields(keys, values) {
+  const expected = Object.fromEntries(keys.map(key => [key, structuredClone(storedProfileSnapshot[key] ?? '')]));
+  const response = await sendMessage({ type: MSG.PROFILE_PATCH, values, expected });
+  if (response?.error) throw new Error(response.error);
+  // Untouched sections retain their opening storage snapshot. Accepting a
+  // newer unrelated value here would let a later edit silently replace it.
+  for (const key of keys) storedProfileSnapshot[key] = structuredClone(response.profile[key]);
+  const saved = JSON.parse(savedProfileSnapshot);
+  for (const key of keys) saved[key] = structuredClone(values[key]);
+  savedProfileSnapshot = JSON.stringify(saved);
+  checkProfileDirty();
+  $('profile-feedback').textContent = 'Profile saved locally.';
 }
 
 function renderSkillsChips() {
@@ -299,14 +274,14 @@ function renderSkillsChips() {
     hint.className = 'skills-empty-hint';
     hint.textContent = 'No skills added yet. Type a skill name below and press Enter or comma.';
     container.append(hint);
-    updateSubnavBadges();
+    checkProfileDirty();
     return;
   }
 
   currentSkills.forEach((skill, index) => {
     const chip = document.createElement('span');
     chip.className = 'skill-chip';
-    chip.innerHTML = `<span>${escapeHtml(skill)}</span><button type="button" class="remove-chip" aria-label="Remove ${escapeHtml(skill)}">✕</button>`;
+    chip.innerHTML = `<span>${escapeHtml(skill)}</span><button type="button" class="remove-chip" aria-label="Remove ${escapeHtml(skill)}">${controlIcon('remove')}</button>`;
     chip.querySelector('.remove-chip').addEventListener('click', (e) => {
       e.stopPropagation();
       currentSkills.splice(index, 1);
@@ -314,7 +289,7 @@ function renderSkillsChips() {
     });
     container.append(chip);
   });
-  updateSubnavBadges();
+  checkProfileDirty();
 }
 
 function addSkillFromInput() {
@@ -342,7 +317,7 @@ function renderWorkExperiencesList() {
     p.style.margin = '8px 0';
     p.textContent = 'No work experience added yet. Click "+ Add experience" to add your first role.';
     container.append(p);
-    updateSubnavBadges();
+    checkProfileDirty();
     return;
   }
 
@@ -370,10 +345,10 @@ function renderWorkExperiencesList() {
             <input type="checkbox" class="work-enabled-toggle" ${item.enabled !== false ? 'checked' : ''} />
             <span style="font-size: 11px;">Active</span>
           </label>
-          <button type="button" class="icon-btn secondary work-move-up" title="Move Up" ${index === 0 ? 'disabled' : ''}>↑</button>
-          <button type="button" class="icon-btn secondary work-move-down" title="Move Down" ${index === currentWork.length - 1 ? 'disabled' : ''}>↓</button>
-          <button type="button" class="icon-btn secondary danger work-delete" title="Remove role">✕</button>
-          <span class="chevron-indicator">▼</span>
+          <button type="button" class="icon-btn secondary work-move-up" title="Move Up" ${index === 0 ? 'disabled' : ''}>${controlIcon('up')}</button>
+          <button type="button" class="icon-btn secondary work-move-down" title="Move Down" ${index === currentWork.length - 1 ? 'disabled' : ''}>${controlIcon('down')}</button>
+          <button type="button" class="icon-btn secondary danger work-delete" title="Remove role">${controlIcon('remove')}</button>
+          <span class="chevron-indicator">${controlIcon('down')}</span>
         </div>
       </div>
       <div class="card-body">
@@ -536,7 +511,7 @@ function renderWorkExperiencesList() {
 
     container.append(card);
   });
-  updateSubnavBadges();
+  checkProfileDirty();
 }
 
 function renderEducationList() {
@@ -549,7 +524,7 @@ function renderEducationList() {
     p.style.margin = '8px 0';
     p.textContent = 'No education entries added yet. Click "+ Add education" to add your school or degree.';
     container.append(p);
-    updateSubnavBadges();
+    checkProfileDirty();
     return;
   }
 
@@ -577,10 +552,10 @@ function renderEducationList() {
             <input type="checkbox" class="edu-enabled-toggle" ${item.enabled !== false ? 'checked' : ''} />
             <span style="font-size: 11px;">Active</span>
           </label>
-          <button type="button" class="icon-btn secondary edu-move-up" title="Move Up" ${index === 0 ? 'disabled' : ''}>↑</button>
-          <button type="button" class="icon-btn secondary edu-move-down" title="Move Down" ${index === currentEducation.length - 1 ? 'disabled' : ''}>↓</button>
-          <button type="button" class="icon-btn secondary danger edu-delete" title="Remove education">✕</button>
-          <span class="chevron-indicator">▼</span>
+          <button type="button" class="icon-btn secondary edu-move-up" title="Move Up" ${index === 0 ? 'disabled' : ''}>${controlIcon('up')}</button>
+          <button type="button" class="icon-btn secondary edu-move-down" title="Move Down" ${index === currentEducation.length - 1 ? 'disabled' : ''}>${controlIcon('down')}</button>
+          <button type="button" class="icon-btn secondary danger edu-delete" title="Remove education">${controlIcon('remove')}</button>
+          <span class="chevron-indicator">${controlIcon('down')}</span>
         </div>
       </div>
       <div class="card-body">
@@ -748,7 +723,7 @@ function renderEducationList() {
 
     container.append(card);
   });
-  updateSubnavBadges();
+  checkProfileDirty();
 }
 
 function renderProjectsList() {
@@ -761,7 +736,7 @@ function renderProjectsList() {
     p.style.margin = '8px 0';
     p.textContent = 'No projects added yet. Click "+ Add project" to highlight a personal, academic, or open-source project.';
     container.append(p);
-    updateSubnavBadges();
+    checkProfileDirty();
     return;
   }
 
@@ -789,10 +764,10 @@ function renderProjectsList() {
             <input type="checkbox" class="proj-enabled-toggle" ${item.enabled !== false ? 'checked' : ''} />
             <span style="font-size: 11px;">Active</span>
           </label>
-          <button type="button" class="icon-btn secondary proj-move-up" title="Move Up" ${index === 0 ? 'disabled' : ''}>↑</button>
-          <button type="button" class="icon-btn secondary proj-move-down" title="Move Down" ${index === currentProjects.length - 1 ? 'disabled' : ''}>↓</button>
-          <button type="button" class="icon-btn secondary danger proj-delete" title="Remove project">✕</button>
-          <span class="chevron-indicator">▼</span>
+          <button type="button" class="icon-btn secondary proj-move-up" title="Move Up" ${index === 0 ? 'disabled' : ''}>${controlIcon('up')}</button>
+          <button type="button" class="icon-btn secondary proj-move-down" title="Move Down" ${index === currentProjects.length - 1 ? 'disabled' : ''}>${controlIcon('down')}</button>
+          <button type="button" class="icon-btn secondary danger proj-delete" title="Remove project">${controlIcon('remove')}</button>
+          <span class="chevron-indicator">${controlIcon('down')}</span>
         </div>
       </div>
       <div class="card-body">
@@ -954,7 +929,7 @@ function renderProjectsList() {
 
     container.append(card);
   });
-  updateSubnavBadges();
+  checkProfileDirty();
 }
 
 function renderEligibilityList() {
@@ -967,7 +942,7 @@ function renderEligibilityList() {
     p.style.margin = '8px 0';
     p.textContent = 'No eligible countries added yet. Click "+ Add eligible country" to specify your work authorization.';
     container.append(p);
-    updateSubnavBadges();
+    checkProfileDirty();
     return;
   }
 
@@ -997,10 +972,10 @@ function renderEligibilityList() {
             <input type="checkbox" class="elig-enabled-toggle" ${item.enabled !== false ? 'checked' : ''} />
             <span style="font-size: 11px;">Active</span>
           </label>
-          <button type="button" class="icon-btn secondary elig-move-up" title="Move Up" ${index === 0 ? 'disabled' : ''}>↑</button>
-          <button type="button" class="icon-btn secondary elig-move-down" title="Move Down" ${index === currentEligibilities.length - 1 ? 'disabled' : ''}>↓</button>
-          <button type="button" class="icon-btn secondary danger elig-delete" title="Remove country">✕</button>
-          <span class="chevron-indicator">▼</span>
+          <button type="button" class="icon-btn secondary elig-move-up" title="Move Up" ${index === 0 ? 'disabled' : ''}>${controlIcon('up')}</button>
+          <button type="button" class="icon-btn secondary elig-move-down" title="Move Down" ${index === currentEligibilities.length - 1 ? 'disabled' : ''}>${controlIcon('down')}</button>
+          <button type="button" class="icon-btn secondary danger elig-delete" title="Remove country">${controlIcon('remove')}</button>
+          <span class="chevron-indicator">${controlIcon('down')}</span>
         </div>
       </div>
       <div class="card-body">
@@ -1062,7 +1037,6 @@ function renderEligibilityList() {
     enabledToggle.addEventListener('change', () => {
       item.enabled = enabledToggle.checked;
       card.classList.toggle('is-disabled', !item.enabled);
-      updateSubnavBadges();
       checkProfileDirty();
     });
 
@@ -1119,7 +1093,6 @@ function renderEligibilityList() {
     countryInput.addEventListener('input', () => {
       item.country = countryInput.value;
       updateCardLabels();
-      updateSubnavBadges();
       checkProfileDirty();
     });
 
@@ -1143,7 +1116,7 @@ function renderEligibilityList() {
 
     container.append(card);
   });
-  updateSubnavBadges();
+  checkProfileDirty();
 }
 
 function renderLanguagesList() {
@@ -1156,7 +1129,7 @@ function renderLanguagesList() {
     p.style.margin = '8px 0';
     p.textContent = 'No languages added yet. Click "+ Add language" to add languages and proficiency levels.';
     container.append(p);
-    updateSubnavBadges();
+    checkProfileDirty();
     return;
   }
 
@@ -1185,10 +1158,10 @@ function renderLanguagesList() {
             <input type="checkbox" class="lang-enabled-toggle" ${item.enabled !== false ? 'checked' : ''} />
             <span style="font-size: 11px;">Active</span>
           </label>
-          <button type="button" class="icon-btn secondary lang-move-up" title="Move Up" ${index === 0 ? 'disabled' : ''}>↑</button>
-          <button type="button" class="icon-btn secondary lang-move-down" title="Move Down" ${index === currentLanguages.length - 1 ? 'disabled' : ''}>↓</button>
-          <button type="button" class="icon-btn secondary danger lang-delete" title="Remove language">✕</button>
-          <span class="chevron-indicator">▼</span>
+          <button type="button" class="icon-btn secondary lang-move-up" title="Move Up" ${index === 0 ? 'disabled' : ''}>${controlIcon('up')}</button>
+          <button type="button" class="icon-btn secondary lang-move-down" title="Move Down" ${index === currentLanguages.length - 1 ? 'disabled' : ''}>${controlIcon('down')}</button>
+          <button type="button" class="icon-btn secondary danger lang-delete" title="Remove language">${controlIcon('remove')}</button>
+          <span class="chevron-indicator">${controlIcon('down')}</span>
         </div>
       </div>
       <div class="card-body">
@@ -1262,7 +1235,6 @@ function renderLanguagesList() {
       e.stopPropagation();
       item.enabled = e.target.checked;
       card.classList.toggle('is-disabled', !item.enabled);
-      updateSubnavBadges();
       checkProfileDirty();
     });
 
@@ -1304,7 +1276,6 @@ function renderLanguagesList() {
     langInput.addEventListener('input', () => {
       item.language = langInput.value;
       updateLanguageLabels();
-      updateSubnavBadges();
       checkProfileDirty();
     });
 
@@ -1334,7 +1305,7 @@ function renderLanguagesList() {
 
     container.append(card);
   });
-  updateSubnavBadges();
+  checkProfileDirty();
 }
 
 function renderProfile(profile) {
@@ -1403,7 +1374,7 @@ function renderProfile(profile) {
   renderSkillsChips();
   renderLanguagesList();
   renderEligibilityList();
-  updateSubnavBadges();
+  checkProfileDirty();
 
   const prefSectionsContainer = $('profile-preferences-sections');
   if (prefSectionsContainer) {
@@ -1438,7 +1409,8 @@ function renderProfile(profile) {
   $('applicantNotes').value = profile.applicantNotes || '';
   savedProfileSnapshot = serializeCurrentProfile();
   const dock = $('profile-floating-dock');
-  if (dock) dock.classList.remove('is-visible');
+  if (dock) { dock.classList.remove('is-visible'); dock.hidden = true; }
+  profileWorkspace?.refresh();
 }
 
 function renderModel(settings) {
@@ -1484,7 +1456,17 @@ async function init() {
 
   setKeyBadge(snapshot.hasApiKey);
   renderModel(settings);
+  storedProfileSnapshot = structuredClone(profile);
   renderProfile(profile);
+  if (!profileWorkspace) {
+    profileWorkspace = createProfileWorkspace({
+      form: $('profile-form'),
+      read: () => JSON.parse(serializeCurrentProfile()),
+      restore: restoreProfileSection,
+      save: saveProfileFields,
+    });
+  }
+  savedProfileSnapshot = serializeCurrentProfile();
 
   async function refreshResume() {
     const res = await sendMessage({ type: MSG.DOC_META });
@@ -1610,71 +1592,35 @@ async function init() {
     }
   };
 
-  $('profile-form').onsubmit = async (event) => {
+  $('profile-form').noValidate = true;
+  $('profile-form').onsubmit = async event => {
     event.preventDefault();
-    const current = await readStore();
-    const stored = current.data[STORAGE_KEYS.PROFILE] || {};
-    const next = { ...DEFAULT_PROFILE, ...stored };
-    for (const input of $('profile-form').querySelectorAll('input, select, textarea')) {
-      if (input.name && !input.closest('.repeatable-card') && !input.closest('.skill-input-row')) {
-        next[input.name] = input.value;
+    const button = $('floating-save-btn');
+    button.disabled = true;
+    const controls = [...$('profile-form').querySelectorAll('.is-editing input, .is-editing select, .is-editing textarea, .is-editing button')];
+    const disabled = controls.map(control => control.disabled);
+    try {
+      for (const input of $('profile-form').querySelectorAll('.is-editing input, .is-editing textarea, .is-editing select')) {
+        if (!input.checkValidity()) { input.reportValidity(); return; }
       }
-    }
-    const fn = $('pf-firstName')?.value?.trim() || '';
-    const mn = $('pf-middleName')?.value?.trim() || '';
-    const ln = $('pf-lastName')?.value?.trim() || '';
-    next.fullName = [fn, mn, ln].filter(Boolean).join(' ') || $('pf-fullName')?.value || next.fullName || '';
-
-    next.workExperiences = currentWork.map(({ _collapsed, ...rest }) => rest);
-    next.education = currentEducation.map(({ _collapsed, ...rest }) => rest);
-    next.projects = currentProjects.map(({ _collapsed, ...rest }) => rest);
-    next.skills = [...currentSkills];
-    next.workEligibilities = currentEligibilities.map(({ _collapsed, ...rest }) => rest);
-    next.languageRecords = currentLanguages.map(({ _collapsed, ...rest }) => rest);
-
-    const primaryElig = next.workEligibilities.find((e) => e && e.enabled !== false) || next.workEligibilities[0];
-    if (primaryElig) {
-      next.workCountry = primaryElig.country || '';
-      next.workAuthorization = primaryElig.workAuthorization || '';
-      next.sponsorshipNow = primaryElig.sponsorshipNow || '';
-      next.sponsorshipFuture = primaryElig.sponsorshipFuture || '';
-    }
-
-    await sendMessage({ type: MSG.STORAGE_SET, key: STORAGE_KEYS.PROFILE, value: next });
-    savedProfileSnapshot = serializeCurrentProfile();
-    flash($('profile-feedback'), 'Profile saved.');
-    updateProfileStrength();
-
-    const dock = $('profile-floating-dock');
-    const dot = $('dock-status-dot');
-    const message = $('dock-status-message');
-    if (dock) {
-      dock.classList.add('is-visible');
-      if (dot) dot.className = 'dock-dot saved';
-      if (message) message.textContent = 'Profile saved';
-      if (saveHideTimeout) clearTimeout(saveHideTimeout);
-      saveHideTimeout = setTimeout(() => {
-        dock.classList.remove('is-visible');
-        saveHideTimeout = null;
-      }, 1600);
+      const values = JSON.parse(serializeCurrentProfile());
+      controls.forEach(control => control.disabled = true);
+      $('dock-status-message').textContent = 'Saving…';
+      await saveProfileFields(Object.keys(values), values);
+      bulkSaveError = false;
+      profileWorkspace.saved();
+    } catch (error) {
+      bulkSaveError = true;
+      flash($('profile-feedback'), `${error.message} Your changes are kept here.`, true);
+    } finally {
+      button.disabled = false;
+      controls.forEach((control, index) => control.disabled = disabled[index]);
+      checkProfileDirty();
     }
   };
 
-  const floatingSaveBtn = $('floating-save-btn');
-  if (floatingSaveBtn) {
-    floatingSaveBtn.onclick = () => {
-      $('profile-form').requestSubmit();
-    };
-  }
-
-  $('profile-form').addEventListener('input', () => {
-    updateProfileStrength();
-    checkProfileDirty();
-  });
-  $('profile-form').addEventListener('change', () => {
-    updateProfileStrength();
-    checkProfileDirty();
-  });
+  $('profile-form').addEventListener('input', checkProfileDirty);
+  $('profile-form').addEventListener('change', checkProfileDirty);
 
   $('export-data').onclick = async () => {
     const current = await readStore();
@@ -1699,7 +1645,9 @@ async function init() {
         await sendMessage({ type: MSG.STORAGE_SET, key, value });
       }
       const refreshed = await readStore();
-      renderProfile({ ...DEFAULT_PROFILE, ...(refreshed.data[STORAGE_KEYS.PROFILE] || {}) });
+      storedProfileSnapshot = { ...DEFAULT_PROFILE, ...(refreshed.data[STORAGE_KEYS.PROFILE] || {}) };
+      renderProfile(storedProfileSnapshot);
+      profileWorkspace.saved();
       renderModel({ ...DEFAULT_SETTINGS, ...(refreshed.data[STORAGE_KEYS.SETTINGS] || {}) });
       flash($('migration-feedback'), `Imported ${Object.keys(entries).length} records. Re-enter your API key above.`);
     } catch (err) {
@@ -1710,194 +1658,85 @@ async function init() {
   };
 
   setupNavigation();
-  updateSubnavBadges();
+  checkProfileDirty();
   handleInitialHash();
   $('save-key').disabled = false;
+  $('profile-form').hidden = false;
+  $('profile-loading').hidden = true;
+  $('profile').setAttribute('aria-busy', 'false');
+}
+
+function showOptionsRoute() {
+  const hash = location.hash || '#profile';
+  const profileRoute = hash === '#profile' || hash.startsWith('#section-');
+  const targetId = profileRoute ? 'profile' : ['#connection', '#models', '#resume', '#advanced'].includes(hash) ? hash.slice(1) : 'profile';
+  for (const section of document.querySelectorAll('.settings-main > section')) {
+    section.hidden = section.id !== targetId;
+  }
+  const titles = { connection: 'Connection', models: 'Writing model', resume: 'Uploaded resume', advanced: 'Backup & migration' };
+  $('options-heading').hidden = targetId === 'profile';
+  $('configuration-links').hidden = targetId === 'profile';
+  document.body.classList.toggle('configuration-open', targetId !== 'profile');
+  $('options-title').textContent = titles[targetId] || 'Profile';
+  document.querySelectorAll('.settings-nav .nav-item[href^="#"]').forEach(link => {
+    const current = link.getAttribute('href') === `#${targetId}`;
+    link.classList.toggle('active', current);
+    if (current) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  });
+  if (hash.startsWith('#section-')) {
+    const target = document.getElementById(hash.slice(1));
+    target?.closest('.profile-summary-section')?.scrollIntoView({ block: 'start' });
+  } else {
+    window.scrollTo({ top: 0 });
+  }
 }
 
 function setupNavigation() {
-  const toggleBtn = $('profile-subnav-toggle');
-  const navGroup = $('profile-nav-group');
-  const profileParentLink = $('profile-nav-link');
-
-  if (toggleBtn && navGroup) {
-    toggleBtn.onclick = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      navGroup.classList.toggle('is-collapsed');
+  if (navigationBound) return;
+  navigationBound = true;
+  document.querySelectorAll('.settings-nav a[href^="#"]').forEach(link => {
+    link.onclick = event => {
+      event.preventDefault();
+      history.pushState(null, '', link.getAttribute('href'));
+      showOptionsRoute();
     };
-  }
-
-  if (profileParentLink && navGroup) {
-    profileParentLink.addEventListener('click', (e) => {
-      navGroup.classList.remove('is-collapsed');
-      const target = $('profile');
-      if (target) {
-        e.preventDefault();
-        history.pushState(null, '', '#profile');
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        updateActiveNav('#profile');
-      }
-    });
-  }
-
-  // Smooth scroll and pulse on subsection click
-  const subnavLinks = document.querySelectorAll('.subnav-item');
-  subnavLinks.forEach((link) => {
-    link.addEventListener('click', (e) => {
-      const href = link.getAttribute('href');
-      if (href && href.startsWith('#')) {
-        const targetId = href.slice(1);
-        const target = document.getElementById(targetId);
-        if (target) {
-          e.preventDefault();
-          history.pushState(null, '', href);
-          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          target.classList.remove('highlight-pulse');
-          void target.offsetWidth;
-          target.classList.add('highlight-pulse');
-          setTimeout(() => target.classList.remove('highlight-pulse'), 1600);
-          updateActiveNav(href);
-        }
-      }
-    });
   });
-
-  // Top level links smooth scroll
-  const topLinks = document.querySelectorAll('.settings-nav > nav > a');
-  topLinks.forEach((link) => {
-    link.addEventListener('click', (e) => {
-      const href = link.getAttribute('href');
-      if (href && href.startsWith('#')) {
-        const target = document.querySelector(href);
-        if (target) {
-          e.preventDefault();
-          history.pushState(null, '', href);
-          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          updateActiveNav(href);
-        }
-      }
-    });
-  });
-
-  // Scroll spy
-  window.addEventListener('scroll', throttle(onWindowScroll, 50), { passive: true });
-}
-
-function updateActiveNav(activeHash) {
-  document.querySelectorAll('.settings-nav a').forEach((a) => {
-    const href = a.getAttribute('href');
-    a.classList.toggle('active', href === activeHash);
-  });
-}
-
-function onWindowScroll() {
-  const sections = [
-    { id: 'connection', el: $('connection') },
-    { id: 'models', el: $('models') },
-    { id: 'section-identity', el: $('section-identity') },
-    { id: 'section-address', el: $('section-address') },
-    { id: 'section-links', el: $('section-links') },
-    { id: 'section-work', el: $('section-work') },
-    { id: 'section-education', el: $('section-education') },
-    { id: 'section-projects', el: $('section-projects') },
-    { id: 'section-skills', el: $('section-skills') },
-    { id: 'section-languages', el: $('section-languages') },
-    { id: 'section-eligibility', el: $('section-eligibility') },
-    { id: 'section-preferences', el: $('section-preferences') },
-    { id: 'section-demographics', el: $('section-demographics') },
-    { id: 'section-rules', el: $('section-rules') },
-    { id: 'resume', el: $('resume') },
-    { id: 'advanced', el: $('advanced') },
-  ];
-
-  const scrollY = window.scrollY;
-  const threshold = scrollY + 140;
-
-  let currentId = null;
-  for (const s of sections) {
-    if (s.el) {
-      if (s.el.offsetTop <= threshold) {
-        currentId = s.id;
-      }
-    }
-  }
-
-  if (!currentId && sections[0].el) {
-    currentId = sections[0].id;
-  }
-
-  const profileSubIds = [
-    'section-identity',
-    'section-address',
-    'section-links',
-    'section-work',
-    'section-education',
-    'section-projects',
-    'section-skills',
-    'section-languages',
-    'section-eligibility',
-    'section-preferences',
-    'section-demographics',
-    'section-rules',
-  ];
-  const isProfileSub = profileSubIds.includes(currentId);
-
-  document.querySelectorAll('.settings-nav a').forEach((a) => {
-    const href = a.getAttribute('href');
-    if (href === '#' + currentId) {
-      a.classList.add('active');
-    } else if (href === '#profile' && isProfileSub) {
-      a.classList.add('active');
-    } else {
-      a.classList.remove('active');
+  window.addEventListener('hashchange', showOptionsRoute);
+  window.addEventListener('popstate', showOptionsRoute);
+  window.addEventListener('beforeunload', event => {
+    if (savedProfileSnapshot && serializeCurrentProfile() !== savedProfileSnapshot) {
+      event.preventDefault();
+      event.returnValue = '';
     }
   });
-}
-
-function throttle(fn, wait) {
-  let inThrottle = false;
-  return function (...args) {
-    if (!inThrottle) {
-      fn.apply(this, args);
-      inThrottle = true;
-      setTimeout(() => { inThrottle = false; }, wait);
-    }
-  };
 }
 
 function handleInitialHash() {
-  const hash = window.location.hash;
-  if (!hash) {
-    updateActiveNav('#connection');
-    return;
-  }
-  const target = document.querySelector(hash);
-  if (target) {
-    const group = $('profile-nav-group');
-    if (group) group.classList.remove('is-collapsed');
-
-    setTimeout(() => {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      target.classList.remove('highlight-pulse');
-      void target.offsetWidth;
-      target.classList.add('highlight-pulse');
-      setTimeout(() => target.classList.remove('highlight-pulse'), 1600);
-      updateActiveNav(hash);
-    }, 150);
-  }
+  showOptionsRoute();
 }
-window.addEventListener('hashchange', handleInitialHash);
 
-api.runtime.onMessage.addListener((message) => {
+api.runtime.onMessage.addListener(message => {
   if (message?.type === MSG.STORAGE_CHANGED && message.secretChanged) {
     setKeyBadge(Boolean(message.hasApiKey));
   }
 });
 
-init().catch((err) => {
-  document.body.prepend(Object.assign(document.createElement('p'), {
-    textContent: `Failed to load options: ${err.message}`,
-    style: 'color:#fca5a5',
-  }));
-});
+async function loadProfilePage() {
+  $('profile-retry').hidden = true;
+  $('profile-loading').hidden = false;
+  $('profile').setAttribute('aria-busy', 'true');
+  try {
+    await init();
+    $('profile-feedback').textContent = '';
+    $('profile-feedback').classList.remove('error');
+  } catch (error) {
+    $('profile-loading').hidden = true;
+    $('profile').setAttribute('aria-busy', 'false');
+    $('profile-retry').hidden = false;
+    flash($('profile-feedback'), `Profile could not load: ${error.message}`, true);
+  }
+}
+
+$('profile-retry').onclick = () => void loadProfilePage();
+void loadProfilePage();

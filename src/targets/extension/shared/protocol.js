@@ -6,6 +6,7 @@ export const MSG = {
   // Storage
   SNAPSHOT: 'kr:snapshot',
   STORAGE_SET: 'kr:storage-set',
+  PROFILE_PATCH: 'kr:profile-patch',
   STORAGE_DELETE: 'kr:storage-delete',
   STORAGE_CHANGED: 'kr:storage-changed',
 

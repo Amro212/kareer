@@ -1,6 +1,6 @@
 import { api, isFirefox } from '../shared/browser.js';
 import { MSG, BROADCAST_KEYS } from '../shared/protocol.js';
-import { buildSnapshot, applySet, applyDelete, writeSecret, clearSecret, hasApiKey } from './storage.js';
+import { buildSnapshot, applySet, applyDelete, applyProfilePatch, writeSecret, clearSecret, hasApiKey } from './storage.js';
 import { proxyAiRequest } from './ai.js';
 import { bindTabSession, getTabSession, watchTabLifecycle } from './tabs.js';
 import { registerFrame, listFrames, dropFrame, dropTab } from './frames.js';
@@ -21,6 +21,12 @@ const handlers = {
     await applySet(key, value);
     broadcastKeys({ [key]: value }, sender);
     return { ok: true };
+  },
+
+  [MSG.PROFILE_PATCH]: async ({ values, expected }, sender) => {
+    const profile = await applyProfilePatch(values, expected);
+    broadcastKeys({ 'kr:profile': profile }, sender);
+    return { profile };
   },
 
   [MSG.STORAGE_DELETE]: async ({ key }, sender) => {

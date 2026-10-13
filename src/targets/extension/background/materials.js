@@ -1,5 +1,5 @@
 import { api } from '../shared/browser.js';
-import { readApiKey, updateStoredSession } from './storage.js';
+import { readApiKey, updateStoredRecord } from './storage.js';
 import { readStored, writeStored, removeStored, listStored } from './documents.js';
 import { buildMaterialSource, validateMaterial, materialJobKey, mergeMaterialRewrite, MATERIAL_KINDS } from '../../../core/materials-model.js';
 import { DEFAULT_SETTINGS } from '../../../core/constants.js';
@@ -103,7 +103,7 @@ async function sourceForGeneration() {
 
 async function sessionUpdate(sessionId, record) {
   if (!sessionId) return;
-  return updateStoredSession(`kr:sessions:${sessionId}`, session => {
+  return updateStoredRecord(`kr:sessions:${sessionId}`, session => {
     if (!session || materialJobKey(session.job) !== materialJobKey(record.job)) return null;
     return { ...session, materialRefs: { ...session.materialRefs, [record.kind]: { id: record.id, revision: record.revision } } };
   });
@@ -186,7 +186,7 @@ export async function handleMaterials(operation, input = {}, sender = {}) {
       running.set(documentId, controller);
       await writeStored(task.id, task);
       if (task.sessionId) {
-        await updateStoredSession(`kr:sessions:${task.sessionId}`, session => session && ({ ...session, materialTasks: { ...session.materialTasks, [task.kind]: task.id } }));
+        await updateStoredRecord(`kr:sessions:${task.sessionId}`, session => session && ({ ...session, materialTasks: { ...session.materialTasks, [task.kind]: task.id } }));
       }
       const previous = await readStored(documentId);
       const { rewrite: _previousRewrite, ...savedOptions } = previous?.options || {};
@@ -257,7 +257,7 @@ export async function handleMaterials(operation, input = {}, sender = {}) {
       if (input.persistRun && session) {
         runRef = { id: `material-run:${session.id}`, revision: crypto.randomUUID() };
         await writeStored(runRef.id, { ...runRef, jobKey, records });
-        await updateStoredSession(key, current => current && ({ ...current, materialRunRef: runRef }));
+        await updateStoredRecord(key, current => current && ({ ...current, materialRunRef: runRef }));
       }
       return { refs: session?.materialRefs || {}, tasks: session?.materialTasks || {}, runRef, records: Object.fromEntries(Object.entries(records).map(([kind, record]) => [kind, encodeMaterial(record)])) };
     });
@@ -265,7 +265,7 @@ export async function handleMaterials(operation, input = {}, sender = {}) {
       const key = `kr:sessions:${input.sessionId}`, session = (await api.storage.local.get(key))[key];
       if (session?.materialRunRef?.revision === input.runRef?.revision) {
         await removeStored(session.materialRunRef.id);
-        await updateStoredSession(key, current => current && ({ ...current, materialRunRef: null }));
+        await updateStoredRecord(key, current => current && ({ ...current, materialRunRef: null }));
       }
       return { ok: true };
     });
@@ -300,7 +300,7 @@ export async function handleMaterials(operation, input = {}, sender = {}) {
         const stored = await api.storage.local.get(null);
         for (const [key, session] of Object.entries(stored)) {
           if (!key.startsWith('kr:sessions:') || !session?.materialRefs) continue;
-          await updateStoredSession(key, current => {
+          await updateStoredRecord(key, current => {
             if (!current) return null;
             const materialRefs = { ...current.materialRefs };
             for (const [kind, ref] of Object.entries(materialRefs)) if (ref.id === input.id) delete materialRefs[kind];
