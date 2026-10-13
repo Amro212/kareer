@@ -45,6 +45,17 @@ node tools/verify-firefox-materials.js
 
 All nine targeted unit files pass. The unit runner reports file-level tests; this is not a claim of nine individual model assertions. Browser runs use one worker, following the feature branch's targeted-testing instructions.
 
+### Clean dependency install and complete build
+
+After a Windows report of unresolved `@tiptap/core` and editor extensions, the
+published branch was extracted into a new temporary checkout without
+`node_modules` or a build cache. `npm ci` installed all locked packages, and the
+exact `npm run build` command completed the userscript, Chrome ZIP and Firefox XPI
+on Node 24.19.0 / npm 11.9.0. This verifies the committed manifests and lockfile
+without relying on the development workspace's existing dependency installation.
+The Windows machine was not directly available for execution; its missing-package
+errors are consistent with a stale or incomplete local dependency installation.
+
 ## Packaging and visual inspection
 
 Chrome ZIP and Firefox XPI builds package the editing engine, PDF.js worker, Geist/Geist Mono, CMU/Charter document fonts and their licenses locally. Checks cover archive integrity, required page assets, current source/build hashes, extension CSP, synchronized package/lock/manifests/site version metadata and local script/stylesheet references.

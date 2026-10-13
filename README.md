@@ -229,9 +229,14 @@ kareer/
 
 ### Build Commands
 
+Run `npm ci` from the repository root before building a newly pulled branch. Git
+does not update `node_modules`; this installs the versions in `package-lock.json`,
+including the Tiptap packages used by the application materials editor. If the
+build reports `Could not resolve "@tiptap/..."`, rerun `npm ci` before building.
+
 ```bash
-# Install dependencies
-npm install
+# Install the locked dependencies, including after branch updates
+npm ci
 
 # Build all targets (Chrome extension, Firefox extension, and Userscript)
 npm run build
