@@ -126,16 +126,17 @@ test('opening old saved letters upgrades actual preview and PDF/Word downloads',
   const old = await legacyRecord('coverLetter', { listingUrl: 'https://example.com/jobs/legacy', title: 'Engineer', company: 'Acme', description: 'Build APIs.' });
   await seedRecord(kr, old);
   await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html?document=${encodeURIComponent(old.id)}`);
+  await workspace.locator('#proof-toggle').click();
   await expect(workspace.locator('#pdf-preview canvas')).toHaveCount(1); await expect(workspace.locator('#pdf-preview')).toHaveAttribute('aria-busy', 'false');
-  await expect(workspace.locator('[data-paragraph]')).toHaveCount(4);
-  await expect(workspace.locator('[data-paragraph="1"]')).toHaveValue('I supported 10 services.');
+  await expect(workspace.locator('.paper-letter p')).toHaveCount(4);
+  await expect(workspace.locator('.paper-letter p').nth(1)).toHaveText('I supported 10 services.');
   await workspace.locator('#pdf-preview').screenshot({ path: testInfo.outputPath('migrated-letter-preview.png') });
   for (const format of ['pdf', 'docx']) {
-    const download = workspace.waitForEvent('download'); await workspace.locator(`[data-download="${format}"]`).click();
+    const download = workspace.waitForEvent('download'); await workspace.locator('#download-toggle').click(); await workspace.locator(`[data-download="${format}"]`).click();
     const data = fs.readFileSync(await (await download).path());
     if (format === 'pdf') await assertPdf(data, 'coverLetter'); else await assertWord(data, 'coverLetter');
   }
-  await workspace.reload(); await expect(workspace.locator('#pdf-preview canvas')).toHaveCount(1);
+  await workspace.reload(); await workspace.locator('#proof-toggle').click(); await expect(workspace.locator('#pdf-preview canvas')).toHaveCount(1);
   expect(kr.openrouter.requests).toHaveLength(0);
 });
 

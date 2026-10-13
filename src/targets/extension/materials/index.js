@@ -1,221 +1,291 @@
 import { api, sendMessage } from '../shared/browser.js';
 import { MSG } from '../shared/protocol.js';
 import { decodeMaterial } from '../shared/binary.js';
-import { materialJobKey } from '../../../core/materials-model.js';
+import { materialJobKey, buildMaterialSource } from '../../../core/materials-model.js';
 import { APP_VERSION } from '../../../core/constants.js';
 import { previewPdf, setupPdfWorker } from './import.js';
+import { createMaterialEditor } from './editor.js';
+import { editorSections, rewriteText } from './editor-model.js';
+import { MaterialAutosave } from './autosave.js';
+import { formatContactRuns } from './document-format.js';
 
 setupPdfWorker(api.runtime.getURL('materials/pdf.worker.mjs'));
 const $ = id => document.getElementById(id);
-const escape = text => String(text ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const query = new URLSearchParams(location.search);
-const originalSessionId = query.get('session');
+const query = new URLSearchParams(location.search), originalSessionId = query.get('session');
 let sessionId = originalSessionId, originJobKey = '', kind = query.get('kind') === 'coverLetter' ? 'coverLetter' : 'resume';
 let job = { localId: crypto.randomUUID(), title: '', company: '', description: '' }, selected = null, task = null, records = [];
-let previewVersion = 0, loadVersion = 0;
-let activeSection = 'summary', dirty = false, busy = false, switching = false, view = 'prepare';
+let documentEditor, autosave, busy = false, switching = false, proof = false, rewritePending = false, previewVersion = 0;
 
 async function request(operation, input = {}) {
   const result = await sendMessage({ type: MSG.MATERIALS, operation, input });
   if (result?.error && !result.status) throw new Error(result.error);
   return ['get', 'save'].includes(operation) ? decodeMaterial(result) : result;
 }
-function feedback(message, error = false) { $('feedback').textContent = message; $('feedback').classList.toggle('error', error); }
-function readJob() { return { ...job, title: $('job-title').value.trim(), company: $('job-company').value.trim(), description: $('job-description').value.trim() }; }
-function options() { return { pageTarget: Number($('page-target').value), tone: $('tone').value, length: $('length').value, instructions: $('instructions').value.trim() }; }
-
-function showView(next) {
-  view = next;
+const feedback = (message, error = false) => { $('feedback').textContent = message; $('feedback').classList.toggle('error', error); };
+const readJob = () => ({ ...job, title: $('job-title').value.trim(), company: $('job-company').value.trim(), description: $('job-description').value.trim() });
+const options = () => ({ pageTarget: Number($('page-target').value), tone: $('tone').value, length: $('length').value, instructions: $('instructions').value.trim() });
+const readDraft = () => ({ model: documentEditor.model(), pageTarget: Number($('page-target').value) });
+function showView(view) {
   for (const name of ['prepare', 'edit']) {
     $('view-' + name).setAttribute('aria-selected', String(name === view));
     $('view-' + name).tabIndex = name === view ? 0 : -1;
     $(name + '-panel').hidden = name !== view;
   }
-  $('save-document').classList.toggle('secondary', view === 'prepare');
+  $('editor-actions').hidden = !selected || view !== 'edit';
+  $('generate').textContent = selected ? kind === 'resume' ? 'Regenerate resume' : 'Regenerate cover letter' : kind === 'resume' ? 'Tailor resume' : 'Generate cover letter';
+  if (view === 'edit') requestAnimationFrame(resizePaper);
 }
-
 function setBusy(value) {
   busy = value;
-  for (const control of document.querySelectorAll('button, input, textarea, select')) {
-    if (!control.closest('dialog')) control.disabled = value;
-  }
+  for (const control of document.querySelectorAll('#prepare-panel button, #prepare-panel input, #prepare-panel textarea, #prepare-panel select, .tabs button, #new-job, #delete-document, #saved-jobs button')) control.disabled = value;
   $('cancel').disabled = false;
+  documentEditor?.editor.setEditable(!value, false);
 }
-
-function updateDirty() {
-  dirty = Boolean(selected) && (JSON.stringify(collectModel()) !== JSON.stringify(selected.model) || Number($('page-target').value) !== Number(selected.options?.pageTarget || 1));
-  $('document-status').textContent = !selected ? '' : dirty ? 'Unsaved changes' : 'Saved locally';
-  $('document-status').className = dirty ? 'status-unsaved' : 'status-saved';
-  $('preview-status').textContent = dirty ? 'Saved version · Save to refresh preview' : 'Saved version';
-}
-
-function selectSection(id) {
-  const blocks = [...document.querySelectorAll('.editor-block')];
-  activeSection = blocks.some(block => block.dataset.editorId === id) ? id : blocks[0]?.dataset.editorId;
-  for (const block of blocks) block.hidden = block.dataset.editorId !== activeSection;
-  for (const button of document.querySelectorAll('[data-editor-section]')) {
-    if (button.dataset.editorSection === activeSection) button.setAttribute('aria-current', 'true');
-    else button.removeAttribute('aria-current');
+function activeSection(id) {
+  for (const button of $('editor-sections').querySelectorAll('button')) {
+    if (button.dataset.editorSection === id) button.setAttribute('aria-current', 'true'); else button.removeAttribute('aria-current');
   }
-  $('editor-section').scrollTop = 0;
+  updateHistory();
 }
-
-async function leaveDraft() {
-  if (!dirty) return true;
-  const dialog = $('draft-dialog');
-  $('draft-error').textContent = '';
-  return new Promise(resolve => {
-    dialog.onclose = () => resolve(dialog.returnValue === 'continue');
-    dialog.oncancel = event => { event.preventDefault(); dialog.close('stay'); };
-    $('draft-stay').onclick = () => dialog.close('stay');
-    $('draft-discard').onclick = () => { $('page-target').value = String(selected.options?.pageTarget || 1); renderEditor(); dialog.close('continue'); };
-    $('draft-save').onclick = async () => {
-      for (const button of dialog.querySelectorAll('button')) button.disabled = true;
-      try { await saveDocument(); dialog.close('continue'); }
-      catch (error) { $('draft-error').textContent = error.message; }
-      finally { for (const button of dialog.querySelectorAll('button')) button.disabled = false; }
-    };
-    dialog.showModal();
-  });
+function updateHistory() {
+  $('undo').disabled = !documentEditor?.editor.can().undo();
+  $('redo').disabled = !documentEditor?.editor.can().redo();
 }
-
-async function switchDocument(action) {
-  if (busy || switching) return;
-  switching = true;
-  try { if (await leaveDraft()) { setBusy(true); await action(); } }
-  finally { setBusy(false); switching = false; }
+function saveState(state, error) {
+  const label = { saving: 'Saving…', draft: 'Saved locally · preparing downloads', compiling: 'Preparing downloads…', saved: 'Saved locally', error: 'Save needs attention' }[state];
+  $('document-status').textContent = selected ? label : '';
+  $('document-status').className = state === 'error' ? 'status-error' : state === 'saved' || state === 'draft' ? 'status-saved' : 'status-unsaved';
+  $('preview-status').textContent = state === 'saved' ? 'Current export · exact page breaks' : 'Last completed export · updating after edits';
+  $('discard-draft').hidden = state !== 'error';
+  if (error) feedback(`${error.message} Your text stays in the editor. Use Save now to retry.`, true);
 }
-
-function updateSelectedJobNav() {
-  const currentKey = materialJobKey(job);
-  for (const button of document.querySelectorAll('#saved-jobs button[data-job]')) {
-    const isSelected = button.dataset.job === currentKey;
-    button.classList.toggle('active', isSelected);
-    button.setAttribute('aria-selected', String(isSelected));
-  }
+function resizePaper() {
+  if (!selected || $('editor-section').hidden) return;
+  const available = Math.max(200, $('editor-section').clientWidth - (innerWidth <= 650 ? 24 : 48));
+  const compact = innerWidth <= 650 && $('zoom').value === 'fit';
+  const width = compact ? available : 816;
+  const scale = compact ? 1 : $('zoom').value === 'fit' ? Math.min(1, available / 816) : Number($('zoom').value);
+  const paper = $('document-paper'); paper.classList.toggle('compact-paper', compact);
+  paper.style.width = `${width}px`; paper.style.transform = `scale(${scale})`;
+  $('paper-frame').style.width = `${width * scale}px`;
+  $('paper-frame').style.height = `${paper.offsetHeight * scale}px`;
 }
-
-function renderEditor() {
-  const model = selected?.model;
-  $('empty-editor').hidden = Boolean(model);
-  $('editor-actions').hidden = !model;
-  $('editor-layout').hidden = !model;
-  const sections = !model ? [] : kind === 'coverLetter' ? model.paragraphs.map((_, i) => ({ id: `paragraph:${i}`, heading: `Paragraph ${i + 1}`, category: i === 0 ? 'Opening' : i === model.paragraphs.length - 1 ? 'Closing' : 'Body' })) : [{ id: 'summary', heading: 'Summary', category: '' }, ...model.sections];
-  $('editor-sections').innerHTML = sections.map(s => `<button class="secondary" data-editor-section="${escape(s.id)}">${escape(s.heading)}${s.category ? `<small>${escape(s.category)}</small>` : ''}</button>`).join('');
-  for (const button of document.querySelectorAll('[data-editor-section]')) button.onclick = () => selectSection(button.dataset.editorSection);
-  $('document-editor').innerHTML = !model ? '' : kind === 'coverLetter' ? model.paragraphs.map((p, i) => `<div class="editor-block" data-editor-id="paragraph:${i}"><div class="editor-block-header"><h3>Paragraph ${i + 1}</h3><button class="secondary" data-rewrite="paragraph:${i}">Rewrite paragraph</button></div><label for="paragraph-${i}">Paragraph text</label><textarea id="paragraph-${i}" data-paragraph="${i}" rows="10">${escape(p)}</textarea></div>`).join('') :
-    `<div class="editor-block" data-editor-id="summary"><div class="editor-block-header"><h3>Summary</h3><button class="secondary" data-rewrite="summary">Rewrite summary</button></div><label for="resume-summary">Professional summary</label><textarea id="resume-summary" rows="10">${escape(model.summary)}</textarea></div>` + model.sections.map((s, i) => `<div class="editor-block" data-editor-id="${escape(s.id)}"><div class="editor-block-header"><div><h3>${escape(s.heading)}</h3><p class="muted">${escape(s.category)}</p></div><button class="secondary" data-rewrite="section:${escape(s.id)}">Rewrite section</button></div>${s.facts ? `<p class="muted">${escape(s.facts)}</p>` : ''}${s.category === 'Projects' ? `<label for="keywords-${i}">Project keywords, one per line</label><textarea id="keywords-${i}" data-keywords="${i}" rows="2">${escape((s.keywords || []).join('\n'))}</textarea>` : ''}<label for="section-${i}">${s.category === 'Skills' ? 'Skills, one per line' : 'Achievements, one per line'}</label><textarea id="section-${i}" data-section="${i}" rows="12">${escape(s.bullets.join('\n'))}</textarea></div>`).join('');
-  for (const button of document.querySelectorAll('[data-rewrite]')) button.onclick = async () => {
-    try { await saveDocument(); await generate({ path: button.dataset.rewrite, revision: selected.revision }); }
-    catch (error) { feedback(error.message, true); }
-  };
-  selectSection(activeSection);
-  updateDirty();
-  setBusy(busy);
+function updatePages() {
+  $('page-count').textContent = `${selected.pages} page${selected.pages === 1 ? '' : 's'}`;
+  const overflow = kind === 'resume' && selected.pages > Number($('page-target').value);
+  $('overflow-status').hidden = !overflow;
+  $('overflow-status').textContent = `${selected.pages} pages · Your ${$('page-target').value}-page target is exceeded. Shorten the text or choose two pages in Prepare. All text is preserved.`;
 }
-
-function collectModel() {
-  const model = structuredClone(selected.model);
-  if (model.kind === 'coverLetter') model.paragraphs = [...document.querySelectorAll('[data-paragraph]')].map(el => el.value.trim()).filter(Boolean);
-  else {
-    model.summary = $('resume-summary').value;
-    for (const el of document.querySelectorAll('[data-section]')) model.sections[Number(el.dataset.section)].bullets = el.value.split('\n').map(s => s.trim()).filter(Boolean);
-    for (const el of document.querySelectorAll('[data-keywords]')) model.sections[Number(el.dataset.keywords)].keywords = el.value.split('\n').map(s => s.trim()).filter(Boolean);
-  }
-  return model;
-}
-
-async function renderDocument(record, { loadOptions = true } = {}) {
-  if (record && (record.kind !== kind || materialJobKey(record.job) !== materialJobKey(job))) return;
+async function renderProof() {
+  if (!proof || !selected) return;
   const version = ++previewVersion;
-  selected = record;
-  renderEditor();
-  if (record) {
-    if (loadOptions) {
-      $('page-target').value = String(record.options?.pageTarget || 1);
-      $('tone').value = record.options?.tone || 'professional'; $('length').value = record.options?.length || 'standard'; $('instructions').value = record.options?.instructions || '';
-    }
-    $('page-count').textContent = `${record.pages} page${record.pages === 1 ? '' : 's'}`;
-    $('pdf-preview').setAttribute('aria-busy', 'true');
-    $('pdf-preview').innerHTML = '<p class="muted">Rendering PDF preview…</p>';
-    try { await previewPdf(record.files.pdf.buffer, $('pdf-preview'), { isCurrent: () => version === previewVersion }); }
-    finally { if (version === previewVersion) $('pdf-preview').setAttribute('aria-busy', 'false'); }
-  } else { $('page-count').textContent = ''; $('pdf-preview').setAttribute('aria-busy', 'false'); $('pdf-preview').innerHTML = '<p class="muted">Your finished document will appear here.</p>'; }
-  updateDirty();
+  $('pdf-preview').setAttribute('aria-busy', 'true');
+  try { await previewPdf(selected.files.pdf.buffer, $('pdf-preview'), { isCurrent: () => version === previewVersion }); }
+  finally { if (version === previewVersion) $('pdf-preview').setAttribute('aria-busy', 'false'); }
 }
-
+async function toggleProof() {
+  proof = !proof;
+  $('proof-toggle').setAttribute('aria-pressed', String(proof));
+  $('proof-toggle').textContent = proof ? 'Back to editing' : 'PDF proof';
+  $('proof-panel').hidden = !proof; $('editor-section').hidden = proof;
+  $('undo').hidden = proof; $('redo').hidden = proof;
+  $('canvas-hint').textContent = proof ? 'Exact PDF layout' : 'Click text to edit';
+  if (proof) {
+    // Show the last good export while the latest edits compile; never call it current.
+    await renderProof();
+    try { await autosave.flush(); } catch (error) { feedback(error.message, true); }
+  } else resizePaper();
+}
+function updateSelectedJobNav() {
+  for (const button of $('saved-jobs').querySelectorAll('button')) {
+    const current = button.dataset.job === materialJobKey(job);
+    button.classList.toggle('active', current);
+    if (current) button.setAttribute('aria-current', 'true'); else button.removeAttribute('aria-current');
+  }
+}
 async function refreshLibrary() {
   records = await request('list');
   const jobs = new Map();
   for (const record of records.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))) if (!jobs.has(materialJobKey(record.job))) jobs.set(materialJobKey(record.job), record.job);
-  $('saved-jobs').innerHTML = [...jobs.entries()].map(([key, item]) => `<button class="secondary" data-job="${escape(key)}">${escape(item.title || 'Untitled job')}<small>${escape(item.company || 'Company not specified')}</small></button>`).join('') || '<p class="muted">Your generated documents will be saved here.</p>';
-  for (const button of document.querySelectorAll('[data-job]')) button.onclick = () => {
-    if (button.dataset.job !== materialJobKey(job)) void switchDocument(() => selectJob(jobs.get(button.dataset.job))).catch(error => feedback(error.message, true));
-  };
-  updateSelectedJobNav();
-  setBusy(busy);
+  $('saved-jobs').replaceChildren();
+  for (const [key, item] of jobs) {
+    const button = document.createElement('button'); button.className = 'secondary'; button.dataset.job = key;
+    button.append(document.createTextNode(item.title || 'Untitled job'));
+    const company = document.createElement('small'); company.textContent = item.company || 'Company not specified'; button.append(company);
+    button.onclick = () => { if (key !== materialJobKey(job)) void switchDocument(() => selectJob(item)).catch(error => feedback(error.message, true)); };
+    $('saved-jobs').append(button);
+  }
+  if (!jobs.size) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Prepared documents appear here.'; $('saved-jobs').append(p); }
+  updateSelectedJobNav(); setBusy(busy);
 }
-
-async function selectJob(nextJob, load = true) {
-  if (task?.status === 'running') { feedback('Wait for generation to finish or cancel it before switching jobs.', true); return; }
-  job = nextJob;
+function paperHeader(model) {
+  $('document-paper').classList.toggle('letter-paper', model.kind === 'coverLetter');
+  const name = document.createElement('p'); name.className = 'paper-name'; name.textContent = model.name;
+  const contact = document.createElement('p'); contact.className = 'paper-contact';
+  for (const run of formatContactRuns(model.contact)) {
+    const el = document.createElement(run.link ? 'a' : 'span'); el.textContent = run.text;
+    if (run.link) { el.href = run.link; el.target = '_blank'; el.rel = 'noopener noreferrer'; }
+    contact.append(el);
+  }
+  $('paper-header').replaceChildren(name, contact);
+  $('letter-context').hidden = model.kind !== 'coverLetter';
+  $('letter-context').replaceChildren();
+  if (model.kind === 'coverLetter') {
+    for (const text of [new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }), job.company].filter(Boolean)) {
+      const p = document.createElement('p'); p.textContent = text; $('letter-context').append(p);
+    }
+  }
+}
+async function renderDocument(record) {
+  ++previewVersion;
+  autosave?.dispose(); documentEditor?.destroy(); autosave = null; documentEditor = null;
+  selected = record; proof = false;
+  // Keep navigation identity in the URL so reload restores the same local draft.
+  const url = new URL(location.href);
+  url.searchParams.set('kind', kind);
+  if (record) url.searchParams.set('document', record.id); else url.searchParams.delete('document');
+  if (sessionId) url.searchParams.set('session', sessionId); else url.searchParams.delete('session');
+  url.searchParams.delete('job');
+  history.replaceState(null, '', url);
+  $('proof-toggle').setAttribute('aria-pressed', 'false'); $('proof-toggle').textContent = 'PDF proof';
+  $('proof-panel').hidden = true; $('editor-section').hidden = false;
+  $('undo').hidden = false; $('redo').hidden = false;
+  $('empty-editor').hidden = Boolean(record); $('editor-layout').hidden = !record;
+  $('editor-actions').hidden = !record;
+  $('document-status').textContent = ''; $('discard-draft').hidden = true;
+  $('pdf-preview').replaceChildren(); $('pdf-preview').setAttribute('aria-busy', 'false');
+  if (!record) return;
+  const draft = await request('getDraft', { id: record.id });
+  const model = draft?.model || record.model;
+  $('page-target').value = String(draft?.pageTarget || record.options?.pageTarget || 1);
+  $('tone').value = record.options?.tone || 'professional'; $('length').value = record.options?.length || 'standard'; $('instructions').value = record.options?.instructions || '';
+  paperHeader(model);
+  $('editor-sections').replaceChildren();
+  for (const section of editorSections(model)) {
+    const button = document.createElement('button'); button.className = 'secondary'; button.dataset.editorSection = section.id; button.textContent = section.label;
+    if (section.category && section.category !== section.label) { const small = document.createElement('small'); small.textContent = section.category; button.append(small); }
+    button.onclick = () => { if (proof) void toggleProof(); documentEditor.focusSection(section.id); activeSection(section.id); };
+    $('editor-sections').append(button);
+  }
+  documentEditor = createMaterialEditor({ container: $('document-editor'), model,
+    onUpdate: () => { autosave?.change(); updateHistory(); resizePaper(); }, onSelection: activeSection,
+    onRewrite: id => void rewriteSection(id).catch(error => feedback(error.message, true)),
+  });
+  const coordinator = new MaterialAutosave({ record, draft, read: readDraft,
+    request: (operation, input) => request(operation, { ...input, sessionId }), onState: saveState,
+    onCompiled: saved => { selected = saved; updatePages(); void renderProof().catch(error => feedback(error.message, true)); },
+  });
+  autosave = coordinator;
+  if (draft?.conflict) { autosave.error = new Error('A newer version exists. Discard this draft to load it.'); autosave.notify(); }
+  else if (draft) { feedback('Recovered your locally saved draft.'); autosave.change(); }
+  activeSection(editorSections(model)[0].id); updatePages(); resizePaper();
+}
+async function discardDraft() {
+  if (!autosave) return;
+  await autosave.tail.catch(() => {});
+  await request('discardDraft', { id: selected.id, draftRevision: autosave.draftRevision });
+  await renderDocument(await request('get', { id: selected.id }));
+  feedback('Draft discarded. Loaded the last completed document.');
+}
+async function leaveDraft() {
+  if (!autosave || !autosave.pending) return true;
+  try { await autosave.persist(); return true; }
+  catch (error) {
+    const dialog = $('draft-dialog'); $('draft-error').textContent = error.message;
+    return new Promise(resolve => {
+      dialog.onclose = () => resolve(dialog.returnValue === 'continue');
+      dialog.oncancel = event => { event.preventDefault(); dialog.close('stay'); };
+      $('draft-stay').onclick = () => dialog.close('stay');
+      $('draft-discard').onclick = async () => { try { await discardDraft(); dialog.close('continue'); } catch (error) { $('draft-error').textContent = error.message; } };
+      $('draft-save').onclick = async () => { try { await autosave.persist(); dialog.close('continue'); } catch (error) { $('draft-error').textContent = error.message; } };
+      dialog.showModal();
+    });
+  }
+}
+async function switchDocument(action) {
+  if (busy || switching) return;
+  switching = true;
+  const previous = autosave;
+  try {
+    if (!await leaveDraft()) return;
+    // A persisted but unexportable draft can still be left and recovered later.
+    // Successful exports update the next Autofill before switching context.
+    try { await autosave?.flush(); } catch { if (autosave?.pending) return; }
+    autosave?.dispose();
+    await autosave?.tail.catch(() => {});
+    if (rewritePending) await request('cancelRewrite', { id: selected.id });
+    setBusy(true); await action();
+  } finally { if (autosave === previous) autosave?.resume(); setBusy(false); switching = false; }
+}
+async function selectJob(next, load = true) {
+  job = next;
   sessionId = originJobKey && materialJobKey(job) === originJobKey ? originalSessionId : null;
   $('job-title').value = job.title || ''; $('job-company').value = job.company || ''; $('job-description').value = job.description || '';
-  $('job-heading').textContent = job.title || 'Prepare for a job';
-  $('company-heading').textContent = job.company || '';
-  updateSelectedJobNav();
-  if (load) await loadCurrentDocument();
+  $('job-heading').textContent = job.title || 'Prepare for a job'; $('company-heading').textContent = job.company || '';
+  updateSelectedJobNav(); if (load) await loadCurrentDocument();
 }
-
 async function loadCurrentDocument() {
-  const version = ++loadVersion;
   const record = records.find(r => r.kind === kind && materialJobKey(r.job) === materialJobKey(job));
-  const document = record ? await request('get', { id: record.id }) : null;
-  if (version === loadVersion) { activeSection = kind === 'resume' ? 'summary' : 'paragraph:0'; await renderDocument(document); showView(document ? 'edit' : 'prepare'); }
+  await renderDocument(record ? await request('get', { id: record.id }) : null);
+  showView(selected ? 'edit' : 'prepare');
 }
-
 async function switchKind(next) {
-  if (task?.status === 'running') return;
   kind = next;
   for (const type of ['resume', 'coverLetter']) { $('tab-' + type).setAttribute('aria-selected', String(type === kind)); $('tab-' + type).tabIndex = type === kind ? 0 : -1; }
-  $('document-workspace').setAttribute('role', 'tabpanel');
-  $('document-workspace').setAttribute('aria-labelledby', 'tab-' + kind);
+  $('document-workspace').setAttribute('role', 'tabpanel'); $('document-workspace').setAttribute('aria-labelledby', 'tab-' + kind);
   $('page-control').hidden = kind !== 'resume'; $('tone-control').hidden = kind === 'resume'; $('length-control').hidden = kind === 'resume';
-  $('generate').textContent = kind === 'resume' ? 'Tailor resume' : 'Generate cover letter';
-  feedback('');
-  await loadCurrentDocument();
+  feedback(''); await loadCurrentDocument();
 }
-
-async function saveDocument() {
-  if (!selected) return;
-  setBusy(true);
-  try {
-    const record = await request('save', { id: selected.id, revision: selected.revision, model: collectModel(), pageTarget: Number($('page-target').value), sessionId });
-    await renderDocument(record, { loadOptions: false }); await refreshLibrary(); feedback('Changes saved. The next Autofill uses this version.');
-  } finally { setBusy(false); }
-}
-
-async function generate(rewrite = null) {
+async function generate() {
   if (task?.status === 'running') return;
   job = readJob();
   if (!job.description) { feedback('Paste the job description first.', true); $('job-description').focus(); return; }
-  feedback('Generating…');
-  setBusy(true);
+  if (autosave) { await autosave.flush(); autosave.dispose(); }
+  feedback('Generating…'); setBusy(true);
   try {
-    task = await request('start', { kind, job, jobEdited: true, sessionId, options: { ...options(), rewrite } });
+    task = await request('start', { kind, job, jobEdited: true, sessionId, options: options() });
     if (task.needsWorkspace) { feedback(task.reason, true); showView('prepare'); task = null; return; }
     $('cancel').hidden = false;
     while (task.status === 'running') { feedback(task.phase || 'Writing your document…'); await new Promise(resolve => setTimeout(resolve, 700)); task = await request('status', { id: task.id }); }
     if (task.status === 'error') throw new Error(task.error);
     await refreshLibrary(); await renderDocument(await request('get', { id: task.material.id }));
     $('job-heading').textContent = job.title || 'Untitled job'; $('company-heading').textContent = job.company || '';
-    showView('edit');
-    feedback(sessionId ? 'Ready. The next Autofill uses this document for your application.' : 'Ready. Your document is saved locally and available to download.');
-  } finally { $('cancel').hidden = true; setBusy(false); }
+    showView('edit'); feedback('Ready. Edit directly on the document. Changes save locally.');
+  } finally { $('cancel').hidden = true; setBusy(false); autosave?.resume(); }
 }
-
+async function rewriteSection(id) {
+  if (!selected || rewritePending || busy) return;
+  const editor = documentEditor, coordinator = autosave, path = editor.rewritePath(id), snapshot = editor.model();
+  const captured = rewriteText(snapshot, path);
+  rewritePending = true; $('rewrite-status').hidden = false;
+  try {
+    await coordinator.persist();
+    const result = await request('rewriteDraft', { id: coordinator.record.id, revision: coordinator.record.revision, model: snapshot, path, options: options() });
+    if (documentEditor !== editor) return;
+    if (rewriteText(editor.model(), path) !== captured) { feedback('The selected text changed while rewriting. Your newer edits were kept; retry the rewrite if needed.'); return; }
+    editor.replace(result.model, path); feedback('Rewrite applied. Undo to restore your previous wording.');
+  } catch (error) { if (documentEditor === editor) throw error; }
+  finally { rewritePending = false; $('rewrite-status').hidden = true; }
+}
+async function download(format) {
+  if (!autosave) return;
+  $('download-menu').close();
+  const coordinator = autosave;
+  $('download-toggle').disabled = true;
+  try {
+    let record = await coordinator.flush();
+    // If typing continued during compilation, finish that version before downloading.
+    if (coordinator.needsCompile) record = await coordinator.flush();
+    if (coordinator.needsCompile) throw new Error('Text is still changing. Pause briefly and download again.');
+    const file = record.files[format], url = URL.createObjectURL(new Blob([file.buffer], { type: file.type }));
+    const link = document.createElement('a'); link.href = url; link.download = file.name; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000); feedback(`Downloaded ${file.name}`);
+  } finally { $('download-toggle').disabled = false; }
+}
 async function init() {
   $('workspace-version').textContent = `Kareer v${APP_VERSION}`;
+  const profile = (await api.storage.local.get('kr:profile'))['kr:profile'] || {}, source = buildMaterialSource(profile);
+  $('profile-summary').textContent = source.sections.length ? `${source.sections.length} enabled profile sections` : 'No profile sections yet. Add your experience or skills to begin.';
   const session = sessionId ? await request('session', { sessionId }) : null;
   if (session) { job = session.job; originJobKey = materialJobKey(job); }
   else if (query.get('job')) job = await request('job', { id: query.get('job') }) || job;
@@ -223,42 +293,60 @@ async function init() {
   if (query.get('document')) { const record = await request('get', { id: query.get('document') }); if (record) { job = record.job; kind = record.kind; } }
   await selectJob(job, false); await switchKind(kind);
 }
-
 function bindActions() {
-  for (const type of ['resume', 'coverLetter']) $('tab-' + type).onclick = () => { if (type !== kind) void switchDocument(() => switchKind(type)).catch(error => feedback(error.message, true)); };
+  const action = fn => () => void Promise.resolve().then(fn).catch(error => feedback(error.message, true));
+  for (const type of ['resume', 'coverLetter']) $('tab-' + type).onclick = action(() => type !== kind && switchDocument(() => switchKind(type)));
   for (const name of ['prepare', 'edit']) $('view-' + name).onclick = () => showView(name);
   $('prepare-document').onclick = () => showView('prepare');
-  $('document-editor').addEventListener('input', updateDirty);
-  $('page-target').addEventListener('change', updateDirty);
-  window.addEventListener('beforeunload', event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } });
+  $('page-target').onchange = () => { autosave?.change(); if (selected) updatePages(); };
+  $('zoom').onchange = resizePaper; new ResizeObserver(resizePaper).observe($('editor-section'));
+  $('undo').onclick = () => { documentEditor?.editor.chain().focus().undo().run(); updateHistory(); };
+  $('redo').onclick = () => { documentEditor?.editor.chain().focus().redo().run(); updateHistory(); };
+  $('proof-toggle').onclick = action(toggleProof);
+  $('save-document').onclick = action(async () => { await autosave?.flush(); feedback('Changes saved. The next Autofill uses this version.'); });
+  $('discard-draft').onclick = action(discardDraft);
+  $('cancel-rewrite').onclick = action(() => request('cancelRewrite', { id: selected.id }));
+  // A nonmodal native dialog escapes scrolling containers and works on the
+  // project's Chrome 110 / Firefox 115 targets, before popover API support.
+  $('download-toggle').onclick = () => {
+    const menu = $('download-menu');
+    if (menu.open) { menu.close(); return; }
+    const rect = $('download-toggle').getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(rect.right - 174, innerWidth - 182))}px`;
+    menu.style.top = `${Math.min(rect.bottom + 6, innerHeight - 100)}px`;
+    menu.show(); $('download-toggle').setAttribute('aria-expanded', 'true'); menu.querySelector('button').focus();
+  };
+  $('download-menu').onclose = () => $('download-toggle').setAttribute('aria-expanded', 'false');
+  $('download-menu').onkeydown = event => {
+    const buttons = [...$('download-menu').querySelectorAll('button')], index = buttons.indexOf(document.activeElement);
+    if (event.key === 'Escape') { event.preventDefault(); $('download-menu').close(); $('download-toggle').focus(); }
+    else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+      event.preventDefault(); const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length;
+      buttons[next].focus();
+    }
+  };
+  document.addEventListener('click', event => { if ($('download-menu').open && !$('download-menu').contains(event.target) && !$('download-toggle').contains(event.target)) $('download-menu').close(); });
+  for (const button of document.querySelectorAll('[data-download]')) button.onclick = action(() => download(button.dataset.download));
   for (const tabs of document.querySelectorAll('[role="tablist"]')) tabs.onkeydown = event => {
     const buttons = [...tabs.querySelectorAll('[role="tab"]')], index = buttons.indexOf(document.activeElement);
     if (index < 0 || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-    event.preventDefault();
-    const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
+    event.preventDefault(); const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
     buttons[next].focus(); buttons[next].click();
   };
-  $('generate').onclick = () => void switchDocument(() => generate()).catch(error => feedback(error.message, true));
-  $('save-document').onclick = () => void saveDocument().catch(error => feedback(error.message, true));
-  $('cancel').onclick = () => task && void request('cancel', { id: task.id });
-  $('new-job').onclick = () => void switchDocument(() => selectJob({ localId: crypto.randomUUID(), title: '', company: '', description: '' })).catch(error => feedback(error.message, true));
-  $('delete-document').onclick = async () => {
-    if (!selected) return;
+  window.addEventListener('beforeunload', event => { if (autosave?.pending) { void autosave.persist().catch(() => {}); event.preventDefault(); event.returnValue = ''; } });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) void autosave?.persist().catch(() => {}); });
+  $('generate').onclick = action(() => switchDocument(generate));
+  $('cancel').onclick = action(() => task && request('cancel', { id: task.id }));
+  $('new-job').onclick = action(() => switchDocument(() => selectJob({ localId: crypto.randomUUID(), title: '', company: '', description: '' })));
+  $('delete-document').onclick = action(async () => {
+    if (!selected || busy) return;
+    await autosave.tail.catch(() => {}); autosave.dispose();
+    if (rewritePending) await request('cancelRewrite', { id: selected.id });
     setBusy(true);
     try { await request('delete', { id: selected.id }); await refreshLibrary(); await renderDocument(null); feedback('Document deleted. Your profile is unchanged.'); }
-    catch (error) { feedback(error.message, true); }
+    catch (error) { autosave?.resume(); throw error; }
     finally { setBusy(false); }
-  };
-  for (const button of document.querySelectorAll('[data-download]')) button.onclick = async () => {
-    if (!selected) return;
-    try {
-      if (dirty) await saveDocument();
-      const file = selected.files[button.dataset.download], url = URL.createObjectURL(new Blob([file.buffer], { type: file.type }));
-      const link = document.createElement('a'); link.href = url; link.download = file.name; link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10000); feedback(`Downloaded ${file.name}`);
-    } catch (error) { feedback(error.message, true); }
-  };
+  });
 }
-bindActions();
-setBusy(true);
+bindActions(); setBusy(true);
 void init().catch(error => feedback(`Workspace could not load: ${error.message}`, true)).finally(() => setBusy(false));
