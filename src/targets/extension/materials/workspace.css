@@ -921,8 +921,8 @@ summary:focus-visible {
 .materials .prepare-grid { grid-template-columns: minmax(0, 1fr) 224px; gap: 40px; }
 .materials .prepare-context p, .materials .prepare-context a { font-size: 13px; }
 .materials .generation-note { font-size: 12px; }
-.materials .edit-layout { grid-template-columns: 156px minmax(0, 1fr); }
-.materials .document-outline { padding: 22px 12px; border-right: 0; }
+.materials .edit-layout { grid-template-columns: clamp(220px, 18vw, 280px) minmax(0, 1fr); }
+.materials .document-outline { padding: 22px 20px; border-right: 0; }
 .materials .document-outline > h3 { font-size: 12px; }
 .materials .document-stage { background: var(--kr-bg-0); }
 .materials .canvas-toolbar { background: var(--kr-bg-0); border-bottom: 0; }

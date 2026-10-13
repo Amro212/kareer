@@ -192,6 +192,28 @@ test('Materials opens on recent applications, searches jobs, and preserves edits
   await expect(page.locator('.paper-letter')).toContainText('My Python API experience');
 });
 
+test('document outline has room for section titles and keeps the canvas usable across widths', async ({ kr }) => {
+  await kr.seed({ profile });
+  kr.openrouter.handler = reply;
+  const page = await kr.context.newPage();
+  await page.goto(workspaceUrl(kr));
+  await createApplication(page, 'Backend Engineer');
+  for (const width of [2048, 1440, 1100, 900, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const outline = await page.locator('.document-outline').boundingBox();
+    const canvas = await page.locator('.document-stage').boundingBox();
+    if (width > 1000) {
+      expect(outline.width).toBeGreaterThanOrEqual(220);
+      expect(canvas.width).toBeGreaterThan(600);
+    } else {
+      expect(Math.abs(outline.width - canvas.width)).toBeLessThan(2);
+    }
+    await page.locator('[data-editor-section="work"]').click();
+    await expect(page.locator('[data-editor-section="work"]')).toHaveAttribute('aria-current', 'true');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+});
+
 test('workspace layouts fit desktop, compact and narrow widths; keyboard focus and reduced motion remain usable', async ({ kr }) => {
   const page = await openProfile(kr);
   fs.mkdirSync('scratch/saas-preview', { recursive: true });
