@@ -105,6 +105,8 @@ function sectionValue(profile, keys) {
 
 export function createProfileWorkspace({ form, read, restore, save }) {
   const sections = [];
+  const navigation = document.getElementById('profile-subsections');
+  navigation?.replaceChildren();
 
   for (const config of SECTIONS) {
     const fields = document.getElementById(`section-${config.id}`);
@@ -115,6 +117,12 @@ export function createProfileWorkspace({ form, read, restore, save }) {
     wrapper.classList.toggle('profile-section-wide', Boolean(config.wide));
     const header = element('div', 'profile-section-heading');
     const heading = element('h2', '', config.title);
+    heading.tabIndex = -1;
+    if (navigation) {
+      const link = element('a', 'profile-section-link', config.title);
+      link.href = `#section-${config.id}`;
+      navigation.append(link);
+    }
     const edit = element('button', 'profile-edit-button', 'Edit');
     edit.type = 'button';
     edit.setAttribute('aria-label', `Edit ${config.title.toLowerCase()}`);

@@ -1659,11 +1659,11 @@ async function init() {
 
   setupNavigation();
   checkProfileDirty();
-  handleInitialHash();
   $('save-key').disabled = false;
   $('profile-form').hidden = false;
   $('profile-loading').hidden = true;
   $('profile').setAttribute('aria-busy', 'false');
+  handleInitialHash();
 }
 
 function showOptionsRoute() {
@@ -1676,6 +1676,7 @@ function showOptionsRoute() {
   const titles = { connection: 'Connection', models: 'Writing model', resume: 'Uploaded resume', advanced: 'Backup & migration' };
   $('options-heading').hidden = targetId === 'profile';
   $('configuration-links').hidden = targetId === 'profile';
+  $('profile-subsections').hidden = targetId !== 'profile';
   document.body.classList.toggle('configuration-open', targetId !== 'profile');
   $('options-title').textContent = titles[targetId] || 'Profile';
   document.querySelectorAll('.settings-nav .nav-item[href^="#"]').forEach(link => {
@@ -1684,9 +1685,17 @@ function showOptionsRoute() {
     if (current) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   });
+  document.querySelectorAll('.profile-section-link').forEach(link => {
+    const current = link.getAttribute('href') === hash;
+    link.classList.toggle('active', current);
+    if (current) link.setAttribute('aria-current', 'location');
+    else link.removeAttribute('aria-current');
+  });
   if (hash.startsWith('#section-')) {
     const target = document.getElementById(hash.slice(1));
-    target?.closest('.profile-summary-section')?.scrollIntoView({ block: 'start' });
+    const card = target?.closest('.profile-summary-section');
+    card?.scrollIntoView({ block: 'start' });
+    card?.querySelector('h2')?.focus({ preventScroll: true });
   } else {
     window.scrollTo({ top: 0 });
   }

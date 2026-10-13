@@ -317,6 +317,8 @@ button.icon-btn:disabled, button.secondary.icon-btn:disabled { opacity: 0.35 !im
 .app-sidebar .nav-item.active { background: var(--kr-bg-2); color: var(--kr-text-1); }
 .app-sidebar .nav-item.active svg { color: var(--kr-signal); }
 .app-sidebar .app-configuration { margin-top: 36px; }
+.profile-subsections { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 12px 20px; padding-left: 12px; border-left: 1px solid var(--kr-line); }
+.settings-nav .profile-section-link { padding: 7px 10px; font-size: 12px; line-height: 1.5; }
 .configuration-links { display: flex; flex-direction: column; gap: 4px; padding-top: 12px; }
 .app-nav-label { color: var(--kr-text-3); padding: 0 12px 8px; font-size: 12px; }
 .app-sidebar-footer { margin-top: auto; padding: 32px 12px 0; color: var(--kr-text-3); font-size: 12px; }
@@ -383,6 +385,9 @@ button.icon-btn:disabled, button.secondary.icon-btn:disabled { opacity: 0.35 !im
   .app-sidebar { padding: 16px; border-right: 0; border-bottom: 1px solid var(--kr-line); }
   .app-sidebar .app-brand { padding: 0; margin-bottom: 16px; font-size: 18px; }
   .app-sidebar .app-navigation { flex-direction: row; gap: 6px; }
+  .options .app-navigation { flex-wrap: wrap; }
+  .options .profile-subsections { order: 3; flex: 0 0 100%; flex-direction: row; overflow-x: auto; margin: 6px 0 0; padding: 0; border: 0; }
+  .options .profile-section-link { flex: 0 0 auto; white-space: nowrap; }
   .app-sidebar .nav-item { width: auto; flex: 1; justify-content: center; padding: 9px 10px; font-size: 12px; }
   .app-sidebar .app-configuration { flex-direction: row; margin-top: 12px; gap: 2px; flex-wrap: wrap; }
   .app-sidebar .app-configuration { position: absolute; top: 10px; right: 16px; margin: 0; }

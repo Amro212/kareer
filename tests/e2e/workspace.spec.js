@@ -83,6 +83,34 @@ test('Profile stays centered in the available content area at wide and compact w
   }
 });
 
+test('Profile subsection links jump to summary cards and preserve route history and open edits', async ({ kr }) => {
+  const page = await openProfile(kr);
+  await expect(page.locator('.profile-section-link')).toHaveCount(12);
+  await section(page, 'identity').getByRole('button', { name: 'Edit identity & contact' }).click();
+  await page.locator('#pf-firstName').fill('Unfinished');
+  for (const id of ['projects', 'work']) {
+    const link = page.locator(`.profile-section-link[href="#section-${id}"]`);
+    await link.click();
+    await expect(link).toHaveAttribute('aria-current', 'location');
+    await expect(section(page, id).locator('h2')).toBeFocused();
+    expect((await section(page, id).boundingBox()).y).toBeGreaterThanOrEqual(0);
+  }
+  await page.goBack();
+  await expect(section(page, 'projects').locator('h2')).toBeFocused();
+  await expect(page.locator('#pf-firstName')).toHaveValue('Unfinished');
+  await section(page, 'identity').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.locator('.app-configuration > a').click();
+  await expect(page.locator('#profile-subsections')).toBeHidden();
+  await page.locator('#profile-nav-link').click();
+  await expect(page.locator('#profile-subsections')).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.locator('.profile-section-link[href="#section-skills"]').click();
+  await expect(section(page, 'skills').locator('h2')).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.reload();
+  await expect(section(page, 'skills').locator('h2')).toBeFocused();
+});
+
 test('Profile failed writes keep fields editable and retries persist them', async ({ kr }) => {
   const page = await openProfile(kr);
   await section(page, 'identity').getByRole('button', { name: 'Edit identity & contact' }).click();
