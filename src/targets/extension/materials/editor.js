@@ -94,7 +94,14 @@ export function createMaterialEditor({ container, model, onUpdate, onSelection, 
     editor,
     model: () => editorToModel(editor.getJSON(), model),
     focusSection(id) {
-      editor.state.doc.forEach((node, pos) => { if (node.attrs.id === id) editor.commands.focus(pos + 2); });
+      editor.state.doc.forEach((node, pos) => {
+        if (node.attrs.id !== id) return;
+        editor.commands.setTextSelection(pos + 2);
+        // Tiptap's focus command defers DOM focus to the next animation frame.
+        // A direct view focus completes navigation before the next typing or
+        // replacement operation can establish its own selection.
+        editor.view.focus();
+      });
       [...container.querySelectorAll('[data-material-section]')].find(el => el.dataset.materialSection === id)?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
     },
     rewritePath(id) {
