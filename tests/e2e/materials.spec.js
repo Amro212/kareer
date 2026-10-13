@@ -193,6 +193,37 @@ test('document switches persist drafts automatically and concurrent saves retain
 const PROFILE = { fullName: 'Test Applicant', email: 'test.applicant@example.com', resumeContext: '',
   workExperiences: [{ id: 'work1', title: 'Engineer', company: 'Acme', startDate: '2021-01', endDate: '2024-02', description: 'Built APIs. Reduced latency by 20%.' }], skills: ['JavaScript'] };
 
+test('skills flow inline like the PDF and switch to categorized rows without losing edits', async ({ kr }) => {
+  await kr.seed({ profile: { ...PROFILE, skills: ['Python', 'SQL', 'Docker'] } });
+  kr.openrouter.handler = materialResponse;
+  const workspace = await kr.context.newPage();
+  await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=resume`);
+  await expect(workspace.locator('#generate')).toBeEnabled();
+  await workspace.locator('#job-description').fill('Build APIs.');
+  await workspace.locator('#generate').click();
+  await expect(workspace.locator('#feedback')).toContainText('Ready', { timeout: 45000 });
+  const skills = workspace.locator('.paper-skills');
+  await expect(skills).toHaveClass(/paper-skills-inline/);
+  const tops = await skills.locator('p').evaluateAll(nodes => nodes.map(p => p.getBoundingClientRect().top));
+  expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(2);
+  expect(await skills.locator('p').nth(1).evaluate(p => getComputedStyle(p, '::before').content)).toContain('·');
+  const id = (await message(workspace, 'list'))[0].id;
+  expect(await pdfText(Buffer.from((await message(workspace, 'get', { id })).files.pdf.data, 'base64'))).toContain('Python · SQL · Docker');
+  await skills.locator('p').first().fill('Languages: Python');
+  await expect(skills).not.toHaveClass(/paper-skills-inline/);
+  expect((await skills.locator('p').nth(1).boundingBox()).y).toBeGreaterThan((await skills.locator('p').first().boundingBox()).y);
+  await workspace.locator('#save-document').click();
+  await expect(workspace.locator('#feedback')).toContainText('Changes saved');
+  expect((await message(workspace, 'get', { id })).model.sections.find(s => s.id === 'skills').bullets).toEqual(['Languages: Python', 'SQL', 'Docker']);
+  await workspace.locator('#undo').click();
+  await expect(skills).toHaveClass(/paper-skills-inline/);
+  await workspace.locator('#save-document').click();
+  await expect.poll(async () => (await message(workspace, 'get', { id })).model.sections.find(s => s.id === 'skills').bullets).toEqual(['Python', 'SQL', 'Docker']);
+  await workspace.reload();
+  await expect(workspace.locator('.paper-skills')).toHaveClass(/paper-skills-inline/);
+  expect((await message(workspace, 'get', { id })).model.sections.find(s => s.id === 'skills').bullets).toEqual(['Python', 'SQL', 'Docker']);
+});
+
 function materialResponse(body) {
   const input = JSON.parse(body.messages.at(-1).content);
   if (!input.kind) return { choices: [{ message: { content: JSON.stringify({ answers: (input.fieldsToFill || []).map(f => ({ fieldId: f.fieldId, value: f.type === 'email' ? PROFILE.email : PROFILE.fullName })) }) } }] };

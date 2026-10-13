@@ -6,6 +6,7 @@ import HardBreak from '@tiptap/extension-hard-break';
 import { UndoRedo } from '@tiptap/extensions';
 import { Plugin } from '@tiptap/pm/state';
 import { modelToEditor, editorToModel, editorSections, categoryLabel } from './editor-model.js';
+import { skillsAreCategorized } from './document-format.js';
 
 const element = (tag, className, text) => { const el = document.createElement(tag); el.className = className; if (text !== undefined) el.textContent = text; return el; };
 
@@ -35,6 +36,10 @@ export function createMaterialEditor({ container, model, onUpdate, onSelection, 
         }
       }
       const contentDOM = element('div', `paper-text ${model.kind === 'coverLetter' ? 'paper-letter' : section.id === 'summary' ? 'paper-summary' : section.category === 'Skills' ? 'paper-skills' : 'paper-bullets'}`);
+      const updateSkillsLayout = next => {
+        if (section.category === 'Skills') contentDOM.classList.toggle('paper-skills-inline', !skillsAreCategorized(next.content.content.map(p => p.textContent)));
+      };
+      updateSkillsLayout(node);
       contentDOM.dataset.editableSection = section.id;
       if (section.id === 'summary') contentDOM.id = 'resume-summary';
       if (model.kind === 'resume' && section.id !== 'summary') contentDOM.dataset.section = String(model.sections.findIndex(s => s.id === section.id));
@@ -44,7 +49,9 @@ export function createMaterialEditor({ container, model, onUpdate, onSelection, 
       rewrite.onmousedown = event => event.preventDefault();
       rewrite.onclick = () => onRewrite(section.id);
       dom.append(heading, contentDOM, rewrite);
-      return { dom, contentDOM, stopEvent: event => rewrite.contains(event.target),
+      return { dom, contentDOM,
+        update(next) { if (next.type !== node.type || next.attrs.id !== section.id) return false; updateSkillsLayout(next); return true; },
+        stopEvent: event => rewrite.contains(event.target),
         ignoreMutation: mutation => mutation.type !== 'selection' && !contentDOM.contains(mutation.target) };
     },
   });

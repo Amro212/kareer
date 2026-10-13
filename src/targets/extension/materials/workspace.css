@@ -539,6 +539,9 @@ textarea {
 .paper-skills {
   margin-left: 14.4px;
 }
+.paper-skills-inline { display: flex; flex-wrap: wrap; }
+.paper-skills-inline p { max-width: 100%; }
+.paper-skills-inline p + p::before { content: " · "; }
 .paper-bullets {
   margin-left: 26.613px;
   font-size: 10.667px;

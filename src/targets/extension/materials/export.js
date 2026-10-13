@@ -2,7 +2,7 @@ import pdfMake from 'pdfmake/build/pdfmake.js';
 import fonts from './fonts/vfs.json' with { type: 'json' };
 import { Document, Packer, Paragraph, TextRun, Header, TabStopType, BorderStyle, ExternalHyperlink } from 'docx';
 import { DOCX_TYPE, validateMaterial } from '../../../core/materials-model.js';
-import { formatContactRuns, formatRightLink } from './document-format.js';
+import { formatContactRuns, formatRightLink, skillsAreCategorized } from './document-format.js';
 
 // Bump when document formatting changes so saved bytes cannot retain an older template.
 export const MATERIAL_TEMPLATE_VERSION = 9;
@@ -85,7 +85,7 @@ function blocks(model, job) {
         if (section.facts) result.push({ text: formatContactRuns(section.facts), style: 'facts' });
       }
       if (section.bullets?.length) {
-        if (category === 'Skills' && section.bullets.some(s => /^[^:]+:/.test(s))) result.push(...section.bullets.map(text => ({ text, style: 'body' })));
+        if (category === 'Skills' && skillsAreCategorized(section.bullets)) result.push(...section.bullets.map(text => ({ text, style: 'body' })));
         else result.push(category === 'Skills' ? { text: section.bullets.join(' · '), style: 'body' } : { ul: [...section.bullets], style: 'bullet' });
       }
     }

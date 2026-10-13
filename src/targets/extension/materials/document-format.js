@@ -1,4 +1,6 @@
 /** Shared contact/link presentation for the editor, PDF and Word. */
+export const skillsAreCategorized = values => values.some(value => /^[^:]+:/.test(value));
+
 export function formatContactRuns(contact) {
   if (!contact) return [];
   const parts = String(contact).split(/\s*[·•|\n]\s*/).map(s => s.trim()).filter(Boolean);
