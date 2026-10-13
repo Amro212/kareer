@@ -2,11 +2,13 @@
 
 **Goal:** Select the strongest truthful evidence for each job, give it enough detail, and retain supported skills and project keywords in PDF and Word.
 
-**Architecture:** Keep profile-only facts, one background AI request, the existing JSON model, and local exports. Let the writer select and rank records; validate optional relevance and project keywords locally. Fit pages by removing weaker records before flattening strong entries, never by deleting the skills section. No new dependency, service, UI, or profile schema.
+**Architecture (updated 2026-10-13):** Keep profile-only generation context, one background AI request, the existing JSON model, and local exports. Let the writer select and rank records; normalize optional metadata without rejecting draft content. Display the complete generated draft without automatic text removal or page-limit rejection. Project keywords are editable in the existing section editor. No new dependency, service, or profile schema.
 
 **Tech stack:** JavaScript, node:test, pdfmake, docx, pdfjs, Playwright.
 
 **Status:** Implemented and built at v0.5.82. 37 focused unit checks and 20 focused materials browser checks pass; final rebuilt extension also passes the two tailoring flow checks. Synthetic PDF inspected, Word text extraction verified. No live model, native Word, real ATS scoring, commit, push or deployment.
+
+**2026-10-13 policy correction:** The user explicitly rejects runtime content gates. The original keyword/skill evidence checks, metadata caps, unknown/duplicate ID rejection, destructive automatic page fitting, and page-limit save/rewrite rejection below are superseded. Evidence and page-budget guidance stays in the writing prompt; the user reviews the resulting draft. Renderer-compatible structure, HTTP/JSON handling, cancellation, secret isolation and stale-edit protection remain. Known source metadata stays authoritative; generated unknown sections remain viewable with unique editor IDs. Optional keyword deviations are normalized/ignored where inapplicable instead of discarding the resume.
 
 ## Research and design (2026-10-12)
 

@@ -3,11 +3,44 @@ import mammoth from 'mammoth';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import fs from 'node:fs';
 
+test('generated resumes with metadata deviations open for editing without content or page-limit rejection', async ({ kr }) => {
+  await kr.seed({ profile: { ...PROFILE, projects: [{ id: 'project1', name: 'API project', description: 'Built APIs.' }] } });
+  const summary = 'Generated summary text for user review. '.repeat(250).trim();
+  kr.openrouter.handler = body => {
+    const input = JSON.parse(body.messages.at(-1).content);
+    return { choices: [{ message: { content: JSON.stringify(input.rewrite ? { summary: 'Rewritten summary. '.repeat(400).trim() } : { summary, sections: [
+      { id: 'work1', keywords: [], relevance: 'high', bullets: ['Generated work bullet.'] },
+      { id: 'project1', keywords: 'Python, Rust, API design, SQL, Docker', bullets: ['Generated project bullet.'] },
+      { id: 'skills', keywords: null, bullets: ['An unsaved skill'] },
+      { id: 'extra', heading: 'Additional evidence', bullets: ['Generated additional detail.'] },
+    ] }) } }] };
+  };
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  await expect(workspace.locator('#generate')).toBeEnabled();
+  await workspace.locator('#job-description').fill('Build APIs.'); await workspace.locator('#generate').click();
+  await expect(workspace.locator('#feedback')).toContainText('Ready', { timeout: 45000 });
+  await expect(workspace.locator('#view-edit')).toHaveAttribute('aria-selected', 'true');
+  await expect(workspace.locator('#resume-summary')).toHaveValue(summary);
+  const record = await message(workspace, 'get', { id: (await message(workspace, 'list'))[0].id });
+  expect(record.pages).toBeGreaterThan(1); expect(record.options.pageTarget || 1).toBe(1);
+  expect(record.model.sections[2].bullets).toEqual(['An unsaved skill']);
+  expect(record.model.sections[3].bullets).toEqual(['Generated additional detail.']);
+  await workspace.locator('[data-editor-section="project1"]').click();
+  await workspace.locator('[data-keywords="1"]').fill('Corrected keywords');
+  await workspace.locator('#save-document').click(); await expect(workspace.locator('#feedback')).toContainText('Changes saved');
+  const saved = await message(workspace, 'get', { id: record.id });
+  expect(saved.model.sections[1].keywords).toEqual(['Corrected keywords']);
+  await waitTask(workspace, await message(workspace, 'start', { kind: 'resume', job: saved.job, options: { pageTarget: 1, rewrite: { path: 'summary', revision: saved.revision } } }));
+  const rewritten = await message(workspace, 'get', { id: record.id });
+  expect(rewritten.model.summary).toBe('Rewritten summary. '.repeat(400).trim());
+  expect(rewritten.model.sections[1].keywords).toEqual(['Corrected keywords']);
+});
+
 test('selected evidence, project keywords and description-backed skills survive generation save and rewrite', async ({ kr }, testInfo) => {
   await kr.seed({ profile: { fullName: 'Test Applicant', email: 'applicant@example.com',
     workExperiences: [{ id: 'work1', title: 'Engineer', company: 'Acme', description: 'Built Python APIs for client integrations.' },
       { id: 'other', title: 'Assistant', company: 'Other Company', description: 'Organized office supplies.' }],
-    projects: [{ id: 'cad', name: 'Mechanical design', description: 'Reconstructed components in SolidWorks and AutoCAD.' }],
+    projects: [{ id: 'cad', name: 'Mechanical design', url: 'https://example.org/mechanical-design', description: 'Reconstructed components in SolidWorks and AutoCAD.' }],
   } });
   kr.openrouter.handler = body => {
     const input = JSON.parse(body.messages.at(-1).content);
@@ -34,6 +67,11 @@ test('selected evidence, project keywords and description-backed skills survive 
   const word = await mammoth.extractRawText({ buffer: Buffer.from(record.files.docx.data, 'base64') });
   expect(word.value).toContain('Mechanical design | SolidWorks, AutoCAD');
   expect(word.value).not.toContain('Other Company');
+  const loading = getDocument({ data: Uint8Array.from(Buffer.from(record.files.pdf.data, 'base64')), isEvalSupported: false, useWasm: false });
+  try {
+    const links = await (await (await loading.promise).getPage(1)).getAnnotations();
+    expect(links.filter(a => a.url === 'https://example.org/mechanical-design')).toHaveLength(1);
+  } finally { await loading.destroy(); }
   await workspace.locator('[data-editor-section="work1"]').click();
   await workspace.locator('[data-section="0"]').fill('Built Python APIs for client integrations and documented workflows.');
   await workspace.locator('#save-document').click(); await expect(workspace.locator('#feedback')).toContainText('Changes saved');
@@ -135,13 +173,15 @@ test('leaving a dirty document offers stay, discard, or save without losing fail
   await workspace.locator('#resume-summary').fill('Saved before switching.'); await workspace.locator('#new-job').click(); await workspace.locator('#draft-save').click();
   await expect(workspace.locator('#view-prepare')).toHaveAttribute('aria-selected', 'true');
   await workspace.locator('#saved-jobs button').first().click(); await expect(workspace.locator('#resume-summary')).toHaveValue('Saved before switching.');
+  const current = await message(workspace, 'get', { id: (await message(workspace, 'list'))[0].id });
+  await message(workspace, 'save', { id: current.id, revision: current.revision, model: { ...current.model, summary: 'Concurrent saved edit.' } });
   await workspace.locator('#resume-summary').fill('Long summary '.repeat(1800)); await workspace.locator('#tab-coverLetter').click(); await workspace.locator('#draft-save').click();
-  await expect(workspace.locator('#draft-error')).toContainText('exceed the page target');
+  await expect(workspace.locator('#draft-error')).toContainText('newer document');
   await expect(workspace.locator('#draft-dialog')).toBeVisible(); await workspace.locator('#draft-stay').click();
   await expect(workspace.locator('#tab-resume')).toHaveAttribute('aria-selected', 'true');
   await expect(workspace.locator('#resume-summary')).toHaveValue('Long summary '.repeat(1800));
   let downloads = 0; workspace.on('download', () => downloads++);
-  await workspace.locator('[data-download="pdf"]').click(); await expect(workspace.locator('#feedback')).toContainText('exceed the page target');
+  await workspace.locator('[data-download="pdf"]').click(); await expect(workspace.locator('#feedback')).toContainText('newer document');
   await expect(workspace.locator('[data-download="pdf"]')).toBeEnabled(); expect(downloads).toBe(0);
 });
 
@@ -416,7 +456,7 @@ test('concurrent jobs stay isolated; cancellation and persisted interruption all
   expect((await kr.readStorage(`kr:sessions:${sessions[1].id}`)).materialRefs.resume).toEqual(sessions[1].materialRefs.resume);
 });
 
-test('workspace points to profile facts and preserves the saved version when edits overflow', async ({ kr }) => {
+test('workspace preserves profile facts and saves editable documents beyond the requested page count', async ({ kr }) => {
   await kr.seed({ profile: PROFILE }); kr.openrouter.handler = materialResponse;
   const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
   await expect(workspace.locator('#generate')).toBeEnabled();
@@ -430,8 +470,11 @@ test('workspace points to profile facts and preserves the saved version when edi
   const before = (await message(workspace, 'list'))[0].revision;
   await workspace.locator('#resume-summary').fill('Long summary '.repeat(1800));
   await workspace.locator('#save-document').click();
-  await expect(workspace.locator('#feedback')).toContainText('exceed the page target');
-  expect((await message(workspace, 'list'))[0].revision).toBe(before);
+  await expect(workspace.locator('#feedback')).toContainText('Changes saved');
+  const saved = await message(workspace, 'get', { id: (await message(workspace, 'list'))[0].id });
+  expect(saved.revision).not.toBe(before);
+  expect(saved.model.summary).toBe('Long summary '.repeat(1800).trim());
+  expect(saved.pages).toBeGreaterThan(1);
 });
 
 test('edits saved while generation is running survive its completion', async ({ kr }) => {

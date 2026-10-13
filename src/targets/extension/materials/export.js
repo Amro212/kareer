@@ -4,7 +4,7 @@ import { Document, Packer, Paragraph, TextRun, Header, TabStopType, BorderStyle,
 import { DOCX_TYPE, validateMaterial } from '../../../core/materials-model.js';
 
 // Bump when document formatting changes so saved bytes cannot retain an older template.
-export const MATERIAL_TEMPLATE_VERSION = 7;
+export const MATERIAL_TEMPLATE_VERSION = 9;
 
 pdfMake.addVirtualFileSystem(fonts);
 const fontFaces = {
@@ -30,7 +30,18 @@ const letterStyles = {
   closing: { fontSize: 12, alignment: 'right', margin: [0, 12, 0, 0] },
 };
 const resumeMargins = [24.48, 12.96, 24.48, 15.84];
-const letterMargins = [72, 115, 72, 75];
+const letterMargins = [72, 115, 72, 54];
+
+function letterLayout(model) {
+  const words = model.paragraphs.join(' ').split(/\s+/).length;
+  const lineHeight = words < 225 ? 1.8 : words < 375 ? 1.5 : 1.35;
+  const gap = words < 225 ? 24 : words < 375 ? 18 : 12;
+  return { ...letterStyles,
+    opening: { ...letterStyles.opening, margin: [0, 0, 0, 4] },
+    body: { ...letterStyles.body, lineHeight, margin: [0, 0, 0, gap] },
+    closing: { ...letterStyles.closing, lineHeight: 1.2, margin: [0, 4, 0, 0] },
+  };
+}
 
 function formatContactRuns(contact) {
   if (!contact) return [];
@@ -61,7 +72,7 @@ function formatContactRuns(contact) {
       }
     }
     if (runs.length) runs.push({ text: ' · ' });
-    runs.push(run);
+    runs.push(run.link ? { ...run, decoration: 'underline' } : run);
   }
   return runs.length ? runs : [{ text: contact }];
 }
@@ -131,40 +142,62 @@ function blocks(model, job) {
 
 async function makePdf(model, job) {
   const letter = model.kind === 'coverLetter', margins = letter ? letterMargins : resumeMargins;
+  const projectLinks = new Map();
   const content = blocks(model, job).flatMap(block => {
+    const projectId = block.style === 'title' && typeof block.text?.link === 'string' ? `project-link-${projectLinks.size}` : null;
+    if (projectId) projectLinks.set(projectId, block.text.link);
     if (block.right) {
       const leftCol = typeof block.text?.link === 'string'
-        ? { text: block.text.text, link: block.text.link, width: '*' }
+        ? { text: block.text.text, ...(projectId ? { id: projectId } : { link: block.text.link }), decoration: 'underline', width: '*' }
         : { text: block.text?.text || block.text, width: '*' };
       const rightCol = typeof block.right?.link === 'string'
-        ? { text: block.right.text, link: block.right.link, width: 'auto', alignment: 'right', bold: false }
+        ? { text: block.right.text, link: block.right.link, decoration: 'underline', width: 'auto', alignment: 'right', bold: false }
         : { text: block.right.text || block.right, width: 'auto', alignment: 'right', bold: false };
       return [{ columns: [leftCol, rightCol], style: block.style, columnGap: 12 }];
     }
-    if (typeof block.text?.link === 'string') return [{ text: block.text.text, link: block.text.link, style: block.style }];
+    if (typeof block.text?.link === 'string') return [{ text: block.text.text, ...(projectId ? { id: projectId } : { link: block.text.link }), decoration: 'underline', style: block.style }];
+    if (block.style === 'closing') return [{ stack: [block], unbreakable: true }];
     if (block.ul) return block.ul.map(text => ({ columns: [{ text: '-', width: 7 }, { text, width: '*' }], style: 'bullet' }));
     if (block.style === 'section') return [block, { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 612 - margins[0] - margins[2], y2: 0, lineWidth: 0.5 }], margin: [0, 0, 0, 2] }];
     return [block];
   });
-  const closing = content.filter(b => b.style === 'closing');
   const definition = { pageSize: 'LETTER', pageMargins: margins,
-    defaultStyle: { font: letter ? 'Charter' : 'CMU Serif', fontSize: letter ? 12 : 9, lineHeight: letter ? 1.4 : 1, color: '#000000' },
-    styles: letter ? letterStyles : resumeStyles,
+    defaultStyle: { font: letter ? 'Charter' : 'CMU Serif', fontSize: letter ? 12 : 9, lineHeight: 1, color: '#000000' },
+    styles: letter ? letterLayout(model) : resumeStyles,
     ...(letter ? {
       background: { canvas: [{ type: 'rect', x: 0, y: 0, w: 612, h: 93.6, color: '#e1e1e1' }] },
       header: { stack: content.slice(0, 2), margin: [72, 23, 72, 0] },
-      footer: (page, pages) => page === pages ? { stack: closing, margin: [72, 0, 72, 0] } : null,
     } : {}),
-    content: letter ? content.slice(2).filter(b => b.style !== 'closing') : content,
+    content: letter ? content.slice(2) : content,
     info: { title: `${model.name} ${letter ? 'Cover Letter' : 'Resume'}`, author: model.name } };
-  const pdf = pdfMake.createPdf(definition);
+  const pdf = pdfMake.createPdf(definition, { bufferPages: projectLinks.size > 0 });
+  const stream = await pdf.getStream();
+  // pdfmake links each word; annotate complete laid-out titles instead, retaining wrapping.
+  // shortcut: uses pinned pdfmake layout markers; rerun link geometry tests when upgrading pdfmake.
+  let activeTitle;
+  if (projectLinks.size) for (const [number, page] of stream._pdfMakePages.entries()) {
+    const areas = new Map();
+    for (const { type, item: line } of page.items) {
+      if (type !== 'line') continue;
+      if (line._node) activeTitle = projectLinks.has(line.id) ? line.id : null;
+      if (activeTitle) {
+        const area = areas.get(activeTitle) || [Infinity, Infinity, -Infinity, -Infinity];
+        area[0] = Math.min(area[0], line.x); area[1] = Math.min(area[1], line.y);
+        area[2] = Math.max(area[2], line.x + line.getWidth()); area[3] = Math.max(area[3], line.y + line.getHeight());
+        areas.set(activeTitle, area);
+      }
+      if (line.lastLineInParagraph) activeTitle = null;
+    }
+    stream.switchToPage(number);
+    for (const [id, [x, y, right, bottom]] of areas) stream.link(x, y, right - x, bottom - y, projectLinks.get(id));
+  }
   const buffer = await pdf.getBuffer();
-  const pages = await pdf.getStream().then(stream => stream._pdfMakePages.length);
+  const pages = stream._pdfMakePages.length;
   return { buffer: Uint8Array.from(buffer).buffer, pages };
 }
 
 function docxDocument(model, job) {
-  const letter = model.kind === 'coverLetter', styles = letter ? letterStyles : resumeStyles;
+  const letter = model.kind === 'coverLetter', styles = letter ? letterLayout(model) : resumeStyles;
   const margins = letter ? letterMargins : resumeMargins, font = letter ? 'Charter' : 'CMU Serif';
   const width = 612 - margins[0] - margins[2];
   const paragraphs = [];
@@ -174,27 +207,28 @@ function docxDocument(model, job) {
     if (Array.isArray(block.text)) {
       paragraphs.push(new Paragraph({
         children: block.text.map(item => typeof item.link === 'string'
-          ? new ExternalHyperlink({ children: [new TextRun({ ...run, text: item.text, style: 'Hyperlink' })], link: item.link })
+          ? new ExternalHyperlink({ children: [new TextRun({ ...run, text: item.text, style: 'Hyperlink', underline: { type: 'single' } })], link: item.link })
           : new TextRun({ ...run, text: item.text })),
         alignment: style.alignment,
         indent: { left: Math.round((style.margin[0] || 0) * 20), firstLine: (block.leadingIndent || 0) * 20 },
-        spacing: { before: style.margin[1] * 20, after: (style.margin[3] + (block.style === 'section' ? 2 : 0)) * 20, line: Math.round(style.fontSize * 1.2 * 20), lineRule: 'exact' },
+        spacing: { before: style.margin[1] * 20, after: (style.margin[3] + (block.style === 'section' ? 2 : 0)) * 20, line: letter ? Math.round((style.lineHeight || 1) * 240) : Math.round(style.fontSize * 1.2 * 20), lineRule: letter ? 'auto' : 'exact' },
         ...(letter && ['name', 'contact'].includes(block.style) ? { shading: { fill: 'E1E1E1' } } : {}),
       }));
       continue;
     }
     const rightRun = typeof block.right?.link === 'string'
-      ? new ExternalHyperlink({ children: [new TextRun({ ...run, text: `\t${block.right.text}`, bold: false, style: 'Hyperlink' })], link: block.right.link })
+      ? new ExternalHyperlink({ children: [new TextRun({ ...run, text: `\t${block.right.text}`, bold: false, style: 'Hyperlink', underline: { type: 'single' } })], link: block.right.link })
       : (block.right ? new TextRun({ ...run, text: `\t${block.right.text || block.right}`, bold: false }) : null);
     const leftRuns = typeof block.text?.link === 'string'
-      ? [new ExternalHyperlink({ children: [new TextRun({ ...run, text: block.text.text, style: 'Hyperlink' })], link: block.text.link })]
+      ? [new ExternalHyperlink({ children: [new TextRun({ ...run, text: block.text.text, style: 'Hyperlink', underline: { type: 'single' } })], link: block.text.link })]
       : null;
     for (const text of block.ul || [block.text || '']) paragraphs.push(new Paragraph({
       children: [...(leftRuns || (block.ul ? `- ${text}` : text).split('\n').map((line, index) => new TextRun({ ...run, text: line, break: index ? 1 : 0 }))), ...(rightRun ? [rightRun] : [])],
       alignment: style.alignment,
       tabStops: block.right ? [{ type: TabStopType.RIGHT, position: Math.round(width * 20) }] : [],
       indent: { left: Math.round((style.margin[0] || 0) * 20), firstLine: (block.leadingIndent || 0) * 20 },
-      spacing: { before: style.margin[1] * 20, after: (style.margin[3] + (block.style === 'section' ? 2 : 0)) * 20, line: Math.round(style.fontSize * 1.2 * 20), lineRule: 'exact' },
+      spacing: { before: style.margin[1] * 20, after: (style.margin[3] + (block.style === 'section' ? 2 : 0)) * 20, line: letter ? Math.round((style.lineHeight || 1) * 240) : Math.round(style.fontSize * 1.2 * 20), lineRule: letter ? 'auto' : 'exact' },
+      keepLines: letter && block.style === 'closing',
       keepNext: ['section', 'title', 'facts'].includes(block.style),
       ...(block.style === 'section' ? { border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: '000000', space: 1 } } } : {}),
       ...(letter && ['name', 'contact'].includes(block.style) ? { shading: { fill: 'E1E1E1' } } : {}),

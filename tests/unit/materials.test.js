@@ -37,10 +37,13 @@ test('resume AI output cannot replace protected job titles or dates', () => {
   assert.equal(result.sections[0].facts, source.sections.find(s => s.id === 'work1').facts);
 });
 
-test('resume rejects unknown source sections', () => {
+test('resume retains generated sections with unknown or repeated IDs as editable draft text', () => {
   assert.equal(typeof model.validateMaterial, 'function');
   const source = model.buildMaterialSource(profile);
-  assert.throws(() => model.validateMaterial('resume', { sections: [{ id: 'invented', bullets: ['Led a team'] }] }, source), /source|unknown/i);
+  const result = model.validateMaterial('resume', { sections: [{ id: 'invented', heading: 'Additional work', bullets: ['Led a team'] }, { id: 'invented', bullets: ['Built a prototype'] }] }, source);
+  assert.deepEqual(result.sections.map(s => s.bullets), [['Led a team'], ['Built a prototype']]);
+  assert.equal(result.sections[0].heading, 'Additional work');
+  assert.equal(new Set(result.sections.map(s => s.id)).size, 2);
 });
 
 test('numbers do not block resume summaries, bullets, cover letters or targeted rewrites', () => {
@@ -105,9 +108,9 @@ test('material field routing distinguishes cover letter text, resume and unrelat
   assert.equal(upload.materialKind({ type: 'textarea', label: 'Why work here?' }, []), null);
 });
 
-test('generated skills cannot introduce a skill absent from source', () => {
+test('generated skills are displayed for user review even when absent from source', () => {
   const source = model.buildMaterialSource(profile);
-  assert.throws(() => model.validateMaterial('resume', { sections: [{ id: 'skills', bullets: ['Rust'] }] }, source), /skill|unsupported/i);
+  assert.deepEqual(model.validateMaterial('resume', { sections: [{ id: 'skills', bullets: ['Rust'] }] }, source).sections[0].bullets, ['Rust']);
 });
 
 test('missing profile descriptions never fall back to imported resume achievements', () => {
@@ -143,7 +146,7 @@ test('display metadata comes from saved facts, never unvalidated import properti
   assert.equal(source.sections.length, 1);
 });
 
-test('tailoring keeps a selected subset with grounded project keywords and relevance', () => {
+test('tailoring keeps selected draft text, protected project titles and optional metadata', () => {
   const source = model.buildMaterialSource({ ...profile, projects: [{ id: 'cad', name: 'Mechanical design', description: 'Reconstructed components in SolidWorks and AutoCAD.' }] });
   const result = model.validateMaterial('resume', { sections: [
     { id: 'cad', title: 'Invented title', keywords: ['SolidWorks', 'AutoCAD'], relevance: 3, bullets: ['Reconstructed components in SolidWorks.'] },
@@ -163,33 +166,50 @@ test('skills can come from explicit enabled descriptions when no skill chips are
   const result = model.validateMaterial('resume', { sections: [{ id: 'api', bullets: ['Built Python APIs.'] }, { id: 'skills', bullets: ['Python', 'SQL'] }] }, source);
   assert.deepEqual(result.sections.at(-1).bullets, ['Python', 'SQL']);
   for (const skill of ['Rust', 'Java', 'Expert Python', 'Python developer']) {
-    assert.throws(() => model.validateMaterial('resume', { sections: [{ id: 'skills', bullets: [skill] }] }, source), /unsupported skill/i);
+    assert.deepEqual(model.validateMaterial('resume', { sections: [{ id: 'skills', bullets: [skill] }] }, source).sections[0].bullets, [skill]);
   }
 });
 
-test('project keywords require evidence in that project and relevance must be bounded', () => {
+test('optional keyword and relevance deviations never reject otherwise renderable resumes', () => {
   const source = model.buildMaterialSource({ skills: ['Rust'], projects: [{ id: 'api', name: 'Integration', description: 'Built Python APIs.' }] });
   for (const keywords of [['Rust'], ['Java'], 'Python', ['Python', 'Python', 'Python', 'Python', 'Python']]) {
-    assert.throws(() => model.validateMaterial('resume', { sections: [{ id: 'api', keywords, bullets: [] }] }, source), /keyword/i);
+    const result = model.validateMaterial('resume', { sections: [{ id: 'api', keywords, bullets: ['Generated achievement'] }] }, source);
+    assert.deepEqual(result.sections[0].bullets, ['Generated achievement']);
+    assert.ok(result.sections[0].keywords.length);
   }
-  for (const relevance of [0, 4, '3', 1.5]) {
-    assert.throws(() => model.validateMaterial('resume', { sections: [{ id: 'api', relevance, bullets: [] }] }, source), /relevance/i);
+  for (const relevance of [0, 4, '3', 1.5, null, 'important']) {
+    const result = model.validateMaterial('resume', { sections: [{ id: 'api', relevance, keywords: null, bullets: ['Generated achievement'] }] }, source);
+    assert.deepEqual(result.sections[0].bullets, ['Generated achievement']);
+    assert.ok(result.sections[0].relevance >= 1 && result.sections[0].relevance <= 3);
   }
+  const result = model.validateMaterial('resume', { sections: [{ id: 'skills', keywords: ['unexpected'], bullets: ['Rust'] }, { id: 'api', keywords: ['A'.repeat(100), 'Python', 'Rust', 'SQL', 'JavaScript'], bullets: ['Built it.'] }] }, source);
+  assert.equal(result.sections[1].keywords.length, 5);
+  assert.deepEqual(result.sections[0].bullets, ['Rust']);
+  assert.equal(result.sections[0].keywords, undefined);
 });
 
 test('manual saves and targeted rewrites retain tailoring metadata', () => {
   const source = model.buildMaterialSource({ projects: [{ id: 'api', name: 'Integration', description: 'Built Python APIs.' }] });
   const current = model.validateMaterial('resume', { sections: [{ id: 'api', keywords: ['Python'], relevance: 3, bullets: ['Built APIs.'] }] }, source);
   const merged = model.mergeMaterialRewrite(current, { sections: [{ id: 'api', keywords: ['Rust'], relevance: 1, bullets: ['Built reliable APIs.'] }] }, 'section:api');
-  const saved = model.validateMaterial('resume', merged, source, { manual: true });
+  const saved = model.validateMaterial('resume', merged, source);
   assert.deepEqual(saved.sections[0].keywords, ['Python']);
   assert.equal(saved.sections[0].relevance, 3);
   assert.deepEqual(saved.sections[0].bullets, ['Built reliable APIs.']);
 });
 
-test('skill grounding preserves punctuation and does not mistake C++ for C', () => {
+test('draft skills preserve punctuation and user-reviewable wording', () => {
   const source = model.buildMaterialSource({ projects: [{ id: 'embedded', name: 'Controller', description: 'Built C++ firmware and C# tools with .NET.' }] });
   const result = model.validateMaterial('resume', { sections: [{ id: 'skills', bullets: ['C++', 'C#', '.NET'] }] }, source);
   assert.deepEqual(result.sections[0].bullets, ['C++', 'C#', '.NET']);
-  assert.throws(() => model.validateMaterial('resume', { sections: [{ id: 'skills', bullets: ['C'] }] }, source), /unsupported skill/i);
+  assert.deepEqual(model.validateMaterial('resume', { sections: [{ id: 'skills', bullets: ['C'] }] }, source).sections[0].bullets, ['C']);
+});
+
+test('generated section display metadata survives saving and reserved IDs remain editable', () => {
+  const source = model.buildMaterialSource(profile);
+  const output = { sections: [{ id: 'summary', category: 'Projects', heading: 'Additional prototype', title: 'Additional prototype', subtitle: 'Developer', facts: 'Project context', dates: '2024', link: 'https://example.org/prototype', bullets: ['Draft details.'] }] };
+  const result = model.validateMaterial('resume', output, source);
+  assert.notEqual(result.sections[0].id, 'summary');
+  for (const key of ['title', 'subtitle', 'facts', 'dates', 'link']) assert.equal(result.sections[0][key], output.sections[0][key]);
+  assert.deepEqual(model.validateMaterial('resume', result, source), result);
 });

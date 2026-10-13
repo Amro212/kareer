@@ -62,6 +62,28 @@ test('project keywords render beside the protected title in PDF and Word', async
   } finally { await loading.destroy(); }
 });
 
+test('multiword and wrapped project titles each have one complete PDF and Word hyperlink', async () => {
+  const names = ['Transformer Training Optimization / ACA Project', 'A detailed engineering project title with enough saved tools and technical context to wrap naturally across several lines without covering the dates or losing any words'.repeat(2)];
+  const source = buildMaterialSource({ fullName: 'Test Applicant', projects: names.map((name, i) => ({ id: `project${i}`, name, url: 'https://example.org/shared-project', startDate: '2024-01', endDate: '2024-12', description: 'Built a prototype.' })) });
+  const exported = await exportMaterial(source, {});
+  const loading = getDocument({ data: new Uint8Array(exported.files.pdf.buffer.slice(0)), isEvalSupported: false, useWasm: false });
+  try {
+    const page = await (await loading.promise).getPage(1), links = (await page.getAnnotations()).filter(a => a.url === 'https://example.org/shared-project');
+    assert.equal(links.length, 2, 'one annotation per title, even when URLs match');
+    const { items } = await page.getTextContent();
+    for (const title of names) assert.ok(items.map(i => i.str).join(' ').replace(/\s+/g, ' ').includes(title));
+    for (const item of items.filter(i => i.str.trim() && i.str !== '-' && !/2024-|Built a prototype|Projects|Test Applicant/.test(i.str))) {
+      const centerX = item.transform[4] + item.width / 2, centerY = item.transform[5] + item.height / 2;
+      assert.ok(links.some(a => centerX >= a.rect[0] && centerX <= a.rect[2] && centerY >= a.rect[1] && centerY <= a.rect[3]), `annotation covers title text: ${item.str}`);
+      const dates = items.filter(i => i.str.includes('2024-') && Math.abs(i.transform[5] - item.transform[5]) < 1);
+      assert.ok(item.transform[4] + item.width <= 587.52, 'wrapped title stays inside page margin');
+      if (dates.length) assert.ok(item.transform[4] + item.width < Math.min(...dates.map(i => i.transform[4])), 'title does not overlap dates on its line');
+    }
+  } finally { await loading.destroy(); }
+  const zip = await JSZip.loadAsync(exported.files.docx.buffer), xml = await zip.file('word/document.xml').async('string');
+  assert.equal((xml.match(/<w:hyperlink /g) || []).length, 2);
+});
+
 test('reference formatting keeps compact resume type, section order and embedded Word fonts', async () => {
   const source = buildMaterialSource({ fullName: 'Test Applicant', email: 'test@example.com',
     workExperiences: [{ id: 'role', title: 'Engineer', company: 'Acme', location: 'Toronto', startDate: '2024-01', current: true, description: 'Built reliable APIs.' }],
@@ -110,7 +132,7 @@ test('cover letter has distinct serif stationery and right-aligned closing witho
     assert.equal(first.height, 12); assert.equal(first.transform[4], 72); assert.equal(next.transform[4], 96);
     const closing = items.find(i => i.str === 'Sincerely,');
     assert.ok(Math.abs(closing.transform[4] + closing.width - 540) < 0.1);
-    assert.ok(closing.transform[5] < 75, 'closing inside reserved bottom margin');
+    assert.ok(next.transform[5] - closing.transform[5] < 70, 'closing follows body without a detached footer');
     assert.ok(name.transform[5] > 698.4, 'letterhead inside 93.6pt header band');
     assert.equal(exported.templateVersion, MATERIAL_TEMPLATE_VERSION);
   } finally { await loading.destroy(); }
@@ -137,9 +159,34 @@ test('legacy letter exports split body blocks and remove the repeated contact si
     const { items } = await (await (await loading.promise).getPage(1)).getTextContent();
     assert.equal(items.filter(i => i.str === model.contact).length, 1);
     const signature = items.find(i => i.str === model.name && i.height === 12);
-    assert.ok(signature.transform[5] < 75);
+    const lastBody = items.find(i => i.str === 'I welcome a conversation.');
+    assert.ok(lastBody.transform[5] - signature.transform[5] < 90);
     assert.ok(Math.abs(signature.transform[4] + signature.width - 540) < 0.1);
   } finally { await loading.destroy(); }
+});
+
+test('short standard and detailed letters use balanced readable spacing without padding text', async () => {
+  const sentence = 'I designed and tested embedded systems, documented results, and explained engineering tradeoffs to project teams.';
+  for (const repeat of [4, 7, 10]) {
+    const model = { kind: 'coverLetter', name: 'Test Applicant', contact: 'test@example.com', paragraphs: ['Dear Hiring Team,', ...Array.from({ length: 3 }, () => Array(repeat).fill(sentence).join(' ')), 'Sincerely,\nTest Applicant'] };
+    const result = await exportMaterial(model, { company: 'Acme' });
+    assert.equal(result.pages, 1);
+    assert.deepEqual(result.model.paragraphs, model.paragraphs);
+    const loading = getDocument({ data: new Uint8Array(result.files.pdf.buffer.slice(0)), isEvalSupported: false, useWasm: false });
+    try {
+      const { items } = await (await (await loading.promise).getPage(1)).getTextContent();
+      const body = items.filter(i => i.height === 12 && i.str.startsWith('I designed'));
+      const signature = items.find(i => i.str === model.name && i.height === 12);
+      assert.ok(signature.transform[5] < 300 && signature.transform[5] > 54, 'chosen lengths occupy the page without overflowing');
+      const lastBody = items.filter(i => i.str && i.height === 12 && i.str !== 'Sincerely,' && i.str !== model.name).at(-1);
+      assert.ok(lastBody.transform[5] - signature.transform[5] < 90, 'signature remains with the letter');
+      assert.ok(body.length >= 3);
+      const bodyLines = items.filter(i => i.height === 12 && i.str.trim() && i.transform[5] <= body[0].transform[5] && i.str !== 'Sincerely,' && i.str !== model.name);
+      for (let i = 1; i < bodyLines.length; i++) assert.ok(bodyLines[i - 1].transform[5] - bodyLines[i].transform[5] >= 12, '12pt body text has at least 12pt baseline separation');
+    } finally { await loading.destroy(); }
+    const zip = await JSZip.loadAsync(result.files.docx.buffer), xml = await zip.file('word/document.xml').async('string');
+    assert.match(xml, /w:lineRule="auto"/);
+  }
 });
 
 test('standard, detailed and overflowing letters retain all text with the closing on the final page', async () => {
@@ -158,8 +205,8 @@ test('standard, detailed and overflowing letters retain all text with the closin
         for (const item of items.filter(i => i.str.trim())) assert.match(page.commonObjs.get(item.fontName).name, /Charter/);
         const signature = items.find(i => i.str === 'Sincerely,');
         assert.equal(Boolean(signature), number === pdf.numPages);
-        if (signature) assert.ok(signature.transform[5] < 75);
-        const content = items.filter(i => i.height === 12 && i.str && i.transform[5] >= 75);
+        if (signature) assert.ok(signature.transform[5] > 54);
+        const content = items.filter(i => i.height === 12 && i.str && i.transform[5] >= 54);
         for (const item of content) assert.ok(item.transform[4] >= 72 && item.transform[4] + item.width <= 540.1, 'body stays inside horizontal margins');
         body += content.map(i => i.str).join(' ') + ' ';
       }
@@ -250,4 +297,27 @@ test('resume exports hyperlinks for contact and projects with clean readable lab
   assert.match(rels, /https:\/\/github\.com\/Amro212\/kareer/);
   assert.match(rels, /https:\/\/amro\.dev/);
   assert.match(rels, /github\.com\/arivera\/flowmesh/);
+});
+
+test('resume and cover letter hyperlinks are visibly underlined in PDF and Word', async () => {
+  const source = buildMaterialSource({ fullName: 'Test Applicant', email: 'test@example.com', linkedin: 'https://linkedin.com/in/test',
+    workExperiences: [{ id: 'role', title: 'Engineer', company: 'Acme', location: 'https://acme.org', description: 'Built APIs.' }],
+    projects: [{ id: 'project', name: 'Linked project title', url: 'https://example.org/project', startDate: '2024-01', current: true, description: 'Built a prototype.' }],
+  });
+  for (const model of [source, { kind: 'coverLetter', name: source.name, contact: source.contact, paragraphs: ['Dear Hiring Team,', 'I build reliable APIs.', 'Sincerely,\nTest Applicant'] }]) {
+    const exported = await exportMaterial(model, {});
+    const zip = await JSZip.loadAsync(exported.files.docx.buffer);
+    for (const path of ['word/document.xml', 'word/header1.xml']) {
+      if (!zip.file(path)) continue;
+      const xml = await zip.file(path).async('string');
+      for (const link of xml.matchAll(/<w:hyperlink\b[\s\S]*?<\/w:hyperlink>/g)) assert.match(link[0], /<w:u w:val="single"\/>/);
+    }
+    const loading = getDocument({ data: new Uint8Array(exported.files.pdf.buffer.slice(0)), isEvalSupported: false, useWasm: false });
+    try {
+      const page = await (await loading.promise).getPage(1), operators = await page.getOperatorList();
+      const thinRects = operators.argsArray.filter((_, i) => operators.fnArray[i] === OPS.constructPath).map(args => args[2]).filter(rect => rect && rect[2] - rect[0] > 5 && rect[3] - rect[1] > 0 && rect[3] - rect[1] < 1);
+      assert.ok(thinRects.length >= (model.kind === 'resume' ? 4 : 2), 'visible underline strokes for contact, location and project links');
+      if (model.kind === 'resume') assert.equal((await page.getAnnotations()).filter(a => a.url === 'https://example.org/project').length, 1);
+    } finally { await loading.destroy(); }
+  }
 });

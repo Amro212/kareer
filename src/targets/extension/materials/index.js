@@ -104,7 +104,7 @@ function renderEditor() {
   $('editor-sections').innerHTML = sections.map(s => `<button class="secondary" data-editor-section="${escape(s.id)}">${escape(s.heading)}${s.category ? `<small>${escape(s.category)}</small>` : ''}</button>`).join('');
   for (const button of document.querySelectorAll('[data-editor-section]')) button.onclick = () => selectSection(button.dataset.editorSection);
   $('document-editor').innerHTML = !model ? '' : kind === 'coverLetter' ? model.paragraphs.map((p, i) => `<div class="editor-block" data-editor-id="paragraph:${i}"><div class="editor-block-header"><h3>Paragraph ${i + 1}</h3><button class="secondary" data-rewrite="paragraph:${i}">Rewrite paragraph</button></div><label for="paragraph-${i}">Paragraph text</label><textarea id="paragraph-${i}" data-paragraph="${i}" rows="10">${escape(p)}</textarea></div>`).join('') :
-    `<div class="editor-block" data-editor-id="summary"><div class="editor-block-header"><h3>Summary</h3><button class="secondary" data-rewrite="summary">Rewrite summary</button></div><label for="resume-summary">Professional summary</label><textarea id="resume-summary" rows="10">${escape(model.summary)}</textarea></div>` + model.sections.map((s, i) => `<div class="editor-block" data-editor-id="${escape(s.id)}"><div class="editor-block-header"><div><h3>${escape(s.heading)}</h3><p class="muted">${escape(s.category)}</p></div><button class="secondary" data-rewrite="section:${escape(s.id)}">Rewrite section</button></div>${s.facts ? `<p class="muted">${escape(s.facts)}</p>` : ''}<label for="section-${i}">${s.category === 'Skills' ? 'Skills, one per line' : 'Achievements, one per line'}</label><textarea id="section-${i}" data-section="${i}" rows="12">${escape(s.bullets.join('\n'))}</textarea></div>`).join('');
+    `<div class="editor-block" data-editor-id="summary"><div class="editor-block-header"><h3>Summary</h3><button class="secondary" data-rewrite="summary">Rewrite summary</button></div><label for="resume-summary">Professional summary</label><textarea id="resume-summary" rows="10">${escape(model.summary)}</textarea></div>` + model.sections.map((s, i) => `<div class="editor-block" data-editor-id="${escape(s.id)}"><div class="editor-block-header"><div><h3>${escape(s.heading)}</h3><p class="muted">${escape(s.category)}</p></div><button class="secondary" data-rewrite="section:${escape(s.id)}">Rewrite section</button></div>${s.facts ? `<p class="muted">${escape(s.facts)}</p>` : ''}${s.category === 'Projects' ? `<label for="keywords-${i}">Project keywords, one per line</label><textarea id="keywords-${i}" data-keywords="${i}" rows="2">${escape((s.keywords || []).join('\n'))}</textarea>` : ''}<label for="section-${i}">${s.category === 'Skills' ? 'Skills, one per line' : 'Achievements, one per line'}</label><textarea id="section-${i}" data-section="${i}" rows="12">${escape(s.bullets.join('\n'))}</textarea></div>`).join('');
   for (const button of document.querySelectorAll('[data-rewrite]')) button.onclick = async () => {
     try { await saveDocument(); await generate({ path: button.dataset.rewrite, revision: selected.revision }); }
     catch (error) { feedback(error.message, true); }
@@ -117,7 +117,11 @@ function renderEditor() {
 function collectModel() {
   const model = structuredClone(selected.model);
   if (model.kind === 'coverLetter') model.paragraphs = [...document.querySelectorAll('[data-paragraph]')].map(el => el.value.trim()).filter(Boolean);
-  else { model.summary = $('resume-summary').value; for (const el of document.querySelectorAll('[data-section]')) model.sections[Number(el.dataset.section)].bullets = el.value.split('\n').map(s => s.trim()).filter(Boolean); }
+  else {
+    model.summary = $('resume-summary').value;
+    for (const el of document.querySelectorAll('[data-section]')) model.sections[Number(el.dataset.section)].bullets = el.value.split('\n').map(s => s.trim()).filter(Boolean);
+    for (const el of document.querySelectorAll('[data-keywords]')) model.sections[Number(el.dataset.keywords)].keywords = el.value.split('\n').map(s => s.trim()).filter(Boolean);
+  }
   return model;
 }
 

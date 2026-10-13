@@ -64,7 +64,8 @@ async function assertPdf(data, kind) {
       expect(items.find(i => i.str === 'I supported 10 services.').transform[4]).toBe(72);
       expect(items.find(i => i.str === 'I welcome a conversation.').transform[4]).toBe(96);
       const signature = items.find(i => i.str === legacy.name && i.height === 12);
-      expect(signature.transform[5]).toBeLessThan(75); expect(signature.transform[4] + signature.width).toBeCloseTo(540, 1);
+      const lastBody = items.find(i => i.str === 'I welcome a conversation.');
+      expect(lastBody.transform[5] - signature.transform[5]).toBeLessThan(90); expect(signature.transform[4] + signature.width).toBeCloseTo(540, 1);
     } else expect(items.find(i => /^-? ?Built APIs for 10 services\.$/.test(i.str)).height).toBe(8);
   } finally { await loading.destroy(); }
 }

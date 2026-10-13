@@ -1,8 +1,6 @@
 /** Host-independent profile source and output validation. */
 const text = value => String(value ?? '').trim();
 const lines = value => text(value).split(/\n+|(?<=\.)\s+(?=[A-Z])/).map(s => s.replace(/^[-•]\s*/, '').trim()).filter(Boolean);
-// shortcut: literal matches cannot prove proficiency or negation; add evidence annotations if semantic false positives recur.
-const mentions = (facts, phrase) => new RegExp(`(^|[^\\p{L}\\p{N}+#])${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=$|[^\\p{L}\\p{N}+#])`, 'iu').test(facts.replace(/\s+/g, ' '));
 export const MATERIAL_KINDS = ['resume', 'coverLetter'];
 export const DOCX_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
@@ -70,7 +68,7 @@ export function mergeMaterialRewrite(current, output, path) {
   return result;
 }
 
-export function validateMaterial(kind, output, source, { manual = false } = {}) {
+export function validateMaterial(kind, output, source) {
   if (!MATERIAL_KINDS.includes(kind)) throw new Error('Unknown document kind.');
   if (!output || typeof output !== 'object') throw new Error('AI returned invalid document data.');
   if (kind === 'coverLetter') {
@@ -82,21 +80,24 @@ export function validateMaterial(kind, output, source, { manual = false } = {}) 
     return { kind, name: source.name, contact: source.contact, paragraphs };
   }
   if (!Array.isArray(output.sections) || !output.sections.length || output.sections.length > 100) throw new Error('Resume sections are empty or invalid.');
-  const ids = new Set();
-  const skillFacts = source.sections.filter(s => s.category !== 'Skills').flatMap(s => s.bullets).join('\n');
-  const sections = output.sections.map(section => {
-    const original = source.sections.find(s => s.id === section.id) || (section.id === 'skills' && skillFacts.trim() ? { id: 'skills', category: 'Skills', heading: 'Skills', facts: '', bullets: [], protected: true } : null);
-    if (!original || ids.has(section.id)) throw new Error('Resume includes an unknown or duplicate source section.');
-    ids.add(section.id);
+  const ids = new Set(['summary']);
+  const sections = output.sections.map((section, index) => {
+    if (!section || typeof section !== 'object') throw new Error('Resume section data is invalid.');
+    const original = source.sections.find(s => s.id === section.id) || {
+      id: text(section.id) || `generated-${index}`, category: section.id === 'skills' ? 'Skills' : text(section.category) || 'Additional information',
+      heading: section.id === 'skills' ? 'Skills' : text(section.heading || section.title) || 'Additional information',
+      title: text(section.title), subtitle: text(section.subtitle), facts: text(section.facts), dates: text(section.dates), location: text(section.location),
+      link: /^https?:\/\//i.test(text(section.link)) ? text(section.link) : '', bullets: [],
+    };
+    let id = text(original.id);
+    while (ids.has(id)) id += '_';
+    ids.add(id);
     if (!Array.isArray(section.bullets) || section.bullets.length > 100 || section.bullets.some(b => typeof b !== 'string')) throw new Error('Resume bullets are invalid.');
     const bullets = section.bullets.map(text).filter(Boolean);
-    if (!manual && original.category === 'Skills' && bullets.some(b => !original.bullets.includes(b) && !mentions(skillFacts, b))) throw new Error('Resume includes an unsupported skill. Use saved skills or explicit source descriptions.');
-    if (section.relevance !== undefined && (!Number.isInteger(section.relevance) || section.relevance < 1 || section.relevance > 3)) throw new Error('Resume relevance must be 1, 2 or 3.');
-    if (section.keywords !== undefined && (original.category !== 'Projects' || !Array.isArray(section.keywords) || section.keywords.length > 4 || section.keywords.some(k => typeof k !== 'string' || !k.trim() || k.length > 80))) throw new Error('Resume project keywords are invalid.');
-    const keywords = section.keywords?.map(text);
-    if (!manual && keywords?.some(k => !mentions([original.title, original.subtitle, ...original.bullets].filter(Boolean).join('\n'), k))) throw new Error('Resume project keywords require evidence in that project.');
-    // Contact, employers, titles, dates and education are always taken from source.
-    return { ...original, bullets, ...(section.relevance !== undefined ? { relevance: section.relevance } : {}), ...(keywords ? { keywords: [...new Set(keywords)] } : {}) };
+    const keywords = original.category === 'Projects' ? (Array.isArray(section.keywords) ? section.keywords : typeof section.keywords === 'string' ? section.keywords.split(/[,;\n]/) : []).filter(k => typeof k === 'string').map(text).filter(Boolean) : undefined;
+    const relevance = Number(section.relevance);
+    // Normalize optional metadata; content judgments belong to the user, not rejection gates.
+    return { ...original, id, bullets, ...(section.relevance !== undefined ? { relevance: Number.isFinite(relevance) ? Math.max(1, Math.min(3, Math.round(relevance))) : 2 } : {}), ...(keywords ? { keywords: [...new Set(keywords)] } : {}) };
   });
   const summary = text(output.summary);
   return { kind, name: source.name, contact: source.contact, summary, sections };
