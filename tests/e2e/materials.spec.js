@@ -15,7 +15,7 @@ test('generated resumes with metadata deviations open for editing without conten
       { id: 'extra', heading: 'Additional evidence', bullets: ['Generated additional detail.'] },
     ] }) } }] };
   };
-  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=resume`);
   await expect(workspace.locator('#generate')).toBeEnabled();
   await workspace.locator('#job-description').fill('Build APIs.'); await workspace.locator('#generate').click();
   await expect(workspace.locator('#feedback')).toContainText('Ready', { timeout: 45000 });
@@ -52,7 +52,7 @@ test('selected evidence, project keywords and description-backed skills survive 
       ],
     }) } }] };
   };
-  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=resume`);
   await expect(workspace.locator('#generate')).toBeEnabled();
   await workspace.locator('#job-title').fill('Technical Solutions Engineer');
   await workspace.locator('#job-description').fill('Explain technical solutions to clients. Build Python integrations and use SolidWorks CAD.');
@@ -96,7 +96,7 @@ test('tailoring uses profile facts only even when an old base resume exists', as
       }; req.onerror = () => reject(req.error);
     });
   });
-  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=resume`);
   await expect(workspace.locator('#generate')).toBeEnabled();
   const first = await waitTask(workspace, await message(workspace, 'start', { kind: 'resume', job: { localId: 'profile-only', description: 'Build APIs.' } }));
   const record = await message(workspace, 'get', { id: first.material.id });
@@ -116,7 +116,7 @@ test('tailoring uses profile facts only even when an old base resume exists', as
 
 test('workspace tabs retain drafts and downloads save the current section edits', async ({ kr }, testInfo) => {
   await kr.seed({ profile: PROFILE }); kr.openrouter.handler = materialResponse;
-  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=resume`);
   await expect(workspace.locator('#generate')).toBeEnabled();
   await workspace.setViewportSize({ width: 1800, height: 1000 });
   await workspace.locator('#job-title').fill('API Engineer'); await workspace.locator('#job-description').fill('Build dependable APIs.');
@@ -131,6 +131,7 @@ test('workspace tabs retain drafts and downloads save the current section edits'
   await workspace.locator('.writing-settings summary').click();
   await workspace.locator('#instructions').fill('Emphasize observability.');
   await workspace.locator('#view-edit').click();
+  await workspace.locator('#recent-navigation summary').click();
   await workspace.locator('#saved-jobs button').first().click();
   await expect(workspace.locator('#draft-dialog')).not.toBeVisible();
   await expect(workspace.locator('#resume-summary')).toHaveText('My current unsaved summary.');
@@ -161,7 +162,7 @@ test('workspace tabs retain drafts and downloads save the current section edits'
 
 test('document switches persist drafts automatically and concurrent saves retain failed edits', async ({ kr }) => {
   await kr.seed({ profile: PROFILE }); kr.openrouter.handler = materialResponse;
-  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=resume`);
   await expect(workspace.locator('#generate')).toBeEnabled();
   await workspace.locator('#job-description').fill('Build APIs.'); await workspace.locator('#generate').click();
   await expect(workspace.locator('#feedback')).toContainText('Ready', { timeout: 45000 });
@@ -447,7 +448,7 @@ test('concurrent jobs stay isolated; cancellation and persisted interruption all
   const ids = await kr.readStorage('kr:sessions');
   const sessions = await Promise.all(ids.map(id => kr.readStorage(`kr:sessions:${id}`)));
   expect(new Set(sessions.map(s => s.materialRefs.resume.id)).size).toBe(2);
-  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=resume`);
   await expect(workspace.locator('#new-job')).toBeEnabled();
   const task = await message(workspace, 'start', { kind: 'resume', sessionId: sessions[0].id, job: sessions[0].job });
   await message(workspace, 'cancel', { id: task.id });
@@ -465,7 +466,7 @@ test('concurrent jobs stay isolated; cancellation and persisted interruption all
 
 test('workspace preserves profile facts and saves editable documents beyond the requested page count', async ({ kr }) => {
   await kr.seed({ profile: PROFILE }); kr.openrouter.handler = materialResponse;
-  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=resume`);
   await expect(workspace.locator('#generate')).toBeEnabled();
   await workspace.locator('#job-title').fill('Engineer'); await workspace.locator('#job-description').fill('Build JavaScript APIs.');
   await workspace.locator('#generate').click(); await expect(workspace.locator('#feedback')).toContainText('Ready', { timeout: 45000 });
@@ -486,7 +487,7 @@ test('workspace preserves profile facts and saves editable documents beyond the 
 
 test('edits saved while generation is running survive its completion', async ({ kr }) => {
   await kr.seed({ profile: PROFILE }); kr.openrouter.handler = materialResponse;
-  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=resume`);
   await expect(workspace.locator('#generate')).toBeEnabled();
   const job = { localId: 'race', title: 'Engineer', description: 'Build JavaScript APIs.' };
   const first = await waitTask(workspace, await message(workspace, 'start', { kind: 'resume', job }));
@@ -506,7 +507,7 @@ test('edits saved while generation is running survive its completion', async ({ 
 
 test('regeneration retains corrected job context and saved document options', async ({ kr }) => {
   await kr.seed({ profile: PROFILE }); kr.openrouter.handler = materialResponse;
-  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=resume`);
   await expect(workspace.locator('#generate')).toBeEnabled();
   const original = { localId: 'corrected', title: 'Engineer', description: 'Original job description.' };
   const corrected = { ...original, title: 'API Engineer', company: 'Acme', description: 'Corrected job description: build JavaScript APIs.' };
@@ -551,7 +552,7 @@ test('automatic full navigation keeps the document selected when Autofill began'
   await page.goto(kr.fixtureUrl('acme/materials-navigation', undefined, '?step=1')); await kr.openPanel(page);
   await page.locator('#kr-tailor-resume').click(); await expect(page.locator('#kr-material-resume-status')).toContainText('Ready', { timeout: 45000 });
   const ids = await kr.readStorage('kr:sessions'), session = await kr.readStorage(`kr:sessions:${ids[0]}`);
-  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`); await expect(workspace.locator('#generate')).toBeEnabled();
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=resume`); await expect(workspace.locator('#generate')).toBeEnabled();
   const old = await message(workspace, 'get', { id: session.materialRefs.resume.id });
   kr.openrouter.delayMs = 800;
   generation = await message(workspace, 'start', { kind: 'resume', job: session.job, sessionId: session.id });

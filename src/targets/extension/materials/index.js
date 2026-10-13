@@ -8,6 +8,7 @@ import { createMaterialEditor } from './editor.js';
 import { editorSections, rewriteText } from './editor-model.js';
 import { MaterialAutosave } from './autosave.js';
 import { formatContactRuns } from './document-format.js';
+import { renderApplicationLibrary } from './library.js';
 
 setupPdfWorker(api.runtime.getURL('materials/pdf.worker.mjs'));
 const $ = id => document.getElementById(id);
@@ -15,13 +16,19 @@ const query = new URLSearchParams(location.search), originalSessionId = query.ge
 let sessionId = originalSessionId, originJobKey = '', kind = query.get('kind') === 'coverLetter' ? 'coverLetter' : 'resume';
 let job = { localId: crypto.randomUUID(), title: '', company: '', description: '' }, selected = null, task = null, records = [];
 let documentEditor, autosave, busy = false, switching = false, proof = false, rewritePending = false, previewVersion = 0;
+let focusAfterSwitch;
 
 async function request(operation, input = {}) {
   const result = await sendMessage({ type: MSG.MATERIALS, operation, input });
   if (result?.error && !result.status) throw new Error(result.error);
   return ['get', 'save'].includes(operation) ? decodeMaterial(result) : result;
 }
-const feedback = (message, error = false) => { $('feedback').textContent = message; $('feedback').classList.toggle('error', error); };
+function feedback(message, error = false) {
+  for (const id of ['feedback', 'library-feedback']) {
+    $(id).textContent = message;
+    $(id).classList.toggle('error', error);
+  }
+}
 const readJob = () => ({ ...job, title: $('job-title').value.trim(), company: $('job-company').value.trim(), description: $('job-description').value.trim() });
 const options = () => ({ pageTarget: Number($('page-target').value), tone: $('tone').value, length: $('length').value, instructions: $('instructions').value.trim() });
 const readDraft = () => ({ model: documentEditor.model(), pageTarget: Number($('page-target').value) });
@@ -35,9 +42,56 @@ function showView(view) {
   $('generate').textContent = selected ? kind === 'resume' ? 'Regenerate resume' : 'Regenerate cover letter' : kind === 'resume' ? 'Tailor resume' : 'Generate cover letter';
   if (view === 'edit') requestAnimationFrame(resizePaper);
 }
+
+function showWorkspace() {
+  $('materials-library').hidden = true;
+  $('application-workspace').hidden = false;
+  $('recent-navigation').hidden = false;
+}
+
+function showLibrary(focus = true) {
+  $('materials-library').hidden = false;
+  $('application-workspace').hidden = true;
+  $('recent-navigation').hidden = true;
+  $('download-menu').close();
+  const url = new URL(location.href);
+  url.searchParams.set('view', 'library');
+  history.replaceState(null, '', url);
+  if (focus) $('library-heading').focus({ preventScroll: true });
+}
+
+function paintLibrary() {
+  renderApplicationLibrary({
+    container: $('application-list'),
+    records,
+    search: $('application-search').value,
+    onOpen: (next, nextKind) => {
+      void switchDocument(async () => {
+        await selectJob(next, false);
+        await switchKind(nextKind);
+        $('job-heading').focus({ preventScroll: true });
+      }).catch(error => feedback(error.message, true));
+    },
+  });
+  $('application-list').setAttribute('aria-busy', 'false');
+}
+
+async function openLibrary() {
+  await refreshLibrary();
+  feedback('');
+  showLibrary();
+}
+
+async function newApplication() {
+  await selectJob({ localId: crypto.randomUUID(), title: '', company: '', description: '' }, false);
+  await switchKind(kind);
+  feedback('');
+  focusAfterSwitch = $('job-title');
+}
+
 function setBusy(value) {
   busy = value;
-  for (const control of document.querySelectorAll('#prepare-panel button, #prepare-panel input, #prepare-panel textarea, #prepare-panel select, .tabs button, #new-job, #delete-document, #saved-jobs button')) control.disabled = value;
+  for (const control of document.querySelectorAll('#prepare-panel button, #prepare-panel input, #prepare-panel textarea, #prepare-panel select, .tabs button, .task-tabs button, #new-job, #start-new-application, #materials-home, #back-to-library, #delete-document, #saved-jobs button, #application-list button, #application-search')) control.disabled = value;
   $('cancel').disabled = false;
   documentEditor?.editor.setEditable(!value, false);
 }
@@ -116,6 +170,7 @@ async function refreshLibrary() {
     $('saved-jobs').append(button);
   }
   if (!jobs.size) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Prepared documents appear here.'; $('saved-jobs').append(p); }
+  paintLibrary();
   updateSelectedJobNav(); setBusy(busy);
 }
 function paperHeader(model) {
@@ -137,15 +192,19 @@ function paperHeader(model) {
   }
 }
 async function renderDocument(record) {
+  showWorkspace();
   ++previewVersion;
   autosave?.dispose(); documentEditor?.destroy(); autosave = null; documentEditor = null;
   selected = record; proof = false;
+  rewritePending = false;
+  $('rewrite-status').hidden = true;
   // Keep navigation identity in the URL so reload restores the same local draft.
   const url = new URL(location.href);
   url.searchParams.set('kind', kind);
   if (record) url.searchParams.set('document', record.id); else url.searchParams.delete('document');
   if (sessionId) url.searchParams.set('session', sessionId); else url.searchParams.delete('session');
   url.searchParams.delete('job');
+  url.searchParams.delete('view');
   history.replaceState(null, '', url);
   $('proof-toggle').setAttribute('aria-pressed', 'false'); $('proof-toggle').textContent = 'PDF proof';
   $('proof-panel').hidden = true; $('editor-section').hidden = false;
@@ -162,7 +221,7 @@ async function renderDocument(record) {
   paperHeader(model);
   $('editor-sections').replaceChildren();
   for (const section of editorSections(model)) {
-    const button = document.createElement('button'); button.className = 'secondary'; button.dataset.editorSection = section.id; button.textContent = section.label;
+    const button = document.createElement('button'); button.className = 'secondary'; button.dataset.editorSection = section.id; button.textContent = section.label; button.title = section.label;
     if (section.category && section.category !== section.label) { const small = document.createElement('small'); small.textContent = section.category; button.append(small); }
     button.onclick = () => { if (proof) void toggleProof(); documentEditor.focusSection(section.id); activeSection(section.id); };
     $('editor-sections').append(button);
@@ -215,13 +274,25 @@ async function switchDocument(action) {
     await autosave?.tail.catch(() => {});
     if (rewritePending) await request('cancelRewrite', { id: selected.id });
     setBusy(true); await action();
-  } finally { if (autosave === previous) autosave?.resume(); setBusy(false); switching = false; }
+  } finally {
+    if (autosave === previous) autosave?.resume();
+    setBusy(false);
+    switching = false;
+    focusAfterSwitch?.focus({ preventScroll: true });
+    focusAfterSwitch = null;
+  }
+}
+function updateJobContext() {
+  $('job-heading').textContent = job.title || 'Prepare for a job';
+  $('company-heading').textContent = job.company || '';
+  $('job-heading').title = job.title || '';
+  $('company-heading').title = job.company || '';
 }
 async function selectJob(next, load = true) {
   job = next;
   sessionId = originJobKey && materialJobKey(job) === originJobKey ? originalSessionId : null;
   $('job-title').value = job.title || ''; $('job-company').value = job.company || ''; $('job-description').value = job.description || '';
-  $('job-heading').textContent = job.title || 'Prepare for a job'; $('company-heading').textContent = job.company || '';
+  updateJobContext();
   updateSelectedJobNav(); if (load) await loadCurrentDocument();
 }
 async function loadCurrentDocument() {
@@ -247,9 +318,15 @@ async function generate() {
     if (task.needsWorkspace) { feedback(task.reason, true); showView('prepare'); task = null; return; }
     $('cancel').hidden = false;
     while (task.status === 'running') { feedback(task.phase || 'Writing your document…'); await new Promise(resolve => setTimeout(resolve, 700)); task = await request('status', { id: task.id }); }
-    if (task.status === 'error') throw new Error(task.error);
+    if (task.status === 'error') {
+      if (/^Generation (cancelled|canceled)\./i.test(task.error)) {
+        feedback('Generation canceled. No documents were changed.');
+        return;
+      }
+      throw new Error(task.error);
+    }
     await refreshLibrary(); await renderDocument(await request('get', { id: task.material.id }));
-    $('job-heading').textContent = job.title || 'Untitled job'; $('company-heading').textContent = job.company || '';
+    updateJobContext();
     showView('edit'); feedback('Ready. Edit directly on the document. Changes save locally.');
   } finally { $('cancel').hidden = true; setBusy(false); autosave?.resume(); }
 }
@@ -265,7 +342,12 @@ async function rewriteSection(id) {
     if (rewriteText(editor.model(), path) !== captured) { feedback('The selected text changed while rewriting. Your newer edits were kept; retry the rewrite if needed.'); return; }
     editor.replace(result.model, path); feedback('Rewrite applied. Undo to restore your previous wording.');
   } catch (error) { if (documentEditor === editor) throw error; }
-  finally { rewritePending = false; $('rewrite-status').hidden = true; }
+  finally {
+    if (documentEditor === editor) {
+      rewritePending = false;
+      $('rewrite-status').hidden = true;
+    }
+  }
 }
 async function download(format) {
   if (!autosave) return;
@@ -284,14 +366,44 @@ async function download(format) {
 }
 async function init() {
   $('workspace-version').textContent = `Kareer v${APP_VERSION}`;
-  const profile = (await api.storage.local.get('kr:profile'))['kr:profile'] || {}, source = buildMaterialSource(profile);
-  $('profile-summary').textContent = source.sections.length ? `${source.sections.length} enabled profile sections` : 'No profile sections yet. Add your experience or skills to begin.';
+  const profile = (await api.storage.local.get('kr:profile'))['kr:profile'] || {};
+  renderProfileSource(profile);
   const session = sessionId ? await request('session', { sessionId }) : null;
   if (session) { job = session.job; originJobKey = materialJobKey(job); }
   else if (query.get('job')) job = await request('job', { id: query.get('job') }) || job;
   await refreshLibrary();
   if (query.get('document')) { const record = await request('get', { id: query.get('document') }); if (record) { job = record.job; kind = record.kind; } }
-  await selectJob(job, false); await switchKind(kind);
+  const hasContext = ['document', 'job', 'session', 'kind'].some(name => query.has(name));
+  if (query.get('view') === 'library' || !hasContext) {
+    showLibrary(false);
+  } else {
+    await selectJob(job, false);
+    await switchKind(kind);
+  }
+}
+
+function renderProfileSource(profile) {
+  const source = buildMaterialSource(profile);
+  $('profile-summary').textContent = source.sections.length
+    ? `${source.sections.length} enabled profile sections`
+    : 'No profile sections yet. Add your experience or skills to begin.';
+}
+
+async function loadWorkspace() {
+  $('workspace-load-error').hidden = true;
+  setBusy(true);
+  try {
+    await init();
+  } catch (error) {
+    $('workspace-load-message').textContent = `Workspace could not load: ${error.message}`;
+    $('workspace-load-error').hidden = false;
+    $('application-list').setAttribute('aria-busy', 'false');
+    const loading = $('application-list').querySelector('.application-loading');
+    if (loading) loading.textContent = 'Your applications could not be loaded.';
+    feedback('');
+  } finally {
+    setBusy(false);
+  }
 }
 function bindActions() {
   const action = fn => () => void Promise.resolve().then(fn).catch(error => feedback(error.message, true));
@@ -337,7 +449,12 @@ function bindActions() {
   document.addEventListener('visibilitychange', () => { if (document.hidden) void autosave?.persist().catch(() => {}); });
   $('generate').onclick = action(() => switchDocument(generate));
   $('cancel').onclick = action(() => task && request('cancel', { id: task.id }));
-  $('new-job').onclick = action(() => switchDocument(() => selectJob({ localId: crypto.randomUUID(), title: '', company: '', description: '' })));
+  $('new-job').onclick = action(() => switchDocument(newApplication));
+  $('start-new-application').onclick = action(() => switchDocument(newApplication));
+  $('materials-home').onclick = action(() => switchDocument(openLibrary));
+  $('back-to-library').onclick = action(() => switchDocument(openLibrary));
+  $('application-search').oninput = paintLibrary;
+  $('workspace-retry').onclick = () => void loadWorkspace();
   $('delete-document').onclick = action(async () => {
     if (!selected || busy) return;
     await autosave.tail.catch(() => {}); autosave.dispose();
@@ -348,5 +465,8 @@ function bindActions() {
     finally { setBusy(false); }
   });
 }
-bindActions(); setBusy(true);
-void init().catch(error => feedback(`Workspace could not load: ${error.message}`, true)).finally(() => setBusy(false));
+api.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes['kr:profile']) renderProfileSource(changes['kr:profile'].newValue || {});
+});
+bindActions();
+void loadWorkspace();

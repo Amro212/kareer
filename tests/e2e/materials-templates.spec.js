@@ -85,7 +85,7 @@ test('legacy exports upgrade on every entry path without AI or lost wording; act
   const page = await kr.context.newPage(); await page.goto(kr.fixtureUrl('materials-fixture.html')); await kr.openPanel(page);
   const ids = await kr.readStorage('kr:sessions'), session = await kr.readStorage(`kr:sessions:${ids[0]}`);
   await page.locator('label').evaluateAll(labels => labels.filter(label => !label.querySelector('input[type="file"]')).forEach(label => label.remove()));
-  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=resume`);
   await expect(workspace.locator('#generate')).toBeEnabled();
   for (const kind of ['resume', 'coverLetter']) {
     const old = await legacyRecord(kind, session.job);
@@ -121,7 +121,7 @@ test('legacy exports upgrade on every entry path without AI or lost wording; act
 
 test('opening old saved letters upgrades actual preview and PDF/Word downloads', async ({ kr }, testInfo) => {
   await kr.seed({ profile });
-  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=resume`);
   await expect(workspace.locator('#generate')).toBeEnabled();
   const old = await legacyRecord('coverLetter', { listingUrl: 'https://example.com/jobs/legacy', title: 'Engineer', company: 'Acme', description: 'Build APIs.' });
   await seedRecord(kr, old);
@@ -148,7 +148,7 @@ test('fresh generation and saved edits use only current PDF and Word templates',
     const output = input.kind === 'coverLetter' ? { paragraphs: legacy.coverLetter.paragraphs } : { summary: legacy.resume.summary, sections: [{ id: 'work1', bullets: legacy.resume.sections[0].bullets }] };
     return { choices: [{ message: { content: JSON.stringify(output) } }] };
   };
-  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=resume`);
   await expect(workspace.locator('#generate')).toBeEnabled();
   await expect(workspace.locator('#workspace-version')).toHaveText(`Kareer v${JSON.parse(fs.readFileSync('dist/chrome/manifest.json', 'utf8')).version}`);
   const job = { listingUrl: 'https://example.com/jobs/fresh', title: 'Engineer', company: 'Acme', description: 'Build APIs.' };
@@ -167,7 +167,7 @@ test('fresh generation and saved edits use only current PDF and Word templates',
 test('reading an old document during regeneration does not masquerade as concurrent edits', async ({ kr }) => {
   await kr.seed({ profile }); kr.openrouter.delayMs = 1800;
   kr.openrouter.handler = () => ({ choices: [{ message: { content: JSON.stringify({ summary: 'Updated wording for 10 services.', sections: [{ id: 'work1', bullets: ['Built APIs for 10 services.'] }] }) } }] });
-  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html`);
+  const workspace = await kr.context.newPage(); await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=resume`);
   await expect(workspace.locator('#generate')).toBeEnabled();
   const old = await legacyRecord('resume', { listingUrl: 'https://example.com/jobs/concurrent', title: 'Engineer', company: 'Acme', description: 'Build APIs.' });
   await seedRecord(kr, old);

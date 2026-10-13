@@ -1,6 +1,6 @@
 # Profile and Materials workspace brief
 
-Status: design discovery complete; proposed layout for review. No application UI changes in this discovery round.
+Status: user authorized implementation on feature/materials-editor-ux after both discovery rounds. This brief records the selected direction.
 
 ## Purpose and direction
 
