@@ -234,6 +234,13 @@ does not update `node_modules`; this installs the versions in `package-lock.json
 including the Tiptap packages used by the application materials editor. If the
 build reports `Could not resolve "@tiptap/..."`, rerun `npm ci` before building.
 
+Deprecation/funding notices and audit findings can appear after a successful
+install. Inspect findings with `npm audit`; avoid `npm audit fix --force` on this
+branch. It can downgrade `web-ext` and `mammoth` to obsolete major versions and
+introduce additional vulnerable dependencies. Compatible fixes and outstanding
+upstream findings are recorded in
+[the dependency audit](docs/qa/2026-10-13-dependency-audit.md).
+
 ```bash
 # Install the locked dependencies, including after branch updates
 npm ci
