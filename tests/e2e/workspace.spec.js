@@ -71,6 +71,18 @@ test('Profile starts as summaries; section saves and cancellation preserve other
   expect(errors).toEqual([]);
 });
 
+test('Profile stays centered in the available content area at wide and compact widths', async ({ kr }) => {
+  const page = await openProfile(kr);
+  for (const width of [2048, 1440, 900, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const main = await page.locator('.settings-main').boundingBox();
+    const sidebar = await page.locator('.settings-nav').boundingBox();
+    const left = width > 760 ? sidebar.x + sidebar.width : 0;
+    expect(Math.abs(main.x + main.width / 2 - (left + width) / 2)).toBeLessThan(2);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+});
+
 test('Profile failed writes keep fields editable and retries persist them', async ({ kr }) => {
   const page = await openProfile(kr);
   await section(page, 'identity').getByRole('button', { name: 'Edit identity & contact' }).click();
