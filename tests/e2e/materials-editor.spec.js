@@ -154,3 +154,36 @@ test('failed regeneration preserves the editable document and resumes autosave',
   await expect(page.locator('#document-status')).toContainText('Saved locally');
   expect(await pdfText(await downloaded(page, 'pdf'))).toContain('I can still edit after a generation failure.');
 });
+
+for (const operation of ['putDraft', 'save']) {
+  test(`document switches freeze editing while ${operation} is pending`, async ({ kr }) => {
+    const page = await setup(kr);
+    await page.evaluate(operation => {
+      const send = chrome.runtime.sendMessage.bind(chrome.runtime);
+      chrome.runtime.sendMessage = (message, callback) => {
+        if (message.type === 'kr:materials' && message.operation === operation) {
+          chrome.runtime.sendMessage = send;
+          window.releaseMaterialSave = () => send(message, callback);
+          return;
+        }
+        return send(message, callback);
+      };
+    }, operation);
+    await page.locator('#resume-summary').fill('Preserved before switching documents.');
+    await page.locator('#tab-coverLetter').click();
+    await expect.poll(() => page.evaluate(() => typeof window.releaseMaterialSave)).toBe('function');
+    try {
+      await expect(page.locator('.document-content')).toHaveAttribute('contenteditable', 'false', { timeout: 1000 });
+      await page.locator('#resume-summary').click();
+      await page.keyboard.type('Late text must not be accepted.');
+      await expect(page.locator('#resume-summary')).toHaveText('Preserved before switching documents.');
+    } finally {
+      await page.evaluate(() => window.releaseMaterialSave());
+    }
+    await expect(page.locator('#tab-resume')).toBeEnabled();
+    await expect(page.locator('#tab-coverLetter')).toHaveAttribute('aria-selected', 'true');
+    await page.locator('#tab-resume').click();
+    await expect(page.locator('#resume-summary')).toHaveText('Preserved before switching documents.');
+    await expect(page.locator('.document-content')).toHaveAttribute('contenteditable', 'true');
+  });
+}

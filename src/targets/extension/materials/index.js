@@ -296,6 +296,7 @@ async function switchDocument(action) {
   switching = true;
   const previous = autosave;
   try {
+    setBusy(true);
     if (!await leaveDraft()) return;
     // A persisted but unexportable draft can still be left and recovered later.
     // Successful exports update the next Autofill before switching context.
@@ -303,7 +304,7 @@ async function switchDocument(action) {
     autosave?.dispose();
     await autosave?.tail.catch(() => {});
     if (rewritePending) await request('cancelRewrite', { id: selected.id });
-    setBusy(true); await action();
+    await action();
   } finally {
     if (autosave === previous) autosave?.resume();
     setBusy(false);
