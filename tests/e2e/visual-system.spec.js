@@ -15,7 +15,7 @@ test('local typography, internal options navigation, and responsive console', as
   await popup.locator('#open-options').click();
   const page = await opened;
   await page.waitForURL(kr.optionsUrl());
-  await expect(page.locator('#pf-firstName')).toBeVisible();
+  await expect(page.locator('[data-profile-section=identity]')).toBeVisible();
   const loaded = await fonts(page);
   expect(loaded).toHaveLength(2);
   expect(loaded.every(face => face.status === 'loaded')).toBe(true);
@@ -25,7 +25,8 @@ test('local typography, internal options navigation, and responsive console', as
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath(`options-${width}.png`), fullPage: true });
   }
-  await page.locator('#advanced').scrollIntoViewIfNeeded();
+  await page.locator('.app-configuration > .nav-item').click();
+  await page.locator('.configuration-links a[href="#advanced"]').click();
   await expect(page.locator('#export-data')).toBeVisible();
 });
 

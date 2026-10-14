@@ -51,10 +51,11 @@ for (const overwriteExisting of [false, true]) {
     expect(kr.openrouter.requests).toHaveLength(0);
     const options = await kr.context.newPage();
     await options.goto(kr.optionsUrl());
+    await options.locator('[data-profile-section=work] .profile-edit-button').click();
     await expect(options.locator('.work-enabled-toggle')).toHaveCount(profile.workExperiences.length);
     for (const toggle of await options.locator('.work-enabled-toggle').all()) await toggle.uncheck();
     await options.locator('#profile-form button[type=submit]').click();
-    await expect(options.locator('#profile-feedback')).toHaveText('Profile saved.');
+    await expect(options.locator('#profile-feedback')).toHaveText('Profile saved locally.');
     const savedWork = (await kr.readStorage('kr:profile')).workExperiences;
     expect(savedWork).toHaveLength(profile.workExperiences.length);
     expect(savedWork.every(record => record.enabled === false)).toBe(true);

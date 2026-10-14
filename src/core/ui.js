@@ -145,19 +145,33 @@ async function refreshMaterialStates() {
   const session = applicationEngine?.session;
   if (!session?.id || !platform.capabilities.materials) return;
   try {
-    const current = await platform.materials.request('session', { sessionId: session.id });
+    let current = await platform.materials.request('session', { sessionId: session.id });
     if (applicationEngine?.session?.id !== session.id) return;
-    session.materialRefs = current?.materialRefs || {};
-    session.materialTasks = current?.materialTasks || {};
-    let changed = false, running = false;
-    for (const [kind, id] of Object.entries(session.materialTasks)) {
+    let changed = false, running = false, completed = false;
+    for (const [kind, id] of Object.entries(current?.materialTasks || {})) {
       const key = materialKey(session.id, kind), previous = materialStates.get(key);
       if (previous?.id === id && previous.status !== 'running') continue;
       const state = await platform.materials.request('status', { id });
+      const latest = materialStates.get(key);
+      if (latest !== previous) {
+        running ||= latest?.status === 'running';
+        completed ||= latest?.status === 'ready';
+        continue;
+      }
       if (JSON.stringify(state) !== JSON.stringify(previous)) { materialStates.set(key, state); changed = true; }
       if (state.status === 'running') running = true;
+      if (state.status === 'ready') completed = true;
     }
-    if (changed) updatePanelDOM();
+    // The session snapshot can precede completion while the later task read is
+    // already Ready. Read the activated references after that acknowledgement,
+    // and update the live session object if hydration replaced it in the meantime.
+    if (completed) current = await platform.materials.request('session', { sessionId: session.id });
+    const live = applicationEngine?.session;
+    if (live?.id !== session.id) return;
+    const refsChanged = JSON.stringify(live.materialRefs) !== JSON.stringify(current?.materialRefs || {});
+    live.materialRefs = current?.materialRefs || {};
+    live.materialTasks = current?.materialTasks || {};
+    if (changed || refsChanged) updatePanelDOM();
     if (running) { clearTimeout(materialsPollTimer); materialsPollTimer = setTimeout(() => void refreshMaterialStates(), 1000); }
   } catch { /* A later click/reload can refresh unavailable status. Autofill remains available. */ }
 }

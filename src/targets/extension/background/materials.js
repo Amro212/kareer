@@ -1,10 +1,11 @@
 import { api } from '../shared/browser.js';
-import { readApiKey, updateStoredSession } from './storage.js';
+import { readApiKey, updateStoredRecord } from './storage.js';
 import { readStored, writeStored, removeStored, listStored } from './documents.js';
 import { buildMaterialSource, validateMaterial, materialJobKey, mergeMaterialRewrite, MATERIAL_KINDS } from '../../../core/materials-model.js';
 import { DEFAULT_SETTINGS } from '../../../core/constants.js';
 import { exportMaterial, MATERIAL_TEMPLATE_VERSION } from '../materials/export.js';
 import { encodeMaterial, encodeDocument } from '../shared/binary.js';
+import { editableModel } from '../materials/editor-model.js';
 
 const running = new Map();
 let committing = Promise.resolve();
@@ -102,7 +103,7 @@ async function sourceForGeneration() {
 
 async function sessionUpdate(sessionId, record) {
   if (!sessionId) return;
-  return updateStoredSession(`kr:sessions:${sessionId}`, session => {
+  return updateStoredRecord(`kr:sessions:${sessionId}`, session => {
     if (!session || materialJobKey(session.job) !== materialJobKey(record.job)) return null;
     return { ...session, materialRefs: { ...session.materialRefs, [record.kind]: { id: record.id, revision: record.revision } } };
   });
@@ -152,7 +153,7 @@ async function execute(task, options, controller) {
 }
 
 export async function handleMaterials(operation, input = {}, sender = {}) {
-  if (['get', 'save', 'delete'].includes(operation) && !input.id?.startsWith('material:')) throw new Error('Unknown application document.');
+  if (['get', 'save', 'delete', 'getDraft', 'putDraft', 'discardDraft', 'rewriteDraft', 'cancelRewrite'].includes(operation) && !input.id?.startsWith('material:')) throw new Error('Unknown application document.');
   if (['status', 'cancel'].includes(operation) && !input.id?.startsWith('task:')) throw new Error('Unknown generation task.');
   switch (operation) {
     case 'start': {
@@ -185,7 +186,7 @@ export async function handleMaterials(operation, input = {}, sender = {}) {
       running.set(documentId, controller);
       await writeStored(task.id, task);
       if (task.sessionId) {
-        await updateStoredSession(`kr:sessions:${task.sessionId}`, session => session && ({ ...session, materialTasks: { ...session.materialTasks, [task.kind]: task.id } }));
+        await updateStoredRecord(`kr:sessions:${task.sessionId}`, session => session && ({ ...session, materialTasks: { ...session.materialTasks, [task.kind]: task.id } }));
       }
       const previous = await readStored(documentId);
       const { rewrite: _previousRewrite, ...savedOptions } = previous?.options || {};
@@ -199,6 +200,48 @@ export async function handleMaterials(operation, input = {}, sender = {}) {
       return { ok: true };
     }
     case 'get': return commit(async () => encodeMaterial(await readCurrentMaterial(input.id)));
+    case 'getDraft': return commit(async () => {
+      const draft = await readStored(`draft:${input.id}`);
+      const record = await readStored(input.id);
+      return draft ? { ...draft, conflict: draft.baseRevision !== record?.revision } : null;
+    });
+    case 'putDraft': return commit(async () => {
+      const record = await readStored(input.id), previous = await readStored(`draft:${input.id}`);
+      if (!record || record.revision !== input.revision || (previous && previous.baseRevision !== record.revision)) throw new Error('A newer document exists. Your draft is retained. Discard the draft to load the newer version.');
+      if ((previous?.revision || null) !== (input.draftRevision || null)) throw new Error('A newer draft exists in another window. Your edits are retained here; reopen the document before retrying.');
+      const draft = { id: `draft:${input.id}`, baseRevision: record.revision, revision: crypto.randomUUID(),
+        model: editableModel(record.model, input.model), pageTarget: input.pageTarget === 2 ? 2 : 1, updatedAt: new Date().toISOString() };
+      await writeStored(draft.id, draft);
+      return draft;
+    });
+    case 'discardDraft': return commit(async () => {
+      const draft = await readStored(`draft:${input.id}`);
+      if (draft && draft.revision !== input.draftRevision) throw new Error('A newer draft exists. Reopen the document before discarding.');
+      await removeStored(`draft:${input.id}`);
+      return { ok: true };
+    });
+    case 'cancelRewrite': {
+      const controller = running.get(input.id);
+      if (controller?.draftRewrite) controller.abort('Rewrite cancelled. Your text is unchanged.');
+      return { ok: true };
+    }
+    case 'rewriteDraft': {
+      if (running.has(input.id)) throw new Error('Wait for the current rewrite or generation, or cancel it.');
+      const previous = await readStored(input.id);
+      if (!previous || previous.revision !== input.revision) throw new Error('A newer document exists. Reopen it before rewriting.');
+      const currentDocument = editableModel(previous.model, input.model), source = await sourceForGeneration();
+      const controller = new AbortController(); controller.draftRewrite = true;
+      running.set(input.id, controller);
+      const timer = setTimeout(() => controller.abort('Rewrite timed out. Your text is unchanged; retry when ready.'), 120000);
+      const heartbeat = setInterval(() => { void api.storage.local.get('kr:settings').catch(() => {}); }, 20000);
+      try {
+        const output = await writingRequest({ kind: previous.kind, source, job: previous.job,
+          ...input.options, rewrite: { path: input.path }, currentDocument }, materialWritingInstructions(previous.kind), controller);
+        if (controller.signal.aborted) throw new Error(String(controller.signal.reason));
+        const model = validateMaterial(previous.kind, mergeMaterialRewrite(currentDocument, output, input.path), previous.source);
+        return { model: editableModel(currentDocument, model) };
+      } finally { clearTimeout(timer); clearInterval(heartbeat); running.delete(input.id); }
+    }
     case 'snapshot': return commit(async () => {
       const key = `kr:sessions:${input.sessionId}`, session = (await api.storage.local.get(key))[key];
       const jobKey = session && materialJobKey(session.job);
@@ -214,7 +257,7 @@ export async function handleMaterials(operation, input = {}, sender = {}) {
       if (input.persistRun && session) {
         runRef = { id: `material-run:${session.id}`, revision: crypto.randomUUID() };
         await writeStored(runRef.id, { ...runRef, jobKey, records });
-        await updateStoredSession(key, current => current && ({ ...current, materialRunRef: runRef }));
+        await updateStoredRecord(key, current => current && ({ ...current, materialRunRef: runRef }));
       }
       return { refs: session?.materialRefs || {}, tasks: session?.materialTasks || {}, runRef, records: Object.fromEntries(Object.entries(records).map(([kind, record]) => [kind, encodeMaterial(record)])) };
     });
@@ -222,7 +265,7 @@ export async function handleMaterials(operation, input = {}, sender = {}) {
       const key = `kr:sessions:${input.sessionId}`, session = (await api.storage.local.get(key))[key];
       if (session?.materialRunRef?.revision === input.runRef?.revision) {
         await removeStored(session.materialRunRef.id);
-        await updateStoredSession(key, current => current && ({ ...current, materialRunRef: null }));
+        await updateStoredRecord(key, current => current && ({ ...current, materialRunRef: null }));
       }
       return { ok: true };
     });
@@ -235,14 +278,17 @@ export async function handleMaterials(operation, input = {}, sender = {}) {
       const previous = await readStored(input.id);
       if (!previous) throw new Error('Document no longer exists. Generate it again.');
       if (input.revision !== previous.revision) throw new Error('A newer document exists. Reopen it before saving edits.');
-      const model = validateMaterial(previous.kind, input.model, previous.source);
+      const model = validateMaterial(previous.kind, input.draftRevision ? editableModel(previous.model, input.model) : input.model, previous.source);
       const exported = await exportMaterial(model, previous.job, input.pageTarget || previous.options.pageTarget || 1, { fit: false });
       const { changes: _legacyChanges, ...saved } = previous;
       const record = stampFiles({ ...saved, ...exported, revision: crypto.randomUUID(), options: { ...previous.options, pageTarget: input.pageTarget || previous.options.pageTarget || 1 }, updatedAt: new Date().toISOString() });
       await commit(async () => {
         const latest = await readStored(record.id);
         if (latest?.revision !== input.revision) throw new Error('A newer document exists. Reopen it before saving edits.');
+        const draft = await readStored(`draft:${record.id}`);
+        if (input.draftRevision && (draft?.revision !== input.draftRevision || draft.baseRevision !== input.revision)) throw new Error('A newer draft exists. Your edits are retained; reopen the document before exporting.');
         await writeStored(record.id, record); await sessionUpdate(input.sessionId, record);
+        if (input.draftRevision) await removeStored(`draft:${record.id}`);
       });
       return encodeMaterial(record);
     }
@@ -250,10 +296,11 @@ export async function handleMaterials(operation, input = {}, sender = {}) {
       if (running.has(input.id)) throw new Error('Cancel generation before deleting this document.');
       await commit(async () => {
         await removeStored(input.id);
+        await removeStored(`draft:${input.id}`);
         const stored = await api.storage.local.get(null);
         for (const [key, session] of Object.entries(stored)) {
           if (!key.startsWith('kr:sessions:') || !session?.materialRefs) continue;
-          await updateStoredSession(key, current => {
+          await updateStoredRecord(key, current => {
             if (!current) return null;
             const materialRefs = { ...current.materialRefs };
             for (const [kind, ref] of Object.entries(materialRefs)) if (ref.id === input.id) delete materialRefs[kind];
