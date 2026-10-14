@@ -116,6 +116,7 @@ export function createMaterialEditor({ container, model, onUpdate, onSelection, 
       const section = editor.state.doc.firstChild, pos = editor.state.selection.from;
       let index = 0, offset = 1;
       section.forEach((paragraph, start, i) => { if (pos >= offset + start) index = i; });
+      if (!section.child(index).textContent.trim()) throw new Error('Select a paragraph with text before rewriting.');
       // Empty paragraphs are omitted by the existing export model.
       return `paragraph:${section.content.content.slice(0, index).filter(p => p.textContent.trim()).length}`;
     },

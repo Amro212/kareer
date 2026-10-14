@@ -3158,3 +3158,12 @@ Narrative voice prompt updated and verified.
 - Regression coverage: `tests/e2e/materials-editor.spec.js` gates `putDraft` and `save` independently, checks editing is frozen and late typing is rejected, then switches back to verify saved text and restored editability. Both tests failed against the original code and pass with the fix.
 - Verification/status: 9/9 focused materials-editor browser tests and 9/9 editor/autosave unit tests pass; both changed JS files pass syntax checks and `git diff --check` passes. Rebundled only the ignored Chrome Materials entry using the existing esbuild settings; existing version metadata edits were preserved. Chromium required local process access after sandbox startup failures. Files changed this turn: Materials controller, editor browser spec, and this log. Fix complete; full suites and Firefox execution were not run.
 
+
+## 2026-10-14 - Reject rewrites of empty selected letter paragraphs
+
+- Target/platform: extension Materials editor, Chrome cover-letter fixtures. User authorized fixing the review bot's empty-target finding.
+- Root cause: rewritePath counted preceding nonempty paragraphs but did not validate the selected node. Empty middle paragraphs targeted neighboring text; empty trailing paragraphs consumed an AI request before failing.
+- Resolution: one guard in src/targets/extension/materials/editor.js rejects selected paragraphs whose trimmed text is empty. The existing caller reports the message before persistence, rewrite status, or an AI request. Resume and populated-letter rewrite paths are preserved.
+- Regression coverage: tests/e2e/materials-editor.spec.js adds middle/trailing cases using the real editor. Each checks empty and whitespace-only selections, unchanged surrounding paragraphs, zero additional AI calls, and a succeeding populated-paragraph rewrite. Both cases failed on the original code and pass with the guard.
+- Verification/status: 2/2 targeted browser cases and 9/9 editor/autosave unit tests pass; changed JS syntax and git diff --check pass. Chrome Materials was rebuilt with the existing esbuild settings for browser verification. No dependencies or version changes. Full suites and Firefox execution were not run.
+- Turn changes/location: editor.js, materials-editor.spec.js, and this log in the attached empty-paragraph-rewrite worktree based on feature/materials-editor-ux at 0a79d98. The original feature/resume-tailor checkout and unrelated edits were preserved. Fix complete locally; no commit or push performed.

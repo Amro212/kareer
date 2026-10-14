@@ -187,3 +187,36 @@ for (const operation of ['putDraft', 'save']) {
     await expect(page.locator('.document-content')).toHaveAttribute('contenteditable', 'true');
   });
 }
+
+for (const position of ['middle', 'trailing']) {
+  test(`empty ${position} letter paragraphs reject rewrites without an AI call`, async ({ kr }) => {
+    const page = await setup(kr, 'coverLetter');
+    const original = await page.locator('.paper-letter p').allTextContents();
+    const paragraphs = page.locator('.paper-letter p');
+    await page.locator('.document-content').evaluate((element, position) => {
+      const editor = element.editor;
+      editor.commands.setTextSelection(position === 'middle' ? editor.state.doc.firstChild.firstChild.nodeSize : editor.state.doc.content.size - 2);
+      editor.view.focus();
+    }, position);
+    await page.keyboard.press('Enter');
+    await expect(paragraphs).toHaveCount(original.length + 1);
+    const empty = position === 'middle' ? paragraphs.nth(1) : paragraphs.last();
+    await expect(empty).toHaveText('');
+    const requests = kr.openrouter.requests.length;
+    for (const text of ['', '   ']) {
+      await empty.click();
+      if (text) await page.keyboard.type(text);
+      await page.getByRole('button', { name: 'Rewrite selected paragraph' }).click();
+      await expect(page.locator('#feedback')).toContainText('Select a paragraph with text before rewriting.', { timeout: 1000 });
+      await expect(page.locator('#rewrite-status')).toBeHidden();
+      expect(kr.openrouter.requests).toHaveLength(requests);
+      expect((await paragraphs.allTextContents()).filter(text => text.trim())).toEqual(original);
+    }
+    await paragraphs.filter({ hasText: 'I build dependable APIs' }).click();
+    await page.getByRole('button', { name: 'Rewrite selected paragraph' }).click();
+    await expect(page.locator('#feedback')).toContainText('Rewrite applied');
+    await expect(paragraphs.filter({ hasText: 'A rewritten paragraph.' })).toHaveCount(1);
+    expect(kr.openrouter.requests).toHaveLength(requests + 1);
+    expect((await paragraphs.allTextContents()).filter(text => text.trim())).toEqual([original[0], 'A rewritten paragraph.', ...original.slice(2)]);
+  });
+}
