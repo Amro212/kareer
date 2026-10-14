@@ -94,6 +94,7 @@ test('Profile subsection links jump to summary cards and preserve route history 
     await expect(link).toHaveAttribute('aria-current', 'location');
     await expect(section(page, id).locator('h2')).toBeFocused();
     expect((await section(page, id).boundingBox()).y).toBeGreaterThanOrEqual(0);
+    expect(Math.abs((await page.locator('.settings-nav').boundingBox()).y)).toBeLessThan(2);
   }
   await page.goBack();
   await expect(section(page, 'projects').locator('h2')).toBeFocused();
