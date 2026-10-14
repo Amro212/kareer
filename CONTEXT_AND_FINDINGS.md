@@ -3225,3 +3225,8 @@ Narrative voice prompt updated and verified.
 
 - User requests visuals of the shipped feature. Captured actual v0.5.120 Chrome extension Options, panel Settings, desktop inline rewrite and 360px inline rewrite in a fresh synthetic browser profile through the existing fixture harness. Options/panel show Warm & personal with its description/example; the answer field shows a local Light wit override. No AI request was made.
 - Artifacts: ignored `sample-output/writing-style-{options,panel,rewrite,rewrite-mobile}.png`; transient capture spec/config kept outside the repository under `/tmp`. Capture check passed and all images were visually inspected. No product source, dependencies, versions or user data changed.
+
+## 2026-10-14 - Commit remaining changes
+
+- User approves visuals and explicitly requests committing all remaining changes and pushing the branch. Remaining Git changes are the previously preserved `.agents/skills/ponytail/SKILL.md` and its `skills-lock.json` entry; reviewed both and retained the MIT license declaration.
+- Added those skill files and this turn record to one commit. JSON parsing and diff whitespace checks pass. No runtime code changed; existing full-suite results remain applicable, so tests were not repeated. Push destination remains `https://github.com/Amro212/kareer.git` on `feature/narrative-writing-styles`.
