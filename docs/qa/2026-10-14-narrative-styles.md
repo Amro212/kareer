@@ -26,7 +26,7 @@ Commands:
 - PLAYWRIGHT_BROWSERS_PATH=/workspace/.playwright npx playwright test tests/e2e/shell.spec.js tests/e2e/autofill.spec.js --grep 'options page persists the key, model, and profile|the prompt carries the stored profile and no credentials'
 - npm run build
 
-The final build produces Chrome, Firefox, and userscript artifacts at v0.5.120. Package/lockfile, manifest, userscript and site versions match. Targeted QA follows this branch's AGENTS.md; the complete suites were not run.
+The final build produces Chrome, Firefox, and userscript artifacts at v0.5.120. Package/lockfile, manifest, userscript and site versions match. Initial implementation used targeted QA under this branch's AGENTS.md. The complete suites were subsequently run at the user's explicit request, as recorded below.
 
 ## Illustrative comparisons
 
@@ -49,3 +49,13 @@ Nontechnical source: a support coordinator found unclear ownership in request ha
 This cloud environment has no configured Kareer/OpenRouter host credentials and its allowed network destinations do not include OpenRouter. No paid live-model call was made. Mock requests prove wiring and contracts, not naturalness or model-to-model consistency. The user was asked where to run this remaining QA.
 
 When a configured host is available, use a separate test browser profile and the configured default model, retaining host-managed authentication. Generate each of the two source cases above in each style (ten initial outputs). Then rewrite the technical Natural draft as Light wit and the nontechnical Natural draft as Quietly confident (two additional outputs). Use only synthetic career data. Review naturalness, distinguishable personality, direct question coverage, continuity of career facts and measured results, and retained anti-boilerplate rules. Save the actual samples and refine/retest only affected styles. Cross-model quality remains outside the agreed default-model test scope.
+
+
+## Full-suite follow-up (2026-10-14)
+
+- Verified both origin URLs are `https://github.com/Amro212/kareer.git`. The authenticated GitHub account is `Amro212`, owns that repository and has push permission. PR #9 targets `feature/resume-tailor` and is mergeable.
+- `npm test`: 554 tests passed, zero failures, zero skips (276.5 seconds).
+- `PLAYWRIGHT_BROWSERS_PATH=/workspace/.playwright npm run test:e2e`: all 189 cases were considered; 184 passed, two Lever university fixture cases failed, and three explicitly opt-in live-capture diagnostics were skipped (29.9 minutes).
+- The two failures predated the writing-style changes. Their page-level `route.continue()` bypassed the shared fixture server mapping in the managed cloud and loaded a proxy "Domain forbidden" response rather than the captured application. The trace and screenshot confirmed the missing form. Changed that route to `route.fallback()` so the existing shared context handler serves the local captured fixture, while unrelated production resources remain blocked. Added an early form-visibility assertion; retained all original school, GPA, hidden-field, provenance and request assertions.
+- `PLAYWRIGHT_BROWSERS_PATH=/workspace/.playwright npx playwright test tests/e2e/lever-university.spec.js`: both corrected cases passed (31.9 seconds). Thus every one of the 186 runnable browser cases passed across the full run and the focused rerun. The whole browser suite was not rerun after this test-only routing fix; no production source changed in this follow-up.
+- `npm run build`: Chrome, Firefox and userscript artifacts rebuilt successfully at v0.5.120 with no source/version change. Whitespace checks pass. Full suites use synthetic/local mocks; live model quality and Firefox runtime testing remain unverified.
