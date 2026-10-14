@@ -61,10 +61,10 @@ function renderMaterials() {
   return `<div class="kr-card" style="gap:10px;">
     <div class="kr-row" style="margin-bottom:0;">
       <div style="display:flex;align-items:center;gap:8px;">
-        <span class="kr-card-title">Application Materials</span>
+        <span class="kr-card-title">Tailored Documents</span>
         ${readyCount > 0 ? `<span class="kr-badge kr-badge-green">${readyCount} READY</span>` : '<span class="kr-badge" style="font-size:10px;color:var(--kr-text-3);">OPTIONAL</span>'}
       </div>
-      <button class="kr-material-workspace-link" data-material-open="workspace" title="Open materials workspace">Workspace ↗</button>
+      <button class="kr-material-workspace-link" data-material-open="workspace" title="Open tailored documents workspace">Workspace ↗</button>
     </div>
     <p style="font-size:12px;color:var(--kr-text-2);margin:0;line-height:1.4;">Tailored for this job. Autofill uses your new documents.</p>
     <div class="kr-materials-list">
@@ -612,7 +612,7 @@ const STYLES = `
   }
 }
 
-/* Application Materials Stacked Rows */
+/* Tailored Documents Stacked Rows */
 .kr-materials-list {
   display: flex;
   flex-direction: column;

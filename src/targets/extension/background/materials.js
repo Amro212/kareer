@@ -174,7 +174,7 @@ export async function handleMaterials(operation, input = {}, sender = {}) {
         const savedContext = await readStored(contextId);
         if (savedContext) job = { ...job, ...savedContext.corrections };
       }
-      if (!job?.description?.trim()) return { needsWorkspace: true, reason: 'Paste the job description to generate application materials.' };
+      if (!job?.description?.trim()) return { needsWorkspace: true, reason: 'Paste the job description to generate tailored documents.' };
       const profile = (await api.storage.local.get('kr:profile'))['kr:profile'] || {};
       const source = buildMaterialSource(profile);
       if (!source.sections.length) return { needsWorkspace: true, reason: 'Add experience, education, projects, or skills in Profile before generating.' };

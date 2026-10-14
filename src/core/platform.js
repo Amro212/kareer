@@ -79,7 +79,7 @@ export const platform = {
   materials: {
     // Operations: start/status/cancel, get/list/save/delete,
     // session/job, and open. Host implementations own files and API secrets.
-    request: (operation, input = {}) => host.materialsRequest?.(operation, input) ?? Promise.reject(new Error('Application materials require the extension.')),
+    request: (operation, input = {}) => host.materialsRequest?.(operation, input) ?? Promise.reject(new Error('Tailored documents require the extension.')),
   },
   openOptions: () => host.openOptions(),
 };

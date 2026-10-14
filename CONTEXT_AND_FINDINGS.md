@@ -1,3 +1,23 @@
+## Turn: 2026-10-14 - Rename "Application Materials" to "Tailored Documents"
+
+- Target: `src/core/ui.js`, `src/targets/extension/materials/index.html`, `src/targets/extension/options/index.html`, `src/targets/extension/popup/index.html`, `src/targets/extension/background/materials.js`, `src/core/platform.js`, `src/core/hosts/gm.js`, `DESIGN.md`
+- User request:
+  - User asked to rename "application materials" to something more intuitive and chose "Tailored Documents".
+- Changes:
+  - `src/core/ui.js`: Updated the ATS side panel card title from "Application Materials" to "Tailored Documents", workspace link tooltip to "Open tailored documents workspace", and CSS section comments.
+  - `src/targets/extension/options/index.html`: Renamed navigation link and profile shortcut button to "Tailored documents".
+  - `src/targets/extension/popup/index.html`: Renamed popup button to "Tailored documents".
+  - `src/targets/extension/materials/index.html`: Updated page title to `{{VISUAL_NAME}} · Tailored documents`, navigation link to "Tailored documents", `aria-label` to "Saved tailored documents", and library heading `<h1>` to "Tailored documents".
+  - `src/targets/extension/background/materials.js`: Updated reason message when job description is missing to 'Paste the job description to generate tailored documents.'
+  - `src/core/platform.js` & `src/core/hosts/gm.js`: Updated error message to 'Tailored documents require the extension.'
+  - `DESIGN.md`: Updated section headings and references from "Application materials" to "Tailored documents".
+- Verification:
+  - `npm run build`: Succeeded (v0.5.117 Chrome & Firefox & userscript packed).
+  - Targeted unit tests: `node --test tests/unit/materials.test.js tests/unit/materials-export.test.js` (34 passing).
+- Status: Completed.
+
+---
+
 ## Turn: 2026-10-11 - Application materials UX audit and redesign plan
 
 - Target: `src/targets/extension/materials/{index.html, index.js, workspace.css, import.js}`, `src/targets/extension/background/materials.js`

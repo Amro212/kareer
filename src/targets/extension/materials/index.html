@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>{{VISUAL_NAME}} · Application materials</title>
+  <title>{{VISUAL_NAME}} · Tailored documents</title>
   <link rel="stylesheet" href="../assets/theme.css"><link rel="stylesheet" href="workspace.css">
 </head>
 <body class="materials">
@@ -11,11 +11,11 @@
       <a class="brand app-brand" href="../options/index.html#profile">{{VISUAL_NAME}}</a>
       <nav class="app-navigation" aria-label="Workspace navigation">
         <a class="nav-item" href="../options/index.html#profile" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2"/></svg>Profile</a>
-        <button class="nav-item active" id="materials-home" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5"/></svg>Application materials</button>
+        <button class="nav-item active" id="materials-home" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5"/></svg>Tailored documents</button>
       </nav>
       <details class="recent-navigation" id="recent-navigation" hidden>
         <summary>Recent applications</summary>
-        <nav id="saved-jobs" aria-label="Saved application materials"></nav>
+        <nav id="saved-jobs" aria-label="Saved tailored documents"></nav>
       </details>
       <nav class="app-configuration" aria-label="Configuration"><a class="nav-item" href="../options/index.html#connection" target="_blank" rel="noopener noreferrer">Settings</a></nav>
       <div class="app-sidebar-footer"><p>Stored in this browser</p><span class="version" id="workspace-version"></span></div>
@@ -23,7 +23,7 @@
     <main>
       <div class="workspace-load-error" id="workspace-load-error" hidden><p id="workspace-load-message" role="alert"></p><button class="secondary" id="workspace-retry">Retry loading workspace</button></div>
       <section id="materials-library" class="materials-library" aria-labelledby="library-heading">
-        <header class="library-heading"><div><h1 id="library-heading" tabindex="-1">Application materials</h1><p class="muted">Every role. The right documents, together.</p></div><button id="new-job"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New application</button></header>
+        <header class="library-heading"><div><h1 id="library-heading" tabindex="-1">Tailored documents</h1><p class="muted">Every role. The right documents, together.</p></div><button id="new-job"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New application</button></header>
         <div class="library-controls"><h2>Recent applications</h2><label class="application-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><input id="application-search" type="search" aria-label="Search applications" placeholder="Search role or company"></label></div>
         <div class="application-columns" aria-hidden="true"><span>Application</span><span>Documents</span><span>Updated</span></div>
         <div id="application-list" aria-live="polite" aria-busy="true"><p class="muted application-loading">Loading your applications…</p></div>
