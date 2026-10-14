@@ -620,13 +620,17 @@ textarea {
   padding: 24px;
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .preview .section-heading {
+  width: 100%;
   max-width: 816px;
   margin: 0 auto;
 }
 #preview-status {
+  width: 100%;
   max-width: 816px;
   margin: 8px auto 18px;
   font-size: 12px;
@@ -635,15 +639,23 @@ textarea {
   font-family: var(--kr-font-mono);
   font-size: 11px;
 }
+#export-page-count { font-size: 11px; color: var(--kr-text-2); }
 #pdf-preview {
+  width: 100%;
   max-width: 816px;
   margin: 0 auto;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
+.pdf-page { margin: 0 auto 24px; max-width: 100%; }
+.pdf-page figcaption { margin-top: 8px; text-align: center; font-size: 11px; color: var(--kr-text-2); }
 #pdf-preview canvas {
   display: block;
   width: 100%;
   height: auto;
-  margin-bottom: 20px;
+  border: 1px solid var(--kr-line-strong);
+  background: #fff;
 }
 .overflow-status,
 .rewrite-status {

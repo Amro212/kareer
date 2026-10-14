@@ -17,6 +17,8 @@ let sessionId = originalSessionId, originJobKey = '', kind = query.get('kind') =
 let job = { localId: crypto.randomUUID(), title: '', company: '', description: '' }, selected = null, task = null, records = [];
 let documentEditor, autosave, busy = false, switching = false, proof = false, rewritePending = false, previewVersion = 0;
 let focusAfterSwitch;
+let exportState = 'saved';
+let saveErrorFeedback = '';
 
 async function request(operation, input = {}) {
   const result = await sendMessage({ type: MSG.MATERIALS, operation, input });
@@ -106,12 +108,21 @@ function updateHistory() {
   $('redo').disabled = !documentEditor?.editor.can().redo();
 }
 function saveState(state, error) {
+  exportState = state;
   const label = { saving: 'Saving…', draft: 'Saved locally · preparing downloads', compiling: 'Preparing downloads…', saved: 'Saved locally', error: 'Save needs attention' }[state];
   $('document-status').textContent = selected ? label : '';
   $('document-status').className = state === 'error' ? 'status-error' : state === 'saved' || state === 'draft' ? 'status-saved' : 'status-unsaved';
   $('preview-status').textContent = state === 'saved' ? 'Current export · exact page breaks' : 'Last completed export · updating after edits';
+  if (state === 'error') $('preview-status').textContent = 'Last completed export · latest edits need an update';
+  if (selected) updatePages();
   $('discard-draft').hidden = state !== 'error';
-  if (error) feedback(`${error.message} Your text stays in the editor. Use Save now to retry.`, true);
+  if (state === 'saved' && saveErrorFeedback && $('feedback').textContent === saveErrorFeedback) {
+    feedback(''); saveErrorFeedback = '';
+  }
+  if (error) {
+    saveErrorFeedback = `${error.message} Your text stays in the editor. Use Save now to retry.`;
+    feedback(saveErrorFeedback, true);
+  }
 }
 function resizePaper() {
   if (!selected || $('editor-section').hidden) return;
@@ -125,16 +136,33 @@ function resizePaper() {
   $('paper-frame').style.height = `${paper.offsetHeight * scale}px`;
 }
 function updatePages() {
-  $('page-count').textContent = `${selected.pages} page${selected.pages === 1 ? '' : 's'}`;
+  const count = `${selected.pages} page${selected.pages === 1 ? '' : 's'}`;
+  const current = exportState === 'saved';
+  $('export-page-count').textContent = current ? `PDF · ${count}` : `Last PDF · ${count} · ${exportState === 'error' ? 'needs update' : 'updating'}`;
+  $('page-count').textContent = count + (current ? '' : ' · last export');
   const overflow = kind === 'resume' && selected.pages > Number($('page-target').value);
   $('overflow-status').hidden = !overflow;
-  $('overflow-status').textContent = `${selected.pages} pages · Your ${$('page-target').value}-page target is exceeded. Shorten the text or choose two pages in Prepare. All text is preserved.`;
+  $('overflow-status').textContent = `${current ? 'PDF' : 'Last PDF'}: ${selected.pages} pages · Your ${$('page-target').value}-page target is exceeded. Shorten the text or choose two pages in Prepare. All text is preserved.`;
+}
+function resizeProof() {
+  const container = $('pdf-preview');
+  if (!proof || !container.clientWidth) return;
+  for (const figure of container.querySelectorAll('.pdf-page')) {
+    const canvas = figure.querySelector('canvas');
+    const width = $('proof-zoom').value === 'page'
+      ? Math.min(container.clientWidth, Math.max(120, container.clientHeight - 44) * canvas.width / canvas.height)
+      : container.clientWidth;
+    figure.style.width = `${width}px`;
+  }
 }
 async function renderProof() {
   if (!proof || !selected) return;
   const version = ++previewVersion;
   $('pdf-preview').setAttribute('aria-busy', 'true');
-  try { await previewPdf(selected.files.pdf.buffer, $('pdf-preview'), { isCurrent: () => version === previewVersion }); }
+  try {
+    await previewPdf(selected.files.pdf.buffer, $('pdf-preview'), { isCurrent: () => proof && version === previewVersion });
+    if (version === previewVersion) resizeProof();
+  }
   finally { if (version === previewVersion) $('pdf-preview').setAttribute('aria-busy', 'false'); }
 }
 async function toggleProof() {
@@ -142,6 +170,7 @@ async function toggleProof() {
   $('proof-toggle').setAttribute('aria-pressed', String(proof));
   $('proof-toggle').textContent = proof ? 'Back to editing' : 'PDF proof';
   $('proof-panel').hidden = !proof; $('editor-section').hidden = proof;
+  $('editor-zoom-control').hidden = proof; $('proof-zoom-control').hidden = !proof;
   $('undo').hidden = proof; $('redo').hidden = proof;
   $('canvas-hint').textContent = proof ? 'Exact PDF layout' : 'Click text to edit';
   if (proof) {
@@ -208,6 +237,7 @@ async function renderDocument(record) {
   history.replaceState(null, '', url);
   $('proof-toggle').setAttribute('aria-pressed', 'false'); $('proof-toggle').textContent = 'PDF proof';
   $('proof-panel').hidden = true; $('editor-section').hidden = false;
+  $('editor-zoom-control').hidden = false; $('proof-zoom-control').hidden = true;
   $('undo').hidden = false; $('redo').hidden = false;
   $('empty-editor').hidden = Boolean(record); $('editor-layout').hidden = !record;
   $('editor-actions').hidden = !record;
@@ -412,6 +442,7 @@ function bindActions() {
   $('prepare-document').onclick = () => showView('prepare');
   $('page-target').onchange = () => { autosave?.change(); if (selected) updatePages(); };
   $('zoom').onchange = resizePaper; new ResizeObserver(resizePaper).observe($('editor-section'));
+  $('proof-zoom').onchange = resizeProof; new ResizeObserver(resizeProof).observe($('pdf-preview'));
   $('undo').onclick = () => { documentEditor?.editor.chain().focus().undo().run(); updateHistory(); };
   $('redo').onclick = () => { documentEditor?.editor.chain().focus().redo().run(); updateHistory(); };
   $('proof-toggle').onclick = action(toggleProof);

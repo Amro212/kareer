@@ -8,15 +8,18 @@ export async function previewPdf(buffer, container, { isCurrent = () => true } =
   const doc = await loading.promise;
   try {
     if (!isCurrent()) return;
-    container.replaceChildren();
+    const pages = document.createDocumentFragment();
     for (let i = 1; i <= doc.numPages; i++) {
       const page = await doc.getPage(i), viewport = page.getViewport({ scale: 1.15 });
       if (!isCurrent()) return;
       const canvas = document.createElement('canvas');
       canvas.width = viewport.width; canvas.height = viewport.height;
       canvas.setAttribute('aria-label', `Document page ${i} of ${doc.numPages}`);
-      container.append(canvas);
+      const figure = document.createElement('figure'); figure.className = 'pdf-page';
+      const caption = document.createElement('figcaption'); caption.textContent = `Page ${i} of ${doc.numPages}`;
+      figure.append(canvas, caption); pages.append(figure);
       await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
     }
+    if (isCurrent()) container.replaceChildren(pages);
   } finally { await loading.destroy(); }
 }

@@ -224,6 +224,71 @@ test('skills flow inline like the PDF and switch to categorized rows without los
   expect((await message(workspace, 'get', { id })).model.sections.find(s => s.id === 'skills').bullets).toEqual(['Python', 'SQL', 'Docker']);
 });
 
+test('PDF counts distinguish pending edits and proof fits and labels every exported page', async ({ kr }, testInfo) => {
+  await kr.seed({ profile: PROFILE });
+  kr.openrouter.handler = materialResponse;
+  const workspace = await kr.context.newPage();
+  await workspace.setViewportSize({ width: 1440, height: 1000 });
+  await workspace.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=resume`);
+  await expect(workspace.locator('#generate')).toBeEnabled();
+  await workspace.locator('#job-description').fill('Build APIs.');
+  await workspace.locator('#generate').click();
+  await expect(workspace.locator('#feedback')).toContainText('Ready', { timeout: 45000 });
+  await expect(workspace.locator('#export-page-count')).toHaveText('PDF · 1 page');
+  await workspace.evaluate(() => {
+    const send = chrome.runtime.sendMessage.bind(chrome.runtime);
+    chrome.runtime.sendMessage = (message, callback) => {
+      if (message.type === 'kr:materials' && message.operation === 'save') {
+        chrome.runtime.sendMessage = send;
+        callback({ error: 'Export temporarily unavailable.' });
+      } else return send(message, callback);
+    };
+  });
+  await workspace.locator('#resume-summary').fill('Built reliable application interfaces and documented integration workflows for engineering teams. '.repeat(140));
+  await expect(workspace.locator('#export-page-count')).toHaveText('Last PDF · 1 page · updating');
+  await workspace.locator('#save-document').click();
+  await expect(workspace.locator('#feedback')).toContainText('Export temporarily unavailable');
+  await expect(workspace.locator('#export-page-count')).toHaveText('Last PDF · 1 page · needs update');
+  await workspace.locator('#proof-toggle').click();
+  // Opening proof retries the failed export while preserving the last good PDF.
+  await expect(workspace.locator('#export-page-count')).toHaveText(/^PDF · \d+ pages$/);
+  await expect(workspace.locator('#feedback')).not.toContainText('Export temporarily unavailable');
+  const record = await message(workspace, 'get', { id: (await message(workspace, 'list'))[0].id });
+  const loading = getDocument({ data: Uint8Array.from(Buffer.from(record.files.pdf.data, 'base64')), isEvalSupported: false, useWasm: false });
+  let pages;
+  try { pages = (await loading.promise).numPages; } finally { await loading.destroy(); }
+  expect(pages).toBeGreaterThan(1);
+  expect(record.pages).toBe(pages);
+  await expect(workspace.locator('#page-count')).toHaveText(`${pages} pages`);
+  await expect(workspace.locator('#pdf-preview')).toHaveAttribute('aria-busy', 'false');
+  await expect(workspace.locator('.pdf-page')).toHaveCount(pages);
+  await expect(workspace.locator('.pdf-page figcaption')).toHaveText(Array.from({ length: pages }, (_, i) => `Page ${i + 1} of ${pages}`));
+  await expect(workspace.locator('#overflow-status')).toContainText('1-page target is exceeded');
+  await expect(workspace.locator('#proof-zoom')).toHaveValue('page');
+  await expect(workspace.locator('#zoom')).toBeHidden();
+  for (const width of [1440, 900, 390]) {
+    await workspace.setViewportSize({ width, height: 1000 });
+    await expect.poll(async () => {
+      const bounds = await workspace.locator('#pdf-preview').boundingBox();
+      const page = await workspace.locator('.pdf-page').first().boundingBox();
+      return page.height <= bounds.height && page.width <= bounds.width;
+    }).toBe(true);
+    expect(await workspace.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await workspace.screenshot({ path: testInfo.outputPath(`pdf-proof-${width}.png`) });
+  }
+  await workspace.setViewportSize({ width: 1440, height: 1000 });
+  const fitted = await workspace.locator('.pdf-page').first().boundingBox();
+  await workspace.locator('#proof-zoom').selectOption('width');
+  await expect.poll(async () => (await workspace.locator('.pdf-page').first().boundingBox()).width).toBeGreaterThan(fitted.width);
+  const downloadPromise = workspace.waitForEvent('download');
+  await workspace.locator('#download-toggle').click(); await workspace.locator('[data-download="pdf"]').click();
+  const download = await downloadPromise;
+  expect(fs.readFileSync(await download.path())).toEqual(Buffer.from(record.files.pdf.data, 'base64'));
+  await workspace.locator('#proof-toggle').click();
+  await expect(workspace.locator('#export-page-count')).toHaveText(`PDF · ${pages} pages`);
+  await expect(workspace.locator('#zoom')).toBeVisible();
+});
+
 function materialResponse(body) {
   const input = JSON.parse(body.messages.at(-1).content);
   if (!input.kind) return { choices: [{ message: { content: JSON.stringify({ answers: (input.fieldsToFill || []).map(f => ({ fieldId: f.fieldId, value: f.type === 'email' ? PROFILE.email : PROFILE.fullName })) }) } }] };
