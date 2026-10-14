@@ -4,6 +4,7 @@ import { APP_VERSION, POPULAR_MODELS, DEFAULT_SETTINGS, DEFAULT_PROFILE, STORAGE
 import { PROFILE_SECTIONS, createWorkExperience, createEducation, createProject, createWorkEligibility, createLanguage } from '../../../core/profile.js';
 import { exportPayload, importPayload } from '../../../core/migration.js';
 import { createProfileWorkspace } from './profile-workspace.js';
+import { NARRATIVE_STYLES, getNarrativeStyle } from '../../../core/narrative-styles.js';
 
 let currentWork = [];
 let currentEducation = [];
@@ -1456,6 +1457,21 @@ async function init() {
 
   setKeyBadge(snapshot.hasApiKey);
   renderModel(settings);
+  const styleSelect = $('narrative-style');
+  styleSelect.replaceChildren(...NARRATIVE_STYLES.map(style => {
+    const option = document.createElement('option');
+    option.value = style.id;
+    option.textContent = style.label;
+    return option;
+  }));
+  styleSelect.value = getNarrativeStyle(settings.narrativeStyle).id;
+  const previewStyle = () => {
+    const style = getNarrativeStyle(styleSelect.value);
+    $('style-description').textContent = style.description;
+    $('style-example').textContent = style.examples[0].answer;
+  };
+  styleSelect.onchange = previewStyle;
+  previewStyle();
   storedProfileSnapshot = structuredClone(profile);
   renderProfile(profile);
   if (!profileWorkspace) {
@@ -1543,9 +1559,9 @@ async function init() {
     const select = $('model');
     const model = (select.value === 'custom' ? $('model-custom').value.trim() : select.value) || DEFAULT_SETTINGS.model;
     const current = await readStore();
-    const next = { ...DEFAULT_SETTINGS, ...(current.data[STORAGE_KEYS.SETTINGS] || {}), model };
+    const next = { ...DEFAULT_SETTINGS, ...(current.data[STORAGE_KEYS.SETTINGS] || {}), model, narrativeStyle: getNarrativeStyle(styleSelect.value).id };
     await sendMessage({ type: MSG.STORAGE_SET, key: STORAGE_KEYS.SETTINGS, value: next });
-    flash($('model-feedback'), 'Model saved.');
+    flash($('model-feedback'), 'Model and writing style saved.');
   };
 
   $('add-work-btn').onclick = () => {

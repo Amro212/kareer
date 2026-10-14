@@ -59,8 +59,15 @@
         <select id="model"></select>
         <input aria-label="Custom model ID" id="model-custom" type="text" placeholder="Custom model id" hidden />
       </div>
+      <div class="group">
+        <label for="narrative-style">Writing style</label>
+        <select id="narrative-style" aria-describedby="style-description"></select>
+        <p class="hint" id="style-description"></p>
+        <p class="hint">Example wording</p>
+        <p id="style-example"></p>
+      </div>
       <div class="actions">
-        <button id="save-model">Save model</button>
+        <button id="save-model">Save model &amp; style</button>
         <span class="feedback" role="status" aria-live="polite" id="model-feedback"></span>
       </div>
     </section>

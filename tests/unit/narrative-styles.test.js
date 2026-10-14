@@ -45,7 +45,7 @@ function checkVoice(prompt, style) {
   assert.doesNotMatch(prompt, /23-year-old|candidate himself|He uses|Direct developer|Why 1Password/);
   assert.match(prompt, /emotional framing, inferred personal reactions, and plausible anecdotal elaboration/);
   assert.match(prompt, /career history, qualifications, dates, and measurable results/);
-  assert.doesNotMatch(prompt, /Do not manufacture enthusiasm|Never invent facts out of thin air\./);
+  assert.doesNotMatch(prompt, /Do not manufacture enthusiasm|Never invent facts out of thin air\.|Ground every factual claim/);
   for (const other of NARRATIVE_STYLES.filter(other => other.id !== style.id)) assert.ok(!prompt.includes(other.prompt));
 }
 

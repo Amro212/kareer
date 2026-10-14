@@ -432,3 +432,36 @@ for (const scenario of ['current', 'pending', 'ambiguous', 'unrelated']) {
     } finally { dom.window.close(); }
   });
 }
+
+test('panel writing style previews, saves, reloads, and preserves unrelated settings', async () => {
+  const bundle = await build({ entryPoints: ['src/targets/userscript/entry.js'], bundle: true, format: 'iife', write: false });
+  const dom = new JSDOM('<title>Job Application</title><body><h1>Job Application</h1><form><label for=app-email>Email</label><input id=app-email type=email><label for=why>Why this role?</label><textarea id=why></textarea></form></body>', { url: 'https://example.com/apply', runScripts: 'dangerously' });
+  const storage = new Map([['kr:settings', { narrativeStyle: 'unknown', futureSetting: 'preserve', narrativeModel: 'other-model' }]]);
+  dom.window.GM_getValue = (key, fallback) => storage.get(key) ?? fallback;
+  dom.window.GM_setValue = (key, value) => storage.set(key, value);
+  dom.window.CSS = { escape: value => value };
+  try {
+    dom.window.eval(bundle.outputFiles[0].text);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    const root = dom.window.document.querySelector('#kareer-root').shadowRoot;
+    root.querySelector('#kr-pebble-toggle-btn')?.click();
+    root.querySelector('#kr-toggle-btn').click();
+    root.querySelector('[data-tab=settings]').click();
+    const select = root.querySelector('[name=narrativeStyle]');
+    assert.ok(select);
+    assert.equal(select.labels.length, 1);
+    assert.equal(select.value, 'natural');
+    select.value = 'light-wit';
+    select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    assert.match(root.querySelector('#kr-style-description').textContent, /dry observation/);
+    assert.match(root.querySelector('#kr-style-example').textContent, /other plans/);
+    assert.equal(storage.get('kr:settings').narrativeStyle, 'unknown', 'preview does not save');
+    root.querySelector('#kr-settings-form').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
+    assert.equal(storage.get('kr:settings').narrativeStyle, 'light-wit');
+    assert.equal(storage.get('kr:settings').futureSetting, 'preserve');
+    assert.equal(storage.get('kr:settings').narrativeModel, 'other-model');
+    root.querySelector('[data-tab=home]').click();
+    root.querySelector('[data-tab=settings]').click();
+    assert.equal(root.querySelector('[name=narrativeStyle]').value, 'light-wit');
+  } finally { dom.window.close(); }
+});
