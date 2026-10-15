@@ -149,4 +149,4 @@ try {
   dom.window.close();
 }
 console.log(`Saved ${report.cases.length} cases and ${report.requests.length} requests to ${outputPath}`);
-assert.equal(report.cases.filter(item => item.error).length, 0, 'Live requests failed; inspect saved report.');
+assert.ok(report.cases.every(item => !item.error && !item.checks.length), 'Live contract failed; inspect saved report.');

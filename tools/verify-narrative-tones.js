@@ -8,9 +8,10 @@ import { saveApiKey, saveSettings, saveProfile, gmSet, getSettings } from '../sr
 import { NARRATIVE_STYLES } from '../src/core/narrative-styles.js';
 import { generateAutofillAnswers, rewriteNarrativeField } from '../src/core/ai.js';
 
-// Opt-in paid verification of production prompts; --original replays the saved pre-change system prompts.
+// Opt-in paid verification of production prompts; --original replays the tracked pre-change system prompts.
 assert.ok(process.env.OPENROUTER_API_KEY, 'Set OPENROUTER_API_KEY.');
 const original = process.argv.includes('--original');
+const originalPrompts = original ? JSON.parse(fs.readFileSync(new URL('./fixtures/narrative-tone-original-prompts.json', import.meta.url), 'utf8')) : null;
 const shipped = !original;
 const modelArg = process.argv.find(arg => arg.startsWith('--model='));
 const models = modelArg ? [modelArg.slice(8)] : [DEFAULT_SETTINGS.model, 'deepseek/deepseek-v4.1-flash'];
@@ -33,8 +34,7 @@ const originalFetch = globalThis.fetch;
 globalThis.fetch = async (url, options) => {
   const body = JSON.parse(options.body);
   if (active.angle === 'original') {
-    const original = JSON.parse(fs.readFileSync('sample-output/tone-comparison-baseline-directions-contrast-no-examples.json'));
-    body.messages[0].content = original.requests.find(request => request.angle === 'baseline' && request.style === active.style).messages[0].content;
+    body.messages[0].content = originalPrompts[active.style];
     const input = JSON.parse(body.messages[1].content);
     input.fieldsToFill = input.fieldsToFill.map(({ writingStyle, ...field }) => field);
     body.messages[1].content = JSON.stringify(input);
