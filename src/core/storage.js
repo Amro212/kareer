@@ -1,5 +1,6 @@
 import { STORAGE_KEYS, DEFAULT_SETTINGS, DEFAULT_PROFILE, APP_VERSION } from './constants.js';
 import { platform } from './platform.js';
+import { getNarrativeStyle } from './narrative-styles.js';
 import { createWorkEligibility, createLanguage } from './profile.js';
 
 export function gmGet(key, defaultValue = null) {
@@ -16,13 +17,14 @@ export function gmDelete(key) {
 
 export function getSettings() {
   const stored = gmGet(STORAGE_KEYS.SETTINGS, {});
-  return { ...DEFAULT_SETTINGS, ...stored };
+  return { ...DEFAULT_SETTINGS, ...stored, narrativeStyle: getNarrativeStyle(stored?.narrativeStyle).id };
 }
 
 export function saveSettings(settings) {
   // Ensure we do not accidentally persist secrets in general settings
   const current = gmGet(STORAGE_KEYS.SETTINGS, {}) || {};
   const cleanSettings = { ...current, ...settings };
+  cleanSettings.narrativeStyle = getNarrativeStyle(cleanSettings.narrativeStyle).id;
   delete cleanSettings.apiKey;
   delete cleanSettings.openRouterApiKey;
   gmSet(STORAGE_KEYS.SETTINGS, cleanSettings);

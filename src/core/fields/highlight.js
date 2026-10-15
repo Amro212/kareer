@@ -1,4 +1,6 @@
 import { UI_IDS } from '../constants.js';
+import { getSettings } from '../storage.js';
+import { NARRATIVE_STYLES } from '../narrative-styles.js';
 
 let inlineRewriteEl = null;
 let currentFocusedNarrativeField = null;
@@ -117,6 +119,19 @@ export function initInlineRewriteBadge(onRewriteClick) {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
+    .kr-rewrite-controls {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px;
+      max-width: calc(100vw - 16px); font: 11px/normal -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .kr-style-label {
+      display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box;
+      padding: 3px 6px; background: #0D1117; color: #F2F5F7; border: 1px solid #26303D; border-radius: 6px;
+    }
+    .kr-style-select {
+      color-scheme: dark; background: #0D1117; color: #F2F5F7; border: 0;
+      min-width: 0; max-width: 160px; font: inherit; line-height: normal;
+    }
+    .kr-rewrite-btn:focus-visible, .kr-style-select:focus-visible { outline: 2px solid #A3E635; outline-offset: 2px; }
     .kr-rewrite-btn {
       all: initial;
       display: inline-flex !important;
@@ -181,6 +196,25 @@ export function initInlineRewriteBadge(onRewriteClick) {
   `;
   shadow.appendChild(styleEl);
 
+  const controls = document.createElement('div');
+  controls.className = 'kr-rewrite-controls';
+  const styleLabel = document.createElement('label');
+  styleLabel.className = 'kr-style-label';
+  styleLabel.textContent = 'Writing style';
+  const styleSelect = document.createElement('select');
+  styleSelect.className = 'kr-style-select';
+  for (const style of NARRATIVE_STYLES) {
+    const option = document.createElement('option');
+    option.value = style.id;
+    option.textContent = style.label;
+    styleSelect.append(option);
+  }
+  styleSelect.value = getSettings().narrativeStyle;
+  styleLabel.append(styleSelect);
+  controls.append(styleLabel);
+  shadow.append(controls);
+  let rewriting = false;
+
   const btn = document.createElement('button');
   btn.className = 'kr-rewrite-btn';
   btn.type = 'button';
@@ -194,11 +228,13 @@ export function initInlineRewriteBadge(onRewriteClick) {
   labelSpan.textContent = 'Rewrite with AI';
 
   btn.append(iconSpan, labelSpan);
-  shadow.appendChild(btn);
+  controls.appendChild(btn);
 
   function setBadgeState(state, customLabel) {
     if (!btn) return;
     btn.setAttribute('data-state', state);
+    btn.disabled = rewriting || state === 'loading';
+    styleSelect.disabled = btn.disabled;
     const icons = {
       loading: BADGE_ICONS.spin,
       success: BADGE_ICONS.check,
@@ -217,9 +253,23 @@ export function initInlineRewriteBadge(onRewriteClick) {
   btn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (currentFocusedNarrativeField && typeof onRewriteClick === 'function') {
-      onRewriteClick(currentFocusedNarrativeField, setBadgeState);
-    }
+    if (rewriting || !currentFocusedNarrativeField || typeof onRewriteClick !== 'function') return;
+    const field = currentFocusedNarrativeField;
+    rewriting = true;
+    setBadgeState('loading');
+    const updateState = (state, label) => {
+      if (currentFocusedNarrativeField === field) setBadgeState(state, label);
+    };
+    let result;
+    try { result = onRewriteClick(field, updateState, styleSelect.value); }
+    catch { updateState('error'); }
+    Promise.resolve(result).catch(() => {
+      updateState('error');
+    }).finally(() => {
+      rewriting = false;
+      if (currentFocusedNarrativeField !== field || btn.dataset.state === 'loading') setBadgeState('idle');
+      else { btn.disabled = false; styleSelect.disabled = false; }
+    });
   });
 
   document.body.appendChild(inlineRewriteEl);
@@ -231,6 +281,10 @@ export function initInlineRewriteBadge(onRewriteClick) {
     const target = e.target;
     if (!target || typeof target.getAttribute !== 'function') return;
     if (target.tagName === 'TEXTAREA' || target.getAttribute('contenteditable') === 'true') {
+      if (currentFocusedNarrativeField !== target) {
+        styleSelect.value = getSettings().narrativeStyle;
+        setBadgeState(rewriting ? 'loading' : 'idle');
+      }
       currentFocusedNarrativeField = target;
       positionRewriteBadge(target);
     }
@@ -241,15 +295,22 @@ export function initInlineRewriteBadge(onRewriteClick) {
     focusTimer = setTimeout(() => {
       if (inlineRewriteEl !== badge) return;
       const isHovered = inlineRewriteEl?.matches(':hover') || btn?.matches(':hover');
-      if (badgeDocument.activeElement !== currentFocusedNarrativeField && !isHovered) {
+      if (badgeDocument.activeElement !== currentFocusedNarrativeField && badgeDocument.activeElement !== badge && !isHovered) {
         hideRewriteBadge();
       }
     }, 250);
   };
+  const reposition = () => {
+    if (badge.style.display !== 'none') positionRewriteBadge(currentFocusedNarrativeField);
+  };
+  window.addEventListener('resize', reposition);
+  window.addEventListener('scroll', reposition, true);
   badgeDocument.addEventListener('focusin', onFocusIn);
   badgeDocument.addEventListener('focusout', onFocusOut);
   inlineRewriteCleanup = () => {
     clearTimeout(focusTimer);
+    window.removeEventListener('resize', reposition);
+    window.removeEventListener('scroll', reposition, true);
     badgeDocument.removeEventListener('focusin', onFocusIn);
     badgeDocument.removeEventListener('focusout', onFocusOut);
   };
@@ -267,12 +328,12 @@ function positionRewriteBadge(target) {
   if (!inlineRewriteEl || !target) return;
 
   const rect = target.getBoundingClientRect();
-  const top = window.scrollY + rect.top - 32;
-  const left = window.scrollX + rect.right - 135;
-
-  inlineRewriteEl.style.setProperty('top', `${Math.max(10, top)}px`, 'important');
-  inlineRewriteEl.style.setProperty('left', `${Math.max(10, left)}px`, 'important');
   inlineRewriteEl.style.setProperty('display', 'block', 'important');
+  const size = inlineRewriteEl.getBoundingClientRect();
+  const top = window.scrollY + rect.top - size.height - 6;
+  const viewportLeft = Math.max(8, Math.min(rect.right - size.width, window.innerWidth - size.width - 8));
+  inlineRewriteEl.style.setProperty('top', `${Math.max(window.scrollY + 8, top)}px`, 'important');
+  inlineRewriteEl.style.setProperty('left', `${window.scrollX + viewportLeft}px`, 'important');
 
   const badge = inlineRewriteEl;
   requestAnimationFrame(() => {

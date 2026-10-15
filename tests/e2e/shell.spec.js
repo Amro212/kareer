@@ -95,7 +95,7 @@ test.describe('extension shell', () => {
     await page.locator('.configuration-links a[href="#models"]').click();
     await page.locator('#model').selectOption('openai/gpt-4o-mini');
     await page.locator('#save-model').click();
-    await expect(page.locator('#model-feedback')).toHaveText('Model saved.');
+    await expect(page.locator('#model-feedback')).toHaveText('Model and writing style saved.');
 
     await page.locator('#profile-nav-link').click();
     await page.locator('[data-profile-section=identity] .profile-edit-button').click();

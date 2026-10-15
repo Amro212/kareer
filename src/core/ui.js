@@ -16,6 +16,7 @@ import { snapshotMaterials, applyGeneratedMaterials, materialKind } from './mate
 import { collectPortableData, exportPayload } from './migration.js';
 import { logger } from './debug.js';
 import { testConnection, generateAutofillAnswers, rewriteNarrativeField } from './ai.js';
+import { NARRATIVE_STYLES, getNarrativeStyle } from './narrative-styles.js';
 import { scanFormFields, harvestComboboxOptions, deduplicateFields, refreshField } from './fields/scanner.js';
 import { resolveComboboxSearchAnswers, resolveDiscoveredAnswers } from './autofill.js';
 import { extractOptionLabel } from './fields/labels.js';
@@ -2885,6 +2886,7 @@ function renderApiKeyGroup() {
 
 function renderSettingsTab() {
   const settings = getSettings();
+  const selectedStyle = getNarrativeStyle(settings.narrativeStyle);
 
   const modelOptions = POPULAR_MODELS.map((m) => {
     const selected = settings.model === m ? 'selected' : '';
@@ -2902,6 +2904,18 @@ function renderSettingsTab() {
           <option value="custom" ${!POPULAR_MODELS.includes(settings.model) ? 'selected' : ''}>Custom Model...</option>
         </select>
         <input class="kr-input" id="kr-custom-model-input" type="text" placeholder="Enter custom model ID" value="${escapeHtml(settings.model)}" style="margin-top: 6px; display: ${!POPULAR_MODELS.includes(settings.model) ? 'block' : 'none'};" />
+      </div>
+
+      <div class="kr-form-group">
+        <label for="kr-narrative-style">Writing style</label>
+        <select class="kr-select" name="narrativeStyle" id="kr-narrative-style" aria-describedby="kr-style-description">
+          ${NARRATIVE_STYLES.map(style => `<option value="${style.id}" ${style.id === selectedStyle.id ? 'selected' : ''}>${escapeHtml(style.label)}</option>`).join('')}
+        </select>
+        <span id="kr-style-description" style="font-size: 12px; line-height: 1.5; color: var(--kr-text-3);">${escapeHtml(selectedStyle.description)}</span>
+        <div class="kr-card" style="margin-top: 6px;">
+          <span class="kr-card-title">Example wording</span>
+          <p id="kr-style-example" style="font-size: 12px; line-height: 1.5; margin: 0;">${escapeHtml(selectedStyle.examples[0].answer)}</p>
+        </div>
       </div>
 
       <div class="kr-card">
@@ -3483,6 +3497,12 @@ function attachEventHandlers() {
   // Settings Form
   const settingsForm = shadowRootRef.querySelector('#kr-settings-form');
   if (settingsForm) {
+    const styleSelect = shadowRootRef.querySelector('#kr-narrative-style');
+    if (styleSelect) styleSelect.onchange = () => {
+      const style = getNarrativeStyle(styleSelect.value);
+      shadowRootRef.querySelector('#kr-style-description').textContent = style.description;
+      shadowRootRef.querySelector('#kr-style-example').textContent = style.examples[0].answer;
+    };
     const modelSelect = shadowRootRef.querySelector('#kr-model-select');
     const customInput = shadowRootRef.querySelector('#kr-custom-model-input');
     if (modelSelect && customInput) {
@@ -3524,6 +3544,7 @@ function attachEventHandlers() {
 
       const newSettings = {
         model: selectedModel,
+        narrativeStyle: getNarrativeStyle(formData.get('narrativeStyle')).id,
         autofillEnabled: formData.get('autofillEnabled') === 'on',
         overwriteExisting: formData.get('overwriteExisting') === 'on',
         autoContinue: formData.get('autoContinue') === 'on',
@@ -3686,25 +3707,28 @@ export function mountUI() {
   if (target) {
     refreshDetectedFields();
     updatePanelDOM();
-    initInlineRewriteBadge(async (targetInput, setBadgeState) => {
+    initInlineRewriteBadge(async (targetInput, setBadgeState, style) => {
       const field = detectedFieldsCache.find((f) => f.element === targetInput) || {
         id: targetInput.id || 'narrative_field',
         label: targetInput.getAttribute('aria-label') || targetInput.placeholder || 'Narrative Response',
         element: targetInput,
-        currentValue: targetInput.value || '',
+        currentValue: targetInput.value || targetInput.textContent || '',
+        type: targetInput.getAttribute('contenteditable') === 'true' ? 'contenteditable' : 'textarea',
         isNarrative: true,
-        constraints: {},
+        constraints: targetInput.maxLength > 0 ? { maxLength: targetInput.maxLength } : {},
       };
 
       try {
         setBadgeState?.('loading', 'Rewriting...');
         field.element = resolveLiveElement(field) || targetInput;
-        const currentVal = field.element?.value || targetInput.value || '';
+        const currentVal = field.element?.getAttribute('contenteditable') === 'true'
+          ? field.element.textContent || '' : field.element?.value || targetInput.value || '';
         const rewritten = await rewriteNarrativeField({
           fieldLabel: field.label,
           currentValue: currentVal,
           feedback: '',
           constraints: field.constraints,
+          style,
         });
 
         if (rewritten) {
