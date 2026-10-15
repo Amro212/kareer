@@ -818,7 +818,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     async initialize() {
       const restored = await restoreSession();
       if (disposed) return;
-      session = restored;
+      session ||= restored;
       if (session && session.identityVersion !== 2) session = null;
       if (session) {
         bindTab(session);
@@ -845,7 +845,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
           const job = captureJob();
           if (job?.pendingHydration) await job.pendingHydration;
           if (disposed) return;
-          session = createSession(job);
+          if (!session) session = createSession(job);
         } catch { /* Ignore early DOM access */ }
       }
       if (pendingJob) updateJob(pendingJob);

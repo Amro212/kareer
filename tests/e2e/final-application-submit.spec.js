@@ -27,7 +27,7 @@ for (const [ats, host] of [
     test(`${ats}: final form fills and reaches review with Auto Continue ${autoContinue ? 'on' : 'off'}`, async ({ kr }) => {
       await kr.seed({ apiKey: ats === 'generic' ? 'sk-or-v1-e2e-test-key' : '', profile: PROFILE, settings: { autoContinue, autoSubmit: false } });
       const page = await kr.context.newPage();
-      const start = ['lever', 'generic'].includes(ats);
+      const start = ats === 'generic';
       await page.goto(kr.fixtureUrl('final-application-submit-fixture.html', host, `?ats=${ats}${start ? '&start' : ''}`));
       await kr.openPanel(page);
       await page.locator('#kr-autofill-btn').click();

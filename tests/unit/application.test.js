@@ -63,6 +63,33 @@ test('destroy during initialization does not restore a session or register obser
   assert.equal(emissions, 0);
 });
 
+test('late Lever initialization cannot replace a completed user-started session', async () => {
+  dom.reconfigure({ url: 'https://jobs.lever.co/acme/42/apply' });
+  render(`<h1>Engineer</h1>${input()}<button>Submit application</button>`);
+  const originalFetch = globalThis.fetch;
+  let release;
+  globalThis.fetch = () => new Promise(resolve => { release = resolve; });
+  const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0 });
+  let initializing;
+  try {
+    initializing = engine.initialize();
+    while (!release) await new Promise(resolve => setTimeout(resolve, 1));
+    await engine.start(job());
+    const id = engine.session.id;
+    assert.equal(engine.session.status, 'review');
+    release({ ok: false, status: 404 });
+    await initializing;
+    assert.equal(engine.session.id, id);
+    assert.equal(engine.session.status, 'review');
+    assert.equal(gmGet('kr:sessions').length, 1);
+  } finally {
+    release?.({ ok: false, status: 404 });
+    await initializing;
+    engine.destroy();
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('destroy during a request discards queued job context and late emissions', async () => {
   render('<h1>Engineer A</h1>' + input() + '<button>Continue</button>');
   let release, emissions = 0;

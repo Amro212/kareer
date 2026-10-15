@@ -34,7 +34,7 @@ test('Lever hydrated job and session remain plain data and survive filling and r
   await page.locator('#kr-autofill-btn').click();
   await expect(page.locator('#name')).toHaveValue(PROFILE.fullName);
   await expect(page.locator('#email')).toHaveValue(PROFILE.email);
-  await expect(page.locator('#kr-main-panel')).toContainText('Autofill complete. Review field statuses below.');
+  await expect(page.locator('#kr-autofill-btn')).toHaveText('Submit Application');
   await expect.poll(async () => Object.keys((await kr.readStorage(`kr:sessions:${id}`))?.answers || {}).length).toBeGreaterThanOrEqual(2);
   const filled = await kr.readStorage(`kr:sessions:${id}`);
   expect(Object.keys(filled.answers).length).toBeGreaterThanOrEqual(2);
@@ -43,19 +43,20 @@ test('Lever hydrated job and session remain plain data and survive filling and r
   await page.reload();
   await kr.openPanel(page);
   await expect(page.locator('#kr-main-panel')).toContainText('Example');
+  await expect(page.locator('#kr-autofill-btn')).toHaveText('Submit Application');
   expect(await kr.readStorage('kr:sessions')).toEqual([id]);
   expect((await kr.readStorage(`kr:sessions:${id}`)).job.description).toBe(DESCRIPTION);
   expect(kr.openrouter.requests).toHaveLength(0);
 });
 
-test('Lever standalone autofill finishes when the parent posting stalls without logging answers', async ({ kr }) => {
+test('Lever reaches Submit when the parent posting stalls without logging answers', async ({ kr }) => {
   const page = await openApplication(kr, { stall: true });
   const consoleMessages = [];
   page.on('console', message => consoleMessages.push(message.text()));
   await page.locator('#kr-autofill-btn').click();
   await expect(page.locator('#email')).toHaveValue(PROFILE.email, { timeout: 15000 });
   await expect(page.locator('#name')).toHaveValue(PROFILE.fullName);
-  await expect(page.locator('#kr-main-panel')).toContainText('Autofill complete. Review field statuses below.');
+  await expect(page.locator('#kr-autofill-btn')).toHaveText('Submit Application');
   const job = await kr.readStorage('kr:job');
   expect(job.description).toBe('Captured application summary.');
   expect(job.applicationUrl).toBe(APPLICATION_URL);

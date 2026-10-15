@@ -43,8 +43,7 @@
       submit.setAttribute('aria-label', 'Submit application');
       submit.textContent = '→';
     }
-    // Lever/generic use standalone filling on a fresh single-page form. Replay
-    // arriving at the final page of an active workflow for those two adapters.
+    // Replay arriving at the final page of an active generic workflow.
     if (new URLSearchParams(location.search).has('start')) {
       submit.hidden = true;
       const next = document.createElement('button');

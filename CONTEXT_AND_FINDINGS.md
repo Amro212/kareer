@@ -1,3 +1,19 @@
+## Turn: 2026-10-14 - Fresh Lever application returns to Autofill instead of Submit
+
+- Report: after filling `https://jobs.lever.co/palantir/71ed917e-850a-484b-9454-fa66bdf24540/apply`, Kareer returned to "Autofill Lever" instead of offering the shared Submit action. Greenhouse and Ashby worked.
+- Root cause: `handleUnifiedAutofillClick` explicitly routed Workday, Greenhouse, and Ashby through the application engine, but omitted Lever. A fresh single-page Lever application with Auto Submit off therefore used standalone filling and never entered `review`. Earlier Lever final-page tests used an artificial Continue step, which selected the engine and masked this case.
+- `src/core/ui.js`: add Lever to the existing workflow-routing list and allow the engine to create its session when job initialization is still awaiting hydration. The old `session &&` gate also sent early clicks to standalone filling even after Lever was added. Completed fresh Lever forms now reach Submit Application through the existing validation, manual submission, confirmation, and opt-in Auto Submit logic.
+- `src/core/application.js`, `tests/unit/application.test.js`: the stalled-hydration browser check exposed a second reset. Initialization could create an idle session after an explicit user-started session had already reached review. Preserve an existing session across restoration and the awaited hydration result. The new controlled regression failed before these two guards.
+- `tests/e2e/final-application-submit.spec.js`: exercise fresh Lever forms directly with Auto Continue on/off, without an artificial Continue step. Both corrected cases failed against the previous build before the production fix.
+- `tests/e2e/lever-hydration.spec.js`: expect Submit Application after filling, preserve it after reload, and verify the same outcome when parent-posting hydration stalls.
+- `tests/e2e/lever-university.spec.js`: retain school/GPA, hidden-control, provenance, and required-field failure assertions; remove the obsolete standalone-completion message assertion now that Lever uses workflow validation. Preserve its former 60-second fill budget on the school-value/failure assertions.
+- `fixtures/final-application-submit-fixture.html`: correct the introductory-step comment; the introductory replay is now used only by the generic workflow case.
+- Build-generated package/site/Firefox update metadata: v0.5.132, newer than the reported installed v0.5.129. Chrome, Firefox, and userscript builds succeeded; no dependencies or new production abstractions.
+- Verification: application/panel unit tests passed (142), navigation lifecycle tests passed (6), and all 7 targeted Lever browser cases passed across the final routing/hydration and captured-university runs. Built Chrome/Firefox manifests match v0.5.132; `git diff --check` passed. The Palantir URL returned HTTP 403 here, so live DOM capture/verification was unavailable; existing captured Lever markup and local replays are used instead.
+- Branch: `fix/application-submit-detection`.
+
+---
+
 ## Turn: 2026-10-14 - Submit blocked despite zero current failed fields
 
 - Report: the user clicked Kareer's Submit Application button on `https://job-boards.greenhouse.io/clara/jobs/5223309007`; the filled form then paused with "Check required fields and application errors before submitting", while the panel showed 0 failed and 0 untouched fields. The screenshot alone does not identify which check rejected this particular form.

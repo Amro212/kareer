@@ -1944,11 +1944,11 @@ async function handleUnifiedAutofillClick() {
 
   // Capture creates context for every job. Single-page/embedded applications
   // still use their field-agent flow; a session alone does not imply navigation.
-  const needsWorkflow = session?.active || session?.currentStep || ['workday', 'greenhouse', 'ashby'].includes(adapter.id) ||
+  const needsWorkflow = session?.active || session?.currentStep || ['workday', 'greenhouse', 'ashby', 'lever'].includes(adapter.id) ||
     Boolean(inspectContinue().control) || getSettings().autoSubmit;
   const hasEmbeddedFields = remoteFieldsCache.length || (await listRemoteFrames()).length;
   if (!current()) return;
-  if (supportedEmbedded || session && needsWorkflow && !hasEmbeddedFields) {
+  if (supportedEmbedded || needsWorkflow && !hasEmbeddedFields) {
     void applicationEngine?.start();
     return;
   }
