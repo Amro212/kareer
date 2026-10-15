@@ -31,7 +31,7 @@ export function updateSiteFiles({ root = rootDir, baseVersion, xpiVersion, addon
         [addonId]: {
           updates: [{
             version: xpiVersion,
-            update_link: 'https://amro212.github.io/kareer/downloads/kareer-firefox.xpi',
+            update_link: 'https://kareer.itsamro.me/downloads/kareer-firefox.xpi',
           }],
         },
       },

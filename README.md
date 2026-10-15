@@ -1,18 +1,18 @@
 <div align="center">
-  <a href="https://amro212.github.io/kareer/">
+  <a href="https://kareer.itsamro.me/">
     <img src="./src/assets/brand/kareer-logo-horizontal.png" alt="Kareer Logo" width="380" />
   </a>
 
   <p><strong>AI-powered job application autofill for Chrome, Firefox, and Tampermonkey.</strong></p>
 
   <p>
-    <a href="https://amro212.github.io/kareer/">
-      <img src="https://img.shields.io/badge/%F0%9F%8C%90_Official_Website-amro212.github.io%2Fkareer-A3E635?style=for-the-badge&labelColor=0D1117" alt="Official Website" />
+    <a href="https://kareer.itsamro.me/">
+      <img src="https://img.shields.io/badge/%F0%9F%8C%90_Official_Website-kareer.itsamro.me-A3E635?style=for-the-badge&labelColor=0D1117" alt="Official Website" />
     </a>
   </p>
 
   <p>
-    <a href="https://amro212.github.io/kareer/"><strong>🌐 Visit Official Website &amp; Interactive Flight Deck &rarr;</strong></a>
+    <a href="https://kareer.itsamro.me/"><strong>🌐 Visit Official Website &amp; Interactive Flight Deck &rarr;</strong></a>
   </p>
 
   <p>
@@ -25,7 +25,7 @@
   <p><em>Apply to jobs in seconds without copy-pasting your resume 50 times a day.<br />Private, local-first, and powered by the LLM of your choice.</em></p>
 
   <p>
-    <a href="https://amro212.github.io/kareer/"><strong>Website &amp; Downloads</strong></a> &bull;
+    <a href="https://kareer.itsamro.me/"><strong>Website &amp; Downloads</strong></a> &bull;
     <a href="#quick-start-for-job-seekers"><strong>Quick Start</strong></a> &bull;
     <a href="#supported-ats-matrix"><strong>Supported ATS</strong></a> &bull;
     <a href="#key-features"><strong>Features</strong></a>
@@ -33,7 +33,7 @@
 </div>
 
 > [!TIP]
-> 🚀 **Official Website & Downloads**: Visit **[amro212.github.io/kareer](https://amro212.github.io/kareer/)** for the live interactive flight deck preview, direct Firefox `.xpi` self-updating install, and full product walkthrough.
+> 🚀 **Official Website & Downloads**: Visit **[kareer.itsamro.me](https://kareer.itsamro.me/)** for the live interactive flight deck preview, direct Firefox `.xpi` self-updating install, and full product walkthrough.
 
 ---
 
@@ -135,7 +135,7 @@ Choose whichever method fits your browser:
 
 #### Option B: Firefox (Signed Add-on)
 1. Download the latest signed extension directly:
-   **[Download Kareer for Firefox (.xpi)](https://amro212.github.io/kareer/downloads/kareer-firefox.xpi)**
+   **[Download Kareer for Firefox (.xpi)](https://kareer.itsamro.me/downloads/kareer-firefox.xpi)**
 2. In Firefox, open the downloaded `.xpi` file (or drag it into any open Firefox tab).
 3. Firefox will detect Mozilla's signature and prompt: *"Add Kareer? This extension has been verified by Mozilla"*. Click **Add** to install.
 *(Alternatively, build from source and load temporarily via `about:debugging`)*.

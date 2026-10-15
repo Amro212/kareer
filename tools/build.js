@@ -79,7 +79,7 @@ function syncSiteAndUpdates(version) {
         if (manifest?.addons?.['kareer@amro212']) {
           manifest.addons['kareer@amro212'].updates = [{
             version,
-            update_link: 'https://amro212.github.io/kareer/downloads/kareer-firefox.xpi',
+            update_link: 'https://kareer.itsamro.me/downloads/kareer-firefox.xpi',
           }];
           fs.writeFileSync(p, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
         }
