@@ -84,14 +84,19 @@ export function inspectContinue(doc = document) {
     const labels = candidates.slice(0, 5).map(el => (visibleText(el) || el.value || el.getAttribute('aria-label')).trim());
     reason = `Multiple forward buttons found: ${labels.join(', ')}${candidates.length > 5 ? ', …' : ''}. Continue manually.`;
   } else if (isDisabled(control)) reason = 'The page’s Continue button is disabled. Wait for the page or check required fields.';
-  return { control, reason };
+  return { control, reason, count: candidates.length };
 }
 
 export function inspectSubmit(doc = document) {
   const adapterControl = detectAdapter(doc.defaultView?.location, doc).submitControl?.(doc);
   const matches = Array.from(doc.querySelectorAll('button,input[type=submit],input[type=button],a[href],[role=button]')).filter(isVisible).filter(el => {
-    const label = (visibleText(el) || el.value || el.getAttribute('aria-label') || '').trim();
-    return /^(?:submit(?: my | your | the )?application|submit(?: application)?|apply now|send application|final submit)$/i.test(label);
+    // Icon text must not mask an explicit accessible name. Fragmented labels
+    // and decorative forward arrows are common on application submit buttons.
+    const labelledBy = (el.getAttribute('aria-labelledby') || '').split(/\s+/)
+      .map(id => doc.getElementById(id)?.textContent || '').join(' ').trim();
+    const label = (labelledBy || el.getAttribute('aria-label') || el.value || visibleText(el) || '')
+      .replace(/\s+/g, ' ').trim();
+    return /^(?:submit(?: (?:my|your|the))? application|submit|apply now|send application|final submit)(?:\s*[→›»])?$/i.test(label);
   }).filter(el => !el.closest('[role=tablist]'));
   if (adapterControl && isVisible(adapterControl) && !matches.includes(adapterControl)) matches.push(adapterControl);
   const control = matches.length === 1 ? matches[0] : null;

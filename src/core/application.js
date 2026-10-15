@@ -720,6 +720,18 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
           return;
         }
         if (await attemptAutoSubmit(token, step)) return;
+        // A single-page application keeps its fields on the final page. It
+        // becomes ready for review only after filling and validation finish.
+        // Inspect all forward candidates so ambiguous Next controls still get
+        // a navigation diagnostic rather than being mistaken for a final page.
+        if (!inspectContinue().count) {
+          const submit = inspectSubmit();
+          if (submit.count) {
+            if (submit.reason) status('paused', submit.reason);
+            else status('review', 'Page filled. Review your answers, then submit the application.');
+            return;
+          }
+        }
         if (!getSettings().autoContinue && !step.forceContinue) {
           step.reviewed = true;
           session.stepReview = true;

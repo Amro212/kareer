@@ -7,7 +7,7 @@ import { createSession, restoreSession, saveSession } from '../../src/core/sessi
 import { rememberAnswer, recallAnswer } from '../../src/core/memory.js';
 import { classifyPage, isVisible } from '../../src/core/pageClassifier.js';
 import { inspectValidation } from '../../src/core/validation.js';
-import { findContinue } from '../../src/core/navigation.js';
+import { findContinue, inspectSubmit } from '../../src/core/navigation.js';
 import { pageSignature } from '../../src/core/navigation.js';
 import { createApplicationEngine } from '../../src/core/application.js';
 import { scanFormFields } from '../../src/core/fields/scanner.js';
@@ -274,6 +274,8 @@ test('Phenom workflow clicks Next, never progress Review, then stops before subm
 test('navigation pause distinguishes competing forward actions from missing controls', async () => {
   for (const [controls, expected] of [
     ['<button>Next</button><button>Continue</button>', /Multiple forward buttons found: Next, Continue/],
+    ['<button>Next</button><button>Continue</button><button>Submit application</button>', /Multiple forward buttons found: Next, Continue/],
+    ['', /No Next or Continue button found/],
     [phenomProgress, /No Next or Continue button found.*progress/i],
   ]) {
     render(`${input()}${controls}`);
@@ -921,6 +923,83 @@ test('review stays manual when Auto Submit is off', async () => {
   assert.equal(engine.session.status, 'review');
   assert.equal(clicks, 0);
   engine.destroy();
+});
+
+for (const [ats, url, submit] of [
+  ['Greenhouse', 'https://job-boards.greenhouse.io/acme/jobs/42', '<button type="submit" class="btn btn--pill">Submit application</button>'],
+  ['Ashby', 'https://jobs.ashbyhq.com/acme/42/application', '<button type="submit" class="ashby-application-form-submit-button"><span>Submit Application</span><svg aria-hidden="true"></svg></button>'],
+  ['Lever', 'https://jobs.lever.co/acme/42/apply', '<button class="postings-btn template-btn-submit" data-qa="btn-submit" href="#">Submit application</button>'],
+  ['generic', 'https://example.com/jobs/42/apply', '<input type="submit" value="Send application">'],
+]) {
+  for (const autoContinue of [false, true]) {
+    test(`${ats} filled final page is ready for review with Auto Continue ${autoContinue ? 'on' : 'off'}`, async () => {
+      dom.reconfigure({ url });
+      saveSettings({ autoContinue, autoSubmit: false });
+      render(`<h1>Engineer</h1><form>${input()}${submit}</form>`);
+      let clicks = 0;
+      document.querySelector('form').onsubmit = event => event.preventDefault();
+      document.querySelector('button,input[type=submit]').onclick = () => clicks++;
+      const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0 });
+      try {
+        await engine.start(job());
+        assert.equal(document.querySelector('#name').value, 'Applicant', 'final-page fields must be filled first');
+        assert.equal(engine.session.status, 'review');
+        assert.match(engine.session.reason, /Page filled.*submit/i);
+        assert.equal(engine.session.active, false);
+        assert.equal(clicks, 0, 'Auto Continue must never click Submit');
+      } finally { engine.destroy(); }
+    });
+  }
+}
+
+test('filled final page reports a disabled Submit instead of missing Continue', async () => {
+  render(`${input()}<button disabled>Submit application</button>`);
+  const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0 });
+  try {
+    await engine.start(job());
+    assert.equal(engine.session.status, 'paused');
+    assert.match(engine.session.reason, /Submit button is disabled/i);
+  } finally { engine.destroy(); }
+});
+
+test('filled final page reports ambiguous Submit controls instead of missing Continue', async () => {
+  render(`${input()}<button>Submit application</button><button>Submit</button>`);
+  saveSettings({ autoSubmit: true });
+  const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0 });
+  try {
+    await engine.start(job());
+    assert.equal(engine.session.status, 'paused');
+    assert.match(engine.session.reason, /Multiple Submit controls/i);
+  } finally { engine.destroy(); }
+});
+
+test('a final Submit button does not mark unresolved required fields ready for review', async () => {
+  render(`${input()}<button>Submit application</button>`);
+  let clicks = 0;
+  document.querySelector('button').onclick = () => clicks++;
+  const engine = createApplicationEngine({
+    answer: async fields => ({ answers: fields.map(field => ({ fieldId: field.fieldId, value: '' })) }),
+    settleMs: 0, transitionMs: 0,
+  });
+  try {
+    await engine.start(job());
+    assert.equal(engine.session.status, 'paused');
+    assert.equal(document.querySelector('#name').value, '');
+    assert.equal(clicks, 0);
+  } finally { engine.destroy(); }
+});
+
+test('accessible Submit names and decorative arrows are recognized', () => {
+  for (const markup of [
+    '<button aria-label="Submit application"><span>→</span></button>',
+    '<span id="submit-label">Submit application</span><button aria-labelledby="submit-label">→</button>',
+    '<button>Submit <span>application</span> →</button>',
+    '<input type="button" value="Submit my application">',
+  ]) {
+    render(markup);
+    assert.equal(inspectSubmit().control, document.querySelector('button,input'), markup);
+    assert.equal(findContinue(), null);
+  }
 });
 
 test('Auto Submit clicks a single unambiguous submit after a zero countdown', async () => {

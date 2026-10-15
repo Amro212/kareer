@@ -1,3 +1,20 @@
+## Turn: 2026-10-14 - Final application pages incorrectly report missing Continue
+
+- Target: shared extension/userscript workflow; Greenhouse, Ashby, Lever, and generic applications.
+- User-reported bug: all required fields fill successfully, but the panel pauses with "No Next or Continue button found" despite a visible Submit application button.
+- Root cause: pages retaining their inputs remain classified as `application` so filling can finish. After validation, the workflow only inspected Submit for opt-in Auto Submit; manual final submission fell through to the missing-Continue diagnostic. Submit matching also let icon text mask explicit accessible names and rejected decorative trailing arrows.
+- Resolution:
+  - `src/core/application.js`: after filling and validation, detect final Submit controls independently of Auto Submit. A single enabled Submit without forward candidates becomes `review` with "Page filled. Review your answers, then submit the application." Disabled/ambiguous Submit controls retain their specific diagnostics. Auto Continue and Auto Submit settings remain independent.
+  - `src/core/navigation.js`: expose the forward candidate count so ambiguous Next/Continue controls cannot masquerade as a final page; recognize Submit accessible names (`aria-labelledby`, `aria-label`), normalized fragmented labels, and decorative arrows.
+  - `tests/unit/application.test.js`: regressions for all four adapters with Auto Continue on/off, disabled/ambiguous Submit, unresolved required fields, competing/missing forward controls, and accessible labels. All eleven initial regressions failed before the production fix and passed afterward.
+  - `fixtures/final-application-submit-fixture.html`, `tests/e2e/final-application-submit.spec.js`: minimal local replay based on existing ATS capture markup, covering manual final review and opt-in submission. This is a synthetic replay, not a new live capture. Lever uses its real single full-name field; Lever/generic manual cases replay an active workflow reaching its final page because fresh single-page forms use standalone filling.
+  - `package.json`, `firefox-updates.json`, `site/firefox-updates.json`, `site/index.html`, `site/version.json`: build-generated v0.5.124 metadata; the build also synchronizes the existing configured Firefox download URL.
+- Verification: targeted application tests passed (113 before adding the final required-field guard case); navigation lifecycle tests passed (6); the two additional/expanded guard tests passed. Unit commands used `node --test --test-isolation=none` for the named files/patterns. Final packaged-Chrome replay passed all 12 cases; the existing Auto Submit countdown and Pause browser tests also passed (2). `npm run build` succeeded for Chrome, Firefox, and userscript at v0.5.124; packaged manifests match the package version; `git diff --check` passed.
+- Branch: `fix/application-submit-detection` from `origin/feature/resume-tailor` (`14725d4`). No live applications submitted.
+- Status: completed; local build artifacts are in `dist/`.
+
+---
+
 ## Turn: 2026-10-14 - Rename "Application Materials" to "Tailored Documents"
 
 - Target: `src/core/ui.js`, `src/targets/extension/materials/index.html`, `src/targets/extension/options/index.html`, `src/targets/extension/popup/index.html`, `src/targets/extension/background/materials.js`, `src/core/platform.js`, `src/core/hosts/gm.js`, `DESIGN.md`
