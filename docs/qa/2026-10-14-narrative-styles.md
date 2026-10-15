@@ -44,7 +44,9 @@ Nontechnical source: a support coordinator found unclear ownership in request ha
 | Story-led | I tried automating the forms, then kept hitting the same obstacle: custom dropdowns. I started building a tool that could handle them. Most of the work went into making those fields reliable. | I started by reviewing why customer requests were waiting three days for a follow-up. Ownership was unclear, so I introduced a shared tracker showing who was responsible for each request. Follow-up time fell to one day. |
 | Light wit | The tools I tried could fill a text box. Custom dropdowns apparently had other plans. I built a form-filling tool and focused on getting those fields to work reliably. | Customer requests were spending three days waiting for someone to own them. I gave each request an owner in a shared tracker, which was less exciting than it sounds and much more useful. Follow-up time dropped to one day. |
 
-## Live-model acceptance still pending
+## Historical live-model limitation (superseded by local evaluation)
+
+The configured local environment was evaluated on 2026-10-14. See [live model review](2026-10-14-narrative-styles-live.md): 68 default-model paid calls including pilot and two prompt experiments; live quality acceptance needs targeted prompt tuning. The original environment limitation and acceptance plan below describe the earlier cloud run.
 
 This cloud environment has no configured Kareer/OpenRouter host credentials and its allowed network destinations do not include OpenRouter. No paid live-model call was made. Mock requests prove wiring and contracts, not naturalness or model-to-model consistency. The user was asked where to run this remaining QA.
 

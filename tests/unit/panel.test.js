@@ -454,7 +454,7 @@ test('panel writing style previews, saves, reloads, and preserves unrelated sett
     select.value = 'light-wit';
     select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
     assert.match(root.querySelector('#kr-style-description').textContent, /dry observation/);
-    assert.match(root.querySelector('#kr-style-example').textContent, /other plans/);
+    assert.match(root.querySelector('#kr-style-example').textContent, /several versions/);
     assert.equal(storage.get('kr:settings').narrativeStyle, 'unknown', 'preview does not save');
     root.querySelector('#kr-settings-form').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
     assert.equal(storage.get('kr:settings').narrativeStyle, 'light-wit');

@@ -419,9 +419,10 @@ async function generatePageAnswers(fields, { settings, profile, allowSearch, job
   if (jobContext?.description) {
     logger.info(`Grounding ${unresolved.length} questions in job context: "${jobContext.title || 'Untitled'}" at "${jobContext.company || 'Unknown'}" (${jobContext.description.length} chars)`);
   }
+  const writingStyle = getNarrativeStyle(settings.narrativeStyle);
   const result = await requestAiJson({ model, tag, messages: [
     { role: 'system', content: `${buildStructuredSystemPrompt({ allowSearch })}\n${buildNarrativeVoicePrompt(profile, settings)}\nFor declared multiple-choice fields only, value may be an array of exact owned option labels. Use all available profile, resume, notes, job, and saved-answer context for ambiguous factual or open-ended questions. Label uncertain context-based estimates with provenance=guessed and inferred=true, and grounded contextual answers provenance=inferred. Never invent career history, qualifications, dates, measurable results, or company facts. For structured fields, never invent facts out of thin air. Select only labels from this field's owned options. Answer every supplied application question, including eligibility, disclosures, and acknowledgments.` },
-    { role: 'user', content: JSON.stringify({ applicantProfile: profileForAI(profile), resumeContext: formatStructuredBackground(profile) || profile.resumeContext, applicantNotes: profile.applicantNotes, pageContext: { url: window.location.href, host: window.location.hostname }, jobContext, repairErrors, fieldsToFill: unresolved }) },
+    { role: 'user', content: JSON.stringify({ applicantProfile: profileForAI(profile), resumeContext: formatStructuredBackground(profile) || profile.resumeContext, applicantNotes: profile.applicantNotes, pageContext: { url: window.location.href, host: window.location.hostname }, jobContext, repairErrors, fieldsToFill: unresolved.map(field => isNarrativeField(field) ? { ...field, writingStyle: `${writingStyle.label}: ${writingStyle.prompt} Preserve facts, limits and explicit language instructions.` } : field) }) },
   ] });
   const byId = new Map(unresolved.map(field => [field.fieldId, field]));
   const seen = new Set();
@@ -459,6 +460,7 @@ export async function rewriteNarrativeField({ fieldLabel, currentValue, feedback
   const settings = { ...getSettings(), ...(style === undefined ? {} : { narrativeStyle: style }) };
   const profile = getProfile();
   const model = settings.narrativeModel || settings.model || DEFAULT_SETTINGS.model;
+  const writingStyle = getNarrativeStyle(settings.narrativeStyle);
 
   if (!hasApiKey()) {
     throw new Error('No OpenRouter API key configured.');
@@ -485,6 +487,8 @@ Rules:
     : '';
 
   const userPrompt = `Question Label: ${fieldLabel}
+Selected Writing Style: ${writingStyle.label}
+${writingStyle.prompt}
 Current Answer:
 ${currentValue}
 

@@ -65,6 +65,8 @@ for (const style of NARRATIVE_STYLES) {
     const sent = JSON.parse(requests[0].messages[1].content).fieldsToFill;
     assert.deepEqual(sent.map(field => field.fieldId), ['story', 'choice']);
     assert.equal(sent[0].constraints.maxLength, 400);
+    assert.equal(sent[0].writingStyle, `${style.label}: ${style.prompt} Preserve facts, limits and explicit language instructions.`);
+    assert.equal(sent[1].writingStyle, undefined, 'structured choices must not receive tone instructions');
     assert.equal(result.answers.find(answer => answer.fieldId === 'saved').value, 'Keep my exact wording.');
     assert.equal(result.answers.find(answer => answer.fieldId === 'name').value, 'Test Candidate');
     assert.equal(result.answers.find(answer => answer.fieldId === 'choice').value, 'day');
@@ -73,6 +75,7 @@ for (const style of NARRATIVE_STYLES) {
     checkVoice(requests[1].messages[0].content, style);
     assert.equal(requests[1].temperature, 0.6);
     assert.match(requests[1].messages[1].content, /200 characters/);
+    assert.ok(requests[1].messages[1].content.includes(`Selected Writing Style: ${style.label}\n${style.prompt}`));
     checkVoice(buildNarrativeSystemPrompt({}, getSettings()), style);
     checkVoice(buildNarrativeEditorSystemPrompt({}, getSettings()), style);
     assert.ok(!JSON.stringify(requests).includes('style-test-key'));
