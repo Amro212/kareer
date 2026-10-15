@@ -1,3 +1,17 @@
+## Turn: 2026-10-14 - Submit blocked despite zero current failed fields
+
+- Report: the user clicked Kareer's Submit Application button on `https://job-boards.greenhouse.io/clara/jobs/5223309007`; the filled form then paused with "Check required fields and application errors before submitting", while the panel showed 0 failed and 0 untouched fields. The screenshot alone does not identify which check rejected this particular form.
+- Reproduced cause: `canSubmit` checked all historical `results`, including a failed conditional field that had disappeared. The panel and fill-completion validation only considered current fields, so the panel could offer Submit and then reject it. A new regression reproduced that exact sequence before the fix.
+- `src/core/application.js`: use the existing current-field validation for both final submission modes. Removed failures and failures superseded by a different current value no longer block submission; live persistence/required/native/ARIA errors still do. Replace the boolean submission check and generic rejection with a concrete field/control reason, including revalidation during the automatic countdown. Auto Submit remains opt-in.
+- `src/core/ui.js`, `tests/unit/panel.test.js`: prioritize a current failed status over the `inferred` flag in field reports. Previously a failed AI answer could appear as INFERRED and be omitted from the FAILED count. Removed fields remain excluded from current counts.
+- `tests/unit/application.test.js`: manual/automatic regressions retain an obsolete failure while verifying the current field passes; live required-field changes now assert a named field in the rejection.
+- `fixtures/final-application-submit-fixture.html`, `tests/e2e/final-application-submit.spec.js`: local conditional-field replay and manual/automatic browser regressions for the 0 FAILED / blocked Submit mismatch.
+- Build metadata: v0.5.128, newer than the user's pictured v0.5.126; Chrome, Firefox, and userscript artifacts built successfully. No dependencies added.
+- Verification: targeted application/panel unit tests passed (141); packaged-Chrome final-page, stale-failure, and Auto Submit/countdown browser checks passed (16). Built Chrome/Firefox manifests match v0.5.128; `git diff --check` passed. The Clara URL returned HTTP 403 from this environment, so this exact live DOM could not be captured or verified. The regression fixture is a local replay, not a claimed Clara capture.
+- Branch: `fix/application-submit-detection`.
+
+---
+
 ## Turn: 2026-10-14 - Make the completed-form button submit the application
 
 - Request: replace the panel's "Ready for Review" primary button with a working Submit button; Ponytail mode enabled.

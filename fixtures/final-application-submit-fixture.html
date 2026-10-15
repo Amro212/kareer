@@ -23,6 +23,10 @@
     const ats = new URLSearchParams(location.search).get('ats');
     const form = document.querySelector('form');
     const submit = document.querySelector('#submit');
+    if (new URLSearchParams(location.search).has('stale')) {
+      form.insertAdjacentHTML('afterbegin', '<label for="obsolete">Old conditional question</label><input id="obsolete" data-reject-fill="true">');
+      document.querySelector('#email').addEventListener('input', () => document.querySelector('#obsolete')?.remove());
+    }
     if (ats === 'greenhouse') {
       form.id = 'application_form';
       submit.className = 'btn btn--pill';

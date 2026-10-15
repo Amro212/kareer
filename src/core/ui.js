@@ -2349,10 +2349,10 @@ export function summarizeFieldResults(fields, results) {
     const res = results.get(id);
     if (res?.status === FILL_STATUS.VERIFIED) {
       verifiedFields.push({ field: f, result: res });
-    } else if (res?.status === FILL_STATUS.INFERRED || res?.status === FILL_STATUS.GUESSED || res?.inferred) {
-      inferredFields.push({ field: f, result: res });
     } else if (res?.status === FILL_STATUS.FAILED) {
       failedFields.push({ field: f, result: res });
+    } else if (res?.status === FILL_STATUS.INFERRED || res?.status === FILL_STATUS.GUESSED || res?.inferred) {
+      inferredFields.push({ field: f, result: res });
     } else {
       untouchedFields.push({ field: f, result: res });
     }

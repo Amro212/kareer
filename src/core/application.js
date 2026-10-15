@@ -267,23 +267,31 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     return true;
   }
 
-  function canSubmit(fields, manual = false) {
-    if (!manual && !getSettings().autoSubmit) return false;
+  function submissionProblem(fields) {
     const page = classifyPage();
-    if (!['application', 'review'].includes(page.type)) return false;
+    if (!['application', 'review'].includes(page.type)) return page.reason;
     const continueControl = findContinue();
     const submit = inspectSubmit();
-    if (!submit.control || isDisabled(submit.control) || submit.count !== 1) return false;
-    if (continueControl && continueControl !== submit.control && !isDisabled(continueControl)) return false;
-    if (inspectValidation(fields).length) return false;
-    if (fields.some(f => f.required && empty(f))) return false;
-    if ([...results.values()].some(result => result.status === 'failed')) return false;
-    return true;
+    if (submit.reason) return submit.reason;
+    if (continueControl && continueControl !== submit.control && !isDisabled(continueControl)) return 'Continue the application before submitting.';
+    const errors = validation(fields);
+    if (errors.length) return errors.map(error => {
+      const label = error.label || fields.find(field => field.id === error.fieldId)?.label;
+      return `${label ? `${label}: ` : ''}${error.message}`;
+    }).join(' ');
+    const missing = fields.filter(field => field.required && empty(field));
+    if (missing.length) return `Required fields still need input: ${missing.map(field => field.label || field.id).join(', ')}.`;
+    return '';
   }
 
   async function attemptSubmit(token, step, manual = false) {
-    const fields = scanFormFields();
-    if (!canSubmit(fields, manual)) return false;
+    if (!manual && !getSettings().autoSubmit) return false;
+    const problem = submissionProblem(scanFormFields());
+    if (problem) {
+      if (!manual) return false;
+      status('paused', problem);
+      return true;
+    }
     if ((step?.submits || 0) >= 1 || (session.submits || 0) >= 1) {
       status('paused', 'Auto Submit already attempted this step. Submit manually.');
       return true;
@@ -296,8 +304,9 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     }
     if (token !== generation || !session?.active) return true;
     const submit = inspectSubmit();
-    if (!submit.control || isDisabled(submit.control) || !canSubmit(scanFormFields(), manual)) {
-      status('paused', submit.reason || 'Submit is no longer safe. Submit manually.');
+    const changed = submissionProblem(scanFormFields());
+    if (changed || !manual && !getSettings().autoSubmit) {
+      status('paused', changed || 'Auto Submit was turned off. Submit manually.');
       return true;
     }
     if (step) step.submits = (step.submits || 0) + 1;
@@ -908,9 +917,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       busy = true;
       session.active = true;
       try {
-        if (!await attemptSubmit(token, session.steps[session.currentStep], true)) {
-          status('paused', inspectSubmit().reason || 'Check required fields and application errors before submitting.');
-        }
+        await attemptSubmit(token, session.steps[session.currentStep], true);
       } catch (error) {
         if (token === generation) status('paused', `Submission failed: ${error.message}`);
       } finally { busy = false; emit(); }

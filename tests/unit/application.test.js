@@ -1041,6 +1041,33 @@ test('manual Submit submits once with Auto Submit off and preserves review edits
   } finally { engine.destroy(); }
 });
 
+for (const autoSubmit of [false, true]) test(`${autoSubmit ? 'Auto' : 'Manual'} Submit ignores a historical failed field removed from the live form`, async () => {
+  saveSettings({ autoSubmit });
+  render(`${input('obsolete', 'Old conditional question')}${input()}<button id="submit">Submit application</button>`);
+  document.querySelector('#obsolete').setAttribute('data-reject-fill', 'true');
+  document.querySelector('#name').oninput = () => document.querySelector('#obsolete')?.remove();
+  let clicks = 0;
+  document.querySelector('#submit').onclick = () => {
+    clicks++;
+    render('<h1>Application submitted</h1>');
+  };
+  let results;
+  const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0, submitCountdownMs: 0,
+    onChange: state => { results = new Map(state.results); } });
+  try {
+    await engine.start(job());
+    assert.equal(results.get('obsolete').status, 'failed', 'a historical failure still exists');
+    assert.equal(results.get('name').status, 'verified', 'the current field passed');
+    if (!autoSubmit) {
+      assert.equal(engine.session.status, 'review');
+      assert.equal(document.querySelector('#name').value, 'Applicant');
+      await engine.submit();
+    }
+    assert.equal(clicks, 1);
+    assert.equal(engine.session.status, 'confirmation');
+  } finally { engine.destroy(); }
+});
+
 for (const change of ['disabled', 'ambiguous', 'required', 'continue']) {
   test(`manual Submit rechecks the live page when ${change} changes during review`, async () => {
     saveSettings({ autoSubmit: false });
@@ -1057,6 +1084,8 @@ for (const change of ['disabled', 'ambiguous', 'required', 'continue']) {
       await engine.submit();
       assert.equal(clicks, 0);
       assert.equal(engine.session.status, 'paused');
+      assert.doesNotMatch(engine.session.reason, /Check required fields and application errors/);
+      if (change === 'required') assert.match(engine.session.reason, /Full name/);
     } finally { engine.destroy(); }
   });
 }

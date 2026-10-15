@@ -2,6 +2,24 @@ import { test, expect, GREENHOUSE_HOST, ASHBY_HOST, LEVER_HOST, ATS_HOST } from 
 
 const PROFILE = { fullName: 'Test Applicant', email: 'test@example.com' };
 
+for (const autoSubmit of [false, true]) {
+  test(`Greenhouse ignores removed failed fields at submission with Auto Submit ${autoSubmit ? 'on' : 'off'}`, async ({ kr }) => {
+    await kr.seed({ apiKey: '', profile: { ...PROFILE, savedAnswers: { 'Old conditional question': 'Test answer' } }, settings: { autoContinue: true, autoSubmit } });
+    const page = await kr.context.newPage();
+    await page.goto(kr.fixtureUrl('final-application-submit-fixture.html', GREENHOUSE_HOST, '?ats=greenhouse&stale'));
+    await kr.openPanel(page);
+    await page.locator('#kr-autofill-btn').click();
+    if (!autoSubmit) {
+      await expect(page.locator('#kr-autofill-btn')).toHaveText('Submit Application');
+      await expect(page.locator('#kr-main-panel')).toContainText('0 FAILED');
+      await page.locator('#kr-autofill-btn').click();
+    }
+    await expect(page.locator('body')).toHaveAttribute('data-submissions', '1');
+    await expect(page.locator('#kr-autofill-btn')).toHaveText('Submitted');
+    expect(kr.openrouter.requests).toHaveLength(0);
+  });
+}
+
 for (const [ats, host] of [
   ['greenhouse', GREENHOUSE_HOST], ['ashby', ASHBY_HOST], ['lever', LEVER_HOST], ['generic', ATS_HOST],
 ]) {

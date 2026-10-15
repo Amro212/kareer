@@ -62,6 +62,15 @@ test('field report correctly summarizes cross-frame fields identified by fieldId
   assert.equal(report.untouched[0].field.fieldId, 'jcf1::phone');
 });
 
+test('a failed inferred answer is counted as failed, not successfully inferred', () => {
+  const report = summarizeFieldResults([{ id: 'answer' }], new Map([
+    ['answer', { status: 'failed', inferred: true, value: 'Rejected answer' }],
+  ]));
+  assert.equal(report.failed.length, 1);
+  assert.equal(report.inferred.length, 0);
+  assert.equal(report.filled, 0);
+});
+
 test('field report distinguishes AI calls vs deterministic profile fills', () => {
   const fields = [
     { id: 'full_name', label: 'Full Name' },
