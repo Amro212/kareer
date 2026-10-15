@@ -55,8 +55,9 @@ export const DEFAULT_PROFILE = {
 
 export const POPULAR_MODELS = [
   'google/gemini-2.5-flash-lite',
-  'google/gemini-2.0-flash',
-  'anthropic/claude-3.5-sonnet',
+  'anthropic/claude-haiku-5.5',
+  'inception/mercury-2.5',
+  'google/gemma-4-26b-a4b-it',
   'openai/gpt-4o',
   'openai/gpt-4o-mini',
   'meta-llama/llama-3.3-70b-instruct',
