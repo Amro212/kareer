@@ -1911,6 +1911,10 @@ async function handleUnifiedAutofillClick() {
     updatePanelDOM();
     return;
   }
+  if (session?.status === 'review') {
+    void engine.submit();
+    return;
+  }
   const adapter = detectAdapter();
   const embeddedStates = await embeddedApplicationStates();
   if (!current()) return;
@@ -2590,9 +2594,9 @@ function renderHomeTab() {
     btnDisabled = false;
     btnTitle = 'Resume application autofill';
   } else if (wfIsDone) {
-    btnContent = `${ICONS.check} ${wfStatus === 'confirmation' ? 'Submitted' : 'Ready for Review'}`;
-    btnDisabled = false;
-    btnTitle = wfStatus === 'confirmation' ? 'Application submitted' : 'Application ready for review';
+    btnContent = `${ICONS.check} ${wfStatus === 'confirmation' ? 'Submitted' : 'Submit Application'}`;
+    btnDisabled = wfStatus === 'confirmation';
+    btnTitle = wfStatus === 'confirmation' ? 'Application submitted' : 'Submit this application';
   } else if (!strength.isMvpComplete) {
     btnContent = `${ICONS.play} ${adapter.id !== 'generic' ? `Autofill ${escapeHtml(adapter.label)}` : 'Autofill Application'}`;
     btnDisabled = false;

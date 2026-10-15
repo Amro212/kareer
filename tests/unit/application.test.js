@@ -1017,6 +1017,50 @@ test('Auto Submit clicks a single unambiguous submit after a zero countdown', as
   engine.destroy();
 });
 
+test('manual Submit submits once with Auto Submit off and preserves review edits', async () => {
+  saveSettings({ autoSubmit: false, overwriteExisting: true });
+  render(`${input()}<button id="submit">Submit application</button>`);
+  let clicks = 0;
+  document.querySelector('#submit').onclick = () => {
+    clicks++;
+    assert.equal(document.querySelector('#name').value, 'User correction');
+    render('<h1>Application submitted</h1>');
+  };
+  const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0 });
+  try {
+    await engine.start(job());
+    assert.equal(engine.session.status, 'review');
+    assert.equal(clicks, 0);
+    document.querySelector('#name').value = 'User correction';
+    await Promise.all([engine.submit(), engine.submit()]);
+    assert.equal(clicks, 1);
+    assert.equal(engine.session.status, 'confirmation');
+    assert.equal(gmGet('kr:settings').autoSubmit, false);
+    await engine.submit();
+    assert.equal(clicks, 1);
+  } finally { engine.destroy(); }
+});
+
+for (const change of ['disabled', 'ambiguous', 'required', 'continue']) {
+  test(`manual Submit rechecks the live page when ${change} changes during review`, async () => {
+    saveSettings({ autoSubmit: false });
+    render(`${input()}<button id="submit">Submit application</button>`);
+    let clicks = 0;
+    document.querySelector('#submit').onclick = () => clicks++;
+    const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0 });
+    try {
+      await engine.start(job());
+      if (change === 'disabled') document.querySelector('#submit').disabled = true;
+      if (change === 'ambiguous') document.querySelector('main').insertAdjacentHTML('beforeend', '<button>Submit</button>');
+      if (change === 'required') document.querySelector('#name').value = '';
+      if (change === 'continue') document.querySelector('main').insertAdjacentHTML('beforeend', '<button>Continue</button>');
+      await engine.submit();
+      assert.equal(clicks, 0);
+      assert.equal(engine.session.status, 'paused');
+    } finally { engine.destroy(); }
+  });
+}
+
 test('Auto Submit is cancelled by Pause during the countdown', async () => {
   saveSettings({ autoContinue: true, autoSubmit: true });
   render('<h1>Review application</h1><button id="submit">Submit application</button>');

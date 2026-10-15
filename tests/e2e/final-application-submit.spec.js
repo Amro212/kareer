@@ -28,6 +28,12 @@ for (const [ats, host] of [
       await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Review your answers, then submit the application.');
       await expect(page.locator('#kr-main-panel')).not.toContainText('No Next or Continue');
       await expect(page.locator('body')).toHaveAttribute('data-submissions', '0');
+      await expect(page.locator('#kr-autofill-btn')).toHaveText('Submit Application');
+      await page.locator('#kr-autofill-btn').click();
+      await expect(page.locator('body')).toHaveAttribute('data-submissions', '1');
+      await expect(page.locator('#kr-autofill-btn')).toHaveText('Submitted');
+      await expect(page.locator('#kr-autofill-btn')).toBeDisabled();
+      expect((await kr.readStorage('kr:settings')).autoSubmit).toBe(false);
       expect(kr.openrouter.requests).toHaveLength(0);
     });
   }

@@ -267,8 +267,8 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     return true;
   }
 
-  function canAutoSubmit(fields) {
-    if (!getSettings().autoSubmit) return false;
+  function canSubmit(fields, manual = false) {
+    if (!manual && !getSettings().autoSubmit) return false;
     const page = classifyPage();
     if (!['application', 'review'].includes(page.type)) return false;
     const continueControl = findContinue();
@@ -281,14 +281,14 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     return true;
   }
 
-  async function attemptAutoSubmit(token, step) {
+  async function attemptSubmit(token, step, manual = false) {
     const fields = scanFormFields();
-    if (!canAutoSubmit(fields)) return false;
+    if (!canSubmit(fields, manual)) return false;
     if ((step?.submits || 0) >= 1 || (session.submits || 0) >= 1) {
       status('paused', 'Auto Submit already attempted this step. Submit manually.');
       return true;
     }
-    const seconds = Math.max(0, Math.ceil(submitCountdownMs / 1000));
+    const seconds = manual ? 0 : Math.max(0, Math.ceil(submitCountdownMs / 1000));
     for (let left = seconds; left > 0; left--) {
       if (token !== generation || !session?.active) return true;
       status('submitting', `Submitting in ${left}s. Click Pause to cancel.`);
@@ -296,14 +296,14 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     }
     if (token !== generation || !session?.active) return true;
     const submit = inspectSubmit();
-    if (!submit.control || isDisabled(submit.control) || !canAutoSubmit(scanFormFields())) {
+    if (!submit.control || isDisabled(submit.control) || !canSubmit(scanFormFields(), manual)) {
       status('paused', submit.reason || 'Submit is no longer safe. Submit manually.');
       return true;
     }
     if (step) step.submits = (step.submits || 0) + 1;
     session.submits = (session.submits || 0) + 1;
     status('submitting', 'Submitting application.');
-    logger.info(`Auto Submit: ${submit.control.textContent?.trim() || submit.control.value || 'Submit'}`);
+    logger.info(`${manual ? 'Manual' : 'Auto'} Submit: ${submit.control.textContent?.trim() || submit.control.value || 'Submit'}`);
     submit.control.click();
     const deadline = Date.now() + Math.max(navigationTimeoutMs, 2500);
     do {
@@ -570,7 +570,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       busy = true;
       const token = generation;
       try {
-        await attemptAutoSubmit(token, session.steps[session.currentStep]);
+        await attemptSubmit(token, session.steps[session.currentStep]);
       } catch (error) {
         if (token === generation && session) status('paused', `Workflow stopped: ${error.message}`);
       } finally {
@@ -589,7 +589,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       for (let pass = 0; pass < 40; pass++) {
         if (!guard(token)) {
           if (token === generation && session.status === 'review' && getSettings().autoSubmit) {
-            await attemptAutoSubmit(token, session.steps[session.currentStep]);
+            await attemptSubmit(token, session.steps[session.currentStep]);
           }
           return;
         }
@@ -719,7 +719,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
           emit();
           return;
         }
-        if (await attemptAutoSubmit(token, step)) return;
+        if (await attemptSubmit(token, step)) return;
         // A single-page application keeps its fields on the final page. It
         // becomes ready for review only after filling and validation finish.
         // Inspect all forward candidates so ambiguous Next controls still get
@@ -754,7 +754,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         if (control && isDisabled(control)) {
           const readiness = await waitForNavigation(signature, token, false);
           if (readiness === 'stopped') {
-            if (token === generation && session.status === 'review' && getSettings().autoSubmit) await attemptAutoSubmit(token, step);
+            if (token === generation && session.status === 'review' && getSettings().autoSubmit) await attemptSubmit(token, step);
             return;
           }
           if (readiness === 'changed' || readiness === 'validation') continue;
@@ -762,7 +762,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
           control = findContinue();
         }
         if (!control || isDisabled(control)) {
-          if (await attemptAutoSubmit(token, step)) return;
+          if (await attemptSubmit(token, step)) return;
           status('paused', inspectContinue().reason);
           return;
         }
@@ -783,7 +783,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         control.click();
         const transition = await waitForNavigation(signature, token, true, navBaseline);
         if (transition === 'stopped') {
-          if (token === generation && session.status === 'review' && getSettings().autoSubmit) await attemptAutoSubmit(token, session.steps[session.currentStep]);
+          if (token === generation && session.status === 'review' && getSettings().autoSubmit) await attemptSubmit(token, session.steps[session.currentStep]);
           return;
         }
         if (transition === 'changed') continue;
@@ -901,6 +901,19 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       session.active = true;
       status('running', 'Starting application workflow.');
       await tick();
+    },
+    async submit() {
+      if (busy || disposed || session?.status !== 'review') return;
+      const token = ++generation;
+      busy = true;
+      session.active = true;
+      try {
+        if (!await attemptSubmit(token, session.steps[session.currentStep], true)) {
+          status('paused', inspectSubmit().reason || 'Check required fields and application errors before submitting.');
+        }
+      } catch (error) {
+        if (token === generation) status('paused', `Submission failed: ${error.message}`);
+      } finally { busy = false; emit(); }
     },
     async continueStep() {
       if (busy || !session) return;

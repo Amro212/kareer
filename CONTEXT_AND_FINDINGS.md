@@ -1,3 +1,16 @@
+## Turn: 2026-10-14 - Make the completed-form button submit the application
+
+- Request: replace the panel's "Ready for Review" primary button with a working Submit button; Ponytail mode enabled.
+- `src/core/ui.js`: completed forms display "Submit Application". Its click calls the engine's explicit submission action before AI/profile routing, preserving review edits instead of restarting autofill. Confirmed submissions display a disabled "Submitted" button.
+- `src/core/application.js`: reuse the existing submission validation, button detection, single-attempt tracking, confirmation wait, and error handling for a manual `submit()` action. An explicit click submits immediately even with Auto Submit off; it does not change the saved setting. Automatic submissions keep their countdown. Recheck current required fields, disabled/ambiguous Submit controls, and remaining forward actions at click time.
+- `tests/unit/application.test.js`: manual submission preserves edits with overwrite enabled, works with Auto Submit off, ignores duplicate clicks, and revalidates changed required fields/buttons.
+- `tests/e2e/final-application-submit.spec.js`: all eight manual-review cases now click the panel's Submit Application button, verify one local submission, a disabled Submitted button, and unchanged Auto Submit settings.
+- Build-generated metadata: `package.json`, `firefox-updates.json`, `site/firefox-updates.json`, `site/index.html`, `site/version.json` updated to v0.5.125. Chrome, Firefox, and userscript builds succeeded. No new dependencies.
+- Verification: targeted application and panel unit tests passed (138, `node --test --test-isolation=none tests/unit/application.test.js tests/unit/panel.test.js`). Packaged-Chrome final-page and existing Auto Submit browser checks passed (14). `git diff --check` passed. Live employer pages were not retested; all submission checks use local fixtures.
+- Branch: `fix/application-submit-detection`.
+
+---
+
 ## Turn: 2026-10-14 - Final application pages incorrectly report missing Continue
 
 - Target: shared extension/userscript workflow; Greenhouse, Ashby, Lever, and generic applications.
