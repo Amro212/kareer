@@ -19,7 +19,7 @@ function openDb() {
   });
 }
 
-function run(mode, work) {
+export function runFiles(mode, work) {
   return openDb().then((db) => new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, mode);
     const store = tx.objectStore(STORE);
@@ -56,12 +56,12 @@ export async function putDocument({ name, type, buffer }) {
     size: buffer.byteLength || 0,
     storedAt: new Date().toISOString(),
   };
-  await run('readwrite', (store) => store.put(record, KEY));
+  await runFiles('readwrite', (store) => store.put(record, KEY));
   return { name: record.name, type: record.type, size: record.size };
 }
 
 export async function getDocument() {
-  const record = await run('readonly', (store) => store.get(KEY));
+  const record = await runFiles('readonly', (store) => store.get(KEY));
   if (!record) return null;
   return {
     name: record.name,
@@ -78,6 +78,14 @@ export async function documentMeta() {
 }
 
 export async function deleteDocument() {
-  await run('readwrite', (store) => store.delete(KEY));
+  await runFiles('readwrite', (store) => store.delete(KEY));
   return { ok: true };
+}
+
+export const readStored = key => runFiles('readonly', store => store.get(key));
+export const writeStored = (key, value) => runFiles('readwrite', store => store.put(value, key));
+export const removeStored = key => runFiles('readwrite', store => store.delete(key));
+export async function listStored(prefix) {
+  const records = await runFiles('readonly', store => store.getAll());
+  return records.filter(record => record?.id?.startsWith(prefix));
 }

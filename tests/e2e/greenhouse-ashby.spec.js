@@ -70,7 +70,10 @@ for (const [ats,host] of [['greenhouse',GREENHOUSE_HOST],['ashby',ASHBY_HOST]]) 
     const page=await kr.context.newPage();await page.goto(kr.fixtureUrl('greenhouse-ashby-workflow.html',host,`?ats=${ats}`));
     await page.locator('#first_name').fill('User name');
     await page.locator('form').evaluate(form=>form.insertAdjacentHTML('afterbegin','<label for="preferred_first_name">Preferred First Name</label><input id="preferred_first_name" required>'));
-    await kr.openPanel(page);await page.locator('#kr-autofill-btn').click();
+    await kr.openPanel(page);
+    // Initial session restoration must finish before exercising the retry flow.
+    await expect(page.locator('#kr-main-panel')).toContainText('Ready to start.');
+    await page.locator('#kr-autofill-btn').click();
     await expect(page.locator('#kr-main-panel')).toContainText('Required saved values or documents are unavailable',{timeout:60000});
     await expect(page.locator('#preferred_first_name')).toHaveValue('Alex');await expect(page.locator('#email')).toHaveValue('');
     await page.locator('[data-tab="profile"]').click();await page.locator('#kr-profile-email').fill('new@example.com');

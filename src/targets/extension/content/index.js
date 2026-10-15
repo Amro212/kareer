@@ -10,24 +10,26 @@ setPlatform(createExtensionHost());
 
 const isTopFrame = window.self === window.top;
 
+// Popup commands can arrive while the storage snapshot is still hydrating.
+// Register immediately and keep the reply channel open until the UI is ready.
+if (isTopFrame) {
+  api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (![MSG.TOGGLE_PANEL, MSG.FRAMES_CHANGED].includes(message?.type)) return;
+    void platform.storage.ready().then(() => {
+      if (message.type === MSG.TOGGLE_PANEL) toggleUIVisibility();
+      else { refreshRemoteFieldCount(); refreshPageDetection(); }
+      sendResponse({ ok: true });
+    }).catch(error => sendResponse({ error: error.message }));
+    return true;
+  });
+}
+
 async function start() {
   // Core reads storage synchronously, so the cache must be filled before the
   // panel or the agent touches it.
   await platform.storage.ready();
 
   if (isTopFrame) {
-    api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-      if (message?.type === MSG.TOGGLE_PANEL) {
-        toggleUIVisibility();
-        sendResponse({ ok: true });
-        return;
-      }
-      if (message?.type === MSG.FRAMES_CHANGED) {
-        refreshRemoteFieldCount();
-        refreshPageDetection();
-        sendResponse({ ok: true });
-      }
-    });
     bootstrap();
   }
 

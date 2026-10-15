@@ -355,13 +355,13 @@ export function fillContentEditable(element, value) {
   return true;
 }
 
-export async function fillFileInput(element) {
+export async function fillFileInput(element, selectedDocument) {
   if (!element || (element.getAttribute('type') || '').toLowerCase() !== 'file') return false;
   if (!platform.capabilities.fileUpload) {
     logger.warn('Fill[file]: host cannot attach files');
     return false;
   }
-  const stored = await platform.documents.get();
+  const stored = selectedDocument || await platform.documents.get();
   if (!stored?.buffer || !stored.name) {
     logger.warn('Fill[file]: no stored resume');
     return false;

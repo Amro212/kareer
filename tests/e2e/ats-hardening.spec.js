@@ -77,6 +77,7 @@ test('Ashby commits its portal location and visible No button without submission
   await page.goto(kr.fixtureUrl('ashby-hardening-fixture.html', ASHBY_HOST));
   await kr.openPanel(page);
   await page.locator('#kr-autofill-btn').click();
+  await expect(page.locator('#kr-autofill-btn')).toBeDisabled();
   await expect(page.locator('#kr-autofill-btn')).toBeEnabled({ timeout: 60000 });
   await expect(page.locator('body')).toHaveAttribute('data-accepted-location', 'Toronto, ON, CAN');
   await expect(page.locator('body')).toHaveAttribute('data-accepted-authorization', 'no');

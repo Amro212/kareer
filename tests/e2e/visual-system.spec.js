@@ -15,7 +15,7 @@ test('local typography, internal options navigation, and responsive console', as
   await popup.locator('#open-options').click();
   const page = await opened;
   await page.waitForURL(kr.optionsUrl());
-  await expect(page.locator('#pf-firstName')).toBeVisible();
+  await expect(page.locator('[data-profile-section=identity]')).toBeVisible();
   const loaded = await fonts(page);
   expect(loaded).toHaveLength(2);
   expect(loaded.every(face => face.status === 'loaded')).toBe(true);
@@ -25,21 +25,25 @@ test('local typography, internal options navigation, and responsive console', as
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath(`options-${width}.png`), fullPage: true });
   }
-  await page.locator('#advanced').scrollIntoViewIfNeeded();
+  await page.locator('.app-configuration > .nav-item').click();
+  await page.locator('.configuration-links a[href="#advanced"]').click();
   await expect(page.locator('#export-data')).toBeVisible();
 });
 
-test('HUD and every panel tab use Geist without overflow', async ({ kr }, info) => {
+test('launcher opens the panel in one click and every tab uses Geist without overflow', async ({ kr }, info) => {
   await kr.seed({ settings: { model: 'provider/' + 'long-model-name-'.repeat(12) } });
   const page = await kr.context.newPage();
   await page.goto(kr.fixtureUrl('phase2-form-fixture.html'));
+  await kr.openPanel(page);
+  await page.locator('#kr-close-panel-btn').click();
+  await expect(page.locator('.kr-pebble')).toBeVisible();
+  await page.locator('.kr-pebble').screenshot({ path: info.outputPath('launcher.png') });
   await page.locator('.kr-pebble').click();
-  await page.locator('#kr-hud').waitFor();
+  await expect(page.locator('#kr-main-panel')).toBeVisible();
+  await expect(page.locator('#kr-hud')).toHaveCount(0);
   const loaded = await fonts(page);
   expect(loaded).toHaveLength(2);
   expect(loaded.every(face => face.status === 'loaded')).toBe(true);
-  await page.locator('#kr-hud').screenshot({ path: info.outputPath('hud.png') });
-  await kr.openPanel(page);
   for (const tab of ['home', 'profile', 'settings', 'debug']) {
     await page.locator(`[data-tab=${tab}]`).click();
     expect(await page.locator('.kr-content').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);

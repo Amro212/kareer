@@ -14,14 +14,22 @@ Log every user-reported bug and every change made in a conversation turn in
 - **Turn changes**: files modified or created, summary and rationale, current
   status and next steps.
 
-## 2. Verification (mandatory)
+## 2. Verification & Testing (mandatory)
 
-- `npm test` must pass before any change is considered done.
-- `npm run test:e2e` must pass for changes that touch scanning, filling,
-  navigation, upload, or the panel. Real browser, real extension load.
-- Every live ATS bug gets a captured fixture plus an E2E spec so it can never
-  silently regress. Capture one with the panel's Debug tab -> "Save page fixture",
-  then move the downloaded files into `fixtures/`.
+- **Targeted testing only for minor changes**: Do NOT run the entire test suite
+  (`npm test` or `npm run test:e2e`) after minor changes, routine bug fixes, or
+  focused component edits. Running the full test suite consumes heavy memory,
+  spikes CPU, and lags the host machine. Run ONLY the specific, relevant test
+  file(s) directly related to the changes made (e.g.,
+  `node --test tests/unit/materials-export.test.js` or
+  `npx playwright test tests/e2e/materials.spec.js`).
+- **Full test suites only for major changes**: Run the complete test suite
+  (`npm test` / `npm run test:e2e`) ONLY when absolutely necessary—specifically
+  for major cross-cutting architectural overhauls, core cross-platform refactors,
+  release preparation, or when explicitly requested by the user.
+- **ATS regressions**: Every live ATS bug gets a captured fixture plus a targeted
+  spec so it can never silently regress. When testing, run only that targeted spec
+  rather than the full browser suite.
 
 ## 3. Architecture rules
 

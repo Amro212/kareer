@@ -11,6 +11,7 @@ import { FILL_STATUS } from './constants.js';
 import { logger } from './debug.js';
 import { detectAdapter } from './adapters/index.js';
 import { getProfile } from './storage.js';
+import { applyGeneratedMaterials } from './materials.js';
 import { inspectContinue, inspectSubmit, observePage, isDisabled } from './navigation.js';
 
 /**
@@ -133,13 +134,13 @@ export function createFieldAgent() {
     return { results };
   }
 
-  async function uploadResume({ overwriteExisting = false } = {}) {
+  async function uploadResume({ overwriteExisting = false, materials = {} } = {}) {
     const token=generation;
     if (['confirmation','captcha'].includes(classifyPage().type)) return {error:classifyPage().reason};
     const allFileFields = scanFormFields(document).filter((field) => field.type === 'file');
     deduplicateFields(allFileFields);
-    const fields = allFileFields.filter((field) => isResumeField(field, allFileFields));
-    const results = [];
+    const fields = allFileFields.filter((field) => isResumeField(field, allFileFields) && !materials.resume);
+    const results = await applyGeneratedMaterials(scanFormFields(document), materials, { overwriteExisting, isCurrent: () => token === generation });
     for (const field of fields) {
       field.element = field.element?.isConnected ? field.element : (scanFormFields(document).find(f => f.id === field.id)?.element || field.element);
       if (!overwriteExisting && !unfilled(field)) continue;

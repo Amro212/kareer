@@ -1,5 +1,5 @@
 import { detectAdapter } from './adapters/index.js';
-import { fillField } from './fields/fillers.js';
+import { fillField, fillFileInput } from './fields/fillers.js';
 import { UI_IDS } from './constants.js';
 import { logger } from './debug.js';
 
@@ -106,7 +106,7 @@ export async function waitForResumeParsing({ doc = document, isCurrent = () => t
 }
 
 export async function uploadResumeAndWait(field, options) {
-  const filled = await fillField(field, '');
+  const filled = options?.document ? await fillFileInput(field.element, options.document) : await fillField(field, '');
   if (filled) await waitForResumeParsing({ ...options, uploadElement:field.element });
   return filled;
 }

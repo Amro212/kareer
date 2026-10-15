@@ -52,6 +52,23 @@ export const test = base.extend({
       }));
     const extensionId = new URL(worker.url()).host;
 
+    // Managed cloud Chromium may force a proxy that ignores host-resolver-rules.
+    // Route only the named synthetic ATS fixtures to our loopback server. The
+    // page keeps its ATS URL and the packaged extension runs unchanged.
+    const fixtureHosts = new Set([ATS_HOST, EMBED_HOST, WORKDAY_HOST, GREENHOUSE_HOST, LEVER_HOST, ASHBY_HOST]);
+    await context.route(url => fixtureHosts.has(url.hostname), async route => {
+      const url = new URL(route.request().url());
+      const response = await route.fetch({ url: `http://127.0.0.1:${fixtures.port}${url.pathname}${url.search}` });
+      await route.fulfill({ response });
+    });
+    // Context routing cannot intercept service-worker fetches. Redirect only
+    // OpenRouter calls in this test worker to the real local HTTPS mock.
+    await worker.evaluate(port => {
+      const original = globalThis.fetch.bind(globalThis);
+      globalThis.fetch = (url, options) => original(typeof url === 'string' && url.startsWith('https://openrouter.ai/')
+        ? `https://localhost:${port}${new URL(url).pathname}` : url, options);
+    }, openrouter.port);
+
     const helpers = {
       context,
       worker,
@@ -109,11 +126,8 @@ export const test = base.extend({
 
       /** Playwright's CSS engine pierces the panel's open shadow root. */
       async openPanel(page) {
-        await page.locator('#kr-pebble-toggle-btn, #kr-toggle-btn').first().waitFor({ timeout: 20000 });
-        if (await page.locator('.kr-pebble').count()) await page.locator('#kr-pebble-toggle-btn').click();
-        const toggle = page.locator('#kr-toggle-btn');
-        await toggle.waitFor({ timeout: 20000 });
-        if (!(await page.locator('#kr-main-panel').count())) await toggle.click();
+        await page.locator('#kr-pebble-toggle-btn').waitFor({ state: 'attached', timeout: 20000 });
+        if (!(await page.locator('#kr-main-panel').isVisible())) await page.locator('#kr-pebble-toggle-btn').click();
         await page.locator('#kr-main-panel').waitFor({ timeout: 10000 });
       },
     };

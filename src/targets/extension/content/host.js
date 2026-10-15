@@ -1,5 +1,6 @@
 import { api, sendMessage } from '../shared/browser.js';
 import { MSG } from '../shared/protocol.js';
+import { decodeMaterial, encodeMaterial } from '../shared/binary.js';
 
 /**
  * Extension host. Core reads storage synchronously, so this host hydrates a
@@ -95,6 +96,7 @@ export function createExtensionHost() {
       menuCommands: false,
       crossFrame: true,
       fileUpload: true,
+      materials: true,
     },
     storageReady: () => (hydrated ||= hydrate()),
     storageGet,
@@ -127,10 +129,10 @@ export function createExtensionHost() {
     framesList: () => sendMessage({ type: MSG.FRAME_LIST })
       .then((res) => res?.frames || [])
       .catch(() => []),
-    frameCommand: (frameId, command) => sendMessage({ type: MSG.FRAME_COMMAND, frameId, command })
+    frameCommand: (frameId, command) => sendMessage({ type: MSG.FRAME_COMMAND, frameId, command: command.materials ? { ...command, materials: Object.fromEntries(Object.entries(command.materials).map(([kind, record]) => [kind, encodeMaterial(record)])) } : command })
       .catch((err) => ({ error: err?.message || 'Frame command failed' })),
     documentsMeta: () => sendMessage({ type: MSG.DOC_META }).then((res) => res?.meta || null).catch(() => null),
-    documentsGet: () => sendMessage({ type: MSG.DOC_GET }).then((res) => (res?.error ? null : res)).catch(() => null),
+    documentsGet: (selection = {}) => sendMessage({ type: MSG.DOC_GET, ...selection }).then((res) => { if (res?.error) throw new Error(res.error); return res; }),
     documentsPut: (doc) => sendMessage({
       type: MSG.DOC_PUT,
       name: doc.name,
@@ -138,6 +140,12 @@ export function createExtensionHost() {
       buffer: doc.buffer,
     }),
     documentsDelete: () => sendMessage({ type: MSG.DOC_DELETE }),
+    materialsRequest: async (operation, input) => {
+      const result = await sendMessage({ type: MSG.MATERIALS, operation, input });
+      if (result?.error && !result.status) throw new Error(result.error);
+      if (operation === 'snapshot') return { ...result, records: Object.fromEntries(Object.entries(result.records).map(([kind, record]) => [kind, decodeMaterial(record)])) };
+      return ['get', 'save'].includes(operation) ? decodeMaterial(result) : result;
+    },
     openOptions: () => {
       sendMessage({ type: MSG.OPEN_OPTIONS }).catch(() => {});
     },

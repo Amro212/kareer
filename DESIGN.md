@@ -1,5 +1,21 @@
 # DESIGN.md
 
+## Tailored documents workspace
+
+- The default entry is a recent-applications library with one dominant New application action. Group each job's resume and cover letter together, show its actual last update, and support role/company search. Explicit document/job/session links open their workspace directly. Share compact navigation with Profile; configuration recedes behind Settings.
+- Prepare and Edit are distinct task tabs. Resume and Cover letter select the document independently. Keep job context and precise save status above the workspace; Edit has one primary Download menu (PDF / Word), with quiet Save now, PDF proof and Delete controls.
+- Tailoring uses saved profile facts only: enabled experience, education, projects, skills and applicant notes. Prepare names the profile as its source and links to it. Uploaded/base resumes and resume-context text do not supply tailoring content; this workspace has no resume import or diff view.
+- Edit presents the complete document on a light paper canvas using the locally packaged export fonts. Tiptap supplies plain-text paragraphs, line breaks and undo/redo. Section navigation scrolls to text; it never hides other sections. Profile identity, titles, employers, dates and education stay protected. Summaries, achievements, skills, project keywords and letter text are editable. Contextual rewrites merge only into unchanged target text and remain undoable.
+- Desktop uses a quiet job library, a section outline and one scrolling canvas. Compact layouts make section navigation horizontal. At narrow widths, Fit width reflows the document for readable editing; explicit zoom preserves the full paper width with horizontal scrolling. PDF proof replaces the canvas to inspect exact exported pagination. The document layout is an editing representation, not a guarantee of identical browser and PDF line breaks.
+- Prepare prioritizes job description, with title/company adjacent, document length accessible, profile-source context beside the form and optional writing preferences in a disclosure. The description defaults to six lines with a 160px minimum height, remains vertically resizable, and aligns with the outer edges of the title/company fields. A secondary Tailored documents shortcut beside the Profile heading opens a new tab to preserve unsaved profile edits. Use shared Geist typography and graphite tokens; restrained lime identifies selection and the single primary generation action.
+- Drafts persist through background-owned IndexedDB after a short typing pause; heavier PDF/Word compilation waits for idle. Saving never remounts the editor or interrupts selection/history. Status distinguishes Saving, Saved locally, Preparing downloads and Save needs attention. Reload restores document identity from the URL and recovers drafts. Downloads flush current edits before using matching files. Document/job switches persist changes normally; only failed persistence prompts Retry / Discard / Stay. Concurrent changes retain drafts and fail visibly rather than overwrite. Overflow preserves all text and shows a page-target notice.
+
+## Profile workspace
+
+- Profile opens as readable summaries. Identity/contact and experience lead; education, skills and projects follow. Address, links, languages, eligibility, preferences, disclosures and writing guidance remain available with all existing fields.
+- Edit expands the selected section in place. Existing inputs remain mounted; Save section persists only that section and Cancel restores its opening value. Other unfinished sections retain their edits. Save all changes remains available when needed. Failed writes retain editable fields and name recovery; newer stored values cause a visible conflict instead of overwriting the affected section.
+- Both workspaces use graphite surfaces, Geist typography, restrained lime, compact shared navigation and generous content spacing. Primary tasks carry visual weight; settings and secondary controls stay quiet. Use subtle control feedback and one short expansion transition, visible keyboard focus and reduced-motion support. Narrow layouts stack summaries and document rows, while configuration remains accessible through Settings.
+
 ## Product
 
 **Working name:** Kareer  

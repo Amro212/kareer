@@ -151,11 +151,11 @@ export async function collectRemoteValidation() {
   return errors;
 }
 
-export async function applyRemoteResumeUploads({ overwriteExisting = false } = {}) {
+export async function applyRemoteResumeUploads({ overwriteExisting = false, materials = {} } = {}) {
   const frames = await listRemoteFrames();
   const results = [];
   for (const frame of frames) {
-    const result = await platform.frames.command(frame.frameId, { action: 'uploadResume', overwriteExisting });
+    const result = await platform.frames.command(frame.frameId, { action: 'uploadResume', overwriteExisting, materials });
     if (!ok(result)) throw new Error(result?.error || 'Embedded resume upload did not finish.');
     for (const entry of result.results || []) {
       results.push({ ...entry, fieldId: remoteFieldId(frame.frameId, entry.fieldId) });

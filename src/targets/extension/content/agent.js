@@ -1,5 +1,6 @@
 import { api } from '../shared/browser.js';
 import { MSG } from '../shared/protocol.js';
+import { decodeMaterial } from '../shared/binary.js';
 import { scanFormFields } from '../../../core/fields/scanner.js';
 import { createFieldAgent } from '../../../core/agent.js';
 import { detectJobPage } from '../../../core/jobs.js';
@@ -49,7 +50,8 @@ export function startAgent({ isTopFrame }) {
     if (message?.type !== MSG.FRAME_COMMAND) return;
     // Re-announce alongside work so a long-lived frame never goes stale.
     announce({ force: true });
-    Promise.resolve(fieldAgent.handle(message.command))
+    const command = message.command?.materials ? { ...message.command, materials: Object.fromEntries(Object.entries(message.command.materials).map(([kind, record]) => [kind, decodeMaterial(record)])) } : message.command;
+    Promise.resolve(fieldAgent.handle(command))
       .then(sendResponse)
       .catch((err) => sendResponse({ error: err?.message || String(err) }));
     return true;

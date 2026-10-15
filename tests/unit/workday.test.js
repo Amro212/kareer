@@ -627,7 +627,7 @@ test('CBC gender opens from its single-select button rather than its filter inpu
   await openCombobox(button);
   assert.equal(document.querySelector('[data-automation-id="activeListContainer"]').hidden, false);
   assert.equal(discoverComboboxOptions(button).length, 1);
-  assert.equal((await waitForComboboxOptions(button, 350, 'Man')).length, 1, 'saved Man must not hide visible Male');
+  assert.equal((await waitForComboboxOptions(button, undefined, 'Man')).length, 1, 'saved Man must not hide visible Male');
 });
 
 test('harvestComboboxOptions skips multi-query search for skills when no explicit query provided', async () => {

@@ -1,5 +1,5 @@
 import { TOKENS, VISUAL_NAME, installPanelFonts } from './theme.js';
-import { APP_VERSION, APP_NAME, POPULAR_MODELS, UI_IDS, FILL_STATUS, STORAGE_KEYS } from './constants.js';
+import { APP_VERSION, APP_NAME, POPULAR_MODELS, UI_IDS, FILL_STATUS, STORAGE_KEYS, DEFAULT_SETTINGS } from './constants.js';
 import { PROFILE_SECTIONS, PROFILE_FIELDS, calculateProfileStrength } from './profile.js';
 import {
   getSettings,
@@ -12,9 +12,11 @@ import {
   gmGet,
 } from './storage.js';
 import { platform, getHostName } from './platform.js';
+import { snapshotMaterials, applyGeneratedMaterials, materialKind } from './materials.js';
 import { collectPortableData, exportPayload } from './migration.js';
 import { logger } from './debug.js';
 import { testConnection, generateAutofillAnswers, rewriteNarrativeField } from './ai.js';
+import { NARRATIVE_STYLES, getNarrativeStyle } from './narrative-styles.js';
 import { scanFormFields, harvestComboboxOptions, deduplicateFields, refreshField } from './fields/scanner.js';
 import { resolveComboboxSearchAnswers, resolveDiscoveredAnswers } from './autofill.js';
 import { extractOptionLabel } from './fields/labels.js';
@@ -44,6 +46,154 @@ import { inspectContinue } from './navigation.js';
 
 let applicationEngine = null;
 let applicationState = null;
+const materialStates = new Map();
+const materialKey = (sessionId, kind) => `${sessionId}:${kind}`;
+let materialsPollTimer = null;
+
+function renderMaterials() {
+  if (!platform.capabilities.materials) return '';
+  const session = applicationEngine?.session;
+  const readyCount = (session?.materialRefs?.resume ? 1 : 0) + (session?.materialRefs?.coverLetter ? 1 : 0);
+  const items = [
+    { kind: 'resume', title: 'Tailored Resume', id: 'kr-tailor-resume', label: 'Tailor resume' },
+    { kind: 'coverLetter', title: 'Cover Letter', id: 'kr-generate-cover-letter', label: 'Generate cover letter' }
+  ];
+
+  return `<div class="kr-card" style="gap:10px;">
+    <div class="kr-row" style="margin-bottom:0;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="kr-card-title">Tailored Documents</span>
+        ${readyCount > 0 ? `<span class="kr-badge kr-badge-green">${readyCount} READY</span>` : '<span class="kr-badge" style="font-size:10px;color:var(--kr-text-3);">OPTIONAL</span>'}
+      </div>
+      <button class="kr-material-workspace-link" data-material-open="workspace" title="Open tailored documents workspace">Workspace ↗</button>
+    </div>
+    <p style="font-size:12px;color:var(--kr-text-2);margin:0;line-height:1.4;">Tailored for this job. Autofill uses your new documents.</p>
+    <div class="kr-materials-list">
+      ${items.map(({ kind, title, id, label }) => {
+        const state = materialStates.get(materialKey(session?.id, kind));
+        const ready = Boolean(session?.materialRefs?.[kind]);
+        const running = state?.status === 'running';
+        const isError = state?.status === 'error';
+        const errorMsg = state?.error || '';
+        const phaseMsg = state?.phase || 'Writing your document…';
+
+        let badgeHtml = '';
+        if (running) {
+          badgeHtml = `<span class="kr-badge kr-badge-blue" style="display:inline-flex;align-items:center;gap:4px;"><span class="kr-spin">${ICONS.spinner}</span> Generating</span>`;
+        } else if (ready) {
+          badgeHtml = `<span class="kr-badge kr-badge-green">Ready</span>`;
+        } else if (isError) {
+          badgeHtml = `<span class="kr-badge kr-badge-amber">Needs review</span>`;
+        }
+
+        let actionButtons = '';
+        if (running) {
+          actionButtons = `<button class="kr-btn kr-btn-secondary kr-btn-small" data-material-cancel="${kind}" style="padding:4px 8px;font-size:11px;">Cancel</button>`;
+        } else if (ready) {
+          actionButtons = `
+            <button class="kr-btn kr-btn-secondary kr-btn-small" id="${id}" style="padding:4px 8px;font-size:11px;" title="Regenerate this document">Regenerate</button>
+            <button class="kr-btn kr-btn-secondary kr-btn-small" data-material-open="${kind}" style="padding:4px 8px;font-size:11px;" title="Open in workspace">Open</button>
+          `;
+        } else {
+          actionButtons = `<button class="kr-btn kr-btn-secondary kr-btn-small" id="${id}" style="padding:4px 10px;font-size:11px;">${label}</button>`;
+        }
+
+        let feedbackHtml = '';
+        if (running) {
+          feedbackHtml = `
+            <div class="kr-material-progress"><div class="kr-material-progress-bar"></div></div>
+            <div id="kr-material-${kind}-status" role="status" aria-live="polite" class="kr-material-phase">
+              <span class="kr-spin">${ICONS.spinner}</span>
+              <span>${escapeHtml(phaseMsg)}</span>
+            </div>
+          `;
+        } else if (isError) {
+          feedbackHtml = `
+            <div id="kr-material-${kind}-status" role="status" aria-live="polite" class="kr-material-error-banner">
+              <span style="flex-shrink:0;">${ICONS.alert}</span>
+              <span>${escapeHtml(errorMsg)}</span>
+            </div>
+          `;
+        } else if (ready) {
+          feedbackHtml = `
+            <div id="kr-material-${kind}-status" role="status" aria-live="polite" class="kr-material-status-ready">
+              Ready for next Autofill
+            </div>
+          `;
+        } else {
+          feedbackHtml = `<div id="kr-material-${kind}-status" role="status" aria-live="polite" style="display:none;"></div>`;
+        }
+
+        return `<div class="kr-material-row ${running ? 'is-generating' : ''}">
+          <div class="kr-material-row-header">
+            <div class="kr-material-title-group">
+              <span style="color:${ready ? 'var(--kr-signal)' : 'var(--kr-text-2)'};display:flex;align-items:center;">${ICONS.fileText || ICONS.briefcase}</span>
+              <span class="kr-material-title">${title}</span>
+              ${badgeHtml}
+            </div>
+            <div class="kr-material-actions">
+              ${actionButtons}
+            </div>
+          </div>
+          ${feedbackHtml}
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
+async function refreshMaterialStates() {
+  const session = applicationEngine?.session;
+  if (!session?.id || !platform.capabilities.materials) return;
+  try {
+    let current = await platform.materials.request('session', { sessionId: session.id });
+    if (applicationEngine?.session?.id !== session.id) return;
+    let changed = false, running = false, completed = false;
+    for (const [kind, id] of Object.entries(current?.materialTasks || {})) {
+      const key = materialKey(session.id, kind), previous = materialStates.get(key);
+      if (previous?.id === id && previous.status !== 'running') continue;
+      const state = await platform.materials.request('status', { id });
+      const latest = materialStates.get(key);
+      if (latest !== previous) {
+        running ||= latest?.status === 'running';
+        completed ||= latest?.status === 'ready';
+        continue;
+      }
+      if (JSON.stringify(state) !== JSON.stringify(previous)) { materialStates.set(key, state); changed = true; }
+      if (state.status === 'running') running = true;
+      if (state.status === 'ready') completed = true;
+    }
+    // The session snapshot can precede completion while the later task read is
+    // already Ready. Read the activated references after that acknowledgement,
+    // and update the live session object if hydration replaced it in the meantime.
+    if (completed) current = await platform.materials.request('session', { sessionId: session.id });
+    const live = applicationEngine?.session;
+    if (live?.id !== session.id) return;
+    const refsChanged = JSON.stringify(live.materialRefs) !== JSON.stringify(current?.materialRefs || {});
+    live.materialRefs = current?.materialRefs || {};
+    live.materialTasks = current?.materialTasks || {};
+    if (changed || refsChanged) updatePanelDOM();
+    if (running) { clearTimeout(materialsPollTimer); materialsPollTimer = setTimeout(() => void refreshMaterialStates(), 1000); }
+  } catch { /* A later click/reload can refresh unavailable status. Autofill remains available. */ }
+}
+
+async function generateMaterial(kind) {
+  const session = applicationEngine?.ensureSession(captureJob());
+  if (!session) return;
+  const key = materialKey(session.id, kind);
+  try {
+    materialStates.set(key, { status: 'running', phase: 'Starting generation' }); updatePanelDOM();
+    const task = await platform.materials.request('start', { kind, sessionId: session.id, job: session.job });
+    if (task.needsWorkspace) {
+      materialStates.set(key, { status: 'error', error: task.reason });
+      await platform.materials.request('open', { sessionId: session.id, kind });
+    } else {
+      materialStates.set(key, task); session.materialTasks = { ...session.materialTasks, [kind]: task.id };
+      clearTimeout(materialsPollTimer); materialsPollTimer = setTimeout(() => void refreshMaterialStates(), 500);
+    }
+  } catch (error) { materialStates.set(key, { status: 'error', error: error.message }); }
+  updatePanelDOM();
+}
 let panelHostDisconnectObserver = null;
 
 function resolveLiveElement(field) {
@@ -66,7 +216,11 @@ function resolveLiveFileElement(field, root = document) {
 let shadowRootRef = null;
 let currentTab = 'home';
 let panelVisible = false;
+let panelJustOpened = false;
 let isPebble = true;
+let userExplicitlyToggledPebble = false;
+let lastAutoExpandUrl = typeof window !== 'undefined' ? window.location?.href : '';
+let wasJustDragged = false;
 let lastAiTestResult = null;
 let isAiTesting = false;
 
@@ -128,6 +282,7 @@ const ICONS = {
   externalLink: `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h4"/><polyline points="10 2 14 2 14 6"/><line x1="7" y1="9" x2="14" y2="2"/></svg>`,
   arrowRight: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="8" x2="13" y2="8"/><polyline points="9 4 13 8 9 12"/></svg>`,
   briefcase: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="12" height="9" rx="1.5"/><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h3A1.5 1.5 0 0 1 11 3.5V5"/></svg>`,
+  fileText: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1H4a1.5 1.5 0 0 0-1.5 1.5v11A1.5 1.5 0 0 0 4 15h8a1.5 1.5 0 0 0 1.5-1.5V6L9 1z"/><polyline points="9 1 9 6 13.5 6"/><line x1="5.5" y1="9" x2="10.5" y2="9"/><line x1="5.5" y1="12" x2="8.5" y2="12"/></svg>`,
   spinner: `<svg class="kr-spin" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-opacity="0.25"/><path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor"/></svg>`,
 };
 
@@ -155,77 +310,100 @@ const STYLES = `
   color: var(--kr-signal);
 }
 
-/* Container & Dock/HUD */
+/* Container & Edge Dock */
 .kr-widget-container {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
   z-index: 2147483646;
   font-family: var(--kr-font);
   font-size: 13px;
   line-height: 1.45;
   color: var(--kr-text-1);
   -webkit-font-smoothing: antialiased;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
   pointer-events: none;
 }
 
-/* Floating Pebble (ultra-compact minimize) */
+/* Floating Pebble (attached flush to right edge) */
 .kr-pebble {
   pointer-events: auto;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--kr-radius-md);
+  position: fixed;
+  right: 0;
+  top: var(--kr-dock-top, 50%);
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 12px 0 0 12px;
+  border-top: 1px solid var(--kr-line);
+  border-left: 1px solid var(--kr-line);
+  border-bottom: 1px solid var(--kr-line);
+  border-right: none;
   background: var(--kr-bg-1);
-  border: 1px solid var(--kr-line);
-  box-shadow: var(--kr-shadow-lg);
+  box-shadow: -4px 6px 20px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.03);
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  cursor: grab;
   color: var(--kr-signal);
-  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
-  position: relative;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), background 0.15s ease, border-color 0.15s ease, box-shadow 0.18s ease;
+  user-select: none;
+}
+
+.kr-pebble:active {
+  cursor: grabbing;
 }
 
 .kr-pebble svg {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   display: block;
+  transition: transform 0.18s ease;
 }
 
 .kr-pebble:hover {
-  transform: translateY(-1px);
-  border-color: var(--kr-line-strong);
+  transform: translateY(-50%) translateX(-4px);
+  border-color: var(--kr-signal);
   background: var(--kr-bg-2);
+  box-shadow: -6px 8px 24px rgba(0, 0, 0, 0.55), 0 0 14px rgba(163, 230, 53, 0.25);
 }
 
 .kr-pebble-dot {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 6px;
-  height: 6px;
+  top: 8px;
+  left: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   border: 1px solid var(--kr-bg-0);
 }
 
-/* Compact HUD Bar */
+/* Compact HUD Bar attached flush to right edge */
 .kr-hud-bar {
   pointer-events: auto;
+  position: fixed;
+  right: 0;
+  top: var(--kr-dock-top, 50%);
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   gap: 8px;
   background: var(--kr-bg-1);
-  border: 1px solid var(--kr-line);
-  border-radius: var(--kr-radius-md);
-  padding: 5px 8px 5px 12px;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.03);
-  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  border-top: 1px solid var(--kr-line);
+  border-left: 1px solid var(--kr-line);
+  border-bottom: 1px solid var(--kr-line);
+  border-right: none;
+  border-radius: 14px 0 0 14px;
+  padding: 6px 12px 6px 14px;
+  box-shadow: -8px 8px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.18s ease;
   user-select: none;
+  cursor: grab;
+}
+
+.kr-hud-bar:active {
+  cursor: grabbing;
 }
 
 .kr-hud-bar:hover {
@@ -393,32 +571,175 @@ const STYLES = `
   border-color: var(--kr-line);
 }
 
-/* Inspection Drawer / Panel */
+/* Inspection Drawer / Panel (Docked right edge) */
 .kr-panel {
   pointer-events: auto;
-  width: 460px;
-  max-width: calc(100vw - 40px);
-  height: 620px;
-  max-height: calc(100vh - 90px);
-  background: rgba(13, 17, 23, 0.97);
-  border: 1px solid var(--kr-line);
-  border-radius: var(--kr-radius-lg);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(255, 255, 255, 0.025);
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  height: 100vh;
+  width: 440px;
+  max-width: 95vw;
+  background: var(--kr-bg-1);
+  border-left: 1px solid var(--kr-line);
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  border-radius: 0;
+  box-shadow: -14px 0 45px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.03);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: kr-slide-up 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 2147483647;
 }
 
-@keyframes kr-slide-up {
+.kr-panel.kr-panel-animate {
+  animation: krPanelSlideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.kr-panel ~ #kr-hud {
+  display: none !important;
+}
+
+@keyframes krPanelSlideIn {
   from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.99);
+    transform: translateX(100%);
+    opacity: 0.85;
   }
   to {
+    transform: translateX(0);
     opacity: 1;
-    transform: translateY(0) scale(1);
   }
+}
+
+/* Tailored Documents Stacked Rows */
+.kr-materials-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kr-material-row {
+  border: 1px solid var(--kr-line);
+  border-radius: var(--kr-radius-sm);
+  background: var(--kr-bg-subtle);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.kr-material-row:hover {
+  border-color: var(--kr-line-strong);
+}
+
+.kr-material-row.is-generating {
+  border-color: rgba(163, 230, 53, 0.4);
+  background: rgba(163, 230, 53, 0.03);
+}
+
+.kr-material-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kr-material-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.kr-material-title {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--kr-text-1);
+  white-space: nowrap;
+}
+
+.kr-material-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.kr-material-progress {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.kr-material-progress-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background: var(--kr-signal);
+  border-radius: 2px;
+  width: 40%;
+  animation: krProgressShimmer 1.4s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(163, 230, 53, 0.6);
+}
+
+@keyframes krProgressShimmer {
+  0% { left: -40%; width: 30%; }
+  50% { width: 60%; }
+  100% { left: 100%; width: 30%; }
+}
+
+.kr-material-phase {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--kr-signal);
+  line-height: 1.3;
+}
+
+.kr-material-status-ready {
+  font-size: 11px;
+  color: var(--kr-success);
+  line-height: 1.3;
+}
+
+.kr-material-error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--kr-radius-sm);
+  background: var(--kr-danger-bg);
+  border: 1px solid rgba(240, 106, 106, 0.25);
+  color: var(--kr-danger);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.kr-material-workspace-link {
+  background: transparent;
+  border: none;
+  color: var(--kr-text-3);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transition: color 0.15s ease;
+}
+
+.kr-material-workspace-link:hover {
+  color: var(--kr-signal);
 }
 
 /* Panel Header */
@@ -1450,6 +1771,26 @@ function getStatusInfo() {
   };
 }
 
+function checkAutoExpand() {
+  if (typeof window !== 'undefined' && window.location?.href !== lastAutoExpandUrl) {
+    lastAutoExpandUrl = window.location.href;
+    userExplicitlyToggledPebble = false;
+  }
+  if (userExplicitlyToggledPebble || panelVisible) return false;
+  const adapter = detectAdapter();
+  const page = classifyPage();
+  const fieldCount = detectedFieldsCache.length + remoteFieldCount;
+  const isKnownAts = Boolean(adapter && adapter.id !== 'generic');
+  const isFormOrApp = page.type === 'application' || fieldCount > 0;
+  if ((isKnownAts || isFormOrApp) && page.type !== 'unrelated' && page.type !== 'listing') {
+    isPebble = false;
+    panelJustOpened = true;
+    panelVisible = true;
+    return true;
+  }
+  return false;
+}
+
 function refreshDetectedFields() {
   try {
     detectedFieldsCache = scanFormFields(document);
@@ -1457,6 +1798,7 @@ function refreshDetectedFields() {
     logger.error('Error scanning fields:', err);
   }
   refreshRemoteFieldCount();
+  checkAutoExpand();
 }
 
 /**
@@ -1489,6 +1831,7 @@ export function refreshRemoteFieldCount({ force = false } = {}) {
       if (!force && !countsChanged && (!total || remoteFieldsCache.length)) return;
       remoteFieldCount = total;
       remoteFrameCount = frames.length;
+      checkAutoExpand();
       updatePanelDOM();
     })
     .catch(() => {});
@@ -1662,6 +2005,10 @@ async function executeAutofillFlow() {
     deduplicateFields(detectedFieldsCache);
     const settings = getSettings();
     const overwrite = Boolean(settings.overwriteExisting);
+    const materials = await snapshotMaterials(applicationEngine?.session);
+    const generatedResults = await applyGeneratedMaterials(detectedFieldsCache, materials, { overwriteExisting: overwrite, isCurrent: () => token === autofillGeneration });
+    for (const entry of generatedResults) fieldResultsCache.set(entry.fieldId, entry);
+    refreshDetectedFields();
 
     const shouldFill = (f) => {
       if (f.element?.disabled || f.element?.readOnly) return false;
@@ -1673,7 +2020,7 @@ async function executeAutofillFlow() {
       return !val || val === 'false' || val === '0' || String(val).trim().length === 0;
     };
     const allFileFields = detectedFieldsCache.filter(f => f.type === 'file');
-    const fileFields = allFileFields.filter(f => isResumeField(f, allFileFields) && shouldFill(f));
+    const fileFields = allFileFields.filter(f => isResumeField(f, allFileFields) && shouldFill(f) && !materials.resume);
     for (const field of fileFields) {
       if (token !== autofillGeneration) return;
       field.element = resolveLiveFileElement(field);
@@ -1692,7 +2039,7 @@ async function executeAutofillFlow() {
       }
 
     }
-    const remoteUploads = await applyRemoteResumeUploads({ overwriteExisting: overwrite });
+    const remoteUploads = await applyRemoteResumeUploads({ overwriteExisting: overwrite, materials });
     if (token !== autofillGeneration) return;
     for (const result of remoteUploads) {
       fieldResultsCache.set(result.fieldId, result);
@@ -1717,9 +2064,9 @@ async function executeAutofillFlow() {
       remoteFieldsCache = remoteFields.map((f) => ({ ...f, id: f.fieldId, fieldId: f.fieldId }));
     }
 
-    const aiTargetFields = targetFields.filter((f) => f.type !== 'file');
+    const aiTargetFields = targetFields.filter((f) => f.type !== 'file' && !materials[materialKind(f)]);
 
-    if (aiTargetFields.length === 0 && remoteFields.length === 0 && fileFields.length === 0 && remoteUploads.length === 0) {
+    if (aiTargetFields.length === 0 && remoteFields.length === 0 && fileFields.length === 0 && remoteUploads.length === 0 && generatedResults.length === 0) {
       autofillProgress.statusText = (detectedFieldsCache.length === 0 && remoteFieldCount === 0)
         ? 'No form fields detected on this page.'
         : 'All fields are already filled. Enable "Overwrite Existing Values" in Settings to overwrite.';
@@ -1971,97 +2318,17 @@ async function saveFixtureSnapshot() {
 
 function renderHud() {
   const status = getStatusInfo();
-  const fieldCount = detectedFieldsCache.length + remoteFieldCount;
-  const adapter = detectAdapter();
   const session = applicationState?.session;
   const wfStatus = session?.status || '';
   const wfIsRunning = wfStatus === 'running' || wfStatus === 'submitting';
-  const wfIsWaiting = wfStatus === 'captcha';
-  const profile = getProfile();
-  const strength = calculateProfileStrength(profile);
-
-  if (isPebble) {
-    const pebbleDotClass = isAutofilling || wfIsRunning ? 'running' : status.dotClass;
-    return `
-      <button type="button" class="kr-pebble" id="kr-pebble-toggle-btn" title="Expand Kareer">
-        <div class="kr-status-dot ${pebbleDotClass} kr-pebble-dot"></div>
-        ${ICONS.brandMark}
-      </button>
-    `;
-  }
-
-  const dotClass = isAutofilling || wfIsRunning ? 'running' : status.dotClass;
-  const countBadge = fieldCount > 0
-    ? `<span class="kr-hud-badge kr-hud-badge-accent">${fieldCount}</span>`
-    : '';
-
-  let ctaContent = '';
-  if (isAutofilling || wfIsRunning) {
-    ctaContent = `
-      <button class="kr-hud-cta kr-hud-cta-running" id="kr-hud-autofill-btn" title="Autofill in progress">
-        <span class="kr-spin">${ICONS.spinner}</span>
-        <span>${autofillProgress.total > 0 ? `${autofillProgress.current}/${autofillProgress.total}` : 'Filling...'}</span>
-      </button>
-      <button class="kr-hud-icon-btn" id="kr-hud-pause-btn" title="Pause autofill">
-        ${ICONS.pause}
-      </button>
-    `;
-  } else if (session?.stepReview) {
-    ctaContent = `
-      <button class="kr-hud-cta" id="kr-hud-autofill-btn" style="background: rgba(163, 230, 53, 0.15); color: var(--kr-signal); border: 1px solid rgba(163, 230, 53, 0.4);" title="Step review complete. Advance to next step.">
-        ${ICONS.arrowRight}
-        <span>Next Step</span>
-      </button>
-    `;
-  } else if (wfStatus === 'paused') {
-    ctaContent = `
-      <button class="kr-hud-cta" id="kr-hud-autofill-btn" title="Resume application autofill">
-        ${ICONS.play}
-        <span>Resume</span>
-      </button>
-    `;
-  } else if (wfIsWaiting) {
-    ctaContent = `
-      <button class="kr-hud-cta" id="kr-hud-autofill-btn" style="background: rgba(242, 184, 75, 0.15); color: #F2B84B; border: 1px solid rgba(242, 184, 75, 0.4);" title="Action required on page">
-        ${ICONS.shield}
-        <span>Action Required</span>
-      </button>
-    `;
-  } else if (!strength.isMvpComplete) {
-    ctaContent = `
-      <button class="kr-hud-cta" id="kr-hud-autofill-btn" style="background: rgba(242, 184, 75, 0.12); color: var(--kr-warning); border: 1px solid rgba(242, 184, 75, 0.35);" title="Profile incomplete (${escapeHtml(strength.missingCore.join(', '))} required). Click to complete profile.">
-        ${ICONS.alert}
-        <span>Setup Profile</span>
-      </button>
-    `;
-  } else {
-    ctaContent = `
-      <button class="kr-hud-cta" id="kr-hud-autofill-btn" ${fieldCount === 0 ? 'disabled' : ''} title="Autofill fields on this page">
-        ${ICONS.play}
-        <span>Autofill</span>
-      </button>
-    `;
-  }
+  const pebbleDotClass = isAutofilling || wfIsRunning ? 'running' : status.dotClass;
 
   return `
-    <div class="kr-hud-bar ${panelVisible ? 'kr-hud-expanded' : ''}" id="kr-hud">
-      <button type="button" class="kr-hud-brand" id="kr-toggle-btn" aria-expanded="${panelVisible}" title="${panelVisible ? 'Collapse panel' : 'Open Kareer Inspector'}">
-        <div class="kr-status-dot ${dotClass}"></div>
-        <div class="kr-hud-title">
-          <span class="kr-hud-brand-mark">${ICONS.brandMark}</span>
-          <span>${VISUAL_NAME}</span>
-        </div>
-        <span class="kr-hud-adapter">${escapeHtml(adapter.id === 'generic' ? 'Generic' : adapter.label)}</span>
-        ${countBadge}
-      </button>
-      ${ctaContent}
-      <button class="kr-hud-icon-btn" id="kr-hud-expand-btn" title="${panelVisible ? 'Collapse panel' : 'Open Inspector'}">
-        ${panelVisible ? ICONS.minimize : ICONS.maximize}
-      </button>
-      <button class="kr-hud-icon-btn" id="kr-pebble-toggle-btn" title="Minimize to pebble">
-        ${ICONS.x}
-      </button>
-    </div>
+    <button type="button" class="kr-pebble" id="kr-pebble-toggle-btn" style="${panelVisible ? 'display: none;' : ''}" title="Open ${VISUAL_NAME}">
+      <div class="kr-status-dot ${pebbleDotClass} kr-pebble-dot"></div>
+      ${ICONS.brandMark}
+    </button>
+    <button type="button" id="kr-toggle-btn" style="display: none;" aria-hidden="true" title="Open ${VISUAL_NAME}"></button>
   `;
 }
 
@@ -2412,6 +2679,7 @@ function renderHomeTab() {
       <button id="kr-pause-application" style="display:none;" aria-hidden="true" tabindex="-1"></button>
     </div>
 
+    ${renderMaterials()}
     ${renderFieldReviewSection()}
 
     <div class="kr-card">
@@ -2456,7 +2724,7 @@ function renderProfileTab() {
 
   const strengthCardHtml = `
     <div class="kr-card" style="margin-bottom: 2px; gap: 8px;">
-      <div class="kr-row">
+      <div class="kr-row" style="margin-bottom: 0;">
         <span class="kr-card-title">Profile Strength</span>
         <span class="kr-badge ${strength.percentage >= 80 ? 'kr-badge-green' : strength.percentage >= 50 ? 'kr-badge-blue' : 'kr-badge-amber'}">${strength.tierLabel} (${strength.percentage}%)</span>
       </div>
@@ -2464,42 +2732,41 @@ function renderProfileTab() {
         <div class="kr-strength-fill ${strength.percentage >= 80 ? 'high' : strength.percentage >= 50 ? 'med' : 'low'}" style="transform: scaleX(${strength.percentage / 100});"></div>
       </div>
       ${!strength.isMvpComplete ? `
-        <div style="font-size: 11px; color: var(--kr-warning);">
-          Missing core identity: ${escapeHtml(strength.missingCore.join(', '))}. Fill them below to enable autofill.
+        <div style="font-size: 11px; color: var(--kr-warning); display: flex; align-items: center; gap: 5px;">
+          ${ICONS.alert}
+          <span>Missing core: ${escapeHtml(strength.missingCore.join(', '))}. Fill below to autofill.</span>
         </div>
       ` : `
         <div style="font-size: 11px; color: var(--kr-text-3);">
-          Core identity verified. Add more background in Settings for optimal application answers.
+          Core identity complete. Detailed records enhance tailored answers.
         </div>
       `}
     </div>
   `;
 
   const backgroundSummaryHtml = `
-    <div style="border: 1px solid var(--kr-line); border-radius: var(--kr-radius-md); padding: 12px; background: rgba(255,255,255,0.02); display: flex; flex-direction: column; gap: 8px;">
-      <div style="display: flex; align-items: center; justify-content: space-between;">
-        <span style="font-weight: 600; font-size: 13px; color: var(--kr-text-1);">Detailed Profile Background</span>
-        <button type="button" class="kr-btn kr-btn-secondary" id="kr-open-full-profile-btn" style="font-size: 11px; padding: 4px 8px; line-height: 1;">Settings ↗</button>
+    <div class="kr-card" style="gap: 8px; border-color: rgba(163, 230, 53, 0.25); background: rgba(163, 230, 53, 0.02);">
+      <div class="kr-row" style="margin-bottom: 0;">
+        <span class="kr-card-title" style="color: var(--kr-text-1);">Full Profile &amp; Records</span>
+        <button type="button" class="kr-btn kr-btn-secondary kr-btn-small" id="kr-open-full-profile-btn" style="color: var(--kr-signal); border-color: rgba(163, 230, 53, 0.35);">Open Settings ↗</button>
       </div>
-      <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+      <p style="font-size: 11px; color: var(--kr-text-2); margin: 0; line-height: 1.4;">
+        Work history, education, projects, skills, compensation, and demographics are configured in the full console.
+      </p>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px;">
         <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${workCount} Experience${workCount === 1 ? '' : 's'}</span>
         <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${eduCount} Education</span>
         <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${projCount} Project${projCount === 1 ? '' : 's'}</span>
         <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${skillCount} Skill${skillCount === 1 ? '' : 's'}</span>
-        <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${eligCount} Eligible countr${eligCount === 1 ? 'y' : 'ies'}</span>
+        <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${eligCount} Work Countr${eligCount === 1 ? 'y' : 'ies'}</span>
       </div>
-      <div style="font-size: 11px; color: var(--kr-text-3);">Manage all roles, degrees, projects, dates, and multiple work countries in the full Settings console.</div>
     </div>
   `;
 
-  const sections = PROFILE_SECTIONS.map((section, index) => `
-    <details class="kr-profile-section" ${index === 0 ? 'open' : ''} style="border: 1px solid var(--kr-line); border-radius: var(--kr-radius-md); padding: 12px; background: rgba(255,255,255,0.02);">
-      <summary style="cursor: pointer; font-weight: 600; color: var(--kr-text-1); display: flex; align-items: center; justify-content: space-between;">
-        <span>${escapeHtml(section.title)}</span>
-        <span style="color: var(--kr-text-3);">${ICONS.chevronDown}</span>
-      </summary>
-      <p style="font-size: 12px; color: var(--kr-text-2); margin: 8px 0 12px;">${escapeHtml(section.description)}</p>
-      <div style="display: flex; flex-direction: column; gap: 12px;">
+  const sections = PROFILE_SECTIONS.map(section => `
+    <details class="kr-details">
+      <summary class="kr-details-summary">${escapeHtml(section.title)}</summary>
+      <div class="kr-details-body">
         ${section.fields.map(field => {
           const value = String(profile[field.name] || '');
           const id = `kr-profile-${field.name}`;
@@ -2519,54 +2786,61 @@ function renderProfileTab() {
     <form id="kr-profile-form" style="display: flex; flex-direction: column; gap: 12px;">
       ${strengthCardHtml}
       ${backgroundSummaryHtml}
-      <div style="font-size: 12px; color: var(--kr-text-2);">Save common answers once. Explicit answers take priority over background notes.</div>
+
+      <div style="font-size: 11px; color: var(--kr-text-3); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-top: 4px;">
+        Core Identity &amp; Contact
+      </div>
+
       <div class="kr-form-group">
         <label for="kr-profile-fullName">Full Name</label>
-        <input class="kr-input" id="kr-profile-fullName" type="text" name="fullName" value="${escapeHtml(profile.fullName)}" placeholder="e.g. Jane Doe" />
+        <input class="kr-input" id="kr-profile-fullName" type="text" name="fullName" value="${escapeHtml(profile.fullName || '')}" placeholder="e.g. Jane Doe" />
       </div>
 
       <div class="kr-row" style="gap: 10px;">
         <div class="kr-form-group" style="flex: 1;">
           <label for="kr-profile-email">Email</label>
-          <input class="kr-input" id="kr-profile-email" type="email" name="email" value="${escapeHtml(profile.email)}" placeholder="jane@example.com" />
+          <input class="kr-input" id="kr-profile-email" type="email" name="email" value="${escapeHtml(profile.email || '')}" placeholder="jane@example.com" />
         </div>
         <div class="kr-form-group" style="flex: 1;">
           <label for="kr-profile-phone">Phone</label>
-          <input class="kr-input" id="kr-profile-phone" type="tel" name="phone" value="${escapeHtml(profile.phone)}" placeholder="+1 555 123 4567" />
+          <input class="kr-input" id="kr-profile-phone" type="tel" name="phone" value="${escapeHtml(profile.phone || '')}" placeholder="+1 555 123 4567" />
         </div>
       </div>
 
       <div class="kr-form-group">
         <label for="kr-profile-location">Location</label>
-        <input class="kr-input" id="kr-profile-location" type="text" name="location" value="${escapeHtml(profile.location)}" placeholder="e.g. San Francisco, CA" />
+        <input class="kr-input" id="kr-profile-location" type="text" name="location" value="${escapeHtml(profile.location || '')}" placeholder="e.g. San Francisco, CA" />
       </div>
 
       <div class="kr-form-group">
         <label for="kr-profile-linkedin">LinkedIn URL</label>
-        <input class="kr-input" id="kr-profile-linkedin" type="url" name="linkedin" value="${escapeHtml(profile.linkedin)}" placeholder="https://linkedin.com/in/..." />
+        <input class="kr-input" id="kr-profile-linkedin" type="url" name="linkedin" value="${escapeHtml(profile.linkedin || '')}" placeholder="https://linkedin.com/in/..." />
       </div>
 
       <div class="kr-row" style="gap: 10px;">
         <div class="kr-form-group" style="flex: 1;">
           <label for="kr-profile-github">GitHub URL</label>
-          <input class="kr-input" id="kr-profile-github" type="url" name="github" value="${escapeHtml(profile.github)}" placeholder="https://github.com/..." />
+          <input class="kr-input" id="kr-profile-github" type="url" name="github" value="${escapeHtml(profile.github || '')}" placeholder="https://github.com/..." />
         </div>
         <div class="kr-form-group" style="flex: 1;">
           <label for="kr-profile-portfolio">Portfolio URL</label>
-          <input class="kr-input" id="kr-profile-portfolio" type="url" name="portfolio" value="${escapeHtml(profile.portfolio)}" placeholder="https://..." />
+          <input class="kr-input" id="kr-profile-portfolio" type="url" name="portfolio" value="${escapeHtml(profile.portfolio || '')}" placeholder="https://..." />
         </div>
       </div>
 
-      ${sections}
-
-      <div style="padding: 10px 12px; border-radius: var(--kr-radius-sm); background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.2); font-size: 12px; color: var(--kr-text-2);">
-        <strong style="color: var(--kr-text-1);">Application source: LinkedIn</strong><br />Used for “How did you hear about us?” If LinkedIn is unavailable, the field is left for review.
-      </div>
-
       <div class="kr-form-group">
-        <label for="kr-profile-applicantNotes">Applicant Notes / Custom Rules</label>
-        <textarea id="kr-profile-applicantNotes" class="kr-textarea" name="applicantNotes" rows="3" placeholder="Additional preferences, exceptions, and guidance for written answers...">${escapeHtml(profile.applicantNotes)}</textarea>
+        <label for="kr-profile-applicantNotes">Applicant Notes / Instructions</label>
+        <textarea id="kr-profile-applicantNotes" class="kr-textarea" name="applicantNotes" rows="2" placeholder="Custom rules, phrasing preferences, and instructions for written answers...">${escapeHtml(profile.applicantNotes || '')}</textarea>
       </div>
+
+      <details class="kr-details" style="margin-top: 4px;">
+        <summary class="kr-details-summary" style="font-size: 11px; color: var(--kr-text-2); text-transform: uppercase; letter-spacing: 0.04em;">
+          Additional Saved Answers &amp; Disclosures
+        </summary>
+        <div class="kr-details-body" style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+          ${sections}
+        </div>
+      </details>
 
       <div class="kr-row" style="margin-top: 4px;">
         <button class="kr-btn" type="submit" style="flex: 1;">Save Profile</button>
@@ -2612,6 +2886,7 @@ function renderApiKeyGroup() {
 
 function renderSettingsTab() {
   const settings = getSettings();
+  const selectedStyle = getNarrativeStyle(settings.narrativeStyle);
 
   const modelOptions = POPULAR_MODELS.map((m) => {
     const selected = settings.model === m ? 'selected' : '';
@@ -2629,6 +2904,18 @@ function renderSettingsTab() {
           <option value="custom" ${!POPULAR_MODELS.includes(settings.model) ? 'selected' : ''}>Custom Model...</option>
         </select>
         <input class="kr-input" id="kr-custom-model-input" type="text" placeholder="Enter custom model ID" value="${escapeHtml(settings.model)}" style="margin-top: 6px; display: ${!POPULAR_MODELS.includes(settings.model) ? 'block' : 'none'};" />
+      </div>
+
+      <div class="kr-form-group">
+        <label for="kr-narrative-style">Writing style</label>
+        <select class="kr-select" name="narrativeStyle" id="kr-narrative-style" aria-describedby="kr-style-description">
+          ${NARRATIVE_STYLES.map(style => `<option value="${style.id}" ${style.id === selectedStyle.id ? 'selected' : ''}>${escapeHtml(style.label)}</option>`).join('')}
+        </select>
+        <span id="kr-style-description" style="font-size: 12px; line-height: 1.5; color: var(--kr-text-3);">${escapeHtml(selectedStyle.description)}</span>
+        <div class="kr-card" style="margin-top: 6px;">
+          <span class="kr-card-title">Example wording</span>
+          <p id="kr-style-example" style="font-size: 12px; line-height: 1.5; margin: 0;">${escapeHtml(selectedStyle.examples[0].answer)}</p>
+        </div>
       </div>
 
       <div class="kr-card">
@@ -2823,6 +3110,43 @@ function updatePanelDOM() {
   if (!container) return;
 
   const settings = getSettings();
+  const dockTop = typeof settings.dockTop === 'number' ? settings.dockTop : 50;
+  container.style.setProperty('--kr-dock-top', `${dockTop}%`);
+
+  const existingPanel = container.querySelector('#kr-main-panel');
+
+  if (panelVisible && existingPanel) {
+    // Panel is already open: update tabs and tab content in place without re-animating or rebuilding the drawer
+    let tabContent = '';
+    if (currentTab === 'home') tabContent = renderHomeTab();
+    else if (currentTab === 'profile') tabContent = renderProfileTab();
+    else if (currentTab === 'settings') tabContent = renderSettingsTab();
+    else if (currentTab === 'debug') tabContent = renderDebugTab();
+
+    const tabs = existingPanel.querySelectorAll('.kr-tab-btn');
+    tabs.forEach((tab) => {
+      if (tab.getAttribute('data-tab') === currentTab) {
+        tab.classList.add('active');
+      } else {
+        tab.classList.remove('active');
+      }
+    });
+
+    const modelChip = existingPanel.querySelector('.kr-model-chip');
+    if (modelChip) {
+      modelChip.textContent = settings.model;
+      modelChip.title = settings.model;
+    }
+
+    const contentEl = existingPanel.querySelector('.kr-content');
+    if (contentEl) {
+      setSafeHTML(contentEl, tabContent);
+    }
+
+    attachEventHandlers();
+    return;
+  }
+
   let panelHtml = '';
 
   if (panelVisible) {
@@ -2832,8 +3156,11 @@ function updatePanelDOM() {
     else if (currentTab === 'settings') tabContent = renderSettingsTab();
     else if (currentTab === 'debug') tabContent = renderDebugTab();
 
+    const animateClass = panelJustOpened ? 'kr-panel-animate' : '';
+    panelJustOpened = false;
+
     panelHtml = `
-      <div class="kr-panel" id="kr-main-panel">
+      <div class="kr-panel ${animateClass}" id="kr-main-panel">
         <div class="kr-header">
           <div class="kr-header-title">
             <span class="kr-brand-mark">${ICONS.brandMark}</span>
@@ -2868,47 +3195,112 @@ function updatePanelDOM() {
   attachEventHandlers();
 }
 
+function makeDraggable(element, container) {
+  if (!element || !container || element._krDraggable) return;
+  element._krDraggable = true;
+  let isDown = false;
+  let startY = 0;
+  let startX = 0;
+  let moved = false;
+
+  const onPointerDown = (e) => {
+    if (e.button !== 0) return;
+    if (element.id === 'kr-hud') {
+      const target = e.target;
+      if (target && target.closest?.('#kr-hud-autofill-btn, #kr-hud-expand-btn, #kr-hud-minimize-btn, #kr-hud-pause-btn')) {
+        return;
+      }
+    }
+    isDown = true;
+    startY = e.clientY;
+    startX = e.clientX;
+    moved = false;
+  };
+
+  const onPointerMove = (e) => {
+    if (!isDown) return;
+    const dy = Math.abs(e.clientY - startY);
+    const dx = Math.abs(e.clientX - startX);
+    if (dy > 4 || dx > 4) {
+      if (!moved) {
+        moved = true;
+        wasJustDragged = true;
+        try {
+          element.setPointerCapture?.(e.pointerId);
+        } catch {}
+      }
+      const vh = (typeof window !== 'undefined' && window.innerHeight) || 800;
+      const pct = Math.min(Math.max((e.clientY / vh) * 100, 5), 95);
+      container.style.setProperty('--kr-dock-top', `${pct.toFixed(1)}%`);
+    }
+  };
+
+  const onPointerUp = (e) => {
+    if (!isDown) return;
+    isDown = false;
+    if (moved) {
+      try {
+        element.releasePointerCapture?.(e.pointerId);
+      } catch {}
+      const vh = (typeof window !== 'undefined' && window.innerHeight) || 800;
+      const pct = Math.min(Math.max((e.clientY / vh) * 100, 5), 95);
+      void saveSettings({ dockTop: Math.round(pct) });
+      setTimeout(() => {
+        wasJustDragged = false;
+      }, 100);
+    } else {
+      wasJustDragged = false;
+    }
+  };
+
+  element.addEventListener('pointerdown', onPointerDown);
+  element.addEventListener('pointermove', onPointerMove);
+  element.addEventListener('pointerup', onPointerUp);
+  element.addEventListener('pointercancel', onPointerUp);
+}
+
 function attachEventHandlers() {
   if (!shadowRootRef) return;
+
+  const container = shadowRootRef.querySelector('.kr-widget-container');
+  const pebbleEl = shadowRootRef.querySelector('#kr-pebble-toggle-btn');
+  if (pebbleEl && container) {
+    makeDraggable(pebbleEl, container);
+    pebbleEl.onclick = () => {
+      if (wasJustDragged) return;
+      userExplicitlyToggledPebble = false;
+      isPebble = false;
+      panelJustOpened = true;
+      panelVisible = true;
+      refreshDetectedFields();
+      updatePanelDOM();
+    };
+  }
+
+  const toggleBtn = shadowRootRef.querySelector('#kr-toggle-btn');
+  if (toggleBtn) {
+    toggleBtn.onclick = () => {
+      if (wasJustDragged) return;
+      userExplicitlyToggledPebble = false;
+      isPebble = false;
+      panelJustOpened = true;
+      panelVisible = true;
+      refreshDetectedFields();
+      updatePanelDOM();
+    };
+  }
 
   const resumePage = shadowRootRef.querySelector('#kr-resume-page');
   if (resumePage) {
     resumePage.onclick = () => void applicationEngine?.start();
   }
 
-  // Toggle button handlers
-  const toggleBtn = shadowRootRef.querySelector('#kr-toggle-btn');
-  if (toggleBtn) {
-    toggleBtn.onclick = () => {
-      panelVisible = !panelVisible;
-      if (panelVisible) refreshDetectedFields();
-      updatePanelDOM();
-    };
-  }
-
-  const expandBtn = shadowRootRef.querySelector('#kr-hud-expand-btn');
-  if (expandBtn) {
-    expandBtn.onclick = () => {
-      panelVisible = !panelVisible;
-      if (panelVisible) refreshDetectedFields();
-      updatePanelDOM();
-    };
-  }
-
-  // Pebble toggle
-  const pebbleBtn = shadowRootRef.querySelector('#kr-pebble-toggle-btn');
-  if (pebbleBtn) {
-    pebbleBtn.onclick = () => {
-      isPebble = !isPebble;
-      if (isPebble) panelVisible = false;
-      updatePanelDOM();
-    };
-  }
-
-  // Close panel handler
+  // Close panel handler (collapses directly to pebble)
   const closeBtn = shadowRootRef.querySelector('#kr-close-panel-btn');
   if (closeBtn) {
     closeBtn.onclick = () => {
+      userExplicitlyToggledPebble = true;
+      isPebble = true;
       panelVisible = false;
       updatePanelDOM();
     };
@@ -2932,6 +3324,18 @@ function attachEventHandlers() {
   };
 
   const autofillBtn = shadowRootRef.querySelector('#kr-autofill-btn');
+  const tailor = shadowRootRef.querySelector('#kr-tailor-resume');
+  if (tailor) tailor.onclick = () => void generateMaterial('resume');
+  const letter = shadowRootRef.querySelector('#kr-generate-cover-letter');
+  if (letter) letter.onclick = () => void generateMaterial('coverLetter');
+  for (const button of shadowRootRef.querySelectorAll('[data-material-open]')) button.onclick = () => {
+    const session = applicationEngine?.ensureSession(captureJob());
+    void platform.materials.request('open', { sessionId: session?.id, id: session?.materialRefs?.[button.dataset.materialOpen]?.id, kind: button.dataset.materialOpen === 'workspace' ? undefined : button.dataset.materialOpen }).catch(error => logger.warn(error.message));
+  };
+  for (const button of shadowRootRef.querySelectorAll('[data-material-cancel]')) button.onclick = () => {
+    const state = materialStates.get(materialKey(applicationEngine?.session?.id, button.dataset.materialCancel));
+    if (state?.id) void platform.materials.request('cancel', { id: state.id });
+  };
   if (autofillBtn) {
     autofillBtn.onclick = handleAutofillAction;
   }
@@ -3064,21 +3468,20 @@ function attachEventHandlers() {
       const current = getProfile();
       const newProfile = {
         ...current,
-        ...Object.fromEntries(PROFILE_FIELDS.map(field => [field.name, String(formData.get(field.name) || '').trim()])),
-        fullName: formData.get('fullName') || '',
-        email: formData.get('email') || '',
-        phone: formData.get('phone') || '',
-        location: formData.get('location') || '',
-        linkedin: formData.get('linkedin') || '',
-        github: formData.get('github') || '',
-        portfolio: formData.get('portfolio') || '',
-        resumeContext: formData.get('resumeContext') !== null ? String(formData.get('resumeContext') || '') : (current.resumeContext || ''),
-        applicantNotes: formData.get('applicantNotes') || '',
-        workExperiences: current.workExperiences || [],
-        education: current.education || [],
-        projects: current.projects || [],
-        skills: current.skills || [],
+        fullName: formData.get('fullName') !== null ? String(formData.get('fullName')).trim() : current.fullName,
+        email: formData.get('email') !== null ? String(formData.get('email')).trim() : current.email,
+        phone: formData.get('phone') !== null ? String(formData.get('phone')).trim() : current.phone,
+        location: formData.get('location') !== null ? String(formData.get('location')).trim() : current.location,
+        linkedin: formData.get('linkedin') !== null ? String(formData.get('linkedin')).trim() : current.linkedin,
+        github: formData.get('github') !== null ? String(formData.get('github')).trim() : current.github,
+        portfolio: formData.get('portfolio') !== null ? String(formData.get('portfolio')).trim() : current.portfolio,
+        applicantNotes: formData.get('applicantNotes') !== null ? String(formData.get('applicantNotes')).trim() : current.applicantNotes,
       };
+      for (const field of PROFILE_FIELDS) {
+        if (formData.has(field.name)) {
+          newProfile[field.name] = String(formData.get(field.name) || '').trim();
+        }
+      }
       saveProfile(newProfile);
       logger.info('Profile saved successfully.');
       updatePanelDOM();
@@ -3094,6 +3497,12 @@ function attachEventHandlers() {
   // Settings Form
   const settingsForm = shadowRootRef.querySelector('#kr-settings-form');
   if (settingsForm) {
+    const styleSelect = shadowRootRef.querySelector('#kr-narrative-style');
+    if (styleSelect) styleSelect.onchange = () => {
+      const style = getNarrativeStyle(styleSelect.value);
+      shadowRootRef.querySelector('#kr-style-description').textContent = style.description;
+      shadowRootRef.querySelector('#kr-style-example').textContent = style.examples[0].answer;
+    };
     const modelSelect = shadowRootRef.querySelector('#kr-model-select');
     const customInput = shadowRootRef.querySelector('#kr-custom-model-input');
     if (modelSelect && customInput) {
@@ -3128,13 +3537,14 @@ function attachEventHandlers() {
       e.preventDefault();
       const formData = new FormData(settingsForm);
 
-      let selectedModel = modelSelect?.value || 'google/gemini-2.0-flash';
+      let selectedModel = modelSelect?.value || DEFAULT_SETTINGS.model;
       if (selectedModel === 'custom' && customInput) {
-        selectedModel = customInput.value.trim() || 'google/gemini-2.0-flash';
+        selectedModel = customInput.value.trim() || DEFAULT_SETTINGS.model;
       }
 
       const newSettings = {
         model: selectedModel,
+        narrativeStyle: getNarrativeStyle(formData.get('narrativeStyle')).id,
         autofillEnabled: formData.get('autofillEnabled') === 'on',
         overwriteExisting: formData.get('overwriteExisting') === 'on',
         autoContinue: formData.get('autoContinue') === 'on',
@@ -3297,25 +3707,28 @@ export function mountUI() {
   if (target) {
     refreshDetectedFields();
     updatePanelDOM();
-    initInlineRewriteBadge(async (targetInput, setBadgeState) => {
+    initInlineRewriteBadge(async (targetInput, setBadgeState, style) => {
       const field = detectedFieldsCache.find((f) => f.element === targetInput) || {
         id: targetInput.id || 'narrative_field',
         label: targetInput.getAttribute('aria-label') || targetInput.placeholder || 'Narrative Response',
         element: targetInput,
-        currentValue: targetInput.value || '',
+        currentValue: targetInput.value || targetInput.textContent || '',
+        type: targetInput.getAttribute('contenteditable') === 'true' ? 'contenteditable' : 'textarea',
         isNarrative: true,
-        constraints: {},
+        constraints: targetInput.maxLength > 0 ? { maxLength: targetInput.maxLength } : {},
       };
 
       try {
         setBadgeState?.('loading', 'Rewriting...');
         field.element = resolveLiveElement(field) || targetInput;
-        const currentVal = field.element?.value || targetInput.value || '';
+        const currentVal = field.element?.getAttribute('contenteditable') === 'true'
+          ? field.element.textContent || '' : field.element?.value || targetInput.value || '';
         const rewritten = await rewriteNarrativeField({
           fieldLabel: field.label,
           currentValue: currentVal,
           feedback: '',
           constraints: field.constraints,
+          style,
         });
 
         if (rewritten) {
@@ -3350,7 +3763,7 @@ export function mountUI() {
       refreshDetectedFields();
       updatePanelDOM();
     } });
-    void applicationEngine.initialize();
+    void applicationEngine.initialize().then(() => refreshMaterialStates());
 
     logger.info('Kareer Shadow DOM UI mounted successfully.');
   }

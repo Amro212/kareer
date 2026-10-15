@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Job Application</title>
+  <style>
+    /* Host styles that previously collapsed the floating badge. */
+    div { line-height: 0; }
+    body { margin: 16px; font-family: sans-serif; }
+    form { max-width: 520px; }
+    label, input, textarea, [contenteditable] { display: block; box-sizing: border-box; width: 100%; margin: 12px 0; }
+    textarea, [contenteditable] { min-height: 100px; border: 1px solid #555; line-height: 1.4; }
+  </style>
+</head>
+<body>
+  <h1>Job Application</h1>
+  <form>
+    <label for="email">Email</label><input id="email" type="email">
+    <label for="why">Why this role?</label><textarea id="why" maxlength="600"></textarea>
+    <label for="saved">Saved answer</label><textarea id="saved"></textarea>
+    <label for="editor">Describe a project</label><div id="editor" role="textbox" aria-label="Describe a project" contenteditable="true" tabindex="0">I built a form-filling tool.</div>
+  </form>
+</body>
+</html>

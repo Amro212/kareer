@@ -5,12 +5,14 @@ test.describe('extension shell', () => {
     const page = await kr.context.newPage();
     await page.goto(kr.optionsUrl());
     const dock = page.locator('#profile-floating-dock');
-    await expect(page.locator('#pf-github')).toBeVisible();
+    await expect(page.locator('[data-profile-section=links]')).toBeVisible();
     await expect(dock).toBeHidden();
     await expect(dock).toHaveCSS('position', 'fixed');
 
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 800 });
+      await page.locator('[data-profile-section=links] .profile-edit-button').click();
+      await page.locator('[data-profile-section=rules] .profile-edit-button').click();
       const github = `https://github.com/applicant-${width}`;
       await page.locator('#pf-github').fill(github);
       await expect(dock).toBeVisible();
@@ -19,10 +21,11 @@ test.describe('extension shell', () => {
       await page.locator('#applicantNotes').fill(`Notes at ${width}`);
       await expect(dock).toBeInViewport();
       const box = await dock.boundingBox();
+      expect(box.width).toBeLessThanOrEqual(420);
       expect(box.x).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width).toBeLessThanOrEqual(width);
       await page.locator('#floating-save-btn').click();
-      await expect(dock).toContainText('Profile saved');
+      await expect(page.locator('#profile-feedback')).toHaveText('Profile saved locally.');
       await expect.poll(async () => (await kr.readStorage('kr:profile')).github).toBe(github);
       expect((await kr.readStorage('kr:profile')).applicantNotes).toBe(`Notes at ${width}`);
       await expect(dock).toBeHidden();
@@ -84,22 +87,28 @@ test.describe('extension shell', () => {
     const page = await kr.context.newPage();
     await page.goto(kr.optionsUrl());
 
+    await page.locator('.app-configuration > .nav-item').click();
     await page.locator('#api-key').fill('sk-or-v1-from-options-page');
     await page.locator('#save-key').click();
     await expect(page.locator('#key-status')).toHaveText('Key saved');
 
+    await page.locator('.configuration-links a[href="#models"]').click();
     await page.locator('#model').selectOption('openai/gpt-4o-mini');
     await page.locator('#save-model').click();
-    await expect(page.locator('#model-feedback')).toHaveText('Model saved.');
+    await expect(page.locator('#model-feedback')).toHaveText('Model and writing style saved.');
 
+    await page.locator('#profile-nav-link').click();
+    await page.locator('[data-profile-section=identity] .profile-edit-button').click();
     await page.locator('#pf-firstName').fill('Test');
     await page.locator('#pf-lastName').fill('Applicant');
+    await page.locator('[data-profile-section=eligibility] .profile-edit-button').click();
     await page.locator('#eligibility-list .card-header').first().click();
     await page.locator('#pf-workCountry').fill('Canada');
     await page.locator('#pf-workAuthorization').selectOption('Yes');
+    await page.locator('[data-profile-section=rules] .profile-edit-button').click();
     await page.locator('#applicantNotes').fill('Ships production software.');
     await page.locator('#profile-form button[type=submit]').click();
-    await expect(page.locator('#profile-feedback')).toHaveText('Profile saved.');
+    await expect(page.locator('#profile-feedback')).toHaveText('Profile saved locally.');
 
     expect(await kr.readStorage('kr:secrets')).toEqual({ apiKey: 'sk-or-v1-from-options-page' });
     expect((await kr.readStorage('kr:settings')).model).toBe('openai/gpt-4o-mini');
@@ -118,8 +127,11 @@ test.describe('extension shell', () => {
     const page = await kr.context.newPage();
     await page.goto(kr.optionsUrl());
 
+    await page.locator('#profile-nav-link').click();
+    await page.locator('[data-profile-section=identity] .profile-edit-button').click();
     await page.locator('#pf-firstName').fill('Dual');
     await page.locator('#pf-lastName').fill('Citizen');
+    await page.locator('[data-profile-section=eligibility] .profile-edit-button').click();
     await page.locator('#eligibility-list .card-header').first().click();
     await page.locator('#pf-workCountry').fill('United States');
     await page.locator('#pf-workAuthorization').selectOption('Yes');
@@ -132,7 +144,7 @@ test.describe('extension shell', () => {
     await secondCard.locator('.elig-sponsor-future').selectOption('No');
 
     await page.locator('#profile-form button[type=submit]').click();
-    await expect(page.locator('#profile-feedback')).toHaveText('Profile saved.');
+    await expect(page.locator('#profile-feedback')).toHaveText('Profile saved locally.');
 
     const profile = await kr.readStorage('kr:profile');
     expect(profile.workCountry).toBe('United States');
@@ -154,10 +166,11 @@ test.describe('extension shell', () => {
 
     const options = await kr.context.newPage();
     await options.goto(kr.optionsUrl());
+    await options.locator('[data-profile-section=identity] .profile-edit-button').click();
     await options.locator('#pf-firstName').fill('Broadcast');
     await options.locator('#pf-lastName').fill('Applicant');
     await options.locator('#profile-form button[type=submit]').click();
-    await expect(options.locator('#profile-feedback')).toHaveText('Profile saved.');
+    await expect(options.locator('#profile-feedback')).toHaveText('Profile saved locally.');
 
     await page.bringToFront();
     await page.locator('[data-tab=profile]').click();

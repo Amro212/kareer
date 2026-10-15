@@ -1,0 +1,116 @@
+/** Host-independent profile source and output validation. */
+const text = value => String(value ?? '').trim();
+const lines = value => text(value).split(/\n+|(?<=\.)\s+(?=[A-Z])/).map(s => s.replace(/^[-•]\s*/, '').trim()).filter(Boolean);
+export const MATERIAL_KINDS = ['resume', 'coverLetter'];
+export const DOCX_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+export function materialJobKey(job) {
+  if (job?.localId) return `local:${job.localId}`;
+  const url = job?.listingUrl || job?.applicationUrl;
+  if (!url) throw new Error('A job identity is needed. Open the workspace and paste the job description.');
+  const parsed = new URL(url);
+  parsed.hash = '';
+  return job.jobId ? `${parsed.origin}:id:${job.jobId}` : `url:${parsed.href}`;
+}
+
+export function buildMaterialSource(profile = {}) {
+  const sections = [];
+  for (const [key, category, heading, facts] of [
+    ['workExperiences', 'Experience', r => [r.title, r.company].filter(Boolean).join(' — '), r => [r.location, r.startDate, r.current ? 'Present' : r.endDate].filter(Boolean).join(' · ')],
+    ['education', 'Education', r => [r.degree, r.fieldOfStudy, r.institution].filter(Boolean).join(' — '), r => [r.startDate, r.current ? 'Present' : r.endDate, r.gpa ? `GPA ${r.gpa}` : ''].filter(Boolean).join(' · ')],
+    ['projects', 'Projects', r => [r.name, r.role].filter(Boolean).join(' — '), r => [r.startDate, r.current ? 'Present' : r.endDate].filter(Boolean).join(' · ')],
+  ]) {
+    for (const [index, record] of (profile[key] || []).entries()) {
+      const id = record.id || `${key}_${index}`;
+      if (record.enabled === false) continue;
+      sections.push({ id, category, heading: heading(record), facts: facts(record),
+        title: text(record.title || record.degree || record.name),
+        subtitle: [record.company || record.institution || record.role, record.fieldOfStudy].filter(Boolean).join(' — '),
+        dates: [record.startDate, record.current ? 'Present' : record.endDate].filter(Boolean).join(' – '),
+        location: key === 'education' ? [record.location, record.gpa ? `GPA ${record.gpa}` : ''].filter(Boolean).join(' · ') : text(key === 'projects' ? '' : record.location),
+        link: key === 'projects' ? text(record.url) : '',
+        bullets: lines(record.description), protected: true });
+    }
+  }
+  const skills = (profile.skills || []).filter(s => typeof s === 'string' || s.enabled !== false).map(s => text(typeof s === 'string' ? s : s.name || s.skill)).filter(Boolean);
+  if (skills.length) sections.push({ id: 'skills', category: 'Skills', heading: 'Skills', facts: '', bullets: skills, protected: true });
+  return {
+    kind: 'resume', name: text(profile.fullName || [profile.firstName, profile.lastName].filter(Boolean).join(' ')),
+    contact: [
+      profile.email,
+      profile.phone,
+      [profile.city, profile.stateProvince, profile.country].filter(Boolean).join(', '),
+      profile.linkedin,
+      profile.github,
+      profile.portfolio,
+      profile.website,
+      profile.additionalUrl,
+      profile.twitter,
+      profile.behance,
+      profile.dribbble,
+    ].filter(Boolean).join(' · '),
+    summary: '', sections, text: '', notes: text(profile.applicantNotes),
+  };
+}
+
+export function mergeMaterialRewrite(current, output, path) {
+  const result = structuredClone(current);
+  if (current.kind === 'resume' && path === 'summary') result.summary = output.summary;
+  else if (current.kind === 'resume' && path.startsWith('section:')) {
+    const id = path.slice(8), index = result.sections.findIndex(s => s.id === id), next = output.sections?.find(s => s.id === id);
+    if (index < 0 || !next) throw new Error('Rewrite target is unavailable. Reopen the document and retry.');
+    result.sections[index] = { ...result.sections[index], bullets: next.bullets };
+  } else if (current.kind === 'coverLetter' && /^paragraph:\d+$/.test(path)) {
+    const index = Number(path.slice(10)), next = output.paragraphs?.[index] ?? (output.paragraphs?.length === 1 ? output.paragraphs[0] : undefined);
+    if (index >= result.paragraphs.length || typeof next !== 'string') throw new Error('Rewrite target is unavailable. Reopen the document and retry.');
+    result.paragraphs[index] = next;
+  } else throw new Error('Unknown rewrite target.');
+  return result;
+}
+
+export function validateMaterial(kind, output, source) {
+  if (!MATERIAL_KINDS.includes(kind)) throw new Error('Unknown document kind.');
+  if (!output || typeof output !== 'object') throw new Error('AI returned invalid document data.');
+  if (kind === 'coverLetter') {
+    if (!Array.isArray(output.paragraphs) || !output.paragraphs.length || output.paragraphs.length > 30 || output.paragraphs.some(p => typeof p !== 'string')) throw new Error('Cover letter paragraphs are empty or invalid.');
+    const paragraphs = output.paragraphs.flatMap(p => p.replace(/\r\n?/g, '\n').split(/\n\s*\n/)).map(text).filter(Boolean);
+    if (!paragraphs.length) throw new Error('Cover letter is empty.');
+    // Legacy AI output repeated the letterhead as its final signature block.
+    if (source.contact && paragraphs.at(-1) === `${source.name}\n${source.contact}`) paragraphs[paragraphs.length - 1] = source.name;
+    return { kind, name: source.name, contact: source.contact, paragraphs };
+  }
+  if (!Array.isArray(output.sections) || !output.sections.length || output.sections.length > 100) throw new Error('Resume sections are empty or invalid.');
+  const ids = new Set(['summary']);
+  const sections = output.sections.map((section, index) => {
+    if (!section || typeof section !== 'object') throw new Error('Resume section data is invalid.');
+    const original = source.sections.find(s => s.id === section.id) || {
+      id: text(section.id) || `generated-${index}`, category: section.id === 'skills' ? 'Skills' : text(section.category) || 'Additional information',
+      heading: section.id === 'skills' ? 'Skills' : text(section.heading || section.title) || 'Additional information',
+      title: text(section.title), subtitle: text(section.subtitle), facts: text(section.facts), dates: text(section.dates), location: text(section.location),
+      link: /^https?:\/\//i.test(text(section.link)) ? text(section.link) : '', bullets: [],
+    };
+    let id = text(original.id);
+    while (ids.has(id)) id += '_';
+    ids.add(id);
+    if (!Array.isArray(section.bullets) || section.bullets.length > 100 || section.bullets.some(b => typeof b !== 'string')) throw new Error('Resume bullets are invalid.');
+    const bullets = section.bullets.map(text).filter(Boolean);
+    const keywords = original.category === 'Projects' ? (Array.isArray(section.keywords) ? section.keywords : typeof section.keywords === 'string' ? section.keywords.split(/[,;\n]/) : []).filter(k => typeof k === 'string').map(text).filter(Boolean) : undefined;
+    const relevance = Number(section.relevance);
+    // Normalize optional metadata; content judgments belong to the user, not rejection gates.
+    return { ...original, id, bullets, ...(section.relevance !== undefined ? { relevance: Number.isFinite(relevance) ? Math.max(1, Math.min(3, Math.round(relevance))) : 2 } : {}), ...(keywords ? { keywords: [...new Set(keywords)] } : {}) };
+  });
+  const summary = text(output.summary);
+  return { kind, name: source.name, contact: source.contact, summary, sections };
+}
+
+export function materialText(document) {
+  if (document.kind === 'coverLetter') return document.paragraphs.join('\n\n');
+  return [document.name, document.contact, document.summary, ...document.sections.map(s => [s.category, [s.heading, s.keywords?.join(', ')].filter(Boolean).join(' | '), s.facts, ...s.bullets].filter(Boolean).join('\n'))].filter(Boolean).join('\n\n');
+}
+
+export function materialFormat(accept = '') {
+  const tokens = accept.toLowerCase().split(',').map(s => s.trim());
+  if (!accept.trim() || tokens.some(s => ['.pdf', 'application/pdf', 'application/*', '*/*'].includes(s))) return 'pdf';
+  if (tokens.some(s => s === '.docx' || s === DOCX_TYPE)) return 'docx';
+  throw new Error('This upload does not accept PDF or DOCX. Download the document and attach a supported format manually.');
+}

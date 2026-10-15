@@ -6,6 +6,7 @@ export const MSG = {
   // Storage
   SNAPSHOT: 'kr:snapshot',
   STORAGE_SET: 'kr:storage-set',
+  PROFILE_PATCH: 'kr:profile-patch',
   STORAGE_DELETE: 'kr:storage-delete',
   STORAGE_CHANGED: 'kr:storage-changed',
 
@@ -38,6 +39,7 @@ export const MSG = {
   DOC_PUT: 'kr:doc-put',
   DOC_META: 'kr:doc-meta',
   DOC_DELETE: 'kr:doc-delete',
+  MATERIALS: 'kr:materials',
 
   // Navigation lifecycle
   NAV_COMMITTED: 'kr:nav-committed',

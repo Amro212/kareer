@@ -3,88 +3,33 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{{VISUAL_NAME}} Options</title>
+  <title>{{VISUAL_NAME}} · Profile</title>
   <link rel="stylesheet" href="../assets/theme.css" />
 </head>
 <body class="options">
   <div class="settings-shell">
-    <aside class="settings-nav">
-      <div class="brand"><span data-product-name>{{VISUAL_NAME}}</span> <span class="version" id="version"></span></div>
-      <nav aria-label="Settings sections">
-        <a href="#connection" class="nav-item">API connection</a>
-        <a href="#models" class="nav-item">Model</a>
-
-        <div class="nav-group" id="profile-nav-group">
-          <div class="nav-group-header">
-            <a href="#profile" class="nav-item nav-item-parent" id="profile-nav-link">Profile &amp; preferences</a>
-            <button type="button" class="nav-chevron-btn" id="profile-subnav-toggle" aria-label="Toggle profile subsections" title="Toggle subsections">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 6 8 10 12 6"/></svg>
-            </button>
-          </div>
-          <div class="nav-strength-meter" id="sidebar-strength-meter" title="Profile strength score">
-            <div class="strength-track">
-              <div class="strength-fill" id="sidebar-strength-fill" style="width: 0%;"></div>
-            </div>
-            <div class="strength-info">
-              <span class="strength-label" id="sidebar-strength-tier">Strength</span>
-              <span class="strength-value" id="sidebar-strength-value">0%</span>
-            </div>
-          </div>
-          <div class="nav-subsections" id="profile-subsections">
-            <a href="#section-identity" class="subnav-item" data-section="section-identity">
-              <span class="subnav-label">Identity &amp; contact</span>
-            </a>
-            <a href="#section-address" class="subnav-item" data-section="section-address">
-              <span class="subnav-label">Residential address</span>
-            </a>
-            <a href="#section-links" class="subnav-item" data-section="section-links">
-              <span class="subnav-label">Online profiles</span>
-            </a>
-            <a href="#section-work" class="subnav-item" data-section="section-work">
-              <span class="subnav-label">Work experience</span>
-              <span class="subnav-badge" id="subnav-work-count"></span>
-            </a>
-            <a href="#section-education" class="subnav-item" data-section="section-education">
-              <span class="subnav-label">Education</span>
-              <span class="subnav-badge" id="subnav-edu-count"></span>
-            </a>
-            <a href="#section-projects" class="subnav-item" data-section="section-projects">
-              <span class="subnav-label">Projects</span>
-              <span class="subnav-badge" id="subnav-proj-count"></span>
-            </a>
-            <a href="#section-skills" class="subnav-item" data-section="section-skills">
-              <span class="subnav-label">Skills</span>
-              <span class="subnav-badge" id="subnav-skills-count"></span>
-            </a>
-            <a href="#section-languages" class="subnav-item" data-section="section-languages">
-              <span class="subnav-label">Languages</span>
-              <span class="subnav-badge" id="subnav-languages-count"></span>
-            </a>
-            <a href="#section-eligibility" class="subnav-item" data-section="section-eligibility">
-              <span class="subnav-label">Work eligibility</span>
-              <span class="subnav-badge" id="subnav-eligibility-count"></span>
-            </a>
-            <a href="#section-preferences" class="subnav-item" data-section="section-preferences">
-              <span class="subnav-label">Job preferences</span>
-            </a>
-            <a href="#section-demographics" class="subnav-item" data-section="section-demographics">
-              <span class="subnav-label">Demographics &amp; disclosures</span>
-            </a>
-            <a href="#section-rules" class="subnav-item" data-section="section-rules">
-              <span class="subnav-label">Rules &amp; notes</span>
-            </a>
-          </div>
-        </div>
-
-        <a href="#resume" class="nav-item">Resume</a>
-        <a href="#advanced" class="nav-item">Backup &amp; migration</a>
+    <aside class="settings-nav app-sidebar">
+      <a class="brand app-brand" href="#profile"><span data-product-name>{{VISUAL_NAME}}</span></a>
+      <nav class="app-navigation" aria-label="Workspace navigation">
+        <a href="#profile" class="nav-item" id="profile-nav-link"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2"/></svg>Profile</a>
+        <div id="profile-subsections" class="profile-subsections" aria-label="Profile sections"></div>
+        <a href="../materials/index.html" class="nav-item" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5"/></svg>Tailored documents</a>
       </nav>
-      <p class="note">Stored in this browser.<br />Your API key stays in the extension.</p>
+      <nav class="app-configuration" aria-label="Configuration">
+        <a href="#connection" class="nav-item">Settings</a>
+        <div class="configuration-links" id="configuration-links" hidden>
+          <a href="#connection" class="nav-item">API connection</a>
+          <a href="#models" class="nav-item">Writing model</a>
+          <a href="#resume" class="nav-item">Uploaded resume</a>
+          <a href="#advanced" class="nav-item">Backup &amp; migration</a>
+        </div>
+      </nav>
+      <div class="app-sidebar-footer"><p>Stored in this browser</p><span class="version" id="version"></span></div>
     </aside>
     <main class="settings-main">
-<header class="page-heading"><h1>Settings</h1><p class="hint">Configure your connection, profile, and application preferences.</p></header>
+<header class="page-heading" id="options-heading" hidden><h1 id="options-title">Settings</h1><p class="hint">Manage the settings for your application workspace.</p></header>
 
-    <section id="connection">
+    <section id="connection" hidden>
       <div>
         <h2>OpenRouter API key</h2>
         <p class="hint">Stored by the extension. It is never sent to the page, the content script, or any log.</p>
@@ -97,14 +42,14 @@
         </div>
       </div>
       <div class="actions">
-        <button id="save-key">Save key</button>
+        <button id="save-key" disabled>Save key</button>
         <button class="secondary" id="test-key">Test connection</button>
         <button class="secondary danger" id="clear-key">Remove key</button>
         <span class="feedback" role="status" aria-live="polite" id="key-feedback"></span>
       </div>
     </section>
 
-    <section id="models">
+    <section id="models" hidden>
       <div>
         <h2>Model</h2>
         <p class="hint">Used for the primary autofill request, repairs, and rewrites.</p>
@@ -114,18 +59,34 @@
         <select id="model"></select>
         <input aria-label="Custom model ID" id="model-custom" type="text" placeholder="Custom model id" hidden />
       </div>
+      <div class="group">
+        <label for="narrative-style">Writing style</label>
+        <select id="narrative-style" aria-describedby="style-description"></select>
+        <p class="hint" id="style-description"></p>
+        <p class="hint">Example wording</p>
+        <p id="style-example"></p>
+      </div>
       <div class="actions">
-        <button id="save-model">Save model</button>
+        <button id="save-model">Save model &amp; style</button>
         <span class="feedback" role="status" aria-live="polite" id="model-feedback"></span>
       </div>
     </section>
 
-    <section id="profile">
-      <div>
-        <h2>Profile</h2>
-        <p class="hint">Explicit answers here take priority over anything inferred from your resume context.</p>
+    <section id="profile" aria-busy="true">
+      <div class="profile-heading">
+        <div>
+        <h1>Your profile</h1>
+        <p class="hint">Your career facts, ready for every application.</p>
+        </div>
+        <a id="profile-materials-link" class="profile-materials-link" href="../materials/index.html" target="_blank" rel="noopener noreferrer" title="Open tailored documents in a new tab">
+          Tailored documents
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M10 14 21 3M21 14v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h6"/></svg>
+        </a>
       </div>
-      <form id="profile-form">
+      <p class="feedback profile-save-feedback" role="status" aria-live="polite" id="profile-feedback"></p>
+      <button type="button" class="secondary profile-retry" id="profile-retry" hidden>Retry loading profile</button>
+      <p id="profile-loading" class="hint" role="status">Loading your profile…</p>
+      <form id="profile-form" hidden>
         <fieldset id="section-identity">
           <legend>Identity and contact</legend>
           <div class="grid" id="identity-fields"></div>
@@ -224,21 +185,20 @@
             <textarea id="applicantNotes" name="applicantNotes" placeholder="Rules for written answers (e.g. 'Emphasize backend architecture and distributed systems', 'Do not disclose salary below $100k', awards, or specific certifications)..."></textarea>
           </div>
         </fieldset>
-        <span class="feedback" role="status" aria-live="polite" id="profile-feedback" style="display: none;"></span>
 
-        <div class="floating-save-dock" id="profile-floating-dock" aria-live="polite">
+        <div class="floating-save-dock" id="profile-floating-dock" aria-live="polite" hidden>
           <div class="dock-status">
             <span class="dock-dot" id="dock-status-dot"></span>
             <span class="dock-message" id="dock-status-message">Unsaved profile changes</span>
           </div>
           <div class="dock-actions">
-            <button type="submit" id="floating-save-btn">Save profile</button>
+            <button type="submit" id="floating-save-btn" aria-describedby="profile-feedback">Save all</button>
           </div>
         </div>
       </form>
     </section>
 
-    <section id="resume">
+    <section id="resume" hidden>
       <div>
         <h2>Resume</h2>
         <p class="hint">One file, stored in the extension. Autofill attaches it to resume upload controls and checks the filename afterwards.</p>
@@ -254,7 +214,7 @@
       </div>
     </section>
 
-    <section id="advanced">
+    <section id="advanced" hidden>
       <div>
         <h2>Backup and migration</h2>
         <p class="hint">Import a JSON export from the Tampermonkey userscript, or back up what is stored here. Exports never include the API key.</p>

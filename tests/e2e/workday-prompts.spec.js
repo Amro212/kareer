@@ -46,6 +46,8 @@ test('Workday profile autofill works without an API key', async ({ kr }) => {
 test('options save legal name parts, phone country, and structured languages', async ({ kr }) => {
   const page = await kr.context.newPage();
   await page.goto(kr.optionsUrl());
+  await page.locator('[data-profile-section=identity] .profile-edit-button').click();
+  await page.locator('[data-profile-section=languages] .profile-edit-button').click();
   await page.locator('#pf-firstName').fill('Test');
   await page.locator('#pf-lastName').fill('Applicant');
   await page.locator('#pf-phoneCountry').fill('United Kingdom');
@@ -55,7 +57,7 @@ test('options save legal name parts, phone country, and structured languages', a
   await languages.getByLabel('Fluent?', { exact: true }).selectOption('Yes');
   await languages.getByLabel('Reading', { exact: true }).fill('Advanced');
   await page.locator('#profile-form button[type=submit]').click();
-  await expect(page.locator('#profile-feedback')).toHaveText('Profile saved.');
+  await expect(page.locator('#profile-feedback')).toHaveText('Profile saved locally.');
   const saved = await kr.readStorage('kr:profile');
   expect(saved).toMatchObject({ firstName: 'Test', lastName: 'Applicant', phoneCountry: 'United Kingdom' });
   expect(saved.languageRecords).toHaveLength(1);

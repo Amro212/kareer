@@ -7,7 +7,7 @@ for (const file of ['brim.clearcompany.com-2026-10-07-21-51.html', 'jobs.smartre
     await page.route('**/*', route => route.request().isNavigationRequest()
       ? route.fulfill({contentType:'text/html', body:fs.readFileSync(`fixtures/${file}`, 'utf8')}) : route.abort());
     await page.goto(kr.fixtureUrl(file));
-    await expect(page.locator('.kr-pebble')).toBeVisible();
+    await expect(page.locator('#kr-main-panel')).toBeVisible();
     await kr.openPanel(page);
     await expect(page.locator('#kr-autofill-btn')).toBeEnabled();
     expect(kr.openrouter.requests).toHaveLength(0);
@@ -20,11 +20,11 @@ test('generic dynamic headings, visibility and open roots reconcile', async ({ k
   await page.waitForTimeout(500);
   await expect(page.locator('#kareer-root')).toHaveCount(0);
   await page.evaluate(() => { document.querySelector('h3').textContent = 'Apply for a job'; document.querySelector('section').hidden = false; });
-  await expect(page.locator('.kr-pebble')).toBeVisible();
+  await expect(page.locator('#kr-main-panel')).toBeVisible();
   await page.evaluate(() => { history.pushState({}, '', '/education'); document.querySelector('h3').textContent = 'Education'; document.querySelector('section').remove(); });
   await expect(page.locator('#kareer-root')).toHaveCount(0);
   await page.evaluate(() => { document.querySelector('candidate-portal').attachShadow({mode:'open'}).innerHTML = '<h3>Job application</h3><label>Email<input type=email></label>'; });
-  await expect(page.locator('.kr-pebble')).toBeVisible();
+  await expect(page.locator('#kr-main-panel')).toBeVisible();
   await page.evaluate(() => { document.querySelector('candidate-portal').hidden = true; document.querySelector('h3').textContent = 'Videos'; });
   await expect(page.locator('#kareer-root')).toHaveCount(0);
 });
@@ -50,7 +50,7 @@ test('generic control name and id hydration reconciles the panel', async ({ kr }
   await expect(page.locator('#kareer-root')).toHaveCount(0);
   for (const attribute of ['name', 'id']) {
     await page.evaluate(attribute => document.querySelector('input[type=file]').setAttribute(attribute, 'resume'), attribute);
-    await expect(page.locator('.kr-pebble')).toBeVisible();
+    await expect(page.locator('#kr-main-panel')).toBeVisible();
     await page.evaluate(attribute => document.querySelector('input[type=file]').removeAttribute(attribute), attribute);
     await expect(page.locator('#kareer-root')).toHaveCount(0);
   }
@@ -88,10 +88,11 @@ test('manual panel survives mutations on its URL and clears on unrelated navigat
   const popup = await kr.context.newPage();
   await popup.goto(kr.popupUrl());
   // Send the same extension command as the popup, targeting this test tab.
-  await kr.worker.evaluate(async url => {
+  const response = await kr.worker.evaluate(async url => {
     const tabs = await chrome.tabs.query({});
     return await chrome.tabs.sendMessage(tabs.find(tab => tab.url === url).id, {type:'kr:toggle-panel'});
   }, page.url());
+  expect(response).toEqual({ ok: true });
   await expect(page.locator('#kr-main-panel')).toBeVisible();
   await page.evaluate(() => { const field = document.createElement('textarea'); document.body.append(field); });
   await page.waitForTimeout(700);

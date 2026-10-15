@@ -14,8 +14,10 @@ dist/
 test-results/
 playwright-report/
 .playwright/
+.impeccable/review/
 coverage/
 .nyc_output/
+sample-output/
 
 # Environment, credentials, and private keys
 .env

@@ -1,0 +1,17 @@
+{
+  "name": "Test Applicant",
+  "contact": "test.applicant@example.com",
+  "resume": {
+    "kind": "resume",
+    "name": "Test Applicant",
+    "contact": "test.applicant@example.com",
+    "summary": "Engineer supporting 10 services.",
+    "sections": [{ "id": "work1", "category": "Experience", "heading": "Engineer — Acme", "facts": "2021 · 2024", "bullets": ["Built APIs for 10 services."] }]
+  },
+  "coverLetter": {
+    "kind": "coverLetter",
+    "name": "Test Applicant",
+    "contact": "test.applicant@example.com",
+    "paragraphs": ["Dear Hiring Team,\n\nI supported 10 services.\n\nI welcome a conversation.", "Test Applicant\ntest.applicant@example.com"]
+  }
+}

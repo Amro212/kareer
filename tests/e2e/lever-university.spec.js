@@ -9,10 +9,11 @@ const PROFILE = {
 
 async function openFixture(kr) {
   const page = await kr.context.newPage();
-  // Captured CSS references production fonts and images. Keep replay local.
+  // Let the shared fixture route serve Lever; block production fonts and images.
   await page.route('**/*', route => new URL(route.request().url()).hostname === LEVER_HOST
-    ? route.continue() : route.abort());
+    ? route.fallback() : route.abort());
   await page.goto(kr.fixtureUrl('jobs.lever.co-2026-09-30-21-49.html', LEVER_HOST));
+  await expect(page.locator('#application-form')).toBeVisible();
   await kr.openPanel(page);
   return page;
 }

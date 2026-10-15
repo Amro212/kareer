@@ -7,7 +7,7 @@ import { createApplicationEngine } from '../../src/core/application.js';
 import { createSession, saveSession } from '../../src/core/sessions.js';
 import { observePage, pageSignature } from '../../src/core/navigation.js';
 import { scanFormFields } from '../../src/core/fields/scanner.js';
-import { saveSettings, saveProfile } from '../../src/core/storage.js';
+import { saveSettings, getSettings, saveProfile } from '../../src/core/storage.js';
 import { logger } from '../../src/core/debug.js';
 
 let dom;
@@ -194,3 +194,17 @@ test('the engine subscribes to navigation events and releases them on destroy', 
   engine.destroy();
   assert.equal(navListeners.size, 0, 'destroy unsubscribes');
 });
+
+test('saveSettings merges partial updates preserving model and existing settings', () => {
+  saveSettings({ model: 'google/gemini-2.5-flash-lite' });
+  const afterModel = getSettings();
+  assert.equal(afterModel.model, 'google/gemini-2.5-flash-lite');
+
+  // Updating dockTop only (like dragging the launcher button) must not wipe model
+  saveSettings({ dockTop: 82 });
+  const afterDock = getSettings();
+  assert.equal(afterDock.dockTop, 82);
+  assert.equal(afterDock.model, 'google/gemini-2.5-flash-lite');
+  assert.equal(afterDock.autofillEnabled, true);
+});
+

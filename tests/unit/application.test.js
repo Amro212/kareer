@@ -140,6 +140,7 @@ test('a different job clears a paused workflow while a genuine step heading pres
 
 test('review-route recapture preserves the completed application session', async () => {
   render('<h1>Engineer</h1>' + input() + '<button>Continue</button>');
+  const listingUrl = window.location.href;
   document.querySelector('button').onclick = () => {
     window.history.replaceState({}, '', '/jobs/42/review');
     render('<h1>Review application</h1><button>Submit application</button>');
@@ -153,6 +154,7 @@ test('review-route recapture preserves the completed application session', async
     assert.equal(engine.session.id, id);
     assert.equal(engine.session.status, 'review');
     assert.equal(engine.session.completedSteps, 1);
+    assert.equal(engine.session.job.listingUrl, listingUrl);
   } finally { engine.destroy(); }
 });
 
