@@ -232,7 +232,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     status('paused', `The page's Continue button stayed disabled after waiting ${navigationTimeoutMs / 1000}s. Auto Continue is still on; inspect the page before resuming.`);
   }
   async function applyResumeUploads(fields, token, signature) {
-    for (const entry of await applyGeneratedMaterials(fields, runMaterials, { isCurrent: () => guard(token) })) results.set(entry.fieldId, entry);
+    for (const entry of await applyGeneratedMaterials(fields, runMaterials, { overwriteExisting: getSettings().overwriteExisting, isCurrent: () => guard(token) })) results.set(entry.fieldId, entry);
     const files = fields.filter(f => f.type === 'file' && isResumeField(f, fields) && !runMaterials.resume);
     if (!platform.capabilities.fileUpload) return true;
     const meta = await platform.documents.meta();

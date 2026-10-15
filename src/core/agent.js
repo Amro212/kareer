@@ -140,7 +140,7 @@ export function createFieldAgent() {
     const allFileFields = scanFormFields(document).filter((field) => field.type === 'file');
     deduplicateFields(allFileFields);
     const fields = allFileFields.filter((field) => isResumeField(field, allFileFields) && !materials.resume);
-    const results = await applyGeneratedMaterials(scanFormFields(document), materials, { isCurrent: () => token === generation });
+    const results = await applyGeneratedMaterials(scanFormFields(document), materials, { overwriteExisting, isCurrent: () => token === generation });
     for (const field of fields) {
       field.element = field.element?.isConnected ? field.element : (scanFormFields(document).find(f => f.id === field.id)?.element || field.element);
       if (!overwriteExisting && !unfilled(field)) continue;

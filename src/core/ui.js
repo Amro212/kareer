@@ -2006,7 +2006,7 @@ async function executeAutofillFlow() {
     const settings = getSettings();
     const overwrite = Boolean(settings.overwriteExisting);
     const materials = await snapshotMaterials(applicationEngine?.session);
-    const generatedResults = await applyGeneratedMaterials(detectedFieldsCache, materials, { isCurrent: () => token === autofillGeneration });
+    const generatedResults = await applyGeneratedMaterials(detectedFieldsCache, materials, { overwriteExisting: overwrite, isCurrent: () => token === autofillGeneration });
     for (const entry of generatedResults) fieldResultsCache.set(entry.fieldId, entry);
     refreshDetectedFields();
 

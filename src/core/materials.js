@@ -16,10 +16,10 @@ export async function snapshotMaterials(session, options = {}) {
   session.materialRefs = current.refs;
   session.materialTasks = current.tasks;
   session.materialRunRef = current.runRef;
-  return current.records;
+  return Object.fromEntries(Object.entries(current.records).filter(([, record]) => record && !record.error));
 }
 
-export async function applyGeneratedMaterials(fields, snapshot, { isCurrent = () => true } = {}) {
+export async function applyGeneratedMaterials(fields, snapshot, { overwriteExisting = false, isCurrent = () => true } = {}) {
   const results = [], files = fields.filter(f => f.type === 'file');
   for (const original of fields) {
     if (!isCurrent()) break;
@@ -28,6 +28,8 @@ export async function applyGeneratedMaterials(fields, snapshot, { isCurrent = ()
     let field = original;
     if (field.element && !field.element.isConnected) field = scanFormFields().find(f => f.id === original.id) || original;
     if (field.element?.disabled || field.element?.readOnly) continue;
+    const currentValue = field.type === 'file' ? field.element?.files?.[0]?.name || field.currentValue : field.element?.value ?? field.element?.textContent ?? field.currentValue;
+    if (!overwriteExisting && (field.hasExistingValue || String(currentValue ?? '').trim())) continue;
     try {
       if (record.error) throw new Error(record.error);
       let value, verification;
