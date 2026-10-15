@@ -42,7 +42,7 @@ import { detectAdapter } from './adapters/index.js';
 import { rememberAnswer } from './memory.js';
 import { saveSession } from './sessions.js';
 import { captureJob, activateJobPage } from './jobs.js';
-import { inspectContinue } from './navigation.js';
+import { inspectContinue, inspectSubmit } from './navigation.js';
 
 let applicationEngine = null;
 let applicationState = null;
@@ -1945,7 +1945,7 @@ async function handleUnifiedAutofillClick() {
   // Capture creates context for every job. Single-page/embedded applications
   // still use their field-agent flow; a session alone does not imply navigation.
   const needsWorkflow = session?.active || session?.currentStep || ['workday', 'greenhouse', 'ashby', 'lever'].includes(adapter.id) ||
-    Boolean(inspectContinue().control) || getSettings().autoSubmit;
+    inspectContinue().count > 0 || inspectSubmit().count > 0 || getSettings().autoSubmit;
   const hasEmbeddedFields = remoteFieldsCache.length || (await listRemoteFrames()).length;
   if (!current()) return;
   if (supportedEmbedded || needsWorkflow && !hasEmbeddedFields) {

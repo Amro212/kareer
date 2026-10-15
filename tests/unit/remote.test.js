@@ -14,6 +14,7 @@ import {
   collectRemoteValidation,
   locateRemoteField,
   inspectRemoteFields,
+  embeddedApplicationStates,
 } from '../../src/core/remote.js';
 
 /** Installs a host that pretends to be the extension, recording every command. */
@@ -64,6 +65,18 @@ test('only embedded frames that hold fields are considered', async () => {
   });
   const frames = await listRemoteFrames();
   assert.deepEqual(frames.map((frame) => frame.frameId), [5]);
+});
+
+test('generic workflow discovery excludes unrelated forms and retains confirmation pages', async () => {
+  stubFrames({
+    frames: [
+      { frameId: 1, isTop: false, applicationEvidence: { eligible: true } },
+      { frameId: 2, isTop: false, applicationEvidence: { eligible: false } },
+      { frameId: 3, isTop: false, fieldCount: 0, applicationEvidence: { eligible: false } },
+    ],
+    respond: frameId => ({ adapter: 'generic', pageType: frameId === 3 ? 'confirmation' : 'application' }),
+  });
+  assert.deepEqual((await embeddedApplicationStates()).map(frame => frame.frameId), [1, 3]);
 });
 
 test('collected fields are namespaced by frame so ids cannot collide', async () => {

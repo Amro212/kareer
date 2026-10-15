@@ -270,7 +270,9 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
   function submissionProblem(fields) {
     const page = classifyPage();
     if (!['application', 'review'].includes(page.type)) return page.reason;
-    const continueControl = findContinue();
+    const next = inspectContinue();
+    if (next.count > 1) return next.reason;
+    const continueControl = next.control;
     const submit = inspectSubmit();
     if (submit.reason) return submit.reason;
     if (continueControl && continueControl !== submit.control && !isDisabled(continueControl)) return 'Continue the application before submitting.';
@@ -430,10 +432,10 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     return guard(token);
   }
 
-  async function embeddedWorkflow(token) {
+  async function embeddedWorkflow(token, manualSubmit = false) {
     const hasTopApplicationForm = Boolean(detectAdapter().applicationRoot?.(document)) || ['workday', 'lever'].includes(detectAdapter().id);
     if (!platform.capabilities.crossFrame || hasTopApplicationForm || ['captcha','confirmation'].includes(classifyPage().type)) return false;
-    const current = () => guard(token);
+    const current = () => token === generation && Boolean(session?.active);
     const discover = async () => {
       const states = await embeddedApplicationStates();
       const candidates = states.filter(state => ['application','review','confirmation','captcha'].includes(state.pageType));
@@ -471,78 +473,81 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         results.clear();
         if (!session.history.some(entry=>entry.signature===signature)) session.history.push({url:state.url,signature,at:new Date().toISOString()});
       }
-      const materialRevision = JSON.stringify(Object.values(runMaterials).map(record => record.revision));
-      if (step.materialRevision !== materialRevision) { step.uploaded = false; step.materialRevision = materialRevision; }
-      if (platform.capabilities.fileUpload && !step.uploaded) {
-        const uploaded=await command('uploadResume',{overwriteExisting:getSettings().overwriteExisting, materials: runMaterials});
-        if (!current()) return true;
-        for (const entry of uploaded.results || []) results.set(remoteFieldId(state.frameId,entry.fieldId),entry);
-        step.uploaded=true;
-        await refresh();
-      }
-      // Agents own DOM and local recipes; only this frame generates answers.
-      const scanned=await command('scan',{overwriteExisting:!step.primary && getSettings().overwriteExisting});
-      if (!current()) return true;
-      await refresh();
-      const fields=(scanned.fields || []).map(field=>({...field,fieldId:remoteFieldId(state.frameId,field.fieldId)}));
-      // Discovery and answer availability are separate: an unanswered known
-      // question must not consume the budget for genuinely new conditional fields.
-      const key=field=>field.fieldId.replace(/^jcf\d+::/, '');
-      if (fields.some(field=>Object.hasOwn(step.questions,key(field)) && step.questions[key(field)]!==questionIdentity(field))) throw new Error('An embedded question changed. Inspect before resuming.');
-      const retry=step.retryRequested;
-      step.retryRequested=false;
-      const missing=fields.filter(field=>!Object.hasOwn(step.questions,key(field)) || retry && (!step.answers[field.fieldId]?.value || results.get(field.fieldId)?.status==='failed'));
-      if (missing.length) {
-        if (step.primary && retry) {
-          step.repairs=(step.repairs || 0)+1;
-          if (step.repairs>2) throw new Error('Embedded repair limit reached. Review manually.');
-        } else if (step.primary && step.lateRequests++ >= 2) throw new Error('Embedded dynamic field limit reached. Review manually.');
-        status('running',`Resolving ${missing.length} embedded fields.`);
-        for (const field of missing) step.questions[key(field)]=questionIdentity(field);
-        const response=await answer(missing,{jobContext:session.job,...(retry?{repairErrors:state.errors,allowSearch:false}:{})});
-        if (!current()) return true;
-        await refresh();
-        for (const entry of response.answers) step.answers[entry.fieldId]=entry;
-        const searches=response.answers.filter(entry=>entry.searchQuery).map(entry=>({...entry,fieldId:entry.fieldId.replace(/^jcf\d+::/, '')}));
-        if (searches.length) {
-          const discovered=await command('searchOptions',{queries:searches});
+      if (!manualSubmit) {
+        const materialRevision = JSON.stringify(Object.values(runMaterials).map(record => record.revision));
+        if (step.materialRevision !== materialRevision) { step.uploaded = false; step.materialRevision = materialRevision; }
+        if (platform.capabilities.fileUpload && !step.uploaded) {
+          const uploaded=await command('uploadResume',{overwriteExisting:getSettings().overwriteExisting, materials: runMaterials});
           if (!current()) return true;
+          for (const entry of uploaded.results || []) results.set(remoteFieldId(state.frameId,entry.fieldId),entry);
+          step.uploaded=true;
           await refresh();
-          if (!current()) return true;
-          const resolved = await resolveDiscoveredAnswers((discovered.fields || []).map(field=>({...field,fieldId:remoteFieldId(state.frameId,field.fieldId)})), response.answers, {jobContext:session.job,isCurrent:current});
-          if (!current()) return true;
-          await refresh();
-          if (!current()) return true;
-          for (const entry of resolved) step.answers[entry.fieldId]=entry;
         }
-      }
-      step.primary=true;
-      saveSession(session);
-      const entries=fields.map(field=>step.answers[field.fieldId]).filter(Boolean);
-      if (entries.length) {
-        const filled=await command('fill',{answers:entries.map(entry=>({...entry,fieldId:entry.fieldId.replace(/^jcf\d+::/, '')}))});
-        if (!current()) return true;
-        for (const entry of filled.results || []) results.set(remoteFieldId(state.frameId,entry.fieldId),entry);
-        await refresh();
-        emit();
-        // Conditional questions revealed by filling get their bounded late pass.
-        const next=await command('scan');
+        // Agents own DOM and local recipes; only this frame generates answers.
+        const scanned=await command('scan',{overwriteExisting:!step.primary && getSettings().overwriteExisting});
         if (!current()) return true;
         await refresh();
-        if (next.fields?.some(field=>!Object.hasOwn(step.questions,field.fieldId))) continue;
+        const fields=(scanned.fields || []).map(field=>({...field,fieldId:remoteFieldId(state.frameId,field.fieldId)}));
+        // Discovery and answer availability are separate: an unanswered known
+        // question must not consume the budget for genuinely new conditional fields.
+        const key=field=>field.fieldId.replace(/^jcf\d+::/, '');
+        if (fields.some(field=>Object.hasOwn(step.questions,key(field)) && step.questions[key(field)]!==questionIdentity(field))) throw new Error('An embedded question changed. Inspect before resuming.');
+        const retry=step.retryRequested;
+        step.retryRequested=false;
+        const missing=fields.filter(field=>!Object.hasOwn(step.questions,key(field)) || retry && (!step.answers[field.fieldId]?.value || results.get(field.fieldId)?.status==='failed'));
+        if (missing.length) {
+          if (step.primary && retry) {
+            step.repairs=(step.repairs || 0)+1;
+            if (step.repairs>2) throw new Error('Embedded repair limit reached. Review manually.');
+          } else if (step.primary && step.lateRequests++ >= 2) throw new Error('Embedded dynamic field limit reached. Review manually.');
+          status('running',`Resolving ${missing.length} embedded fields.`);
+          for (const field of missing) step.questions[key(field)]=questionIdentity(field);
+          const response=await answer(missing,{jobContext:session.job,...(retry?{repairErrors:state.errors,allowSearch:false}:{})});
+          if (!current()) return true;
+          await refresh();
+          for (const entry of response.answers) step.answers[entry.fieldId]=entry;
+          const searches=response.answers.filter(entry=>entry.searchQuery).map(entry=>({...entry,fieldId:entry.fieldId.replace(/^jcf\d+::/, '')}));
+          if (searches.length) {
+            const discovered=await command('searchOptions',{queries:searches});
+            if (!current()) return true;
+            await refresh();
+            if (!current()) return true;
+            const resolved = await resolveDiscoveredAnswers((discovered.fields || []).map(field=>({...field,fieldId:remoteFieldId(state.frameId,field.fieldId)})), response.answers, {jobContext:session.job,isCurrent:current});
+            if (!current()) return true;
+            await refresh();
+            if (!current()) return true;
+            for (const entry of resolved) step.answers[entry.fieldId]=entry;
+          }
+        }
+        step.primary=true;
+        saveSession(session);
+        const entries=fields.map(field=>step.answers[field.fieldId]).filter(Boolean);
+        if (entries.length) {
+          const filled=await command('fill',{answers:entries.map(entry=>({...entry,fieldId:entry.fieldId.replace(/^jcf\d+::/, '')}))});
+          if (!current()) return true;
+          for (const entry of filled.results || []) results.set(remoteFieldId(state.frameId,entry.fieldId),entry);
+          await refresh();
+          emit();
+          // Conditional questions revealed by filling get their bounded late pass.
+          const next=await command('scan');
+          if (!current()) return true;
+          await refresh();
+          if (next.fields?.some(field=>!Object.hasOwn(step.questions,field.fieldId))) continue;
+        }
       }
       if (state.errors.length || [...results.values()].some(entry=>entry.status==='failed')) {
         status('paused',`Embedded application needs review: ${state.errors.map(error=>error.message).join(' ').slice(0,250) || 'A value or upload was rejected.'}`);return true;
       }
       let action;
+      if (manualSubmit && state.canContinue) throw new Error('Continue the application before submitting.');
       if (state.canContinue) {
         if (!getSettings().autoContinue && !step.forceContinue) {session.stepReview=true;status('paused','Page filled. Auto Continue is off.');return true;}
         step.forceContinue=false;
         if (step.clicks++>=3 || session.transitions++>=30) throw new Error('Embedded navigation limit reached. Continue manually.');
         action='continue';
-      } else if (state.canSubmit && getSettings().autoSubmit) {
+      } else if (state.canSubmit && (manualSubmit || getSettings().autoSubmit)) {
         if (session.submits) throw new Error('Auto Submit already attempted. Check the result manually.');
-        for (let left=Math.ceil(submitCountdownMs/1000);left>0;left--) {
+        for (let left=manualSubmit?0:Math.ceil(submitCountdownMs/1000);left>0;left--) {
           if (!current()) return true;
           status('submitting',`Submitting in ${left}s. Click Pause to cancel.`);
           if (!current()) return true;
@@ -552,7 +557,9 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         await refresh();
         if (!state.canSubmit || state.canContinue || state.errors.length) throw new Error('Embedded validation changed during countdown. Review manually.');
         session.submits=1;step.submits=1;action='submit';
-      } else {status('paused','Embedded page filled. Review the application before proceeding.');return true;}
+      } else if (state.canSubmit) {
+        status('review', 'Page filled. Review your answers, then submit the application.');return true;
+      } else {status('paused',state.navigationReason || 'No enabled, unambiguous Submit or Continue control in the application frame.');return true;}
       status(action==='submit'?'submitting':'running',action==='submit'?'Submitting application.':'Continuing embedded application.');
       saveSession(session);
       const before=state;
@@ -917,7 +924,8 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       busy = true;
       session.active = true;
       try {
-        await attemptSubmit(token, session.steps[session.currentStep], true);
+        if (session.frameOwner) await embeddedWorkflow(token, true);
+        else await attemptSubmit(token, session.steps[session.currentStep], true);
       } catch (error) {
         if (token === generation) status('paused', `Submission failed: ${error.message}`);
       } finally { busy = false; emit(); }

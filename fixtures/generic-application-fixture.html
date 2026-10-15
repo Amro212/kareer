@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Job application · Example</title>
+<!-- Site-independent local replay. Every submission stays on this fixture. -->
+<body data-submissions="0" data-newsletters="0">
+<header><form><label>Newsletter email<input type="email"></label><button>Subscribe</button></form></header>
+<main><h1>Job application</h1><h2>Contact details</h2>
+  <form id="application">
+    <label for="full_name">Full name</label><input id="full_name" required>
+    <label for="email">Email</label><input id="email" type="email" required>
+  </form>
+</main>
+<script>
+  const params = new URLSearchParams(location.search);
+  const main = document.querySelector('main');
+  const form = document.querySelector('#application');
+  let root = document;
+  if (params.has('shadow')) {
+    const host = document.createElement('application-form');
+    main.replaceWith(host);
+    root = host.attachShadow({ mode: 'open' });
+    root.append(main);
+  }
+  const markup = {
+    native: '<button id="submit" type="submit">Envoyer ma candidature</button>',
+    input: '<input id="submit" type="submit" value="Send">',
+    implicit: '<button id="submit">Send</button>',
+    accessible: '<button id="submit" type="button" aria-label="Submit application">→</button>',
+    custom: '<span id="action-label">Send application</span><div id="submit" role="button" tabindex="0" aria-labelledby="action-label">→</div>',
+    external: '<button id="submit" type="submit" form="application">Finish</button>',
+    footer: '<footer><button id="submit" type="submit" form="application">Envoyer</button></footer>',
+  };
+  function finalControl() {
+    const kind = params.get('control') || 'native';
+    (['external', 'footer'].includes(kind) ? main : form).insertAdjacentHTML('beforeend', markup[kind]);
+    if (['custom', 'accessible'].includes(kind)) root.querySelector('#submit').onclick = () => form.requestSubmit();
+    if (params.has('ambiguous')) form.insertAdjacentHTML('beforeend', '<button type="submit">Submit application</button>');
+    if (params.has('forward-ambiguity')) form.insertAdjacentHTML('beforeend', '<button type="button">Next</button><button type="button">Continue</button>');
+    if (params.has('disabled')) root.querySelector('#submit').disabled = true;
+  }
+  let next = params.has('steps');
+  if (next) form.insertAdjacentHTML('beforeend', '<button type="submit" aria-label="Continue">→</button>');
+  else finalControl();
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    if (next) {
+      next = false;
+      main.querySelector('h2').textContent = 'Additional questions';
+      form.innerHTML = '<label for="motivation">Why this role?</label><textarea id="motivation" required></textarea>';
+      finalControl();
+      return;
+    }
+    document.body.dataset.submissions = String(Number(document.body.dataset.submissions) + 1);
+    document.body.dataset.submittedName = form.querySelector('#full_name')?.value || '';
+    main.innerHTML = '<h1>Application submitted</h1><p>Thank you for applying.</p>';
+  });
+  document.querySelector('header form').onsubmit = event => {
+    event.preventDefault();
+    document.body.dataset.newsletters = String(Number(document.body.dataset.newsletters) + 1);
+  };
+</script>
+</body>
+</html>

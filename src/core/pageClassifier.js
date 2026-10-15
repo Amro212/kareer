@@ -36,6 +36,34 @@ export function visibleText(root = document.body) {
   return Array.from(root.childNodes, read).join(' ').replace(/\s+/g, ' ').trim();
 }
 
+export const CONTINUE_LABEL = /^(?:next(?: step)?|continue|save (?:and|&) continue|review(?: application)?|proceed)(?:\s*[→›»])?$/i;
+
+export function controlLabel(element) {
+  const root = element.getRootNode();
+  const referenced = (element.getAttribute('aria-labelledby') || '').split(/\s+/)
+    .map(id => root.getElementById?.(id)?.textContent || '').join(' ').trim();
+  return (referenced || element.getAttribute('aria-label') ||
+    (element.matches('input') ? element.value : visibleText(element)) || '').replace(/\s+/g, ' ').trim();
+}
+
+export function actionControls(doc) {
+  return accessibleRoots(doc).flatMap(root => [...root.querySelectorAll('button,input[type=submit],input[type=button],a[href],[role=button]')])
+    .filter(element => isVisible(element) && !element.matches('[role=combobox],[aria-haspopup=listbox]') && !element.closest('[role=listbox],.select__menu,[role=menu]'));
+}
+
+export function isSubmitControl(element) {
+  const label = controlLabel(element);
+  if (element.closest('[role=tablist]')) return false;
+  if (element.closest('header,nav,footer') &&
+      !(element.form && !element.form.closest('header,nav,footer')) && !/\bapplication\b/i.test(label)) return false;
+  if (CONTINUE_LABEL.test(label)) return false;
+  if (/^(?:submit(?: (?:my|your|the))? application|submit|apply(?: now)?|send(?: (?:my|your|the))? application|final submit|finish(?: application)?|complete application)(?:\s*[→›»])?$/i.test(label)) return true;
+  // Native form semantics cover labels and languages without an ATS recipe.
+  return Boolean(element.matches('button,input[type=submit]') && element.type === 'submit' && element.form &&
+    !/\b(?:save|delete|remove|upload|attach|add|reset|search|subscribe|sign in|log in)\b/i.test(label) &&
+    element.form.querySelector('input:not([type=hidden]):not([type=submit]):not([type=button]),textarea,select'));
+}
+
 export function classifyPage(doc = document) {
   const roots = accessibleRoots(doc);
   const all = selector => roots.flatMap(root => [...root.querySelectorAll(selector)]);
@@ -48,7 +76,7 @@ export function classifyPage(doc = document) {
   const fields = all('input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=search]),textarea,select,[role=combobox],[contenteditable=true],button,input[type=search],spl-input,spl-textarea,spl-checkbox,spl-autocomplete,spl-phone-field,spl-dropzone').some(el => isVisible(el) &&
     (!el.matches('button,input[type=search]') || !el.closest('header,nav,footer') && (el.matches('button[aria-haspopup=listbox]') || adapter.isCombobox?.(el))));
   if (fields) return { type: 'application', reason: 'Application fields detected.' };
-  const final = all('button,input[type=submit],[role=button]').filter(isVisible).some(el => /\bsubmit (?:my |your |the )?application\b|\bfinal submit\b|^submit$|^apply now$/i.test(visibleText(el) || el.value || el.getAttribute('aria-label') || ''));
+  const final = actionControls(doc).some(isSubmitControl);
   if (final) return { type: 'review', reason: 'Ready for review. Final submission is manual.' };
   if (doc.querySelector('script[type="application/ld+json"]') && /JobPosting/.test(doc.querySelector('script[type="application/ld+json"]')?.textContent || '') || /job description|about (?:the|this) (?:role|job)/i.test(text)) return { type: 'listing', reason: 'Job listing detected.' };
   return { type: 'unrelated', reason: 'No application step detected.' };

@@ -18,7 +18,8 @@ export async function embeddedApplicationStates() {
   const states = await Promise.all(frames.map(async frame => {
     try {
       const state = await platform.frames.command(frame.frameId, {action:'stepState'});
-      return state && !state.error && ['greenhouse','ashby'].includes(state.adapter) ? {...state,frameId:frame.frameId} : null;
+      return state && !state.error && (['greenhouse','ashby'].includes(state.adapter) ||
+        state.adapter === 'generic' && (frame.applicationEvidence?.eligible || state.pageType === 'confirmation')) ? {...state,frameId:frame.frameId} : null;
     } catch { return null; }
   }));
   return states.filter(Boolean);

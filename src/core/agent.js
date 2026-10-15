@@ -201,7 +201,7 @@ export function createFieldAgent() {
     const observation=observePage(fields);
     return {pageType:page.type,reason:page.reason,url:location.href,adapter:detectAdapter().id,
       signature:JSON.stringify(observation),observation,fieldCount:fields.length,canContinue:Boolean(next.control && !isDisabled(next.control)),
-      canSubmit:Boolean(submit.control && !isDisabled(submit.control)),errors:inspectValidation(fields),
+      canSubmit:Boolean(submit.control && !isDisabled(submit.control) && next.count < 2),navigationReason:next.count ? next.reason : submit.reason,errors:inspectValidation(fields),
       fields:normalizeFieldsForAI(fields),uploads:fields.filter(field => field.type === 'file').map(field => ({fieldId:field.id,required:field.required,currentValue:field.currentValue,label:field.label}))};
   }
 
@@ -212,7 +212,7 @@ export function createFieldAgent() {
     if (state.errors.length) return {error:'Embedded validation needs manual input.',errors:state.errors};
     const control = command.action === 'submit' ? inspectSubmit().control : inspectContinue().control;
     if (!control || isDisabled(control)) return {error:'No unambiguous enabled application control.'};
-    if (command.action === 'submit' && state.canContinue) return {error:'Continue the application before submitting.'};
+    if (command.action === 'submit' && (!state.canSubmit || state.canContinue)) return {error:state.navigationReason || 'Continue the application before submitting.'};
     control.click();
     return {ok:true};
   }

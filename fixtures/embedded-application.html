@@ -263,6 +263,7 @@
     document.getElementById('application').addEventListener('submit', (event) => {
       event.preventDefault();
       document.body.dataset.submitted = 'true';
+      document.getElementById('application').insertAdjacentHTML('beforeend', '<p role="status">Application submitted. Thank you for applying.</p>');
     });
   </script>
 </body>

@@ -13,6 +13,11 @@ function page(html, url = 'https://job-boards.greenhouse.io/reddit/jobs/8089959'
   return document;
 }
 
+test('generic application intent uses the accessible action name rather than icon text', () => {
+  const doc = page('<h1>Candidate portal</h1><form><label>Email<input type="email"></label><div role="button" aria-label="Send application">→</div></form>', 'https://example.com/portal');
+  assert.equal(isJobPage(doc), true);
+});
+
 test('captures Greenhouse header location and company independently of the description', () => {
   const job = captureJob(page('<main><img alt="Reddit Logo"><h1>Partner Manager</h1><div class="job__location">New York City, NY</div><div class="job__description">Build partnerships.</div><form><label>Applicant location</label><input value="Toronto, Canada"></form></main>'));
   assert.equal(job.company, 'Reddit');

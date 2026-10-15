@@ -1029,6 +1029,45 @@ test('accessible Submit names and decorative arrows are recognized', () => {
   }
 });
 
+test('generic native submit controls work without ATS-specific labels', () => {
+  for (const control of ['<button type="submit">Finish</button>', '<input type="submit" value="Enviar candidatura">', '<button>Send</button>']) {
+    render(`<form><label>Email<input type="email" required></label>${control}</form>`);
+    assert.equal(inspectSubmit().control, document.querySelector('button,input[type=submit]'));
+  }
+});
+
+test('generic native submit fallback excludes forward and unrelated form actions', () => {
+  for (const label of ['Next', 'Save draft', 'Upload resume', 'Subscribe']) {
+    render(`<form><input type="email"><button type="submit">${label}</button></form>`);
+    assert.equal(inspectSubmit().control, null, label);
+  }
+  render('<form><input type="email"><button aria-haspopup="listbox">Choose country</button></form>');
+  assert.equal(inspectSubmit().control, null);
+});
+
+test('generic submit can live in a footer and reference its application form', () => {
+  render('<form id="application"><input type="email" required></form><footer><button form="application" type="submit">Envoyer</button></footer>');
+  assert.equal(inspectSubmit().control, document.querySelector('button'));
+});
+
+test('generic forward and submit controls are discovered inside open shadow roots', () => {
+  render('<application-form></application-form>');
+  const root = document.querySelector('application-form').attachShadow({ mode: 'open' });
+  root.innerHTML = '<form><label>Email<input type="email"></label><button aria-label="Continue">→</button></form>';
+  assert.equal(findContinue(), root.querySelector('button'));
+  assert.equal(inspectSubmit().control, null);
+  root.querySelector('button').setAttribute('aria-label', 'Submit application');
+  assert.equal(inspectSubmit().control, root.querySelector('button'));
+});
+
+test('generic selected-value displays count as committed while query text does not', () => {
+  render('<div class="select-shell"><span class="select-value"></span><label for="choice">Location</label><input id="choice" role="combobox" value="search query"></div>');
+  assert.equal(scanFormFields()[0].currentValue, '');
+  document.querySelector('.select-value').textContent = 'Ottawa, Ontario, Canada';
+  document.querySelector('#choice').value = '';
+  assert.equal(scanFormFields()[0].currentValue, 'Ottawa, Ontario, Canada');
+});
+
 test('Auto Submit clicks a single unambiguous submit after a zero countdown', async () => {
   saveSettings({ autoContinue: true, autoSubmit: true });
   render('<h1>Review application</h1><button id="submit">Submit application</button>');
@@ -1095,7 +1134,7 @@ for (const autoSubmit of [false, true]) test(`${autoSubmit ? 'Auto' : 'Manual'} 
   } finally { engine.destroy(); }
 });
 
-for (const change of ['disabled', 'ambiguous', 'required', 'continue']) {
+for (const change of ['disabled', 'ambiguous', 'required', 'continue', 'ambiguous-forward']) {
   test(`manual Submit rechecks the live page when ${change} changes during review`, async () => {
     saveSettings({ autoSubmit: false });
     render(`${input()}<button id="submit">Submit application</button>`);
@@ -1108,6 +1147,7 @@ for (const change of ['disabled', 'ambiguous', 'required', 'continue']) {
       if (change === 'ambiguous') document.querySelector('main').insertAdjacentHTML('beforeend', '<button>Submit</button>');
       if (change === 'required') document.querySelector('#name').value = '';
       if (change === 'continue') document.querySelector('main').insertAdjacentHTML('beforeend', '<button>Continue</button>');
+      if (change === 'ambiguous-forward') document.querySelector('main').insertAdjacentHTML('beforeend', '<button>Next</button><button>Continue</button>');
       await engine.submit();
       assert.equal(clicks, 0);
       assert.equal(engine.session.status, 'paused');
