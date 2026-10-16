@@ -195,8 +195,8 @@ test('search queries reach the owning frame and returned options stay namespaced
 test('validation errors from embedded frames are aggregated for repair', async () => {
   stubFrames({
     frames: [
-      { frameId: 5, isTop: false, fieldCount: 2, url: 'https://embed.example.com/form' },
-      { frameId: 6, isTop: false, fieldCount: 1, url: 'https://other.example.com/form' },
+      { frameId: 5, isTop: false, fieldCount: 2, url: 'https://embed.example.com/form', applicationEvidence: { eligible: true } },
+      { frameId: 6, isTop: false, fieldCount: 1, url: 'https://other.example.com/form', applicationEvidence: { eligible: true } },
     ],
     respond: (frameId) => (frameId === 5
       ? { errors: [{ fieldId: 'field-1', message: 'Required' }] }
@@ -208,8 +208,24 @@ test('validation errors from embedded frames are aggregated for repair', async (
 });
 
 test('an unreachable application frame cannot silently pass submission validation', async () => {
-  stubFrames({ frames: [{ frameId: 5, isTop: false, fieldCount: 1 }], respond: () => ({ error: 'Frame unavailable' }) });
+  stubFrames({ frames: [{ frameId: 5, isTop: false, fieldCount: 1, applicationEvidence: { eligible: true } }], respond: () => ({ error: 'Frame unavailable' }) });
   await assert.rejects(collectRemoteValidation(), /Frame unavailable/);
+});
+
+test('submission validates participating partial frames and skips unrelated widgets', async () => {
+  const sent = stubFrames({
+    frames: [
+      { frameId: 5, isTop: false, fieldCount: 1, applicationEvidence: { eligible: false } },
+      { frameId: 6, isTop: false, fieldCount: 1, applicationEvidence: { eligible: false } },
+      { frameId: 7, isTop: false, fieldCount: 1, applicationEvidence: { eligible: true } },
+    ],
+    respond: frameId => frameId === 6 ? { error: 'Widget unavailable' } : { errors: [{ fieldId: 'value', message: 'Required' }] },
+  });
+  assert.deepEqual(await collectRemoteValidation(['jcf5::value', 'local-field']), [
+    { fieldId: 'jcf5::value', message: 'Required' },
+    { fieldId: 'jcf7::value', message: 'Required' },
+  ]);
+  assert.deepEqual(sent.map(entry => entry.frameId), [5, 7]);
 });
 
 test('locateRemoteField dispatches locate action to owning frame with local id', async () => {

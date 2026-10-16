@@ -41,24 +41,30 @@ test('native Next: Review obeys Auto Continue off even with Auto Submit on', asy
 });
 
 for (const autoSubmit of [false, true]) {
-  test(`generic iframe submission with Auto Submit ${autoSubmit ? 'on' : 'off'}`, async ({ kr }) => {
-    await kr.seed({ profile: PROFILE, settings: { autoContinue: true, autoSubmit } });
-    const page = await kr.context.newPage();
-    await page.goto(kr.fixtureUrl('generic-application-host.html'));
-    await kr.openPanel(page);
-    await expect(page.locator('#kr-main-panel')).toContainText('embedded frame');
-    await page.locator('#kr-autofill-btn').click();
-    const frame = page.frameLocator('iframe');
-    if (!autoSubmit) {
-      await expect(page.locator('#kr-autofill-btn')).toHaveText('Submit Application');
-      await frame.locator('#full_name').fill('Reviewed iframe name');
+  for (const capture of [false, true]) {
+    test(`generic iframe submission with Auto Submit ${autoSubmit ? 'on' : 'off'}${capture ? ' beside email capture' : ''}`, async ({ kr }) => {
+      await kr.seed({ profile: PROFILE, settings: { autoContinue: true, autoSubmit } });
+      const page = await kr.context.newPage();
+      await page.goto(kr.fixtureUrl('generic-application-host.html', undefined, capture ? '?capture' : ''));
+      await kr.openPanel(page);
+      await expect(page.locator('#kr-main-panel')).toContainText('embedded frame');
       await page.locator('#kr-autofill-btn').click();
-    }
-    await expect(frame.locator('body')).toHaveAttribute('data-submissions', '1');
-    if (!autoSubmit) await expect(frame.locator('body')).toHaveAttribute('data-submitted-name', 'Reviewed iframe name');
-    await expect(frame.locator('body')).toHaveAttribute('data-newsletters', '0');
-    await expect(page.locator('#kr-autofill-btn')).toHaveText('Submitted');
-  });
+      const frame = page.frameLocator('iframe');
+      if (!autoSubmit) {
+        await expect(page.locator('#kr-autofill-btn')).toHaveText('Submit Application');
+        await frame.locator('#full_name').fill('Reviewed iframe name');
+        await page.locator('#kr-autofill-btn').click();
+      }
+      await expect(frame.locator('body')).toHaveAttribute('data-submissions', '1');
+      if (!autoSubmit) await expect(frame.locator('body')).toHaveAttribute('data-submitted-name', 'Reviewed iframe name');
+      await expect(frame.locator('body')).toHaveAttribute('data-newsletters', '0');
+      await expect(page.locator('#kr-autofill-btn')).toHaveText('Submitted');
+      if (capture) {
+        await expect(page.locator('body')).toHaveAttribute('data-signups', '0');
+        await expect(page.locator('form input')).toHaveValue('');
+      }
+    });
+  }
 }
 
 for (const query of ['ambiguous', 'disabled', 'forward-ambiguity']) {
@@ -86,29 +92,35 @@ test('generic native Auto Submit keeps its countdown', async ({ kr }) => {
 });
 
 for (const autoSubmit of [false, true]) {
-  test(`mixed parent and iframe fields submit through the parent with Auto Submit ${autoSubmit}`, async ({ kr }) => {
-    await kr.seed({ profile: PROFILE, settings: { autoContinue: true, autoSubmit } });
-    const page = await kr.context.newPage();
-    await page.goto(kr.fixtureUrl('generic-application-host.html', undefined, '?mixed'));
-    await kr.openPanel(page);
-    await expect(page.locator('#kr-main-panel')).toContainText('embedded frame');
-    await page.locator('#kr-autofill-btn').click();
-    const frame = page.frameLocator('iframe');
-    await expect(page.locator('#parent-name')).toHaveValue(PROFILE.fullName);
-    await expect(frame.locator('#email')).toHaveValue(PROFILE.email);
-    await expect(frame.locator('body')).toHaveAttribute('data-submissions', '0');
-    if (!autoSubmit) {
-      await expect(page.locator('#kr-autofill-btn')).toHaveText('Submit Application');
-      await frame.locator('#email').fill('');
+  for (const widget of [false, true]) {
+    test(`mixed parent and iframe fields submit through the parent with Auto Submit ${autoSubmit}${widget ? ' beside unrelated widget' : ''}`, async ({ kr }) => {
+      await kr.seed({ profile: PROFILE, settings: { autoContinue: true, autoSubmit } });
+      const page = await kr.context.newPage();
+      await page.goto(kr.fixtureUrl('generic-application-host.html', undefined, `?mixed${widget ? '&widget' : ''}`));
+      await kr.openPanel(page);
+      await expect(page.locator('#kr-main-panel')).toContainText('embedded frame');
+      if (widget) {
+        await expect(page.locator('#kr-main-panel')).toContainText('2 embedded frames');
+        await expect(page.frameLocator('iframe[title="Support widget"]').locator('#topic')).toHaveAttribute('aria-invalid', 'true');
+      }
       await page.locator('#kr-autofill-btn').click();
-      await expect(page.locator('#kr-main-panel')).toContainText('Email');
-      await expect(page.locator('body')).toHaveAttribute('data-submissions', '0');
-      await frame.locator('#email').fill(PROFILE.email);
-      await page.locator('#kr-autofill-btn').click();
-      await expect(page.locator('#kr-autofill-btn')).toHaveText('Submit Application');
-      await page.locator('#kr-autofill-btn').click();
-    }
-    await expect(page.locator('body')).toHaveAttribute('data-submissions', '1');
-    await expect(page.locator('#kr-autofill-btn')).toHaveText('Submitted');
-  });
+      const frame = page.frameLocator('iframe[title="Job application"]');
+      await expect(page.locator('#parent-name')).toHaveValue(PROFILE.fullName);
+      await expect(frame.locator('#email')).toHaveValue(PROFILE.email);
+      await expect(frame.locator('body')).toHaveAttribute('data-submissions', '0');
+      if (!autoSubmit) {
+        await expect(page.locator('#kr-autofill-btn')).toHaveText('Submit Application');
+        await frame.locator('#email').fill('');
+        await page.locator('#kr-autofill-btn').click();
+        await expect(page.locator('#kr-main-panel')).toContainText('Email');
+        await expect(page.locator('body')).toHaveAttribute('data-submissions', '0');
+        await frame.locator('#email').fill(PROFILE.email);
+        await page.locator('#kr-autofill-btn').click();
+        await expect(page.locator('#kr-autofill-btn')).toHaveText('Submit Application');
+        await page.locator('#kr-autofill-btn').click();
+      }
+      await expect(page.locator('body')).toHaveAttribute('data-submissions', '1');
+      await expect(page.locator('#kr-autofill-btn')).toHaveText('Submitted');
+    });
+  }
 }

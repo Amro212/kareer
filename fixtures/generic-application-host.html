@@ -2,7 +2,13 @@
 <html lang="en"><meta charset="utf-8"><title>Job application · Embedded form</title>
 <body><h1>Job application</h1><iframe title="Job application" width="900" height="800"></iframe>
 <script>
-if (new URLSearchParams(location.search).has('mixed')) {
+const params = new URLSearchParams(location.search);
+if (params.has('capture')) {
+  document.body.dataset.signups = '0';
+  document.querySelector('iframe').insertAdjacentHTML('beforebegin', '<form><input type="email" placeholder="Email address" required><button>Sign Up</button></form>');
+  document.querySelector('form').onsubmit = event => { event.preventDefault(); document.body.dataset.signups = String(Number(document.body.dataset.signups) + 1); };
+}
+if (params.has('mixed')) {
   document.body.dataset.submissions = '0';
   document.querySelector('iframe').insertAdjacentHTML('beforebegin', '<form id="application"><label for="parent-name">Full name</label><input id="parent-name" required><button>Submit application</button></form>');
   document.querySelector('form').onsubmit = event => {
@@ -13,5 +19,8 @@ if (new URLSearchParams(location.search).has('mixed')) {
   };
 }
 document.querySelector('iframe').src = 'http://embed.kareer.test/generic-application-fixture.html' + location.search;
+if (params.has('widget')) {
+  document.body.insertAdjacentHTML('beforeend', '<iframe title="Support widget" src="http://embed.kareer.test/unrelated-widget-fixture.html"></iframe>');
+}
 </script>
 </body></html>

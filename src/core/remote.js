@@ -145,9 +145,10 @@ export async function captureRemoteFixtures(label = '') {
   return captures;
 }
 
-/** Aggregated validation errors from embedded frames, for workflow repair. */
-export async function collectRemoteValidation() {
-  const frames = await listRemoteFrames();
+/** Validate application frames and partial frames that participated in this fill. */
+export async function collectRemoteValidation(fieldIds = []) {
+  const participating = new Set([...fieldIds].map(id => parseRemoteFieldId(id)?.frameId));
+  const frames = (await listRemoteFrames()).filter(frame => frame.applicationEvidence?.eligible || participating.has(frame.frameId));
   const errors = [];
   for (const frame of frames) {
     const result = await platform.frames.command(frame.frameId, { action: 'validation' });

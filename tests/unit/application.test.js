@@ -43,12 +43,12 @@ test('combined autofill validates current parent and frame fields before parent 
   let errors = [], submissions = 0;
   const base = createGmHost();
   setPlatform({ ...base, capabilities: { ...base.capabilities, crossFrame: true },
-    framesList: async () => [{ frameId: 7, isTop: false, fieldCount: 1 }],
+    framesList: async () => [{ frameId: 7, isTop: false, fieldCount: 1, applicationEvidence: { eligible: false } }],
     frameCommand: async () => ({ errors }),
   });
   document.querySelector('form').onsubmit = event => { event.preventDefault(); submissions++; render('<h1>Application submitted</h1>'); };
   const engine = createApplicationEngine({ settleMs: 0, transitionMs: 0 });
-  const entries = new Map();
+  const entries = new Map([['jcf7::email', { status: 'verified', value: 'test@example.com' }]]);
   try {
     engine.ensureSession(job());
     await engine.reviewFilledPage(entries);
@@ -78,7 +78,7 @@ test('Pause cancels pending combined submission validation', async () => {
   let release;
   const base = createGmHost();
   setPlatform({ ...base, capabilities: { ...base.capabilities, crossFrame: true },
-    framesList: async () => [{ frameId: 7, isTop: false, fieldCount: 1 }],
+    framesList: async () => [{ frameId: 7, isTop: false, fieldCount: 1, applicationEvidence: { eligible: true } }],
     frameCommand: () => new Promise(resolve => { release = resolve; }),
   });
   const engine = createApplicationEngine();
@@ -94,6 +94,38 @@ test('Pause cancels pending combined submission validation', async () => {
     assert.equal(engine.session.submits || 0, 0);
   } finally { engine.destroy(); }
 });
+
+for (const autoSubmit of [false, true]) {
+  for (const widgetUnavailable of [false, true]) {
+    test(`submission ignores an unrelated ${widgetUnavailable ? 'unreachable' : 'invalid'} widget with Auto Submit ${autoSubmit}`, async () => {
+      render('<form id="application">' + input() + '<button>Submit application</button></form>');
+      document.querySelector('#name').value = 'Applicant';
+      saveSettings({ autoSubmit });
+      let submissions = 0, widgetCommands = 0;
+      const base = createGmHost();
+      setPlatform({ ...base, capabilities: { ...base.capabilities, crossFrame: true },
+        framesList: async () => [{ frameId: 8, isTop: false, fieldCount: 1, applicationEvidence: { eligible: false } }],
+        frameCommand: async () => {
+          widgetCommands++;
+          return widgetUnavailable ? { error: 'Widget unavailable' } : { errors: [{ fieldId: 'chat', message: 'Required value missing.' }] };
+        },
+      });
+      document.querySelector('form').onsubmit = event => { event.preventDefault(); submissions++; render('<h1>Application submitted</h1>'); };
+      const engine = createApplicationEngine({ submitCountdownMs: 0 });
+      try {
+        engine.ensureSession(job());
+        await engine.reviewFilledPage(new Map());
+        if (!autoSubmit) {
+          assert.equal(engine.session.status, 'review');
+          await engine.submit();
+        }
+        assert.equal(engine.session.status, 'confirmation');
+        assert.equal(submissions, 1);
+        assert.equal(widgetCommands, 0);
+      } finally { engine.destroy(); }
+    });
+  }
+}
 
 test('an unresolved required canonical answer receives bounded contextual repair',async()=>{
   dom.reconfigure({url:'https://jobs.ashbyhq.com/acme/1/application'});

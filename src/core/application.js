@@ -268,7 +268,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
   }
 
   async function submissionProblem() {
-    const remoteErrors = await collectRemoteValidation();
+    const remoteErrors = await collectRemoteValidation(results.keys());
     const fields = scanFormFields();
     const page = classifyPage();
     if (!['application', 'review'].includes(page.type)) return page.reason;
