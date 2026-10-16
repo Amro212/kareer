@@ -46,6 +46,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            site/package-lock.json
 
       - name: Determine run mode & versions
         shell: bash
@@ -129,11 +132,23 @@ jobs:
         if: steps.sync_amo.outputs.deploy_needed == 'true'
         uses: actions/configure-pages@v5
 
+      - name: Install website dependencies
+        if: steps.sync_amo.outputs.deploy_needed == 'true'
+        run: npm ci --prefix site
+
+      - name: Check website public asset staging
+        if: steps.sync_amo.outputs.deploy_needed == 'true'
+        run: node --test tests/unit/site-build.test.js
+
+      - name: Build website and preserve Firefox distribution files
+        if: steps.sync_amo.outputs.deploy_needed == 'true'
+        run: npm run build --prefix site
+
       - name: Upload Pages artifact
         if: steps.sync_amo.outputs.deploy_needed == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'site'
+          path: 'site-dist'
 
       - name: Deploy to GitHub Pages
         if: steps.sync_amo.outputs.deploy_needed == 'true'
