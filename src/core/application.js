@@ -232,7 +232,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     status('paused', `The page's Continue button stayed disabled after waiting ${navigationTimeoutMs / 1000}s. Auto Continue is still on; inspect the page before resuming.`);
   }
   async function applyResumeUploads(fields, token, signature) {
-    for (const entry of await applyGeneratedMaterials(fields, runMaterials, { isCurrent: () => guard(token) })) results.set(entry.fieldId, entry);
+    for (const entry of await applyGeneratedMaterials(fields, runMaterials, { overwriteExisting: getSettings().overwriteExisting, isCurrent: () => guard(token) })) results.set(entry.fieldId, entry);
     const files = fields.filter(f => f.type === 'file' && isResumeField(f, fields) && !runMaterials.resume);
     if (!platform.capabilities.fileUpload) return true;
     const meta = await platform.documents.meta();
@@ -364,10 +364,11 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       if (!field) continue; // A conditional question can disappear on this step.
       if (field.type === 'file') continue;
       field.options = original.options;
-      field.element.scrollIntoView?.({ block: 'center', behavior: 'instant' });
+      const unchangedChoices = field.widget === 'ats-choice' && (await verifyField(field, entry.value)).verified;
+      if (!unchangedChoices) field.element.scrollIntoView?.({ block: 'center', behavior: 'instant' });
       logger.info(`Field action [${entry.source === 'ai' ? 'AI' : entry.source === 'saved' ? 'Saved' : 'Profile'}]: id=${field.id}, label="${field.label}"`);
       const started = Date.now();
-      const filled = await fillField(field, entry.value);
+      const filled = unchangedChoices || await fillField(field, entry.value);
       const filledAt = Date.now();
       if (!await settleFields(signature, token, 'field action', field.id)) return false;
       const live = scanFormFields().find(f => f.id === field.id && f.label === field.label);

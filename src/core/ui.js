@@ -2010,7 +2010,7 @@ async function executeAutofillFlow() {
     const settings = getSettings();
     const overwrite = Boolean(settings.overwriteExisting);
     const materials = await snapshotMaterials(applicationEngine?.session);
-    const generatedResults = await applyGeneratedMaterials(detectedFieldsCache, materials, { isCurrent: () => token === autofillGeneration });
+    const generatedResults = await applyGeneratedMaterials(detectedFieldsCache, materials, { overwriteExisting: overwrite, isCurrent: () => token === autofillGeneration });
     for (const entry of generatedResults) fieldResultsCache.set(entry.fieldId, entry);
     refreshDetectedFields();
 
@@ -2162,10 +2162,13 @@ async function executeAutofillFlow() {
 
         logger.info(`Field action [${source === 'ai' ? 'AI' : source === 'saved' ? 'Saved' : 'Profile'}]: id=${field.id}, label="${field.label}"`);
 
-        scrollToField(field.element);
-        highlightActiveField(field.element);
+        const unchangedChoices = field.widget === 'ats-choice' && (await verifyField(field, answer.value)).verified;
+        if (!unchangedChoices) {
+          scrollToField(field.element);
+          highlightActiveField(field.element);
+        }
 
-        const didFill = await fillField(field, answer.value);
+        const didFill = unchangedChoices || await fillField(field, answer.value);
         if (token !== autofillGeneration) break;
 
         // Allow micro-delay for React/framework state settling (interruptible)

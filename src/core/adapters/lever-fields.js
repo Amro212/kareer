@@ -110,12 +110,12 @@ function extractQuestionText(element, container) {
   return '';
 }
 
-export function leverFieldMetadata(element) {
+export function leverFieldMetadata(element, questionContainer) {
   if (!element) return null;
   const isDom = typeof element.getAttribute === 'function';
-  const container = typeof element.closest === 'function'
+  const container = questionContainer || (typeof element.closest === 'function'
     ? element.closest('.application-question, .custom-question, label')
-    : null;
+    : null);
   const title = container?.querySelector?.('.application-label, .text') ||
     (typeof element.closest === 'function' ? element.closest('label')?.querySelector?.('.application-label') : null);
   const rawLabel = title
@@ -210,7 +210,7 @@ export function leverAnswer(field, profile, options = {}) {
     return { ...answer, value: '' };
   }
 
-  const answers = matched.map(opt => answerSource === 'saved' ? (opt.label || opt.value) : (field.type === 'combobox' ? opt.label : opt.value));
+  const answers = matched.map(opt => field.type === 'combobox' ? opt.label : opt.value);
   return { ...answer, value: Array.isArray(resolvedValue) ? answers : answers[0] };
 }
 

@@ -399,12 +399,15 @@ async function generatePageAnswers(fields, { settings, profile, allowSearch, job
     // Keep that unresolved result rather than substituting a simpler fallback.
     const deterministic = adapterAnswer || (resolver && field.ats?.canonicalKey ? null : eligibility || fixed);
     const saved = profile.savedAnswers?.[field.label];
-    const resolved = deterministic && deterministic.value !== '' && deterministic.value != null && (!Array.isArray(deterministic.value) || deterministic.value.length > 0);
+    const savedOptions = field.ats?.multiple && Array.isArray(saved) ? saved.map(value => findExactOption(field.options || [], value, field)) : null;
+    const resolved = deterministic && deterministic.value !== '' && deterministic.value != null && (!Array.isArray(deterministic.value) || deterministic.value.length > 0 || field.ats?.multiple && !field.required);
     if (resolved || deterministic?.searchQuery) {
       if (!deterministic.source) deterministic.source = 'profile';
       if (!deterministic.provenance) deterministic.provenance = deterministic.value ? 'saved' : 'unresolved';
       answers.push(deterministic);
-    } else if (saved !== undefined && (!['combobox', 'select', 'radio'].includes(field.type) || findExactOption(field.options || [], saved, field))) {
+    } else if (savedOptions && (savedOptions.length || !field.required) && savedOptions.every(Boolean)) {
+      answers.push({ fieldId: field.fieldId, value: savedOptions.map(option => field.type === 'combobox' ? option.label : option.value), inferred: false, provenance: 'saved', source: 'saved' });
+    } else if (saved !== undefined && !Array.isArray(saved) && (!['combobox', 'select', 'radio'].includes(field.type) || findExactOption(field.options || [], saved, field))) {
       answers.push({ fieldId: field.fieldId, value: saved, inferred: false, provenance: 'saved', source: 'saved' });
     } else {
       unresolved.push(field);
@@ -431,7 +434,7 @@ async function generatePageAnswers(fields, { settings, profile, allowSearch, job
     if (!field || seen.has(answer.fieldId)) continue;
     seen.add(answer.fieldId);
     if (answer.value == null || (typeof answer.value === 'object' && !Array.isArray(answer.value))) continue;
-    if (Array.isArray(answer.value) && (!field.ats?.multiple || !answer.value.length || answer.value.some(value => typeof value !== 'string'))) continue;
+    if (Array.isArray(answer.value) && (!field.ats?.multiple || !answer.value.length && (field.required || field.type !== 'radio') || answer.value.some(value => typeof value !== 'string'))) continue;
     if (!Array.isArray(answer.value) && !['string', 'boolean', 'number'].includes(typeof answer.value)) continue;
     if (['combobox', 'select', 'radio'].includes(field.type) && answer.value !== '') {
       const values = Array.isArray(answer.value) ? answer.value : [answer.value];

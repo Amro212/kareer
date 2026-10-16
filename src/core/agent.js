@@ -93,10 +93,13 @@ export function createFieldAgent() {
 
       try {
         field.element = resolveLive(field);
-        scrollToField(field.element);
-        highlightActiveField(field.element);
+        const unchangedChoices = field.widget === 'ats-choice' && (await verifyField(field, answer.value)).verified;
+        if (!unchangedChoices) {
+          scrollToField(field.element);
+          highlightActiveField(field.element);
+        }
 
-        const didFill = await fillField(field, answer.value);
+        const didFill = unchangedChoices || await fillField(field, answer.value);
         await new Promise((resolve) => setTimeout(resolve, field.type === 'combobox' ? 250 : 80));
 
         field.element = resolveLive(field);
@@ -142,7 +145,7 @@ export function createFieldAgent() {
     const allFileFields = scanFormFields(document).filter((field) => field.type === 'file');
     deduplicateFields(allFileFields);
     const fields = allFileFields.filter((field) => isResumeField(field, allFileFields) && !materials.resume);
-    const results = await applyGeneratedMaterials(scanFormFields(document), materials, { isCurrent: () => token === generation });
+    const results = await applyGeneratedMaterials(scanFormFields(document), materials, { overwriteExisting, isCurrent: () => token === generation });
     for (const field of fields) {
       field.element = field.element?.isConnected ? field.element : (scanFormFields(document).find(f => f.id === field.id)?.element || field.element);
       if (!overwriteExisting && !unfilled(field)) continue;

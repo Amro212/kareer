@@ -6,6 +6,7 @@ import { isLeverLocation, isPlacesLocation, recordLocationActivation } from './c
 import { optionKey, findExactOption, optionData, resolveComboboxParts, readComboboxSelection, discoverComboboxOptions, openCombobox, closeCombobox, setComboboxSearch, captureComboboxSearch, waitForComboboxOptions, waitForComboboxSelection, clickFieldControl } from './combobox.js';
 import { platform } from '../platform.js';
 import { detectAdapter } from '../adapters/index.js';
+import { fillCheckboxQuestion } from '../adapters/application-fields.js';
 
 function setNativeInputValue(element, value) {
   try {
@@ -392,7 +393,7 @@ export async function fillFileInput(element, selectedDocument) {
 export async function fillField(field, targetValue) {
   if (!field || !field.element) return false;
   if (field.widget === 'workday-choice') return detectAdapter().fillChoice(field, targetValue, { checkbox: fillCheckbox }) === true;
-  if (field.widget === 'ats-choice') return detectAdapter().fillChoice(field, targetValue, {checkbox:fillCheckbox}) === true;
+  if (field.widget === 'ats-choice') return fillCheckboxQuestion(field, targetValue, {checkbox:fillCheckbox});
   if (['select', 'radio'].includes(field.type)) {
     const option = findExactOption(field.options || [], targetValue, field);
     if (!option) return false;
