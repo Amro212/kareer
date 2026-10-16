@@ -12,9 +12,12 @@ import { pageSignature } from '../../src/core/navigation.js';
 import { createApplicationEngine } from '../../src/core/application.js';
 import { scanFormFields } from '../../src/core/fields/scanner.js';
 import { saveProfile, saveSettings, gmGet } from '../../src/core/storage.js';
+import { setPlatform } from '../../src/core/platform.js';
+import { createGmHost } from '../../src/core/hosts/gm.js';
 
 let dom;
 beforeEach(() => {
+  setPlatform(createGmHost());
   dom = new JSDOM('<body><main></main></body>', { url: 'https://example.com/jobs/42/apply' });
   for (const key of ['window', 'document', 'location', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement', 'Element', 'Event', 'KeyboardEvent', 'MouseEvent', 'MutationObserver']) globalThis[key] = dom.window[key];
   globalThis.CSS = { escape: value => value };
@@ -34,6 +37,63 @@ const input = (id = 'name', label = 'Full name') => `<label for="${id}">${label}
 const job = () => ({ title: 'Engineer', company: 'Example', listingUrl: 'https://example.com/jobs/42', applicationUrl: window.location.href });
 
 const workflowAnswers = async fields => ({ answers: fields.map(f => ({ fieldId: f.fieldId, value: 'Applicant' })) });
+
+test('combined autofill validates current parent and frame fields before parent submission', async () => {
+  render('<form id="application">' + input() + '<button>Submit application</button></form>');
+  let errors = [], submissions = 0;
+  const base = createGmHost();
+  setPlatform({ ...base, capabilities: { ...base.capabilities, crossFrame: true },
+    framesList: async () => [{ frameId: 7, isTop: false, fieldCount: 1 }],
+    frameCommand: async () => ({ errors }),
+  });
+  document.querySelector('form').onsubmit = event => { event.preventDefault(); submissions++; render('<h1>Application submitted</h1>'); };
+  const engine = createApplicationEngine({ settleMs: 0, transitionMs: 0 });
+  const entries = new Map();
+  try {
+    engine.ensureSession(job());
+    await engine.reviewFilledPage(entries);
+    assert.equal(engine.session.status, 'paused');
+    document.querySelector('#name').value = 'Reviewed name';
+    entries.set('name', { status: 'verified', value: 'Reviewed name' });
+    engine.session.frameOwner = { frameId: 7 };
+    await engine.reviewFilledPage(entries);
+    assert.equal(engine.session.frameOwner, null);
+    assert.equal(engine.session.status, 'review');
+    errors = [{ fieldId: 'email', label: 'Email', message: 'Required value missing.' }];
+    await engine.submit();
+    assert.equal(submissions, 0);
+    assert.equal(engine.session.status, 'paused');
+    assert.match(engine.session.reason, /Email/);
+    errors = [];
+    await engine.reviewFilledPage(entries);
+    await engine.submit();
+    assert.equal(submissions, 1);
+    assert.equal(engine.session.status, 'confirmation');
+  } finally { engine.destroy(); }
+});
+
+test('Pause cancels pending combined submission validation', async () => {
+  render('<form id="application">' + input() + '<button>Submit application</button></form>');
+  document.querySelector('#name').value = 'Applicant';
+  let release;
+  const base = createGmHost();
+  setPlatform({ ...base, capabilities: { ...base.capabilities, crossFrame: true },
+    framesList: async () => [{ frameId: 7, isTop: false, fieldCount: 1 }],
+    frameCommand: () => new Promise(resolve => { release = resolve; }),
+  });
+  const engine = createApplicationEngine();
+  try {
+    engine.ensureSession(job());
+    const pending = engine.reviewFilledPage(new Map());
+    while (!release) await new Promise(resolve => setTimeout(resolve, 1));
+    engine.pause();
+    release({ errors: [] });
+    await pending;
+    assert.equal(engine.session.status, 'paused');
+    assert.equal(engine.session.active, false);
+    assert.equal(engine.session.submits || 0, 0);
+  } finally { engine.destroy(); }
+});
 
 test('an unresolved required canonical answer receives bounded contextual repair',async()=>{
   dom.reconfigure({url:'https://jobs.ashbyhq.com/acme/1/application'});

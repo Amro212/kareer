@@ -160,7 +160,7 @@ export function createFieldAgent() {
   }
 
   async function validation() {
-    const fields = cache.size ? [...cache.values()] : scanFormFields(document);
+    const fields = scanFormFields(document);
     return {
       errors: inspectValidation(fields).map((error) => ({ ...error, frameUrl: window.location.href })),
     };

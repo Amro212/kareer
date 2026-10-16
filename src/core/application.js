@@ -16,7 +16,7 @@ import { platform } from './platform.js';
 import { snapshotMaterials, applyGeneratedMaterials, materialKind } from './materials.js';
 import { detectAdapter } from './adapters/index.js';
 import { logger } from './debug.js';
-import { applyRemoteResumeUploads, embeddedApplicationStates, remoteFieldId } from './remote.js';
+import { applyRemoteResumeUploads, embeddedApplicationStates, remoteFieldId, collectRemoteValidation } from './remote.js';
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const scanPageFields = () => scanAllFields().filter(f => (isVisible(f.element) || f.type === 'file' && isVisible(f.element.parentElement)) && !f.element.closest('[role=listbox],.select__menu')).map(f => ({ ...f, label: workflowLabel(f) }));
@@ -267,7 +267,9 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     return true;
   }
 
-  function submissionProblem(fields) {
+  async function submissionProblem() {
+    const remoteErrors = await collectRemoteValidation();
+    const fields = scanFormFields();
     const page = classifyPage();
     if (!['application', 'review'].includes(page.type)) return page.reason;
     const next = inspectContinue();
@@ -276,7 +278,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     const submit = inspectSubmit();
     if (submit.reason) return submit.reason;
     if (continueControl && continueControl !== submit.control && !isDisabled(continueControl)) return 'Continue the application before submitting.';
-    const errors = validation(fields);
+    const errors = [...validation(fields), ...remoteErrors];
     if (errors.length) return errors.map(error => {
       const label = error.label || fields.find(field => field.id === error.fieldId)?.label;
       return `${label ? `${label}: ` : ''}${error.message}`;
@@ -288,7 +290,8 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
 
   async function attemptSubmit(token, step, manual = false) {
     if (!manual && !getSettings().autoSubmit) return false;
-    const problem = submissionProblem(scanFormFields());
+    const problem = await submissionProblem();
+    if (token !== generation || !session?.active) return true;
     if (problem) {
       if (!manual) return false;
       status('paused', problem);
@@ -305,8 +308,8 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       await delay(1000);
     }
     if (token !== generation || !session?.active) return true;
-    const submit = inspectSubmit();
-    const changed = submissionProblem(scanFormFields());
+    const changed = await submissionProblem();
+    if (token !== generation || !session?.active) return true;
     if (changed || !manual && !getSettings().autoSubmit) {
       status('paused', changed || 'Auto Submit was turned off. Submit manually.');
       return true;
@@ -314,6 +317,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     if (step) step.submits = (step.submits || 0) + 1;
     session.submits = (session.submits || 0) + 1;
     status('submitting', 'Submitting application.');
+    const submit = inspectSubmit();
     logger.info(`${manual ? 'Manual' : 'Auto'} Submit: ${submit.control.textContent?.trim() || submit.control.value || 'Submit'}`);
     submit.control.click();
     const deadline = Date.now() + Math.max(navigationTimeoutMs, 2500);
@@ -928,6 +932,23 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         else await attemptSubmit(token, session.steps[session.currentStep], true);
       } catch (error) {
         if (token === generation) status('paused', `Submission failed: ${error.message}`);
+      } finally { busy = false; emit(); }
+    },
+    async reviewFilledPage(entries) {
+      if (busy || disposed || !session) return;
+      const token = ++generation;
+      busy = true;
+      session.active = true;
+      session.frameOwner = null;
+      results.clear();
+      for (const [id, result] of entries) results.set(id, result);
+      try {
+        const problem = await submissionProblem();
+        if (token !== generation || !session.active) return;
+        if (problem) status('paused', problem);
+        else if (!await attemptSubmit(token, session.steps[session.currentStep])) status('review', 'Page filled. Review your answers, then submit the application.');
+      } catch (error) {
+        if (token === generation) status('paused', `Submission needs review: ${error.message}`);
       } finally { busy = false; emit(); }
     },
     async continueStep() {

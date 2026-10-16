@@ -2076,6 +2076,7 @@ async function executeAutofillFlow() {
         : 'All fields are already filled. Enable "Overwrite Existing Values" in Settings to overwrite.';
       logger.info(autofillProgress.statusText);
       isAutofilling = false;
+      if (!inspectContinue().count && inspectSubmit().count) await applicationEngine?.reviewFilledPage(fieldResultsCache);
       updatePanelDOM();
       return;
     }
@@ -2255,6 +2256,7 @@ async function executeAutofillFlow() {
     autofillProgress.total = report.total;
     autofillProgress.statusText = 'Autofill complete. Review field statuses below.';
     logger.info(`Autofill finished: ${report.filled} filled, ${report.failed.length} failed and ${report.untouched.length} untouched out of ${report.total} current fields.`);
+    if (!inspectContinue().count && inspectSubmit().count) await applicationEngine?.reviewFilledPage(fieldResultsCache);
   } catch (err) {
     if (token !== autofillGeneration) return;
     const msg = err?.message || String(err);

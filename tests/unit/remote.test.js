@@ -79,6 +79,16 @@ test('generic workflow discovery excludes unrelated forms and retains confirmati
   assert.deepEqual((await embeddedApplicationStates()).map(frame => frame.frameId), [1, 3]);
 });
 
+test('a partial iframe does not own an application with parent form fields', async () => {
+  document.body.innerHTML = '<form id="application"><label>Full name<input required></label><button>Submit application</button></form>';
+  stubFrames({ frames: [{ frameId: 1, isTop: false, fieldCount: 1, applicationEvidence: { eligible: true } }],
+    respond: () => ({ adapter: 'generic', pageType: 'application', canSubmit: true }) });
+  assert.deepEqual(await embeddedApplicationStates(), []);
+  // Host newsletter controls must not take ownership from a complete iframe.
+  document.body.innerHTML = '<aside><form><label>Newsletter email<input type="email"></label><button>Join</button></form></aside>';
+  assert.equal((await embeddedApplicationStates()).length, 1);
+});
+
 test('collected fields are namespaced by frame so ids cannot collide', async () => {
   stubFrames({
     frames: [
@@ -192,7 +202,12 @@ test('validation errors from embedded frames are aggregated for repair', async (
   });
 
   const errors = await collectRemoteValidation();
-  assert.deepEqual(errors, [{ fieldId: 'field-1', message: 'Required' }]);
+  assert.deepEqual(errors, [{ fieldId: 'jcf5::field-1', message: 'Required' }]);
+});
+
+test('an unreachable application frame cannot silently pass submission validation', async () => {
+  stubFrames({ frames: [{ frameId: 5, isTop: false, fieldCount: 1 }], respond: () => ({ error: 'Frame unavailable' }) });
+  await assert.rejects(collectRemoteValidation(), /Frame unavailable/);
 });
 
 test('locateRemoteField dispatches locate action to owning frame with local id', async () => {

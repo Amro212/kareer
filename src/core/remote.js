@@ -1,5 +1,7 @@
 import { platform } from './platform.js';
 import { logger } from './debug.js';
+import { accessibleRoots } from './domRoots.js';
+import { isApplicationForm } from './pageClassifier.js';
 
 /**
  * Top-frame side of cross-frame filling.
@@ -14,6 +16,8 @@ const PREFIX = 'jcf';
 // Workflow discovery includes zero-field frames so success pages survive scans.
 export async function embeddedApplicationStates() {
   if (!platform.capabilities.crossFrame) return [];
+  // A partial iframe cannot own an application with fields in its parent form.
+  if (accessibleRoots(document).some(root => [...root.querySelectorAll('form,[role=form]')].some(isApplicationForm))) return [];
   const frames = (await platform.frames.list()).filter(frame => !frame.isTop);
   const states = await Promise.all(frames.map(async frame => {
     try {
@@ -147,7 +151,8 @@ export async function collectRemoteValidation() {
   const errors = [];
   for (const frame of frames) {
     const result = await platform.frames.command(frame.frameId, { action: 'validation' });
-    if (ok(result) && result.errors?.length) errors.push(...result.errors);
+    if (!ok(result) || !Array.isArray(result.errors)) throw new Error(result?.error || 'Embedded validation is unavailable. Review the application before submitting.');
+    errors.push(...result.errors.map(error => ({ ...error, fieldId: error.fieldId ? remoteFieldId(frame.frameId, error.fieldId) : null })));
   }
   return errors;
 }

@@ -51,6 +51,18 @@ export function actionControls(doc) {
     .filter(element => isVisible(element) && !element.matches('[role=combobox],[aria-haspopup=listbox]') && !element.closest('[role=listbox],.select__menu,[role=menu]'));
 }
 
+export function isApplicationForm(form) {
+  if (form.closest('header,nav,footer,[role=navigation],[role=search]')) return false;
+  const controls = [...form.querySelectorAll('input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]),textarea,select,[contenteditable=true],[role=combobox]')]
+    .filter(element => isVisible(element) || element.type === 'file' && isVisible(element.parentElement));
+  if (!controls.length) return false;
+  const purpose = [form.id, form.getAttribute('name'), form.getAttribute('aria-label'), form.getAttribute('role'),
+    ...controls.flatMap(element => [element.id, element.name, element.getAttribute('aria-label'), ...[...(element.labels || [])].map(label => label.textContent)])].join(' ').replace(/[_-]+/g, ' ');
+  if (/\b(?:newsletter|subscribe|subscription|search|login|log in|sign in|sign up)\b/i.test(purpose)) return false;
+  return /\b(?:application|applicant|candidate|resume|cover\s*letter|cv|(?:full|first|last|given|family)\s*name)\b/i.test(purpose) ||
+    [...form.querySelectorAll('button,input[type=submit],[role=button]')].some(element => /\b(?:submit|send|finish|complete) (?:my |your |the )?application\b/i.test(controlLabel(element)));
+}
+
 export function isSubmitControl(element) {
   const label = controlLabel(element);
   if (element.closest('[role=tablist]')) return false;

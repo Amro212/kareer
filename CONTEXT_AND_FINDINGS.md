@@ -1,3 +1,14 @@
+## Turn: 2026-10-16 - Review fix 1: applications split between parent and iframe
+
+- Finding: an eligible generic iframe took ownership even when application fields remained in the parent. Its confirmation could mark the whole application Submitted while parent fields stayed empty.
+- `src/core/pageClassifier.js`, `src/core/remote.js`: recognize a parent application form separately from host newsletter/search controls. Mixed forms retain the existing combined local/frame autofill path rather than granting a partial iframe workflow ownership.
+- `src/core/ui.js`, `src/core/application.js`: hand completed combined fills to the shared review/submission mechanism. Clear stale iframe ownership; validate current parent and frame fields before review and immediately before a manual or automatic parent submission. Preserve Auto Submit's countdown and Pause cancellation. Already-filled mixed forms can retry validation without overwriting user corrections.
+- `src/core/agent.js`, `src/core/remote.js`: frame validation rescans live fields; errors retain frame-qualified IDs, and an unavailable frame cannot silently pass submission validation.
+- Regression coverage: `fixtures/generic-application-host.html`, `tests/e2e/generic-submit.spec.js`, `tests/unit/remote.test.js` and `tests/unit/application.test.js` cover combined filling, parent-only submission, missing iframe input, confirmation, host newsletter exclusion, unavailable-frame validation and Pause during pending validation.
+- Verification: 128 existing application units, 14 remote units and both new combined-handoff units passed. All four targeted browser cases passed (mixed and frame-only applications, Auto Submit on/off). All-target build succeeded at v0.5.136; build metadata refreshed. No live employer application was submitted.
+
+---
+
 ## Turn: 2026-10-14 - Site-independent Submit workflow for generic applications
 
 - Request: generic applications outside Ashby, Greenhouse, Lever, and Workday must have their own reliable submission mechanism.
