@@ -1,3 +1,14 @@
+## Turn: 2026-10-16 - Repair the shared master/PR Ashby CI regression
+
+- User reported failed PR #11 CI run `38860416443` (job `116841185410`) and master run `38852912702` (job `116817891202`). Both fail the same existing `ats-hardening.test.js` case: an extra standalone `authorization_2` checkbox appears beside the Ashby Yes/No question. PR CI passed 639/640 units; master passed 598/599 before aborting its build/deployment. This is one inherited defect, not separate merge failures.
+- Root cause: master's checkbox scanner now claims only each group's declared option elements, preserving adjacent independent inputs. Ashby's specialized Yes/No group declares the visible buttons but left its hidden backing checkbox unclaimed. The generic scanner then exposed it as a second work-authorization field, risking a conflicting answer after selecting No.
+- `src/core/adapters/ashby.js`: extend the existing adapter exclusion selector to ignore inputs inside the known Yes/No widget. Both shared checkbox grouping and ordinary field discovery already honor this hook. Visible Yes/No buttons, ordinary checkboxes, and generic/other-ATS grouping keep their existing behavior. No changes to submission or Auto Submit settings.
+- `tests/unit/ats-hardening.test.js`: strengthen the existing captured Ashby fixture regressions to assert the backing input is absent before filling and that one work-authorization question retains its committed No answer after rescanning. Existing ordinary checkbox identity and required-validation assertions remain intact. The exact CI failure reproduced locally before the fix.
+- Verification: all 108 targeted units in `ats-hardening.test.js`, `checkbox-groups.test.js`, and `greenhouse-ashby.test.js` pass. The packaged Chrome Ashby location/No-button regression passes (one case, 58.1 seconds), with mocked API calls and zero application submissions. All-target build succeeds at v0.5.141, synchronizing `package.json`, both Firefox update manifests, `site/index.html`, and `site/version.json`. Whitespace checks pass.
+- Delivery: publish this fix on the existing PR #11 branch, then check its new CI run. Master receives the fix through that PR; no direct master push or merge is authorized or performed. Full local suites and live employer submissions were not run.
+
+---
+
 ## Turn: 2026-10-16 - Integrate master and prepare the submission-fix PR
 
 - User authorized applying the rehearsed resolutions, pushing the active branch to Amro212/kareer, and opening a PR targeting master.

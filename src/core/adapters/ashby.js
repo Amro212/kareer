@@ -27,7 +27,7 @@ export const ashbyAdapter = {
     placesLocation: false,
   },
   applicationRoot: doc => doc.querySelector(FORM),
-  excludeField: element => Boolean(element.closest('[role=listbox],.ashby-select-menu,[class*="jobFilter"]')),
+  excludeField: element => Boolean(element.closest('[role=listbox],.ashby-select-menu,[class*="jobFilter"],.ashby-application-form-input-yesno input')),
   profileValue: applicationProfileValue,
   resolveAnswer: applicationAnswer,
   searchQuery: (field, value) => DISCLOSURES.has(field.ats?.canonicalKey) || ['work_auth','sponsorship'].includes(field.ats?.canonicalKey) ? '' : value,
