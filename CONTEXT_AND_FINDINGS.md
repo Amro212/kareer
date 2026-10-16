@@ -1,3 +1,12 @@
+## Turn: 2026-10-16 - Review fix 2: selected cover letters in embedded overwrite scans
+
+- Finding: a frame received the selected cover letter, then its overwrite-enabled scan returned that same textarea for AI replacement. Local filling already excluded selected material fields.
+- `src/core/agent.js`: remember the current material selection when applying it, and exclude those material fields from primary, retry and late scans. Explicitly clearing the selection restores normal scan behavior; current required-field validation still includes the letter.
+- `tests/unit/greenhouse-ashby.test.js`: regression cases cover Greenhouse, Ashby and generic frame agents, overwrite on/off, live required validation and clearing a selection. `tests/e2e/materials.spec.js`: strengthen the existing reload/cross-origin material flow with overwrite enabled; assert the selected text survives, the panel reaches Submit Application, and only the two document-generation AI requests occur.
+- Verification: all 64 targeted adapter units and the strengthened real-extension browser case passed. All-target build succeeded at v0.5.137; build metadata refreshed. No dependencies added or live AI/employer requests made.
+
+---
+
 ## Turn: 2026-10-16 - Review fix 1: applications split between parent and iframe
 
 - Finding: an eligible generic iframe took ownership even when application fields remained in the parent. Its confirmation could mark the whole application Submitted while parent fields stayed empty.

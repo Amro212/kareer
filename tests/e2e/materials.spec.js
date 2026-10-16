@@ -515,8 +515,8 @@ test('cover letters generate independently, use DOCX-only fields, and fill text 
   expect((await mammoth.extractRawText({ buffer: Buffer.from(bytes) })).value).toContain('I build APIs');
 });
 
-test('materials persist through page navigation and are sent to cross-origin embedded forms', async ({ kr }) => {
-  await kr.seed({ profile: PROFILE, settings: { autoContinue: false, autoSubmit: false } });
+test('materials persist through page navigation and survive embedded overwrite scans', async ({ kr }) => {
+  await kr.seed({ profile: PROFILE, settings: { autoContinue: false, autoSubmit: false, overwriteExisting: true } });
   kr.openrouter.handler = materialResponse; kr.openrouter.delayMs = 1200;
   const page = await kr.context.newPage(); await page.goto(kr.fixtureUrl('materials-embedded.html')); await kr.openPanel(page);
   await page.locator('#kr-tailor-resume').click();
@@ -530,6 +530,8 @@ test('materials persist through page navigation and are sent to cross-origin emb
   await expect(frame.locator('#resume-name')).toContainText('.pdf');
   await expect(frame.locator('#letter-name')).toContainText('.pdf');
   await expect(frame.locator('#letter-text')).toHaveValue(/I build APIs/);
+  await expect(page.locator('#kr-autofill-btn')).toHaveText('Submit Application');
+  expect(kr.openrouter.requests).toHaveLength(2);
   expect(await page.locator('#kareer-root').count()).toBe(1);
   expect(await frame.locator('#kareer-root').count()).toBe(0);
   expect(await pdfText(await frame.locator('#resume').evaluate(async el => [...new Uint8Array(await el.files[0].arrayBuffer())]))).toContain('Built APIs');

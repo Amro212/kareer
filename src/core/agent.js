@@ -11,7 +11,7 @@ import { FILL_STATUS } from './constants.js';
 import { logger } from './debug.js';
 import { detectAdapter } from './adapters/index.js';
 import { getProfile } from './storage.js';
-import { applyGeneratedMaterials } from './materials.js';
+import { applyGeneratedMaterials, materialKind } from './materials.js';
 import { inspectContinue, inspectSubmit, observePage, isDisabled } from './navigation.js';
 
 /**
@@ -23,6 +23,7 @@ import { inspectContinue, inspectSubmit, observePage, isDisabled } from './navig
 export function createFieldAgent() {
   let cache = new Map();
   let generation = 0;
+  let selectedMaterials = {};
 
   function unfilled(field, overwrite = false) {
     const adapterNeeds = detectAdapter().needsFill?.(field, getProfile());
@@ -47,7 +48,7 @@ export function createFieldAgent() {
     const scanned = scanFormFields(document);
     cache = new Map(scanned.map((field) => [field.id, field]));
 
-    const targets = scanned.filter((field) => field.type !== 'file' && unfilled(field, overwriteExisting));
+    const targets = scanned.filter((field) => field.type !== 'file' && unfilled(field, overwriteExisting) && !selectedMaterials[materialKind(field)]);
     if (!targets.length) return { fields: [], pageType: page.type };
 
     await harvestComboboxOptions(targets);
@@ -137,6 +138,7 @@ export function createFieldAgent() {
   async function uploadResume({ overwriteExisting = false, materials = {} } = {}) {
     const token=generation;
     if (['confirmation','captcha'].includes(classifyPage().type)) return {error:classifyPage().reason};
+    selectedMaterials = materials;
     const allFileFields = scanFormFields(document).filter((field) => field.type === 'file');
     deduplicateFields(allFileFields);
     const fields = allFileFields.filter((field) => isResumeField(field, allFileFields) && !materials.resume);
