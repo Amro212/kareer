@@ -2,7 +2,7 @@ import { test, expect } from './support/fixtures.js';
 
 const PROFILE = { fullName: 'Test Applicant', email: 'test@example.com', savedAnswers: { 'Why this role?': 'I build useful software.' } };
 
-for (const query of ['control=native', 'control=input', 'control=implicit', 'control=accessible', 'control=custom', 'control=external', 'control=footer', 'control=native&shadow', 'control=custom&shadow', 'control=native&steps']) {
+for (const query of ['control=native', 'control=input', 'control=implicit', 'control=accessible', 'control=custom', 'control=external', 'control=footer', 'control=native&shadow', 'control=custom&shadow', 'control=native&steps', 'control=native&sidebar-newsletter']) {
   test(`generic manual submission: ${query}`, async ({ kr }) => {
     await kr.seed({ profile: PROFILE, settings: { autoContinue: true, autoSubmit: false, overwriteExisting: true } });
     const page = await kr.context.newPage();
@@ -20,10 +20,25 @@ for (const query of ['control=native', 'control=input', 'control=implicit', 'con
     await expect(page.locator('body')).toHaveAttribute('data-submissions', '1');
     if (!query.includes('steps')) await expect(page.locator('body')).toHaveAttribute('data-submitted-name', 'Reviewed name');
     await expect(page.locator('body')).toHaveAttribute('data-newsletters', '0');
+    if (query.includes('sidebar-newsletter')) await expect(page.locator('aside input')).toHaveValue('subscriber@example.org');
     expect((await kr.readStorage('kr:settings')).autoSubmit).toBe(false);
     expect(kr.openrouter.requests).toHaveLength(0);
   });
 }
+
+test('native Next: Review obeys Auto Continue off even with Auto Submit on', async ({ kr }) => {
+  await kr.seed({ profile: PROFILE, settings: { autoContinue: false, autoSubmit: true } });
+  const page = await kr.context.newPage();
+  await page.goto(kr.fixtureUrl('generic-application-fixture.html', undefined, '?steps&next-label=Next%3A%20Review'));
+  await kr.openPanel(page);
+  await page.locator('#kr-autofill-btn').click();
+  await expect(page.locator('#kr-autofill-btn')).toHaveText('Continue to Next Step');
+  await expect(page.locator('h2')).toHaveText('Contact details');
+  await expect(page.locator('body')).toHaveAttribute('data-submissions', '0');
+  await page.locator('#kr-autofill-btn').click();
+  await expect(page.locator('body')).toHaveAttribute('data-submissions', '1');
+  await expect(page.locator('#kr-autofill-btn')).toHaveText('Submitted');
+});
 
 for (const autoSubmit of [false, true]) {
   test(`generic iframe submission with Auto Submit ${autoSubmit ? 'on' : 'off'}`, async ({ kr }) => {

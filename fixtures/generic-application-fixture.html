@@ -15,6 +15,14 @@
   const params = new URLSearchParams(location.search);
   const main = document.querySelector('main');
   const form = document.querySelector('#application');
+  if (params.has('sidebar-newsletter')) {
+    const aside = document.createElement('aside');
+    aside.append(document.querySelector('header form'));
+    aside.querySelector('button').textContent = 'Join';
+    aside.querySelector('input').value = 'subscriber@example.org';
+    aside.querySelector('input').readOnly = true;
+    document.body.append(aside);
+  }
   let root = document;
   if (params.has('shadow')) {
     const host = document.createElement('application-form');
@@ -40,7 +48,12 @@
     if (params.has('disabled')) root.querySelector('#submit').disabled = true;
   }
   let next = params.has('steps');
-  if (next) form.insertAdjacentHTML('beforeend', '<button type="submit" aria-label="Continue">→</button>');
+  if (next) {
+    const button = document.createElement('button');
+    button.type = 'submit';
+    button.textContent = params.get('next-label') || 'Continue';
+    form.append(button);
+  }
   else finalControl();
   form.addEventListener('submit', event => {
     event.preventDefault();
@@ -56,7 +69,7 @@
     document.body.dataset.submittedName = form.querySelector('#full_name')?.value || '';
     main.innerHTML = '<h1>Application submitted</h1><p>Thank you for applying.</p>';
   });
-  document.querySelector('header form').onsubmit = event => {
+  document.querySelector('header form,aside form').onsubmit = event => {
     event.preventDefault();
     document.body.dataset.newsletters = String(Number(document.body.dataset.newsletters) + 1);
   };

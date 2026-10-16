@@ -1105,6 +1105,33 @@ test('generic native submit fallback excludes forward and unrelated form actions
   assert.equal(inspectSubmit().control, null);
 });
 
+test('sidebar newsletter and search forms do not compete with the application submit', () => {
+  render('<form id="application"><label>Full name<input></label><label>Job search preferences<textarea></textarea></label><label><input type="checkbox">Subscribe to our newsletter</label><button id="submit">Send</button></form>' +
+    '<aside><form><label>Newsletter email<input type="email"></label><button>Join</button></form></aside>' +
+    '<form role="search"><input type="search"><button>Go</button></form>');
+  assert.equal(inspectSubmit().count, 1);
+  assert.equal(inspectSubmit().control.id, 'submit');
+});
+
+for (const label of ['Next: Review', 'Next step — Additional questions', 'Continue to next step']) {
+  test(`native ${label} respects Auto Continue instead of consuming a submit attempt`, async () => {
+    render(`<form id="application">${input()}<button>${label}</button></form>`);
+    saveSettings({ autoContinue: false, autoSubmit: true });
+    let clicks = 0;
+    document.querySelector('form').onsubmit = event => { event.preventDefault(); clicks++; };
+    const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0, submitCountdownMs: 0 });
+    try {
+      assert.equal(inspectSubmit().count, 0);
+      assert.equal(findContinue(), document.querySelector('button'));
+      await engine.start(job());
+      assert.equal(clicks, 0);
+      assert.equal(engine.session.submits || 0, 0);
+      assert.equal(engine.session.stepReview, true);
+      assert.match(engine.session.reason, /Auto Continue is off/);
+    } finally { engine.destroy(); }
+  });
+}
+
 test('generic submit can live in a footer and reference its application form', () => {
   render('<form id="application"><input type="email" required></form><footer><button form="application" type="submit">Envoyer</button></footer>');
   assert.equal(inspectSubmit().control, document.querySelector('button'));

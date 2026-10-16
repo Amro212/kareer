@@ -36,7 +36,7 @@ export function visibleText(root = document.body) {
   return Array.from(root.childNodes, read).join(' ').replace(/\s+/g, ' ').trim();
 }
 
-export const CONTINUE_LABEL = /^(?:next(?: step)?|continue|save (?:and|&) continue|review(?: application)?|proceed)(?:\s*[→›»])?$/i;
+export const CONTINUE_LABEL = /^(?:next(?: step)?(?:\s*[:–—-]\s*.+)?|continue(?: to .+)?|save (?:and|&) continue|review(?: (?:your )?application)?|proceed)(?:\s*[→›»])?$/i;
 
 export function controlLabel(element) {
   const root = element.getRootNode();
@@ -56,11 +56,15 @@ export function isApplicationForm(form) {
   const controls = [...form.querySelectorAll('input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]),textarea,select,[contenteditable=true],[role=combobox]')]
     .filter(element => isVisible(element) || element.type === 'file' && isVisible(element.parentElement));
   if (!controls.length) return false;
-  const purpose = [form.id, form.getAttribute('name'), form.getAttribute('aria-label'), form.getAttribute('role'),
-    ...controls.flatMap(element => [element.id, element.name, element.getAttribute('aria-label'), ...[...(element.labels || [])].map(label => label.textContent)])].join(' ').replace(/[_-]+/g, ' ');
-  if (/\b(?:newsletter|subscribe|subscription|search|login|log in|sign in|sign up)\b/i.test(purpose)) return false;
+  const identity = [form.id, form.getAttribute('name'), form.getAttribute('aria-label'), form.getAttribute('role')].join(' ').replace(/[_-]+/g, ' ');
+  const fieldLabels = element => [element.id, element.name, element.getAttribute('aria-label'), ...[...(element.labels || [])].map(label => label.textContent)].join(' ').replace(/[_-]+/g, ' ');
+  const purpose = [identity, ...controls.map(fieldLabels)].join(' ');
+  if (/\b(?:newsletter|subscribe|subscription|search|login|log in|sign in|sign up)\b/i.test(identity) ||
+      controls.some(element => element.type === 'email' && /\b(?:newsletter|subscribe|subscription)\b/i.test(fieldLabels(element)))) return false;
+  const singleEmailForm = !form.closest('aside') && controls.some(element => element.type === 'email') &&
+    [...form.getRootNode().querySelectorAll('form,[role=form]')].filter(candidate => isVisible(candidate) && !candidate.closest('header,nav,footer,aside,[role=navigation],[role=search]')).length === 1;
   return /\b(?:application|applicant|candidate|resume|cover\s*letter|cv|(?:full|first|last|given|family)\s*name)\b/i.test(purpose) ||
-    [...form.querySelectorAll('button,input[type=submit],[role=button]')].some(element => /\b(?:submit|send|finish|complete) (?:my |your |the )?application\b/i.test(controlLabel(element)));
+    [...form.querySelectorAll('button,input[type=submit],[role=button]')].some(element => /\b(?:submit|send|finish|complete) (?:my |your |the )?application\b/i.test(controlLabel(element))) || singleEmailForm;
 }
 
 export function isSubmitControl(element) {
@@ -70,10 +74,9 @@ export function isSubmitControl(element) {
       !(element.form && !element.form.closest('header,nav,footer')) && !/\bapplication\b/i.test(label)) return false;
   if (CONTINUE_LABEL.test(label)) return false;
   if (/^(?:submit(?: (?:my|your|the))? application|submit|apply(?: now)?|send(?: (?:my|your|the))? application|final submit|finish(?: application)?|complete application)(?:\s*[→›»])?$/i.test(label)) return true;
-  // Native form semantics cover labels and languages without an ATS recipe.
-  return Boolean(element.matches('button,input[type=submit]') && element.type === 'submit' && element.form &&
-    !/\b(?:save|delete|remove|upload|attach|add|reset|search|subscribe|sign in|log in)\b/i.test(label) &&
-    element.form.querySelector('input:not([type=hidden]):not([type=submit]):not([type=button]),textarea,select'));
+  // Native semantics apply only to an identified application form.
+  return Boolean(element.matches('button,input[type=submit]') && element.type === 'submit' && element.form && isApplicationForm(element.form) &&
+    !/\b(?:save|delete|remove|upload|attach|add|reset|search|subscribe|sign in|log in)\b/i.test(label));
 }
 
 export function classifyPage(doc = document) {

@@ -1,3 +1,15 @@
+## Turn: 2026-10-16 - Review fix 3: native final-submit detection and final verification
+
+- Findings: native `Next: Review` was treated as final Submit, clicked with Auto Continue off, and consumed the session's final-submit attempt. A sidebar newsletter's native `Join` button also competed with the actual application Submit button.
+- `src/core/pageClassifier.js`: recognize labelled Next stages and Continue-to actions as forward navigation. Apply unknown native submit labels only to an identified application form, sharing parent-form evidence from review fix 1. Distinguish form purpose from application question text so job-search questions and optional newsletter consent do not disqualify an application. Preserve single primary email forms, multilingual final labels, external/footer-associated submit controls and open shadow roots.
+- `fixtures/generic-application-fixture.html`, `tests/e2e/generic-submit.spec.js`, `tests/unit/application.test.js`: add sidebar-newsletter and labelled-Next replays. Assert Auto Continue off prevents the Next click even with Auto Submit on, the final-submit attempt remains unused, and the real final page still submits after explicit continuation.
+- `tests/unit/panel.test.js`: move the pending-routing test gate to frame discovery. Parent application fields now correctly bypass iframe-owned step discovery; retain both original navigation/Pause cancellation assertions.
+- The new sidebar replay initially passed every submission assertion but made one AI request for its newly visible auxiliary email field. Keep that newsletter address read-only in the fixture to isolate button detection while preserving zero-extra-request, unchanged-address and zero-newsletter-submission assertions. This does not change scanner behavior for unrelated editable sidebar fields.
+- All-target build succeeded at v0.5.139; package/site/Firefox metadata refreshed and the build fingerprint matches current production source. All 44 distinct focused browser cases passed across the main run (42 passes) and the two-case follow-up (corrected sidebar replay plus selected-material overwrite/reload). Final application/panel checks passed 154/154 after the cancellation-test gate correction; adapters (64), remote handling (14) and navigation (6) also passed, totaling 238 targeted units. `git diff --check` passes. All three fixes have separate commits on `fix/application-submit-detection`. No new dependencies, full suites or live AI/employer submissions.
+- Remote sync is blocked: automatic approval review rejected the push to `https://github.com/Amro212/kareer.git`, stating that the transcript does not establish trust or explicit export authorization for this specific destination/payload despite the earlier branch-push authorization. No remote update occurred. The committed local branch is ready for explicit destination approval.
+
+---
+
 ## Turn: 2026-10-16 - Review fix 2: selected cover letters in embedded overwrite scans
 
 - Finding: a frame received the selected cover letter, then its overwrite-enabled scan returned that same textarea for AI replacement. Local filling already excluded selected material fields.
