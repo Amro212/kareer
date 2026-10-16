@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { captureJob } from '../../src/core/jobs.js';
 import { createSession, restoreSession, saveSession } from '../../src/core/sessions.js';
 import { rememberAnswer, recallAnswer } from '../../src/core/memory.js';
-import { classifyPage, isVisible } from '../../src/core/pageClassifier.js';
+import { classifyPage, isVisible, isApplicationForm } from '../../src/core/pageClassifier.js';
 import { inspectValidation } from '../../src/core/validation.js';
 import { findContinue, inspectSubmit } from '../../src/core/navigation.js';
 import { pageSignature } from '../../src/core/navigation.js';
@@ -1091,14 +1091,32 @@ test('accessible Submit names and decorative arrows are recognized', () => {
 
 test('generic native submit controls work without ATS-specific labels', () => {
   for (const control of ['<button type="submit">Finish</button>', '<input type="submit" value="Enviar candidatura">', '<button>Send</button>']) {
-    render(`<form><label>Email<input type="email" required></label>${control}</form>`);
+    render(`<form aria-label="Job application"><label>Email<input type="email" required></label>${control}</form>`);
     assert.equal(inspectSubmit().control, document.querySelector('button,input[type=submit]'));
   }
 });
 
+test('a sole email capture form needs positive application evidence', async () => {
+  render('<h1>Software Engineer</h1><p>About the role</p><form><input type="email" placeholder="Email address" required><button>Sign Up</button></form>');
+  let submissions = 0;
+  document.querySelector('form').onsubmit = event => { event.preventDefault(); submissions++; };
+  saveSettings({ autoContinue: true, autoSubmit: true });
+  const engine = createApplicationEngine({ answer: async fields => ({ answers: fields.map(field => ({ fieldId: field.fieldId, value: 'test@example.com' })) }), settleMs: 0, submitCountdownMs: 0 });
+  try {
+    assert.equal(isApplicationForm(document.querySelector('form')), false);
+    assert.equal(inspectSubmit().count, 0);
+    await engine.start(job());
+    assert.equal(submissions, 0);
+    assert.equal(engine.session.submits || 0, 0);
+    document.querySelector('button').textContent = 'Submit application';
+    assert.equal(isApplicationForm(document.querySelector('form')), true);
+    assert.equal(inspectSubmit().count, 1);
+  } finally { engine.destroy(); }
+});
+
 test('generic native submit fallback excludes forward and unrelated form actions', () => {
-  for (const label of ['Next', 'Save draft', 'Upload resume', 'Subscribe']) {
-    render(`<form><input type="email"><button type="submit">${label}</button></form>`);
+  for (const label of ['Next', 'Save draft', 'Upload resume', 'Subscribe', 'Sign Up']) {
+    render(`<form id="application"><input type="email"><button type="submit">${label}</button></form>`);
     assert.equal(inspectSubmit().control, null, label);
   }
   render('<form><input type="email"><button aria-haspopup="listbox">Choose country</button></form>');

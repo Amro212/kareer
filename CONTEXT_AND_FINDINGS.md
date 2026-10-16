@@ -1,3 +1,12 @@
+## Turn: 2026-10-16 - PR #11 review fix: require form-level application evidence
+
+- Validated the review finding in `src/core/pageClassifier.js`: a listing's sole placeholder-only email form with a Sign Up button was accepted by the form-count shortcut, treated as final Submit, and could suppress a genuine embedded application. This affects the shared extension/userscript core.
+- Remove the single-email/form-count shortcut. Native submit fallback now requires the existing positive form/field identity or application-specific action evidence; explicitly exclude Sign Up from fallback actions. Genuine single-email application forms remain supported when they identify themselves as applications or have a Submit Application action. Do not infer the purpose of a form from the job listing around it.
+- Extend `tests/unit/application.test.js` to cover Auto Submit on a sole capture form, zero marketing submissions/attempts, positive single-email evidence, and Sign Up rejection even inside a positively identified form. Give the existing generic-label compatibility cases a real application label. Extend `tests/unit/remote.test.js` to verify placeholder-only capture controls cannot take ownership away from a real iframe.
+- All three focused reproductions failed for the expected classification/ownership causes before the source change. After it, the three focused application cases and one embedded-discovery case pass. The first multi-file in-process attempt exposed shared DOM hook interference; reran each test file in its own process for valid before/after evidence. No new fixture is needed for this synthetic review finding. Broader regression checks and packaging follow the second review fix; no master merge or deployment.
+
+---
+
 ## Turn: 2026-10-16 - Repair the shared master/PR Ashby CI regression
 
 - User reported failed PR #11 CI run `38860416443` (job `116841185410`) and master run `38852912702` (job `116817891202`). Both fail the same existing `ats-hardening.test.js` case: an extra standalone `authorization_2` checkbox appears beside the Ashby Yes/No question. PR CI passed 639/640 units; master passed 598/599 before aborting its build/deployment. This is one inherited defect, not separate merge failures.

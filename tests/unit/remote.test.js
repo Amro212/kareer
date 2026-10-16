@@ -87,6 +87,8 @@ test('a partial iframe does not own an application with parent form fields', asy
   // Host newsletter controls must not take ownership from a complete iframe.
   document.body.innerHTML = '<aside><form><label>Newsletter email<input type="email"></label><button>Join</button></form></aside>';
   assert.equal((await embeddedApplicationStates()).length, 1);
+  document.body.innerHTML = '<h1>Software Engineer</h1><form><input type="email" placeholder="Email address"><button>Sign Up</button></form>';
+  assert.equal((await embeddedApplicationStates()).length, 1);
 });
 
 test('collected fields are namespaced by frame so ids cannot collide', async () => {

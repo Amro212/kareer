@@ -61,10 +61,8 @@ export function isApplicationForm(form) {
   const purpose = [identity, ...controls.map(fieldLabels)].join(' ');
   if (/\b(?:newsletter|subscribe|subscription|search|login|log in|sign in|sign up)\b/i.test(identity) ||
       controls.some(element => element.type === 'email' && /\b(?:newsletter|subscribe|subscription)\b/i.test(fieldLabels(element)))) return false;
-  const singleEmailForm = !form.closest('aside') && controls.some(element => element.type === 'email') &&
-    [...form.getRootNode().querySelectorAll('form,[role=form]')].filter(candidate => isVisible(candidate) && !candidate.closest('header,nav,footer,aside,[role=navigation],[role=search]')).length === 1;
   return /\b(?:application|applicant|candidate|resume|cover\s*letter|cv|(?:full|first|last|given|family)\s*name)\b/i.test(purpose) ||
-    [...form.querySelectorAll('button,input[type=submit],[role=button]')].some(element => /\b(?:submit|send|finish|complete) (?:my |your |the )?application\b/i.test(controlLabel(element))) || singleEmailForm;
+    [...form.querySelectorAll('button,input[type=submit],[role=button]')].some(element => /\b(?:submit|send|finish|complete) (?:my |your |the )?application\b/i.test(controlLabel(element)));
 }
 
 export function isSubmitControl(element) {
@@ -76,7 +74,7 @@ export function isSubmitControl(element) {
   if (/^(?:submit(?: (?:my|your|the))? application|submit|apply(?: now)?|send(?: (?:my|your|the))? application|final submit|finish(?: application)?|complete application)(?:\s*[→›»])?$/i.test(label)) return true;
   // Native semantics apply only to an identified application form.
   return Boolean(element.matches('button,input[type=submit]') && element.type === 'submit' && element.form && isApplicationForm(element.form) &&
-    !/\b(?:save|delete|remove|upload|attach|add|reset|search|subscribe|sign in|log in)\b/i.test(label));
+    !/\b(?:save|delete|remove|upload|attach|add|reset|search|subscribe|sign up|sign in|log in)\b/i.test(label));
 }
 
 export function classifyPage(doc = document) {
