@@ -1,4 +1,4 @@
-import { isVisible, visibleText } from './pageClassifier.js';
+import { isVisible, visibleText, actionControls, controlLabel, CONTINUE_LABEL, isSubmitControl } from './pageClassifier.js';
 import { cleanText } from './fields/labels.js';
 import { detectAdapter } from './adapters/index.js';
 
@@ -65,10 +65,7 @@ export function findSubmit(doc = document) {
 }
 
 export function inspectContinue(doc = document) {
-  const matches = Array.from(doc.querySelectorAll('button,input[type=submit],input[type=button],a[href],[role=button]')).filter(isVisible).filter(el => {
-    const label = visibleText(el) || el.value || el.getAttribute('aria-label') || '';
-    return /^(?:next(?: step)?|continue|save (?:and|&) continue|review(?: application)?|proceed)$/i.test(label.trim());
-  });
+  const matches = actionControls(doc).filter(el => CONTINUE_LABEL.test(controlLabel(el)));
   const adapterControl = detectAdapter(doc.defaultView?.location || (typeof location !== 'undefined' ? location : { hostname: '' }), doc).continueControl(doc);
   if (adapterControl && isVisible(adapterControl) && !matches.includes(adapterControl)) matches.push(adapterControl);
   const candidates = matches.filter(el => {
@@ -81,24 +78,21 @@ export function inspectContinue(doc = document) {
   let reason = '';
   if (!candidates.length) reason = `No Next or Continue button found.${matches.length ? ' Application progress controls were excluded.' : ''} Continue manually.`;
   else if (candidates.length > 1) {
-    const labels = candidates.slice(0, 5).map(el => (visibleText(el) || el.value || el.getAttribute('aria-label')).trim());
+    const labels = candidates.slice(0, 5).map(controlLabel);
     reason = `Multiple forward buttons found: ${labels.join(', ')}${candidates.length > 5 ? ', …' : ''}. Continue manually.`;
   } else if (isDisabled(control)) reason = 'The page’s Continue button is disabled. Wait for the page or check required fields.';
-  return { control, reason };
+  return { control, reason, count: candidates.length };
 }
 
 export function inspectSubmit(doc = document) {
   const adapterControl = detectAdapter(doc.defaultView?.location, doc).submitControl?.(doc);
-  const matches = Array.from(doc.querySelectorAll('button,input[type=submit],input[type=button],a[href],[role=button]')).filter(isVisible).filter(el => {
-    const label = (visibleText(el) || el.value || el.getAttribute('aria-label') || '').trim();
-    return /^(?:submit(?: my | your | the )?application|submit(?: application)?|apply now|send application|final submit)$/i.test(label);
-  }).filter(el => !el.closest('[role=tablist]'));
+  const matches = actionControls(doc).filter(isSubmitControl);
   if (adapterControl && isVisible(adapterControl) && !matches.includes(adapterControl)) matches.push(adapterControl);
   const control = matches.length === 1 ? matches[0] : null;
   let reason = '';
   if (!matches.length) reason = 'No unambiguous Submit control. Submit manually.';
   else if (matches.length > 1) {
-    const labels = matches.slice(0, 5).map(el => (visibleText(el) || el.value || el.getAttribute('aria-label')).trim());
+    const labels = matches.slice(0, 5).map(controlLabel);
     reason = `Multiple Submit controls found: ${labels.join(', ')}${matches.length > 5 ? ', …' : ''}. Submit manually.`;
   } else if (isDisabled(control)) reason = 'The page’s Submit button is disabled.';
   return { control, reason, count: matches.length };
@@ -108,5 +102,5 @@ export function pageSignature(fields, doc = document) {
   return JSON.stringify([page.url, page.marker || page.heading || page.fields.map(f => [f.id, f.question]).sort()]);
 }
 export function isDisabled(control) {
-  return Boolean(control?.disabled || control?.getAttribute('aria-disabled') === 'true');
+  return Boolean(control?.disabled || control?.matches(':disabled') || control?.getAttribute('aria-disabled') === 'true');
 }

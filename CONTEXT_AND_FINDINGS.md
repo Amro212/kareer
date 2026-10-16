@@ -1,3 +1,150 @@
+## Turn: 2026-10-16 - PR #11 review fix: scope final validation to application frames
+
+- Confirmed the second review finding: `submissionProblem` unconditionally validated every registered frame with fields. An invalid chat field or an unavailable unrelated widget paused otherwise valid manual and automatic submissions. Four synthetic engine regressions (invalid/unreachable widget, Auto Submit off/on) and one remote scoping case failed before the fix for the expected reasons.
+- `src/core/remote.js`: `collectRemoteValidation` now considers frames with positive application evidence and partial frames that participated in the current fill, identified by existing namespaced field-result IDs. It ignores other frames before sending validation commands. `src/core/application.js` supplies its current result IDs. Live field rescanning, namespaced errors, and error handling for actual application frames remain intact; no host contract or setting changes.
+- `tests/unit/application.test.js` verifies both submit modes ignore invalid/unreachable unrelated widgets, a previously filled partial application frame with no standalone application evidence still blocks submission after its required field is cleared, and Pause still cancels pending application validation. `tests/unit/remote.test.js` verifies participation/evidence scoping and retains unreachable-application rejection and error namespace coverage.
+- `fixtures/generic-application-host.html` and `tests/e2e/generic-submit.spec.js` add email-capture and unrelated-widget variants to existing browser cases. New `fixtures/unrelated-widget-fixture.html` is a synthetic support form with a prefilled but ARIA-invalid field, so it contributes no fill result while still reproducing the original blanket-validation blocker. Both actual iframes must be registered before the browser test starts. Both submit modes preserve email capture untouched, submit the real application, ignore the widget error, and still reject a cleared required field in the application iframe. These are synthetic review reproductions, not a new live ATS report.
+- Verification across both review fixes: **207 targeted unit tests pass** in separate per-file processes (139 application, 15 remote, 20 panel, 6 navigation lifecycle, 27 generic detection). All **24 packaged Chrome generic-submit cases pass** in 1.9 minutes. Source/test syntax and whitespace checks pass. The first navigation command used a nonexistent filename; corrected it to `navigation-lifecycle.test.js`, which passes all six cases. All-target build succeeds at **v0.5.142**, synchronizing `package.json`, both Firefox update manifests, `site/index.html`, and `site/version.json`.
+- Delivery: keep the two review fixes as separate commits and push them to existing PR #11, then verify the new GitHub CI run. The preceding CI run `38861780185` had already passed all 640 units and builds after the Ashby backing-input fix. No dependency changes, live employer/paid API requests, master merge, deployment, full local suite, or Firefox/userscript runtime checks this turn.
+
+---
+
+## Turn: 2026-10-16 - PR #11 review fix: require form-level application evidence
+
+- Validated the review finding in `src/core/pageClassifier.js`: a listing's sole placeholder-only email form with a Sign Up button was accepted by the form-count shortcut, treated as final Submit, and could suppress a genuine embedded application. This affects the shared extension/userscript core.
+- Remove the single-email/form-count shortcut. Native submit fallback now requires the existing positive form/field identity or application-specific action evidence; explicitly exclude Sign Up from fallback actions. Genuine single-email application forms remain supported when they identify themselves as applications or have a Submit Application action. Do not infer the purpose of a form from the job listing around it.
+- Extend `tests/unit/application.test.js` to cover Auto Submit on a sole capture form, zero marketing submissions/attempts, positive single-email evidence, and Sign Up rejection even inside a positively identified form. Give the existing generic-label compatibility cases a real application label. Extend `tests/unit/remote.test.js` to verify placeholder-only capture controls cannot take ownership away from a real iframe.
+- All three focused reproductions failed for the expected classification/ownership causes before the source change. After it, the three focused application cases and one embedded-discovery case pass. The first multi-file in-process attempt exposed shared DOM hook interference; reran each test file in its own process for valid before/after evidence. No new fixture is needed for this synthetic review finding. Broader regression checks and packaging follow the second review fix; no master merge or deployment.
+
+---
+
+## Turn: 2026-10-16 - Repair the shared master/PR Ashby CI regression
+
+- User reported failed PR #11 CI run `38860416443` (job `116841185410`) and master run `38852912702` (job `116817891202`). Both fail the same existing `ats-hardening.test.js` case: an extra standalone `authorization_2` checkbox appears beside the Ashby Yes/No question. PR CI passed 639/640 units; master passed 598/599 before aborting its build/deployment. This is one inherited defect, not separate merge failures.
+- Root cause: master's checkbox scanner now claims only each group's declared option elements, preserving adjacent independent inputs. Ashby's specialized Yes/No group declares the visible buttons but left its hidden backing checkbox unclaimed. The generic scanner then exposed it as a second work-authorization field, risking a conflicting answer after selecting No.
+- `src/core/adapters/ashby.js`: extend the existing adapter exclusion selector to ignore inputs inside the known Yes/No widget. Both shared checkbox grouping and ordinary field discovery already honor this hook. Visible Yes/No buttons, ordinary checkboxes, and generic/other-ATS grouping keep their existing behavior. No changes to submission or Auto Submit settings.
+- `tests/unit/ats-hardening.test.js`: strengthen the existing captured Ashby fixture regressions to assert the backing input is absent before filling and that one work-authorization question retains its committed No answer after rescanning. Existing ordinary checkbox identity and required-validation assertions remain intact. The exact CI failure reproduced locally before the fix.
+- Verification: all 108 targeted units in `ats-hardening.test.js`, `checkbox-groups.test.js`, and `greenhouse-ashby.test.js` pass. The packaged Chrome Ashby location/No-button regression passes (one case, 58.1 seconds), with mocked API calls and zero application submissions. All-target build succeeds at v0.5.141, synchronizing `package.json`, both Firefox update manifests, `site/index.html`, and `site/version.json`. Whitespace checks pass.
+- Delivery: publish this fix on the existing PR #11 branch, then check its new CI run. Master receives the fix through that PR; no direct master push or merge is authorized or performed. Full local suites and live employer submissions were not run.
+
+---
+
+## Turn: 2026-10-16 - Integrate master and prepare the submission-fix PR
+
+- User authorized applying the rehearsed resolutions, pushing the active branch to Amro212/kareer, and opening a PR targeting master.
+- Merge `origin/master` at `96c1fc7` into `fix/application-submit-detection`. Resolve only the five release-metadata conflicts (`package.json`, both Firefox update manifests, `site/version.json`, `site/index.html`) with the already-tested v0.5.140 metadata. Preserve master's checkbox-group/generated-material fixes and the branch's application submission fixes.
+- Confirmed the resulting source, tools, tests, fixtures, package metadata and website/update metadata exactly match the validated rehearsal tree `504abcd546ff4c46b1b9818a2ce67dea8f50b2aa`. No manual implementation edits were needed. The rehearsal passed 276 targeted unit tests, 37 focused browser cases and all-target builds.
+- Verification on the actual branch: refreshed the derived build cache, rebuilt Chrome/Firefox/userscript as v0.5.140, and passed all 21 targeted checkbox-group smoke tests. Confirmed zero unresolved paths, clean whitespace checks, and exact source/test/fixture/metadata equality with the validated rehearsal. Branch publication and the PR target Amro212/kareer; master is changed only through the requested PR workflow, not by a direct push. Full suites and live ATS submissions were not run.
+
+---
+
+## Turn: 2026-10-16 - Review fix 3: native final-submit detection and final verification
+
+- Findings: native `Next: Review` was treated as final Submit, clicked with Auto Continue off, and consumed the session's final-submit attempt. A sidebar newsletter's native `Join` button also competed with the actual application Submit button.
+- `src/core/pageClassifier.js`: recognize labelled Next stages and Continue-to actions as forward navigation. Apply unknown native submit labels only to an identified application form, sharing parent-form evidence from review fix 1. Distinguish form purpose from application question text so job-search questions and optional newsletter consent do not disqualify an application. Preserve single primary email forms, multilingual final labels, external/footer-associated submit controls and open shadow roots.
+- `fixtures/generic-application-fixture.html`, `tests/e2e/generic-submit.spec.js`, `tests/unit/application.test.js`: add sidebar-newsletter and labelled-Next replays. Assert Auto Continue off prevents the Next click even with Auto Submit on, the final-submit attempt remains unused, and the real final page still submits after explicit continuation.
+- `tests/unit/panel.test.js`: move the pending-routing test gate to frame discovery. Parent application fields now correctly bypass iframe-owned step discovery; retain both original navigation/Pause cancellation assertions.
+- The new sidebar replay initially passed every submission assertion but made one AI request for its newly visible auxiliary email field. Keep that newsletter address read-only in the fixture to isolate button detection while preserving zero-extra-request, unchanged-address and zero-newsletter-submission assertions. This does not change scanner behavior for unrelated editable sidebar fields.
+- All-target build succeeded at v0.5.139; package/site/Firefox metadata refreshed and the build fingerprint matches current production source. All 44 distinct focused browser cases passed across the main run (42 passes) and the two-case follow-up (corrected sidebar replay plus selected-material overwrite/reload). Final application/panel checks passed 154/154 after the cancellation-test gate correction; adapters (64), remote handling (14) and navigation (6) also passed, totaling 238 targeted units. `git diff --check` passes. All three fixes have separate commits on `fix/application-submit-detection`. No new dependencies, full suites or live AI/employer submissions.
+- Remote sync: automatic approval review initially rejected the push to `https://github.com/Amro212/kareer.git` because it required explicit destination/payload approval. The user then explicitly approved pushing the three verified fixes to Amro212/kareer. Push succeeded: `origin/fix/application-submit-detection` advanced from `38fc90a` to `608580a` and upstream tracking is configured. This follow-up changes only this status log; production code and verified v0.5.139 artifacts are unchanged, so tests were not rerun.
+
+---
+
+## Turn: 2026-10-16 - Review fix 2: selected cover letters in embedded overwrite scans
+
+- Finding: a frame received the selected cover letter, then its overwrite-enabled scan returned that same textarea for AI replacement. Local filling already excluded selected material fields.
+- `src/core/agent.js`: remember the current material selection when applying it, and exclude those material fields from primary, retry and late scans. Explicitly clearing the selection restores normal scan behavior; current required-field validation still includes the letter.
+- `tests/unit/greenhouse-ashby.test.js`: regression cases cover Greenhouse, Ashby and generic frame agents, overwrite on/off, live required validation and clearing a selection. `tests/e2e/materials.spec.js`: strengthen the existing reload/cross-origin material flow with overwrite enabled; assert the selected text survives, the panel reaches Submit Application, and only the two document-generation AI requests occur.
+- Verification: all 64 targeted adapter units and the strengthened real-extension browser case passed. All-target build succeeded at v0.5.137; build metadata refreshed. No dependencies added or live AI/employer requests made.
+
+---
+
+## Turn: 2026-10-16 - Review fix 1: applications split between parent and iframe
+
+- Finding: an eligible generic iframe took ownership even when application fields remained in the parent. Its confirmation could mark the whole application Submitted while parent fields stayed empty.
+- `src/core/pageClassifier.js`, `src/core/remote.js`: recognize a parent application form separately from host newsletter/search controls. Mixed forms retain the existing combined local/frame autofill path rather than granting a partial iframe workflow ownership.
+- `src/core/ui.js`, `src/core/application.js`: hand completed combined fills to the shared review/submission mechanism. Clear stale iframe ownership; validate current parent and frame fields before review and immediately before a manual or automatic parent submission. Preserve Auto Submit's countdown and Pause cancellation. Already-filled mixed forms can retry validation without overwriting user corrections.
+- `src/core/agent.js`, `src/core/remote.js`: frame validation rescans live fields; errors retain frame-qualified IDs, and an unavailable frame cannot silently pass submission validation.
+- Regression coverage: `fixtures/generic-application-host.html`, `tests/e2e/generic-submit.spec.js`, `tests/unit/remote.test.js` and `tests/unit/application.test.js` cover combined filling, parent-only submission, missing iframe input, confirmation, host newsletter exclusion, unavailable-frame validation and Pause during pending validation.
+- Verification: 128 existing application units, 14 remote units and both new combined-handoff units passed. All four targeted browser cases passed (mixed and frame-only applications, Auto Submit on/off). All-target build succeeded at v0.5.136; build metadata refreshed. No live employer application was submitted.
+
+---
+
+## Turn: 2026-10-14 - Site-independent Submit workflow for generic applications
+
+- Request: generic applications outside Ashby, Greenhouse, Lever, and Workday must have their own reliable submission mechanism.
+- `src/core/ui.js`: route generic applications with detected Submit or Continue candidates into the shared workflow, including fresh single-page forms and ambiguous controls. They no longer need a prior Continue step to reach Submit Application.
+- `src/core/pageClassifier.js`, `src/core/navigation.js`, `src/core/jobDetection.js`: share action names and intent across classification, workflow, and job-page detection. Read accessible names, native/default submit-button semantics and associated forms, including external/footer controls, with controls discovered through open shadow roots. Support labels outside the English ATS recipes through native semantics. Exclude field dropdowns, menus, unrelated header/footer forms, and forward actions from Submit matching. Disabled and ambiguous controls retain concrete diagnostics; inherited native disabled states are recognized.
+- `src/core/remote.js`, `src/core/application.js`, `src/core/agent.js`: discover generic application frames with application evidence and retain zero-field confirmations. Completed embedded applications offer the same manual Submit action. Reuse the existing frame-owned navigation, signature checks, validation, bounded attempts, and confirmation handling; manual submission skips re-filling so edits survive. Auto Submit remains opt-in with its existing countdown. Ambiguous forward controls prevent submitting locally and in a frame.
+- `src/core/fields/combobox.js`: recognize a widget's `.select-value` committed display, needed by the existing generic embedded fixture; query text alone still cannot prove a committed choice.
+- `fixtures/generic-application-fixture.html`, `fixtures/generic-application-host.html`, `tests/e2e/generic-submit.spec.js`: native/input/default/custom/accessible/external/footer controls, multiple steps, open shadow roots, generic iframes, preserved edits, Auto Submit, unrelated newsletter exclusion, and disabled/ambiguous controls. All fixture submissions stay local.
+- `tests/e2e/final-application-submit.spec.js`: exercise generic forms directly without an artificial introductory Continue step. `fixtures/embedded-application.html` and `tests/e2e/cross-frame.spec.js`: expose real local confirmation and assert Submit/Submitted; verify paginated discovery resolves the exact choice with one primary model request instead of demanding an unnecessary second request.
+- Targeted unit coverage: `tests/unit/application.test.js`, `tests/unit/remote.test.js`, `tests/unit/job-context.test.js`, `tests/unit/greenhouse-ashby.test.js` cover native semantics, shadow controls, current committed selections, accessible application intent, generic-frame eligibility, and ambiguous navigation.
+- Build-generated metadata and Chrome/Firefox/userscript artifacts: v0.5.135. No dependencies added. Closed shadow roots and arbitrary custom controls without usable semantics remain outside the fallback's capabilities; ambiguous controls require manual handling.
+- Verification: all 39 focused browser cases passed on the final build. Targeted unit runs passed for application/panel (148), embedded adapters (61), job-context/remote (20), autofill (51), and navigation (6). Chrome/Firefox manifests match v0.5.135; `git diff --check` passed. No full suites or live employer submissions were run. Branch: `fix/application-submit-detection`.
+
+---
+
+## Turn: 2026-10-14 - Fresh Lever application returns to Autofill instead of Submit
+
+- Report: after filling `https://jobs.lever.co/palantir/71ed917e-850a-484b-9454-fa66bdf24540/apply`, Kareer returned to "Autofill Lever" instead of offering the shared Submit action. Greenhouse and Ashby worked.
+- Root cause: `handleUnifiedAutofillClick` explicitly routed Workday, Greenhouse, and Ashby through the application engine, but omitted Lever. A fresh single-page Lever application with Auto Submit off therefore used standalone filling and never entered `review`. Earlier Lever final-page tests used an artificial Continue step, which selected the engine and masked this case.
+- `src/core/ui.js`: add Lever to the existing workflow-routing list and allow the engine to create its session when job initialization is still awaiting hydration. The old `session &&` gate also sent early clicks to standalone filling even after Lever was added. Completed fresh Lever forms now reach Submit Application through the existing validation, manual submission, confirmation, and opt-in Auto Submit logic.
+- `src/core/application.js`, `tests/unit/application.test.js`: the stalled-hydration browser check exposed a second reset. Initialization could create an idle session after an explicit user-started session had already reached review. Preserve an existing session across restoration and the awaited hydration result. The new controlled regression failed before these two guards.
+- `tests/e2e/final-application-submit.spec.js`: exercise fresh Lever forms directly with Auto Continue on/off, without an artificial Continue step. Both corrected cases failed against the previous build before the production fix.
+- `tests/e2e/lever-hydration.spec.js`: expect Submit Application after filling, preserve it after reload, and verify the same outcome when parent-posting hydration stalls.
+- `tests/e2e/lever-university.spec.js`: retain school/GPA, hidden-control, provenance, and required-field failure assertions; remove the obsolete standalone-completion message assertion now that Lever uses workflow validation. Preserve its former 60-second fill budget on the school-value/failure assertions.
+- `fixtures/final-application-submit-fixture.html`: correct the introductory-step comment; the introductory replay is now used only by the generic workflow case.
+- Build-generated package/site/Firefox update metadata: v0.5.132, newer than the reported installed v0.5.129. Chrome, Firefox, and userscript builds succeeded; no dependencies or new production abstractions.
+- Verification: application/panel unit tests passed (142), navigation lifecycle tests passed (6), and all 7 targeted Lever browser cases passed across the final routing/hydration and captured-university runs. Built Chrome/Firefox manifests match v0.5.132; `git diff --check` passed. The Palantir URL returned HTTP 403 here, so live DOM capture/verification was unavailable; existing captured Lever markup and local replays are used instead.
+- Branch: `fix/application-submit-detection`.
+
+---
+
+## Turn: 2026-10-14 - Submit blocked despite zero current failed fields
+
+- Report: the user clicked Kareer's Submit Application button on `https://job-boards.greenhouse.io/clara/jobs/5223309007`; the filled form then paused with "Check required fields and application errors before submitting", while the panel showed 0 failed and 0 untouched fields. The screenshot alone does not identify which check rejected this particular form.
+- Reproduced cause: `canSubmit` checked all historical `results`, including a failed conditional field that had disappeared. The panel and fill-completion validation only considered current fields, so the panel could offer Submit and then reject it. A new regression reproduced that exact sequence before the fix.
+- `src/core/application.js`: use the existing current-field validation for both final submission modes. Removed failures and failures superseded by a different current value no longer block submission; live persistence/required/native/ARIA errors still do. Replace the boolean submission check and generic rejection with a concrete field/control reason, including revalidation during the automatic countdown. Auto Submit remains opt-in.
+- `src/core/ui.js`, `tests/unit/panel.test.js`: prioritize a current failed status over the `inferred` flag in field reports. Previously a failed AI answer could appear as INFERRED and be omitted from the FAILED count. Removed fields remain excluded from current counts.
+- `tests/unit/application.test.js`: manual/automatic regressions retain an obsolete failure while verifying the current field passes; live required-field changes now assert a named field in the rejection.
+- `fixtures/final-application-submit-fixture.html`, `tests/e2e/final-application-submit.spec.js`: local conditional-field replay and manual/automatic browser regressions for the 0 FAILED / blocked Submit mismatch.
+- Build metadata: v0.5.128, newer than the user's pictured v0.5.126; Chrome, Firefox, and userscript artifacts built successfully. No dependencies added.
+- Verification: targeted application/panel unit tests passed (141); packaged-Chrome final-page, stale-failure, and Auto Submit/countdown browser checks passed (16). Built Chrome/Firefox manifests match v0.5.128; `git diff --check` passed. The Clara URL returned HTTP 403 from this environment, so this exact live DOM could not be captured or verified. The regression fixture is a local replay, not a claimed Clara capture.
+- Branch: `fix/application-submit-detection`.
+
+---
+
+## Turn: 2026-10-14 - Make the completed-form button submit the application
+
+- Request: replace the panel's "Ready for Review" primary button with a working Submit button; Ponytail mode enabled.
+- `src/core/ui.js`: completed forms display "Submit Application". Its click calls the engine's explicit submission action before AI/profile routing, preserving review edits instead of restarting autofill. Confirmed submissions display a disabled "Submitted" button.
+- `src/core/application.js`: reuse the existing submission validation, button detection, single-attempt tracking, confirmation wait, and error handling for a manual `submit()` action. An explicit click submits immediately even with Auto Submit off; it does not change the saved setting. Automatic submissions keep their countdown. Recheck current required fields, disabled/ambiguous Submit controls, and remaining forward actions at click time.
+- `tests/unit/application.test.js`: manual submission preserves edits with overwrite enabled, works with Auto Submit off, ignores duplicate clicks, and revalidates changed required fields/buttons.
+- `tests/e2e/final-application-submit.spec.js`: all eight manual-review cases now click the panel's Submit Application button, verify one local submission, a disabled Submitted button, and unchanged Auto Submit settings.
+- Build-generated metadata: `package.json`, `firefox-updates.json`, `site/firefox-updates.json`, `site/index.html`, `site/version.json` updated to v0.5.125. Chrome, Firefox, and userscript builds succeeded. No new dependencies.
+- Verification: targeted application and panel unit tests passed (138, `node --test --test-isolation=none tests/unit/application.test.js tests/unit/panel.test.js`). Packaged-Chrome final-page and existing Auto Submit browser checks passed (14). `git diff --check` passed. Live employer pages were not retested; all submission checks use local fixtures.
+- Branch: `fix/application-submit-detection`.
+
+---
+
+## Turn: 2026-10-14 - Final application pages incorrectly report missing Continue
+
+- Target: shared extension/userscript workflow; Greenhouse, Ashby, Lever, and generic applications.
+- User-reported bug: all required fields fill successfully, but the panel pauses with "No Next or Continue button found" despite a visible Submit application button.
+- Root cause: pages retaining their inputs remain classified as `application` so filling can finish. After validation, the workflow only inspected Submit for opt-in Auto Submit; manual final submission fell through to the missing-Continue diagnostic. Submit matching also let icon text mask explicit accessible names and rejected decorative trailing arrows.
+- Resolution:
+  - `src/core/application.js`: after filling and validation, detect final Submit controls independently of Auto Submit. A single enabled Submit without forward candidates becomes `review` with "Page filled. Review your answers, then submit the application." Disabled/ambiguous Submit controls retain their specific diagnostics. Auto Continue and Auto Submit settings remain independent.
+  - `src/core/navigation.js`: expose the forward candidate count so ambiguous Next/Continue controls cannot masquerade as a final page; recognize Submit accessible names (`aria-labelledby`, `aria-label`), normalized fragmented labels, and decorative arrows.
+  - `tests/unit/application.test.js`: regressions for all four adapters with Auto Continue on/off, disabled/ambiguous Submit, unresolved required fields, competing/missing forward controls, and accessible labels. All eleven initial regressions failed before the production fix and passed afterward.
+  - `fixtures/final-application-submit-fixture.html`, `tests/e2e/final-application-submit.spec.js`: minimal local replay based on existing ATS capture markup, covering manual final review and opt-in submission. This is a synthetic replay, not a new live capture. Lever uses its real single full-name field; Lever/generic manual cases replay an active workflow reaching its final page because fresh single-page forms use standalone filling.
+  - `package.json`, `firefox-updates.json`, `site/firefox-updates.json`, `site/index.html`, `site/version.json`: build-generated v0.5.124 metadata; the build also synchronizes the existing configured Firefox download URL.
+- Verification: targeted application tests passed (113 before adding the final required-field guard case); navigation lifecycle tests passed (6); the two additional/expanded guard tests passed. Unit commands used `node --test --test-isolation=none` for the named files/patterns. Final packaged-Chrome replay passed all 12 cases; the existing Auto Submit countdown and Pause browser tests also passed (2). `npm run build` succeeded for Chrome, Firefox, and userscript at v0.5.124; packaged manifests match the package version; `git diff --check` passed.
+- Branch: `fix/application-submit-detection` from `origin/feature/resume-tailor` (`14725d4`). No live applications submitted.
+- Status: completed; local build artifacts are in `dist/`.
+
+---
+
 ## Turn: 2026-10-14 - Rename "Application Materials" to "Tailored Documents"
 
 - Target: `src/core/ui.js`, `src/targets/extension/materials/index.html`, `src/targets/extension/options/index.html`, `src/targets/extension/popup/index.html`, `src/targets/extension/background/materials.js`, `src/core/platform.js`, `src/core/hosts/gm.js`, `DESIGN.md`

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Job application · Engineer at Example</title>
+<body data-submissions="0">
+  <!-- Minimal replay of the reported filled-form/final-button state. Submit
+       markup follows the existing Greenhouse, Ashby, and Lever captures; no
+       employer endpoint is contacted. This is not a new live-page capture. -->
+  <main>
+    <h1>Engineer</h1>
+    <h2>Contact details</h2>
+    <p>Apply to Example in Toronto, Canada</p>
+    <form>
+      <div id="names">
+        <label for="first_name">First name</label><input id="first_name" name="first_name" required>
+        <label for="last_name">Last name</label><input id="last_name" name="last_name" required>
+      </div>
+      <label for="email">Email</label><input id="email" name="email" type="email" required>
+      <button id="submit" type="submit">Submit application</button>
+    </form>
+  </main>
+  <script>
+    const ats = new URLSearchParams(location.search).get('ats');
+    const form = document.querySelector('form');
+    const submit = document.querySelector('#submit');
+    if (new URLSearchParams(location.search).has('stale')) {
+      form.insertAdjacentHTML('afterbegin', '<label for="obsolete">Old conditional question</label><input id="obsolete" data-reject-fill="true">');
+      document.querySelector('#email').addEventListener('input', () => document.querySelector('#obsolete')?.remove());
+    }
+    if (ats === 'greenhouse') {
+      form.id = 'application_form';
+      submit.className = 'btn btn--pill';
+      submit.setAttribute('aria-disabled', 'false');
+    } else if (ats === 'ashby') {
+      form.setAttribute('data-ashby-root', '');
+      submit.className = 'ashby-application-form-submit-button';
+      submit.innerHTML = '<span>Submit Application</span><svg aria-hidden="true"></svg>';
+    } else if (ats === 'lever') {
+      document.querySelector('#names').innerHTML = '<div class="application-question"><label><span class="application-label">Full name</span><input id="name" name="name" required></label></div>';
+      submit.className = 'postings-btn template-btn-submit';
+      submit.setAttribute('data-qa', 'btn-submit');
+    } else {
+      submit.setAttribute('aria-label', 'Submit application');
+      submit.textContent = '→';
+    }
+    // Replay arriving at the final page of an active generic workflow.
+    if (new URLSearchParams(location.search).has('start')) {
+      submit.hidden = true;
+      const next = document.createElement('button');
+      next.type = 'button';
+      next.textContent = 'Continue';
+      form.append(next);
+      next.onclick = () => {
+        if (!form.reportValidity()) return;
+        document.querySelector('h2').textContent = 'Application questions';
+        next.remove();
+        submit.hidden = false;
+      };
+    }
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      document.body.dataset.submissions = String(Number(document.body.dataset.submissions) + 1);
+      document.querySelector('main').innerHTML = '<h1>Application submitted</h1><p>Thank you for applying.</p>';
+    });
+  </script>
+</body>
+</html>

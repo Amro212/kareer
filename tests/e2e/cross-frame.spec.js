@@ -45,7 +45,7 @@ test.describe('cross-origin embedded application', () => {
     await expect(page.locator('#kr-main-panel')).toContainText('embedded frame', { timeout: 20000 });
 
     await page.locator('#kr-autofill-btn').click();
-    await expect(page.locator('#kr-main-panel')).toContainText('Autofill complete. Review field statuses below.', { timeout: 60000 });
+    await expect(page.locator('#kr-autofill-btn')).toHaveText(autoSubmit ? 'Submitted' : 'Submit Application', { timeout: 60000 });
     await expect(page.locator('#kr-main-panel')).not.toContainText('No form fields detected on this page.');
     await expect(page.locator('#kr-main-panel')).toContainText('VERIFIED');
 
@@ -69,7 +69,7 @@ test.describe('cross-origin embedded application', () => {
     await expect(page.locator('#kr-main-panel')).toContainText('embedded frame', { timeout: 20000 });
 
     await page.locator('#kr-autofill-btn').click();
-    await expect(page.locator('#kr-main-panel')).toContainText('Autofill complete. Review field statuses below.', { timeout: 60000 });
+    await expect(page.locator('#kr-autofill-btn')).toHaveText('Submit Application', { timeout: 60000 });
 
     // Profile values are resolved locally; all remaining questions share a request.
     const structured = kr.openrouter.requests.filter(({ body }) => body.temperature === 0.2);
@@ -93,7 +93,7 @@ test.describe('cross-origin embedded application', () => {
     await expect(page.locator('#kr-main-panel')).toContainText('embedded frame', { timeout: 20000 });
 
     await page.locator('#kr-autofill-btn').click();
-    await expect(page.locator('#kr-main-panel')).toContainText('Autofill complete. Review field statuses below.', { timeout: 60000 });
+    await expect(page.locator('#kr-autofill-btn')).toHaveText('Submit Application', { timeout: 60000 });
 
     // Ottawa is outside the combobox's unsearched first page, but harvesting
     // pre-searches residence fields with the stored profile location, so this
@@ -131,10 +131,13 @@ test.describe('cross-origin embedded application', () => {
     await expect(page.locator('#kr-main-panel')).toContainText('embedded frame', { timeout: 20000 });
 
     await page.locator('#kr-autofill-btn').click();
-    await expect(page.locator('#kr-main-panel')).toContainText('Autofill complete. Review field statuses below.', { timeout: 60000 });
+    await expect(page.locator('#kr-autofill-btn')).toHaveText('Submit Application', { timeout: 60000 });
 
-    // Primary fill plus a frame search follow-up; narrative passes may add requests.
-    expect(kr.openrouter.requests.length).toBeGreaterThanOrEqual(2);
+    // The shared workflow resolves the discovered exact choice without another model request.
+    expect(kr.openrouter.requests).toHaveLength(1);
+    const requested = JSON.parse(kr.openrouter.requests[0].body.messages.at(-1).content).fieldsToFill;
+    const school = requested.find(field => /university or college/i.test(field.label));
+    expect(school.options.some(option => option.label === 'University of Waterloo')).toBe(false);
     await expect(embedFrame(page).locator('#school-display')).toHaveText('University of Waterloo');
   });
 

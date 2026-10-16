@@ -34,8 +34,7 @@ test('captured Lever university fills exactly without scanning hidden fields or 
     `);
   });
   await page.locator('#kr-autofill-btn').click();
-  await expect(page.locator('#kr-main-panel')).toContainText('Autofill complete. Review field statuses below.', { timeout: 60000 });
-  await expect(page.locator('[data-qa="university-dropdown"]')).toHaveValue('University of Waterloo');
+  await expect(page.locator('[data-qa="university-dropdown"]')).toHaveValue('University of Waterloo', { timeout: 60000 });
   await expect(page.locator('#hidden-university')).toHaveValue('');
   await expect(page.locator('#university-gpa')).toHaveValue('Filled university-gpa');
 
@@ -62,10 +61,9 @@ test('captured Lever required university with no usable answer appears as FAILED
   };
   const page = await openFixture(kr);
   await page.locator('#kr-autofill-btn').click();
-  await expect(page.locator('#kr-main-panel')).toContainText('Autofill complete. Review field statuses below.', { timeout: 60000 });
   await expect(page.locator('[data-qa="university-dropdown"]')).toHaveValue('');
   const schoolRow = page.locator('.kr-review-item').filter({ hasText: 'What Post-Secondary institution do you attend?' });
   await expect(schoolRow).toHaveCount(1);
-  await expect(schoolRow).toContainText('FAILED');
+  await expect(schoolRow).toContainText('FAILED', { timeout: 60000 });
   await expect(schoolRow).not.toContainText('UNTOUCHED');
 });

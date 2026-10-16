@@ -110,6 +110,7 @@ test('Ashby yes/no is a required single choice with unanswered distinct from No'
   assert.equal(field.required, true);
   assert.match(field.label, /legally authorized/);
   assert.equal(field.currentValue, '');
+  assert.equal(fields.some(f => f.element.matches('.ashby-application-form-input-yesno input')), false);
   assert.equal(fields.some(f => f.label === 'Option'), false);
   assert.equal(await fillField(field, 'No'), true);
   assert.equal((await verifyField(field, 'No')).verified, true);
@@ -205,6 +206,8 @@ test('Ashby committed No passes required validation and ordinary checkbox IDs st
   boot('ashby');
   const field = scanFormFields().find(f => f.id === 'authorization');
   await fillField(field, 'No');
+  const scanned = scanFormFields();
+  assert.deepEqual(scanned.filter(f => f.ats?.canonicalKey === 'work_auth').map(f => [f.id, f.currentValue]), [['authorization', 'No']]);
   assert.equal(inspectValidation(scanFormFields()).filter(e => e.fieldId === 'authorization').length, 0);
   document.querySelector('main').insertAdjacentHTML('beforeend', '<div class="ashby-application-form-field-entry" data-field-path="interests"><label class="ashby-application-form-question-title">Interests</label><label><input type="checkbox" id="interest-a">A</label><label><input type="checkbox" id="interest-b">B</label></div>');
   const fields = scanFormFields().filter(f => f.type === 'checkbox');

@@ -62,6 +62,15 @@ test('field report correctly summarizes cross-frame fields identified by fieldId
   assert.equal(report.untouched[0].field.fieldId, 'jcf1::phone');
 });
 
+test('a failed inferred answer is counted as failed, not successfully inferred', () => {
+  const report = summarizeFieldResults([{ id: 'answer' }], new Map([
+    ['answer', { status: 'failed', inferred: true, value: 'Rejected answer' }],
+  ]));
+  assert.equal(report.failed.length, 1);
+  assert.equal(report.inferred.length, 0);
+  assert.equal(report.filled, 0);
+});
+
 test('field report distinguishes AI calls vs deterministic profile fills', () => {
   const fields = [
     { id: 'full_name', label: 'Full Name' },
@@ -198,10 +207,12 @@ for (const cancel of ['navigation', 'pause']) {
       import { bootstrapWhenReady } from './src/core/main.js';
       const host = createGmHost();
       setPlatform({ ...host, capabilities: { ...host.capabilities, crossFrame: true },
-        framesList: async () => [{ frameId: 1, isTop: false, fieldCount: 1 }],
+        framesList: async () => {
+          if (window.deferRouting) await (window.routingGate ||= new Promise(resolve => window.releaseRouting = resolve));
+          return [{ frameId: 1, isTop: false, fieldCount: 1 }];
+        },
         frameCommand: async (id, command) => {
           if (command.action === 'stepState') {
-            if (!window.releaseRouting) await new Promise(resolve => window.releaseRouting = resolve);
             return { adapter: 'ashby' };
           }
           return { fields: [], results: [] };
@@ -221,7 +232,9 @@ for (const cancel of ['navigation', 'pause']) {
       dom.window.eval(bundle.outputFiles[0].text);
       await new Promise(resolve=>setTimeout(resolve,80));
       let root=dom.window.document.querySelector('#kareer-root').shadowRoot;
-      root.querySelector('#kr-pebble-toggle-btn').click();root.querySelector('#kr-toggle-btn').click();root.querySelector('#kr-autofill-btn').click();
+      root.querySelector('#kr-pebble-toggle-btn').click();root.querySelector('#kr-toggle-btn').click();
+      dom.window.deferRouting = true;
+      root.querySelector('#kr-autofill-btn').click();
       for(let i=0;i<30 && !dom.window.releaseRouting;i++) await new Promise(resolve=>setTimeout(resolve,20));
       assert.ok(dom.window.releaseRouting);
       if(cancel==='navigation') {

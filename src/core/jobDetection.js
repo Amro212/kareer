@@ -1,5 +1,5 @@
 import { detectAdapter } from './adapters/index.js';
-import { isVisible } from './pageClassifier.js';
+import { isVisible, controlLabel as actionLabel } from './pageClassifier.js';
 import { accessibleRoots, FORM_CONTROLS, isKareerElement } from './domRoots.js';
 
 export const JOB_HEADINGS = 'h1,h2,h3,h4,h5,h6,legend,[role="heading"]';
@@ -73,7 +73,7 @@ export function jobPageEvidence(doc, { continuity = false, stepHeading = null } 
   }
   const candidateGroup = [...groups.values()].some(keys => [...keys].filter(key => key !== 'resume').length >= 2);
   const resumeGroup = [...groups.values()].some(keys => keys.has('resume') && (keys.has('email') || keys.has('name') || keys.has('phone')));
-  const submitApplication = all('button,[role="button"],input[type="submit"]').some(el => /\bsubmit (?:my |your |the )?application\b/i.test(el.textContent || el.value || el.getAttribute('aria-label') || ''));
+  const submitApplication = all('button,[role="button"],input[type="submit"]').some(el => /\b(?:submit|send|finish|complete) (?:my |your |the )?application\b/i.test(actionLabel(el)));
   if (submitApplication && controls.length) return yes('application-action-controls');
   const intent = titles.some(text => !/^(?:how to|guide to|tips for)\b/i.test(text) && APPLICATION_INTENT.test(text));
   const direct = titles.some(text => /^(?:job|employment) application\b|^apply for (?:an? |this |the )?(?:job|role|position)\b/i.test(text));

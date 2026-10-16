@@ -6,7 +6,7 @@ import { detectAdapter, adapterById } from '../adapters/index.js';
 export const COMBO = '[role="combobox"], button[aria-haspopup="listbox"], input[aria-autocomplete="list"], input[aria-autocomplete="both"]';
 const MENU = '[role="listbox"], .select__menu, [class*="menu-list"]';
 const OPTION = '[role="option"], .select__option';
-const VALUE = '.select__single-value, [class*="singleValue"], [class*="single-value"], .select__multi-value__label, [class*="multiValueLabel"], [class*="multi-value__label"]';
+const VALUE = '.select-value, .select__single-value, [class*="singleValue"], [class*="single-value"], .select__multi-value__label, [class*="multiValueLabel"], [class*="multi-value__label"]';
 const countryLabelsByInput = new WeakMap();
 const searchesByInput = new WeakMap();
 const activatedLocations = new WeakMap();

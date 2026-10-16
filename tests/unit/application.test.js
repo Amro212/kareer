@@ -5,16 +5,19 @@ import { readFile } from 'node:fs/promises';
 import { captureJob } from '../../src/core/jobs.js';
 import { createSession, restoreSession, saveSession } from '../../src/core/sessions.js';
 import { rememberAnswer, recallAnswer } from '../../src/core/memory.js';
-import { classifyPage, isVisible } from '../../src/core/pageClassifier.js';
+import { classifyPage, isVisible, isApplicationForm } from '../../src/core/pageClassifier.js';
 import { inspectValidation } from '../../src/core/validation.js';
-import { findContinue } from '../../src/core/navigation.js';
+import { findContinue, inspectSubmit } from '../../src/core/navigation.js';
 import { pageSignature } from '../../src/core/navigation.js';
 import { createApplicationEngine } from '../../src/core/application.js';
 import { scanFormFields } from '../../src/core/fields/scanner.js';
 import { saveProfile, saveSettings, gmGet } from '../../src/core/storage.js';
+import { setPlatform } from '../../src/core/platform.js';
+import { createGmHost } from '../../src/core/hosts/gm.js';
 
 let dom;
 beforeEach(() => {
+  setPlatform(createGmHost());
   dom = new JSDOM('<body><main></main></body>', { url: 'https://example.com/jobs/42/apply' });
   for (const key of ['window', 'document', 'location', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement', 'Element', 'Event', 'KeyboardEvent', 'MouseEvent', 'MutationObserver']) globalThis[key] = dom.window[key];
   globalThis.CSS = { escape: value => value };
@@ -34,6 +37,95 @@ const input = (id = 'name', label = 'Full name') => `<label for="${id}">${label}
 const job = () => ({ title: 'Engineer', company: 'Example', listingUrl: 'https://example.com/jobs/42', applicationUrl: window.location.href });
 
 const workflowAnswers = async fields => ({ answers: fields.map(f => ({ fieldId: f.fieldId, value: 'Applicant' })) });
+
+test('combined autofill validates current parent and frame fields before parent submission', async () => {
+  render('<form id="application">' + input() + '<button>Submit application</button></form>');
+  let errors = [], submissions = 0;
+  const base = createGmHost();
+  setPlatform({ ...base, capabilities: { ...base.capabilities, crossFrame: true },
+    framesList: async () => [{ frameId: 7, isTop: false, fieldCount: 1, applicationEvidence: { eligible: false } }],
+    frameCommand: async () => ({ errors }),
+  });
+  document.querySelector('form').onsubmit = event => { event.preventDefault(); submissions++; render('<h1>Application submitted</h1>'); };
+  const engine = createApplicationEngine({ settleMs: 0, transitionMs: 0 });
+  const entries = new Map([['jcf7::email', { status: 'verified', value: 'test@example.com' }]]);
+  try {
+    engine.ensureSession(job());
+    await engine.reviewFilledPage(entries);
+    assert.equal(engine.session.status, 'paused');
+    document.querySelector('#name').value = 'Reviewed name';
+    entries.set('name', { status: 'verified', value: 'Reviewed name' });
+    engine.session.frameOwner = { frameId: 7 };
+    await engine.reviewFilledPage(entries);
+    assert.equal(engine.session.frameOwner, null);
+    assert.equal(engine.session.status, 'review');
+    errors = [{ fieldId: 'email', label: 'Email', message: 'Required value missing.' }];
+    await engine.submit();
+    assert.equal(submissions, 0);
+    assert.equal(engine.session.status, 'paused');
+    assert.match(engine.session.reason, /Email/);
+    errors = [];
+    await engine.reviewFilledPage(entries);
+    await engine.submit();
+    assert.equal(submissions, 1);
+    assert.equal(engine.session.status, 'confirmation');
+  } finally { engine.destroy(); }
+});
+
+test('Pause cancels pending combined submission validation', async () => {
+  render('<form id="application">' + input() + '<button>Submit application</button></form>');
+  document.querySelector('#name').value = 'Applicant';
+  let release;
+  const base = createGmHost();
+  setPlatform({ ...base, capabilities: { ...base.capabilities, crossFrame: true },
+    framesList: async () => [{ frameId: 7, isTop: false, fieldCount: 1, applicationEvidence: { eligible: true } }],
+    frameCommand: () => new Promise(resolve => { release = resolve; }),
+  });
+  const engine = createApplicationEngine();
+  try {
+    engine.ensureSession(job());
+    const pending = engine.reviewFilledPage(new Map());
+    while (!release) await new Promise(resolve => setTimeout(resolve, 1));
+    engine.pause();
+    release({ errors: [] });
+    await pending;
+    assert.equal(engine.session.status, 'paused');
+    assert.equal(engine.session.active, false);
+    assert.equal(engine.session.submits || 0, 0);
+  } finally { engine.destroy(); }
+});
+
+for (const autoSubmit of [false, true]) {
+  for (const widgetUnavailable of [false, true]) {
+    test(`submission ignores an unrelated ${widgetUnavailable ? 'unreachable' : 'invalid'} widget with Auto Submit ${autoSubmit}`, async () => {
+      render('<form id="application">' + input() + '<button>Submit application</button></form>');
+      document.querySelector('#name').value = 'Applicant';
+      saveSettings({ autoSubmit });
+      let submissions = 0, widgetCommands = 0;
+      const base = createGmHost();
+      setPlatform({ ...base, capabilities: { ...base.capabilities, crossFrame: true },
+        framesList: async () => [{ frameId: 8, isTop: false, fieldCount: 1, applicationEvidence: { eligible: false } }],
+        frameCommand: async () => {
+          widgetCommands++;
+          return widgetUnavailable ? { error: 'Widget unavailable' } : { errors: [{ fieldId: 'chat', message: 'Required value missing.' }] };
+        },
+      });
+      document.querySelector('form').onsubmit = event => { event.preventDefault(); submissions++; render('<h1>Application submitted</h1>'); };
+      const engine = createApplicationEngine({ submitCountdownMs: 0 });
+      try {
+        engine.ensureSession(job());
+        await engine.reviewFilledPage(new Map());
+        if (!autoSubmit) {
+          assert.equal(engine.session.status, 'review');
+          await engine.submit();
+        }
+        assert.equal(engine.session.status, 'confirmation');
+        assert.equal(submissions, 1);
+        assert.equal(widgetCommands, 0);
+      } finally { engine.destroy(); }
+    });
+  }
+}
 
 test('an unresolved required canonical answer receives bounded contextual repair',async()=>{
   dom.reconfigure({url:'https://jobs.ashbyhq.com/acme/1/application'});
@@ -61,6 +153,33 @@ test('destroy during initialization does not restore a session or register obser
   await initializing;
   assert.equal(engine.session, null);
   assert.equal(emissions, 0);
+});
+
+test('late Lever initialization cannot replace a completed user-started session', async () => {
+  dom.reconfigure({ url: 'https://jobs.lever.co/acme/42/apply' });
+  render(`<h1>Engineer</h1>${input()}<button>Submit application</button>`);
+  const originalFetch = globalThis.fetch;
+  let release;
+  globalThis.fetch = () => new Promise(resolve => { release = resolve; });
+  const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0 });
+  let initializing;
+  try {
+    initializing = engine.initialize();
+    while (!release) await new Promise(resolve => setTimeout(resolve, 1));
+    await engine.start(job());
+    const id = engine.session.id;
+    assert.equal(engine.session.status, 'review');
+    release({ ok: false, status: 404 });
+    await initializing;
+    assert.equal(engine.session.id, id);
+    assert.equal(engine.session.status, 'review');
+    assert.equal(gmGet('kr:sessions').length, 1);
+  } finally {
+    release?.({ ok: false, status: 404 });
+    await initializing;
+    engine.destroy();
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('destroy during a request discards queued job context and late emissions', async () => {
@@ -274,6 +393,8 @@ test('Phenom workflow clicks Next, never progress Review, then stops before subm
 test('navigation pause distinguishes competing forward actions from missing controls', async () => {
   for (const [controls, expected] of [
     ['<button>Next</button><button>Continue</button>', /Multiple forward buttons found: Next, Continue/],
+    ['<button>Next</button><button>Continue</button><button>Submit application</button>', /Multiple forward buttons found: Next, Continue/],
+    ['', /No Next or Continue button found/],
     [phenomProgress, /No Next or Continue button found.*progress/i],
   ]) {
     render(`${input()}${controls}`);
@@ -923,6 +1044,167 @@ test('review stays manual when Auto Submit is off', async () => {
   engine.destroy();
 });
 
+for (const [ats, url, submit] of [
+  ['Greenhouse', 'https://job-boards.greenhouse.io/acme/jobs/42', '<button type="submit" class="btn btn--pill">Submit application</button>'],
+  ['Ashby', 'https://jobs.ashbyhq.com/acme/42/application', '<button type="submit" class="ashby-application-form-submit-button"><span>Submit Application</span><svg aria-hidden="true"></svg></button>'],
+  ['Lever', 'https://jobs.lever.co/acme/42/apply', '<button class="postings-btn template-btn-submit" data-qa="btn-submit" href="#">Submit application</button>'],
+  ['generic', 'https://example.com/jobs/42/apply', '<input type="submit" value="Send application">'],
+]) {
+  for (const autoContinue of [false, true]) {
+    test(`${ats} filled final page is ready for review with Auto Continue ${autoContinue ? 'on' : 'off'}`, async () => {
+      dom.reconfigure({ url });
+      saveSettings({ autoContinue, autoSubmit: false });
+      render(`<h1>Engineer</h1><form>${input()}${submit}</form>`);
+      let clicks = 0;
+      document.querySelector('form').onsubmit = event => event.preventDefault();
+      document.querySelector('button,input[type=submit]').onclick = () => clicks++;
+      const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0 });
+      try {
+        await engine.start(job());
+        assert.equal(document.querySelector('#name').value, 'Applicant', 'final-page fields must be filled first');
+        assert.equal(engine.session.status, 'review');
+        assert.match(engine.session.reason, /Page filled.*submit/i);
+        assert.equal(engine.session.active, false);
+        assert.equal(clicks, 0, 'Auto Continue must never click Submit');
+      } finally { engine.destroy(); }
+    });
+  }
+}
+
+test('filled final page reports a disabled Submit instead of missing Continue', async () => {
+  render(`${input()}<button disabled>Submit application</button>`);
+  const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0 });
+  try {
+    await engine.start(job());
+    assert.equal(engine.session.status, 'paused');
+    assert.match(engine.session.reason, /Submit button is disabled/i);
+  } finally { engine.destroy(); }
+});
+
+test('filled final page reports ambiguous Submit controls instead of missing Continue', async () => {
+  render(`${input()}<button>Submit application</button><button>Submit</button>`);
+  saveSettings({ autoSubmit: true });
+  const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0 });
+  try {
+    await engine.start(job());
+    assert.equal(engine.session.status, 'paused');
+    assert.match(engine.session.reason, /Multiple Submit controls/i);
+  } finally { engine.destroy(); }
+});
+
+test('a final Submit button does not mark unresolved required fields ready for review', async () => {
+  render(`${input()}<button>Submit application</button>`);
+  let clicks = 0;
+  document.querySelector('button').onclick = () => clicks++;
+  const engine = createApplicationEngine({
+    answer: async fields => ({ answers: fields.map(field => ({ fieldId: field.fieldId, value: '' })) }),
+    settleMs: 0, transitionMs: 0,
+  });
+  try {
+    await engine.start(job());
+    assert.equal(engine.session.status, 'paused');
+    assert.equal(document.querySelector('#name').value, '');
+    assert.equal(clicks, 0);
+  } finally { engine.destroy(); }
+});
+
+test('accessible Submit names and decorative arrows are recognized', () => {
+  for (const markup of [
+    '<button aria-label="Submit application"><span>→</span></button>',
+    '<span id="submit-label">Submit application</span><button aria-labelledby="submit-label">→</button>',
+    '<button>Submit <span>application</span> →</button>',
+    '<input type="button" value="Submit my application">',
+  ]) {
+    render(markup);
+    assert.equal(inspectSubmit().control, document.querySelector('button,input'), markup);
+    assert.equal(findContinue(), null);
+  }
+});
+
+test('generic native submit controls work without ATS-specific labels', () => {
+  for (const control of ['<button type="submit">Finish</button>', '<input type="submit" value="Enviar candidatura">', '<button>Send</button>']) {
+    render(`<form aria-label="Job application"><label>Email<input type="email" required></label>${control}</form>`);
+    assert.equal(inspectSubmit().control, document.querySelector('button,input[type=submit]'));
+  }
+});
+
+test('a sole email capture form needs positive application evidence', async () => {
+  render('<h1>Software Engineer</h1><p>About the role</p><form><input type="email" placeholder="Email address" required><button>Sign Up</button></form>');
+  let submissions = 0;
+  document.querySelector('form').onsubmit = event => { event.preventDefault(); submissions++; };
+  saveSettings({ autoContinue: true, autoSubmit: true });
+  const engine = createApplicationEngine({ answer: async fields => ({ answers: fields.map(field => ({ fieldId: field.fieldId, value: 'test@example.com' })) }), settleMs: 0, submitCountdownMs: 0 });
+  try {
+    assert.equal(isApplicationForm(document.querySelector('form')), false);
+    assert.equal(inspectSubmit().count, 0);
+    await engine.start(job());
+    assert.equal(submissions, 0);
+    assert.equal(engine.session.submits || 0, 0);
+    document.querySelector('button').textContent = 'Submit application';
+    assert.equal(isApplicationForm(document.querySelector('form')), true);
+    assert.equal(inspectSubmit().count, 1);
+  } finally { engine.destroy(); }
+});
+
+test('generic native submit fallback excludes forward and unrelated form actions', () => {
+  for (const label of ['Next', 'Save draft', 'Upload resume', 'Subscribe', 'Sign Up']) {
+    render(`<form id="application"><input type="email"><button type="submit">${label}</button></form>`);
+    assert.equal(inspectSubmit().control, null, label);
+  }
+  render('<form><input type="email"><button aria-haspopup="listbox">Choose country</button></form>');
+  assert.equal(inspectSubmit().control, null);
+});
+
+test('sidebar newsletter and search forms do not compete with the application submit', () => {
+  render('<form id="application"><label>Full name<input></label><label>Job search preferences<textarea></textarea></label><label><input type="checkbox">Subscribe to our newsletter</label><button id="submit">Send</button></form>' +
+    '<aside><form><label>Newsletter email<input type="email"></label><button>Join</button></form></aside>' +
+    '<form role="search"><input type="search"><button>Go</button></form>');
+  assert.equal(inspectSubmit().count, 1);
+  assert.equal(inspectSubmit().control.id, 'submit');
+});
+
+for (const label of ['Next: Review', 'Next step — Additional questions', 'Continue to next step']) {
+  test(`native ${label} respects Auto Continue instead of consuming a submit attempt`, async () => {
+    render(`<form id="application">${input()}<button>${label}</button></form>`);
+    saveSettings({ autoContinue: false, autoSubmit: true });
+    let clicks = 0;
+    document.querySelector('form').onsubmit = event => { event.preventDefault(); clicks++; };
+    const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0, submitCountdownMs: 0 });
+    try {
+      assert.equal(inspectSubmit().count, 0);
+      assert.equal(findContinue(), document.querySelector('button'));
+      await engine.start(job());
+      assert.equal(clicks, 0);
+      assert.equal(engine.session.submits || 0, 0);
+      assert.equal(engine.session.stepReview, true);
+      assert.match(engine.session.reason, /Auto Continue is off/);
+    } finally { engine.destroy(); }
+  });
+}
+
+test('generic submit can live in a footer and reference its application form', () => {
+  render('<form id="application"><input type="email" required></form><footer><button form="application" type="submit">Envoyer</button></footer>');
+  assert.equal(inspectSubmit().control, document.querySelector('button'));
+});
+
+test('generic forward and submit controls are discovered inside open shadow roots', () => {
+  render('<application-form></application-form>');
+  const root = document.querySelector('application-form').attachShadow({ mode: 'open' });
+  root.innerHTML = '<form><label>Email<input type="email"></label><button aria-label="Continue">→</button></form>';
+  assert.equal(findContinue(), root.querySelector('button'));
+  assert.equal(inspectSubmit().control, null);
+  root.querySelector('button').setAttribute('aria-label', 'Submit application');
+  assert.equal(inspectSubmit().control, root.querySelector('button'));
+});
+
+test('generic selected-value displays count as committed while query text does not', () => {
+  render('<div class="select-shell"><span class="select-value"></span><label for="choice">Location</label><input id="choice" role="combobox" value="search query"></div>');
+  assert.equal(scanFormFields()[0].currentValue, '');
+  document.querySelector('.select-value').textContent = 'Ottawa, Ontario, Canada';
+  document.querySelector('#choice').value = '';
+  assert.equal(scanFormFields()[0].currentValue, 'Ottawa, Ontario, Canada');
+});
+
 test('Auto Submit clicks a single unambiguous submit after a zero countdown', async () => {
   saveSettings({ autoContinue: true, autoSubmit: true });
   render('<h1>Review application</h1><button id="submit">Submit application</button>');
@@ -937,6 +1219,80 @@ test('Auto Submit clicks a single unambiguous submit after a zero countdown', as
   assert.equal(engine.session.status, 'confirmation');
   engine.destroy();
 });
+
+test('manual Submit submits once with Auto Submit off and preserves review edits', async () => {
+  saveSettings({ autoSubmit: false, overwriteExisting: true });
+  render(`${input()}<button id="submit">Submit application</button>`);
+  let clicks = 0;
+  document.querySelector('#submit').onclick = () => {
+    clicks++;
+    assert.equal(document.querySelector('#name').value, 'User correction');
+    render('<h1>Application submitted</h1>');
+  };
+  const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0 });
+  try {
+    await engine.start(job());
+    assert.equal(engine.session.status, 'review');
+    assert.equal(clicks, 0);
+    document.querySelector('#name').value = 'User correction';
+    await Promise.all([engine.submit(), engine.submit()]);
+    assert.equal(clicks, 1);
+    assert.equal(engine.session.status, 'confirmation');
+    assert.equal(gmGet('kr:settings').autoSubmit, false);
+    await engine.submit();
+    assert.equal(clicks, 1);
+  } finally { engine.destroy(); }
+});
+
+for (const autoSubmit of [false, true]) test(`${autoSubmit ? 'Auto' : 'Manual'} Submit ignores a historical failed field removed from the live form`, async () => {
+  saveSettings({ autoSubmit });
+  render(`${input('obsolete', 'Old conditional question')}${input()}<button id="submit">Submit application</button>`);
+  document.querySelector('#obsolete').setAttribute('data-reject-fill', 'true');
+  document.querySelector('#name').oninput = () => document.querySelector('#obsolete')?.remove();
+  let clicks = 0;
+  document.querySelector('#submit').onclick = () => {
+    clicks++;
+    render('<h1>Application submitted</h1>');
+  };
+  let results;
+  const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0, submitCountdownMs: 0,
+    onChange: state => { results = new Map(state.results); } });
+  try {
+    await engine.start(job());
+    assert.equal(results.get('obsolete').status, 'failed', 'a historical failure still exists');
+    assert.equal(results.get('name').status, 'verified', 'the current field passed');
+    if (!autoSubmit) {
+      assert.equal(engine.session.status, 'review');
+      assert.equal(document.querySelector('#name').value, 'Applicant');
+      await engine.submit();
+    }
+    assert.equal(clicks, 1);
+    assert.equal(engine.session.status, 'confirmation');
+  } finally { engine.destroy(); }
+});
+
+for (const change of ['disabled', 'ambiguous', 'required', 'continue', 'ambiguous-forward']) {
+  test(`manual Submit rechecks the live page when ${change} changes during review`, async () => {
+    saveSettings({ autoSubmit: false });
+    render(`${input()}<button id="submit">Submit application</button>`);
+    let clicks = 0;
+    document.querySelector('#submit').onclick = () => clicks++;
+    const engine = createApplicationEngine({ answer: workflowAnswers, settleMs: 0, transitionMs: 0 });
+    try {
+      await engine.start(job());
+      if (change === 'disabled') document.querySelector('#submit').disabled = true;
+      if (change === 'ambiguous') document.querySelector('main').insertAdjacentHTML('beforeend', '<button>Submit</button>');
+      if (change === 'required') document.querySelector('#name').value = '';
+      if (change === 'continue') document.querySelector('main').insertAdjacentHTML('beforeend', '<button>Continue</button>');
+      if (change === 'ambiguous-forward') document.querySelector('main').insertAdjacentHTML('beforeend', '<button>Next</button><button>Continue</button>');
+      await engine.submit();
+      assert.equal(clicks, 0);
+      assert.equal(engine.session.status, 'paused');
+      assert.doesNotMatch(engine.session.reason, /Check required fields and application errors/);
+      if (change === 'required') assert.match(engine.session.reason, /Full name/);
+    } finally { engine.destroy(); }
+  });
+}
 
 test('Auto Submit is cancelled by Pause during the countdown', async () => {
   saveSettings({ autoContinue: true, autoSubmit: true });

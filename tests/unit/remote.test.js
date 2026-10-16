@@ -14,6 +14,7 @@ import {
   collectRemoteValidation,
   locateRemoteField,
   inspectRemoteFields,
+  embeddedApplicationStates,
 } from '../../src/core/remote.js';
 
 /** Installs a host that pretends to be the extension, recording every command. */
@@ -64,6 +65,30 @@ test('only embedded frames that hold fields are considered', async () => {
   });
   const frames = await listRemoteFrames();
   assert.deepEqual(frames.map((frame) => frame.frameId), [5]);
+});
+
+test('generic workflow discovery excludes unrelated forms and retains confirmation pages', async () => {
+  stubFrames({
+    frames: [
+      { frameId: 1, isTop: false, applicationEvidence: { eligible: true } },
+      { frameId: 2, isTop: false, applicationEvidence: { eligible: false } },
+      { frameId: 3, isTop: false, fieldCount: 0, applicationEvidence: { eligible: false } },
+    ],
+    respond: frameId => ({ adapter: 'generic', pageType: frameId === 3 ? 'confirmation' : 'application' }),
+  });
+  assert.deepEqual((await embeddedApplicationStates()).map(frame => frame.frameId), [1, 3]);
+});
+
+test('a partial iframe does not own an application with parent form fields', async () => {
+  document.body.innerHTML = '<form id="application"><label>Full name<input required></label><button>Submit application</button></form>';
+  stubFrames({ frames: [{ frameId: 1, isTop: false, fieldCount: 1, applicationEvidence: { eligible: true } }],
+    respond: () => ({ adapter: 'generic', pageType: 'application', canSubmit: true }) });
+  assert.deepEqual(await embeddedApplicationStates(), []);
+  // Host newsletter controls must not take ownership from a complete iframe.
+  document.body.innerHTML = '<aside><form><label>Newsletter email<input type="email"></label><button>Join</button></form></aside>';
+  assert.equal((await embeddedApplicationStates()).length, 1);
+  document.body.innerHTML = '<h1>Software Engineer</h1><form><input type="email" placeholder="Email address"><button>Sign Up</button></form>';
+  assert.equal((await embeddedApplicationStates()).length, 1);
 });
 
 test('collected fields are namespaced by frame so ids cannot collide', async () => {
@@ -170,8 +195,8 @@ test('search queries reach the owning frame and returned options stay namespaced
 test('validation errors from embedded frames are aggregated for repair', async () => {
   stubFrames({
     frames: [
-      { frameId: 5, isTop: false, fieldCount: 2, url: 'https://embed.example.com/form' },
-      { frameId: 6, isTop: false, fieldCount: 1, url: 'https://other.example.com/form' },
+      { frameId: 5, isTop: false, fieldCount: 2, url: 'https://embed.example.com/form', applicationEvidence: { eligible: true } },
+      { frameId: 6, isTop: false, fieldCount: 1, url: 'https://other.example.com/form', applicationEvidence: { eligible: true } },
     ],
     respond: (frameId) => (frameId === 5
       ? { errors: [{ fieldId: 'field-1', message: 'Required' }] }
@@ -179,7 +204,28 @@ test('validation errors from embedded frames are aggregated for repair', async (
   });
 
   const errors = await collectRemoteValidation();
-  assert.deepEqual(errors, [{ fieldId: 'field-1', message: 'Required' }]);
+  assert.deepEqual(errors, [{ fieldId: 'jcf5::field-1', message: 'Required' }]);
+});
+
+test('an unreachable application frame cannot silently pass submission validation', async () => {
+  stubFrames({ frames: [{ frameId: 5, isTop: false, fieldCount: 1, applicationEvidence: { eligible: true } }], respond: () => ({ error: 'Frame unavailable' }) });
+  await assert.rejects(collectRemoteValidation(), /Frame unavailable/);
+});
+
+test('submission validates participating partial frames and skips unrelated widgets', async () => {
+  const sent = stubFrames({
+    frames: [
+      { frameId: 5, isTop: false, fieldCount: 1, applicationEvidence: { eligible: false } },
+      { frameId: 6, isTop: false, fieldCount: 1, applicationEvidence: { eligible: false } },
+      { frameId: 7, isTop: false, fieldCount: 1, applicationEvidence: { eligible: true } },
+    ],
+    respond: frameId => frameId === 6 ? { error: 'Widget unavailable' } : { errors: [{ fieldId: 'value', message: 'Required' }] },
+  });
+  assert.deepEqual(await collectRemoteValidation(['jcf5::value', 'local-field']), [
+    { fieldId: 'jcf5::value', message: 'Required' },
+    { fieldId: 'jcf7::value', message: 'Required' },
+  ]);
+  assert.deepEqual(sent.map(entry => entry.frameId), [5, 7]);
 });
 
 test('locateRemoteField dispatches locate action to owning frame with local id', async () => {

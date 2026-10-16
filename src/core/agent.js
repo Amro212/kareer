@@ -11,7 +11,7 @@ import { FILL_STATUS } from './constants.js';
 import { logger } from './debug.js';
 import { detectAdapter } from './adapters/index.js';
 import { getProfile } from './storage.js';
-import { applyGeneratedMaterials } from './materials.js';
+import { applyGeneratedMaterials, materialKind } from './materials.js';
 import { inspectContinue, inspectSubmit, observePage, isDisabled } from './navigation.js';
 
 /**
@@ -23,6 +23,7 @@ import { inspectContinue, inspectSubmit, observePage, isDisabled } from './navig
 export function createFieldAgent() {
   let cache = new Map();
   let generation = 0;
+  let selectedMaterials = {};
 
   function unfilled(field, overwrite = false) {
     const adapterNeeds = detectAdapter().needsFill?.(field, getProfile());
@@ -47,7 +48,7 @@ export function createFieldAgent() {
     const scanned = scanFormFields(document);
     cache = new Map(scanned.map((field) => [field.id, field]));
 
-    const targets = scanned.filter((field) => field.type !== 'file' && unfilled(field, overwriteExisting));
+    const targets = scanned.filter((field) => field.type !== 'file' && unfilled(field, overwriteExisting) && !selectedMaterials[materialKind(field)]);
     if (!targets.length) return { fields: [], pageType: page.type };
 
     await harvestComboboxOptions(targets);
@@ -140,6 +141,7 @@ export function createFieldAgent() {
   async function uploadResume({ overwriteExisting = false, materials = {} } = {}) {
     const token=generation;
     if (['confirmation','captcha'].includes(classifyPage().type)) return {error:classifyPage().reason};
+    selectedMaterials = materials;
     const allFileFields = scanFormFields(document).filter((field) => field.type === 'file');
     deduplicateFields(allFileFields);
     const fields = allFileFields.filter((field) => isResumeField(field, allFileFields) && !materials.resume);
@@ -163,7 +165,7 @@ export function createFieldAgent() {
   }
 
   async function validation() {
-    const fields = cache.size ? [...cache.values()] : scanFormFields(document);
+    const fields = scanFormFields(document);
     return {
       errors: inspectValidation(fields).map((error) => ({ ...error, frameUrl: window.location.href })),
     };
@@ -204,7 +206,7 @@ export function createFieldAgent() {
     const observation=observePage(fields);
     return {pageType:page.type,reason:page.reason,url:location.href,adapter:detectAdapter().id,
       signature:JSON.stringify(observation),observation,fieldCount:fields.length,canContinue:Boolean(next.control && !isDisabled(next.control)),
-      canSubmit:Boolean(submit.control && !isDisabled(submit.control)),errors:inspectValidation(fields),
+      canSubmit:Boolean(submit.control && !isDisabled(submit.control) && next.count < 2),navigationReason:next.count ? next.reason : submit.reason,errors:inspectValidation(fields),
       fields:normalizeFieldsForAI(fields),uploads:fields.filter(field => field.type === 'file').map(field => ({fieldId:field.id,required:field.required,currentValue:field.currentValue,label:field.label}))};
   }
 
@@ -215,7 +217,7 @@ export function createFieldAgent() {
     if (state.errors.length) return {error:'Embedded validation needs manual input.',errors:state.errors};
     const control = command.action === 'submit' ? inspectSubmit().control : inspectContinue().control;
     if (!control || isDisabled(control)) return {error:'No unambiguous enabled application control.'};
-    if (command.action === 'submit' && state.canContinue) return {error:'Continue the application before submitting.'};
+    if (command.action === 'submit' && (!state.canSubmit || state.canContinue)) return {error:state.navigationReason || 'Continue the application before submitting.'};
     control.click();
     return {ok:true};
   }

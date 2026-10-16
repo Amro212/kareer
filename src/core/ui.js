@@ -42,7 +42,7 @@ import { detectAdapter } from './adapters/index.js';
 import { rememberAnswer } from './memory.js';
 import { saveSession } from './sessions.js';
 import { captureJob, activateJobPage } from './jobs.js';
-import { inspectContinue } from './navigation.js';
+import { inspectContinue, inspectSubmit } from './navigation.js';
 
 let applicationEngine = null;
 let applicationState = null;
@@ -1911,6 +1911,10 @@ async function handleUnifiedAutofillClick() {
     updatePanelDOM();
     return;
   }
+  if (session?.status === 'review') {
+    void engine.submit();
+    return;
+  }
   const adapter = detectAdapter();
   const embeddedStates = await embeddedApplicationStates();
   if (!current()) return;
@@ -1940,11 +1944,11 @@ async function handleUnifiedAutofillClick() {
 
   // Capture creates context for every job. Single-page/embedded applications
   // still use their field-agent flow; a session alone does not imply navigation.
-  const needsWorkflow = session?.active || session?.currentStep || ['workday', 'greenhouse', 'ashby'].includes(adapter.id) ||
-    Boolean(inspectContinue().control) || getSettings().autoSubmit;
+  const needsWorkflow = session?.active || session?.currentStep || ['workday', 'greenhouse', 'ashby', 'lever'].includes(adapter.id) ||
+    inspectContinue().count > 0 || inspectSubmit().count > 0 || getSettings().autoSubmit;
   const hasEmbeddedFields = remoteFieldsCache.length || (await listRemoteFrames()).length;
   if (!current()) return;
-  if (supportedEmbedded || session && needsWorkflow && !hasEmbeddedFields) {
+  if (supportedEmbedded || needsWorkflow && !hasEmbeddedFields) {
     void applicationEngine?.start();
     return;
   }
@@ -2072,6 +2076,7 @@ async function executeAutofillFlow() {
         : 'All fields are already filled. Enable "Overwrite Existing Values" in Settings to overwrite.';
       logger.info(autofillProgress.statusText);
       isAutofilling = false;
+      if (!inspectContinue().count && inspectSubmit().count) await applicationEngine?.reviewFilledPage(fieldResultsCache);
       updatePanelDOM();
       return;
     }
@@ -2254,6 +2259,7 @@ async function executeAutofillFlow() {
     autofillProgress.total = report.total;
     autofillProgress.statusText = 'Autofill complete. Review field statuses below.';
     logger.info(`Autofill finished: ${report.filled} filled, ${report.failed.length} failed and ${report.untouched.length} untouched out of ${report.total} current fields.`);
+    if (!inspectContinue().count && inspectSubmit().count) await applicationEngine?.reviewFilledPage(fieldResultsCache);
   } catch (err) {
     if (token !== autofillGeneration) return;
     const msg = err?.message || String(err);
@@ -2348,10 +2354,10 @@ export function summarizeFieldResults(fields, results) {
     const res = results.get(id);
     if (res?.status === FILL_STATUS.VERIFIED) {
       verifiedFields.push({ field: f, result: res });
-    } else if (res?.status === FILL_STATUS.INFERRED || res?.status === FILL_STATUS.GUESSED || res?.inferred) {
-      inferredFields.push({ field: f, result: res });
     } else if (res?.status === FILL_STATUS.FAILED) {
       failedFields.push({ field: f, result: res });
+    } else if (res?.status === FILL_STATUS.INFERRED || res?.status === FILL_STATUS.GUESSED || res?.inferred) {
+      inferredFields.push({ field: f, result: res });
     } else {
       untouchedFields.push({ field: f, result: res });
     }
@@ -2593,9 +2599,9 @@ function renderHomeTab() {
     btnDisabled = false;
     btnTitle = 'Resume application autofill';
   } else if (wfIsDone) {
-    btnContent = `${ICONS.check} ${wfStatus === 'confirmation' ? 'Submitted' : 'Ready for Review'}`;
-    btnDisabled = false;
-    btnTitle = wfStatus === 'confirmation' ? 'Application submitted' : 'Application ready for review';
+    btnContent = `${ICONS.check} ${wfStatus === 'confirmation' ? 'Submitted' : 'Submit Application'}`;
+    btnDisabled = wfStatus === 'confirmation';
+    btnTitle = wfStatus === 'confirmation' ? 'Application submitted' : 'Submit this application';
   } else if (!strength.isMvpComplete) {
     btnContent = `${ICONS.play} ${adapter.id !== 'generic' ? `Autofill ${escapeHtml(adapter.label)}` : 'Autofill Application'}`;
     btnDisabled = false;

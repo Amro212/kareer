@@ -40,6 +40,43 @@ function boot(html, ats = 'greenhouse', scripts=false) {
 }
 afterEach(() => { dom?.window.close(); setPlatform(createGmHost()); });
 
+for (const ats of ['greenhouse', 'ashby', 'generic']) {
+  test(`${ats} frame keeps selected cover letter text out of overwrite and late scans`, async () => {
+    boot('<form id="application_form" data-ashby-root><label for="letter">Cover letter</label><textarea id="letter" required></textarea><label for="other">Why this role?</label><textarea id="other"></textarea></form>', ats);
+    if (ats === 'generic') {
+      document.querySelector('form').removeAttribute('data-ashby-root');
+      document.querySelector('form').removeAttribute('id');
+      dom.reconfigure({ url: 'https://careers.example.org/apply' });
+    }
+    const agent = createFieldAgent();
+    const text = 'My selected and edited cover letter.';
+    const uploaded = await agent.handle({ action: 'uploadResume', materials: { coverLetter: { revision: 'selected', model: { kind: 'coverLetter', paragraphs: [text] } } } });
+    assert.equal(uploaded.results[0].status, 'verified');
+    for (const overwriteExisting of [true, false]) {
+      const scan = await agent.handle({ action: 'scan', overwriteExisting });
+      assert.deepEqual(scan.fields.map(field => field.fieldId), ['other']);
+    }
+    assert.equal(document.querySelector('#letter').value, text);
+    document.querySelector('#letter').value = '';
+    assert.ok((await agent.handle({ action: 'validation' })).errors.some(error => error.fieldId === 'letter'));
+    await agent.handle({ action: 'uploadResume', materials: {} });
+    assert.ok((await agent.handle({ action: 'scan', overwriteExisting: true })).fields.some(field => field.fieldId === 'letter'));
+  });
+}
+
+test('generic frame cannot submit while forward controls are ambiguous', async () => {
+  boot('<form><input type="email" value="test@example.com"><button>Next</button><button>Continue</button><button id="submit">Submit application</button></form>');
+  dom.reconfigure({ url: 'https://example.com/application' });
+  let clicks = 0;
+  document.querySelector('#submit').onclick = () => clicks++;
+  const agent = createFieldAgent();
+  const state = await agent.handle({ action: 'stepState' });
+  assert.equal(state.canSubmit, false);
+  const result = await agent.handle({ action: 'submit', expectedSignature: state.signature });
+  assert.match(result.error, /Multiple forward buttons/);
+  assert.equal(clicks, 0);
+});
+
 test('Greenhouse retry reuses its partial education row after an inferred degree choice',async()=>{
   boot('<form id="application_form"><div id="education_section"><div class="education"><label>School<input id="school"></label><label>Degree<input id="degree"></label></div><button type="button" id="add_education">Add</button></div></form>');
   const profile={education:[{id:'edu',institution:'university of guelph',degree:'Bachelor of Engineering'}]},session={};
@@ -128,7 +165,7 @@ for (const cancel of [false,true]) test(`embedded late degree discovery ${cancel
     await engine.start();
     assert.equal(calls,cancel?0:1);assert.equal(accepted,!cancel);
     assert.equal(commands.filter(command=>command.action==='searchOptions').length,1);
-    assert.equal(engine.session.reason,cancel?'Paused by user.':'Embedded page filled. Review the application before proceeding.');
+    assert.equal(engine.session.reason,cancel?'Paused by user.':'Page filled. Review your answers, then submit the application.');
   } finally {engine.destroy();globalThis.GM_xmlhttpRequest=undefined;}
 });
 
