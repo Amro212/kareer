@@ -92,10 +92,13 @@ export function createFieldAgent() {
 
       try {
         field.element = resolveLive(field);
-        scrollToField(field.element);
-        highlightActiveField(field.element);
+        const unchangedChoices = field.widget === 'ats-choice' && (await verifyField(field, answer.value)).verified;
+        if (!unchangedChoices) {
+          scrollToField(field.element);
+          highlightActiveField(field.element);
+        }
 
-        const didFill = await fillField(field, answer.value);
+        const didFill = unchangedChoices || await fillField(field, answer.value);
         await new Promise((resolve) => setTimeout(resolve, field.type === 'combobox' ? 250 : 80));
 
         field.element = resolveLive(field);

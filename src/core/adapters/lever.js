@@ -11,6 +11,7 @@ import {
   leverNeedsFill,
   leverCanonicalKey,
 } from './lever-fields.js';
+import { checkboxQuestions, fillCheckboxQuestion } from './application-fields.js';
 
 function hostnameOf(loc) {
   return String(loc?.hostname || '');
@@ -64,7 +65,7 @@ export const leverAdapter = {
     return ['work_auth','sponsorship','sponsorship_now','sponsorship_future','gender','pronouns','ethnicity','disability_v2','veteran_v2'].includes(field.ats?.canonicalKey) ? '' : value;
   },
   choiceGroups(root, profile = {}) {
-    return Array.from(root.querySelectorAll('#candidatePronounsCheckboxes')).map(container => {
+    return [...checkboxQuestions(root, this), ...Array.from(root.querySelectorAll('#candidatePronounsCheckboxes')).map(container => {
       const elements = Array.from(container.querySelectorAll('input[type="checkbox"]'));
       const customInput = container.querySelector('#customPronounsTextField');
       const explicit = profile.pronouns?.trim() || '';
@@ -82,14 +83,16 @@ export const leverAdapter = {
       };
       field.currentValue = this.readChoice(field).join(', ');
       return field;
-    });
+    })];
   },
   readChoice(field) {
+    if (field.widget === 'ats-choice') return field.elements.flatMap((element, index) => element.checked ? [field.options[index].value] : []);
     if (field.widget !== 'lever-pronouns') return null;
     return field.elements.filter(el => el.checked).map(el => el.id === 'customPronounsOption'
       ? field.customInput?.value.trim() || 'Custom' : el.value);
   },
   fillChoice(field, value, { checkbox, text }) {
+    if (field.widget === 'ats-choice') return fillCheckboxQuestion(field, value, { checkbox });
     if (field.widget !== 'lever-pronouns') return null;
     const target = field.elements.find(el => (el.id === 'customPronounsOption' ? field.customValue : el.value) === value);
     if (!target) return false;

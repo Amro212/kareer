@@ -154,7 +154,7 @@ export function extractLabel(element) {
 function findGroupContainer(elements) {
   if (!elements || elements.length === 0) return null;
   const firstEl = elements[0];
-  const containerSelectors = '.form-group, .form-field, .fieldItem, .qa-radio-field, .qa-dropdown-field, .field, [role="radiogroup"], [role="group"], .question, fieldset';
+  const containerSelectors = '.form-group, .form-field, .fieldItem, .qa-radio-field, .qa-dropdown-field, .field, .gfield, .application-question, .custom-question, .checkbox-group, [role="radiogroup"], [role="group"], .question, fieldset';
   let candidate = firstEl.closest(containerSelectors);
   if (candidate && elements.every((el) => candidate.contains(el))) {
     return candidate;
@@ -201,6 +201,8 @@ export function extractGroupLabel(elements = [], groupName = '') {
     // Check aria-label on container
     const ariaLabel = container.getAttribute('aria-label');
     if (ariaLabel && ariaLabel.trim()) return cleanText(ariaLabel);
+    const labelledBy = (container.getAttribute('aria-labelledby') || '').split(/\s+/).map(id => container.getRootNode().getElementById?.(id)?.textContent || '').join(' ').trim();
+    if (labelledBy) return cleanText(labelledBy);
 
     // Look for heading or label that is NOT wrapping one of the radio inputs
     const headings = Array.from(container.querySelectorAll('label, legend, .label, .form-label, .field-label, .field-title, .control-label, h3, h4, h5, p, strong, span'));

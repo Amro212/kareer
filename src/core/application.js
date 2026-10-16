@@ -349,10 +349,11 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       if (!field) continue; // A conditional question can disappear on this step.
       if (field.type === 'file') continue;
       field.options = original.options;
-      field.element.scrollIntoView?.({ block: 'center', behavior: 'instant' });
+      const unchangedChoices = field.widget === 'ats-choice' && (await verifyField(field, entry.value)).verified;
+      if (!unchangedChoices) field.element.scrollIntoView?.({ block: 'center', behavior: 'instant' });
       logger.info(`Field action [${entry.source === 'ai' ? 'AI' : entry.source === 'saved' ? 'Saved' : 'Profile'}]: id=${field.id}, label="${field.label}"`);
       const started = Date.now();
-      const filled = await fillField(field, entry.value);
+      const filled = unchangedChoices || await fillField(field, entry.value);
       const filledAt = Date.now();
       if (!await settleFields(signature, token, 'field action', field.id)) return false;
       const live = scanFormFields().find(f => f.id === field.id && f.label === field.label);

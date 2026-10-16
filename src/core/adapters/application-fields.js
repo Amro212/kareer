@@ -3,7 +3,8 @@ import { countryCode, explicitCountryCode, countryCodes, countryNames, eligibili
 import { fixedProfileAnswer } from '../profile.js';
 import { optionKey, findExactOption, readComboboxSelection } from '../fields/combobox.js';
 import { locationMatches } from '../location.js';
-import { choiceValue, extractOptionLabel } from '../fields/labels.js';
+import { choiceValue, extractOptionLabel, extractGroupLabel, nameToLabel } from '../fields/labels.js';
+import { isVisible } from '../pageClassifier.js';
 
 // Local recipes authored from the public Greenhouse/Ashby inventory. They map
 // controls to existing profile facts; they do not interpret remote action code.
@@ -209,23 +210,60 @@ export function applicationNeedsFill(field, profile) {
   return null;
 }
 
-export function checkboxQuestions(root, adapter) {
-  return [...root.querySelectorAll('fieldset,.demographic_question,.ashby-application-form-field-entry')].flatMap(container => {
-    const elements = [...container.querySelectorAll('input[type=checkbox]')];
-    if (!elements.length || container.querySelector('fieldset,.demographic_question,.ashby-application-form-field-entry')) return [];
-    const metadata = adapter.fieldMetadata(elements[0]);
-    const multipleQuestion = adapter.id === 'ashby' && elements.length > 1 && container.matches('.ashby-application-form-input-checkbox-group');
-    if (!DISCLOSURES.has(metadata?.ats?.canonicalKey) && !multipleQuestion) return [];
+export function checkboxQuestions(root, adapter, excluded = new Set()) {
+  const containers = 'fieldset,[role="group"],.gfield,.form-group,.form-field,.field,.question,.checkbox-group,.application-question,.custom-question,.demographic_question,.ashby-application-form-field-entry';
+  const groups = new Map(), named = new Map();
+  for (const element of root.querySelectorAll('input[type=checkbox]')) {
+    if (excluded.has(element) || !isVisible(element.parentElement) || element.closest('#candidatePronounsCheckboxes,[role="listbox"],header,nav,footer') || adapter.excludeField?.(element)) continue;
+    let container = element.closest(containers);
+    // A one-control layout wrapper is an option, unless it owns a separate question title.
+    while (container?.matches('.form-group,.form-field,.field') && !container.matches('fieldset,[role="group"]') && container.querySelectorAll('input:not([type=hidden]),textarea,select').length === 1) {
+      const title = [...container.querySelectorAll('label,legend,h3,h4,h5,.label,.form-label,.field-label,.field-title,.application-label')]
+        .some(node => !node.contains(element) && ![...element.labels].some(label => label.contains(node)));
+      const parent = container.parentElement?.closest(containers);
+      if (title || !parent) break;
+      container = parent;
+    }
+    if (container && (container === root || root.contains(container))) {
+      if (!groups.has(container)) groups.set(container, []);
+      groups.get(container).push(element);
+    } else if (element.name) {
+      const scope = element.form || element.getRootNode();
+      if (!named.has(scope)) named.set(scope, new Map());
+      const names = named.get(scope);
+      if (!names.has(element.name)) names.set(element.name, []);
+      names.get(element.name).push(element);
+    }
+  }
+  const candidates = [...groups].map(([container,elements]) => ({container,elements}));
+  for (const names of named.values()) for (const elements of names.values()) {
+    if (elements.length < 2) continue;
+    let container = elements[0].parentElement;
+    while (container && !elements.every(element => container.contains(element))) container = container.parentElement;
+    if (container) candidates.push({container,elements});
+  }
+  return candidates.flatMap(({container,elements}) => {
+    const metadata = adapter.fieldMetadata?.(elements[0], container);
+    const label = metadata?.label || (groups.has(container) ? extractGroupLabel(elements, elements[0].name) : nameToLabel(elements[0].name));
+    const multipleQuestion = elements.length > 1 && (elements[0].name && elements.every(element => element.name === elements[0].name) ||
+      DISCLOSURES.has(metadata?.ats?.canonicalKey) || /(?:select|check|choose).*(?:all|multiple|more than one)/i.test(label) ||
+      container.matches('.checkbox-group,.gfield--type-checkbox,.ashby-application-form-input-checkbox-group'));
+    if (!multipleQuestion && !(elements.length === 1 && DISCLOSURES.has(metadata?.ats?.canonicalKey))) return [];
     const options = elements.map(element => ({value:choiceValue(element,elements), label:extractOptionLabel(element)}));
-    return [{...metadata,id:container.id || elements[0].name || elements[0].id,type:'radio',widget:'ats-choice',element:container,elements,options,
-      ats:{...metadata.ats,multiple:elements.length > 1},required:metadata.required || container.getAttribute('aria-required') === 'true',
+    return [{...metadata,label,id:(!container.matches('form') && container.id) || elements[0].name || elements[0].id,type:'radio',widget:'ats-choice',element:container,elements,options,
+      ats:{adapter:adapter.id,...metadata?.ats,multiple:elements.length > 1},required:Boolean(metadata?.required || elements.some(element => element.required) || container.getAttribute('aria-required') === 'true' || container.querySelector('.required,.gfield_required')),
       currentValue:elements.flatMap((element,index) => element.checked ? [options[index].value] : []).join(', '),constraints:{},isNarrative:false}];
   });
 }
 
+export function readCheckboxQuestion(field) {
+  return field.elements.flatMap((element,index) => element.checked ? [field.options[index].value] : []);
+}
+
 export function fillCheckboxQuestion(field, value, {checkbox}) {
   const values = Array.isArray(value) ? value : [value];
-  if (values.some(item => !field.options.some(option => option.value === item))) return false;
+  if (!values.length && field.required || values.some(item => !field.options.some(option => option.value === item)) ||
+    field.elements.some((element,index) => element.disabled && element.checked !== values.includes(field.options[index].value))) return false;
   for (const [index,element] of field.elements.entries()) {
     const wanted = values.includes(field.options[index].value);
     if (element.checked !== wanted) checkbox(element, wanted);

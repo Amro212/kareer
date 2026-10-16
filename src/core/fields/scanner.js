@@ -8,6 +8,7 @@ import { isVisible as isPageVisible } from '../pageClassifier.js';
 import { isLeverLocation, isCustomCombobox } from './combobox.js';
 import { COMBO, discoverComboboxOptions, optionData, readComboboxSelection, resolveComboboxParts, openCombobox, closeCombobox, setComboboxSearch, waitForComboboxOptions } from './combobox.js';
 import { accessibleRoots, FORM_CONTROLS } from '../domRoots.js';
+import { checkboxQuestions } from '../adapters/application-fields.js';
 
 let fieldCounter = 0;
 const scanStates = new WeakMap();
@@ -90,15 +91,22 @@ export function scanFormFields(root = document) {
   const adapter = detectAdapter();
   const applicationRoot = adapter.applicationRoot?.(root.ownerDocument || root);
   if (applicationRoot && (root === document || root.contains(applicationRoot))) root = applicationRoot;
-  for (const field of adapter.choiceGroups?.(root, getProfile()) || []) {
-    if (!isVisible(field.element) || isInsideCopilot(field.element)) continue;
+  const addChoice = field => {
+    if (!isVisible(field.element) || isInsideCopilot(field.element)) return;
+    if (!field.id) field.id = `jc_field_${++fieldCounter}`;
     detectedFields.push(field);
-    field.element.querySelectorAll('input, button').forEach(el => processedElements.add(el));
+    field.elements.forEach(el => processedElements.add(el));
+    if (field.customInput) processedElements.add(field.customInput);
+  };
+  for (const field of adapter.choiceGroups?.(root, getProfile()) || []) addChoice(field);
+  for (const current of accessibleRoots(root)) {
+    for (const field of checkboxQuestions(current, adapter, processedElements)) addChoice(field);
   }
 
   const allCandidates = collectCandidatesWithShadow(root);
   const candidates = allCandidates.filter((el) => {
     if (isInsideCopilot(el)) return false;
+    if (el.type === 'checkbox' && (!isPageVisible(el.parentElement) || el.closest('[role="listbox"]'))) return false;
     if (el.closest('.select2-container') && !el.matches('.select2-container')) return false;
     if (el.matches('.select2-container') && !adapter.isCombobox?.(el)) return false;
     if (el.closest('header,nav,footer,[role="banner"],[role="navigation"],[role="contentinfo"],.g-recaptcha,.h-captcha,[data-captcha]')) return false;

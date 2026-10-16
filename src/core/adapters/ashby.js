@@ -56,7 +56,7 @@ export const ashbyAdapter = {
     const row = element.closest(ROW);
     let owner = element.parentElement;
     while (row && owner !== row && !owner?.querySelector('.ashby-application-form-question-title')) owner = owner.parentElement;
-    let title = (row ? owner : container)?.querySelector('.ashby-application-form-question-title');
+    let title = (row ? owner : container)?.querySelector('.ashby-application-form-question-title,legend');
     if (row && element.type==='checkbox' && /isCurrent/i.test(element.id)) {
       title=element.ownerDocument.createElement('label');
       title.textContent=element.parentElement.parentElement.textContent.trim();

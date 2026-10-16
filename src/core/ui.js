@@ -2157,10 +2157,13 @@ async function executeAutofillFlow() {
 
         logger.info(`Field action [${source === 'ai' ? 'AI' : source === 'saved' ? 'Saved' : 'Profile'}]: id=${field.id}, label="${field.label}"`);
 
-        scrollToField(field.element);
-        highlightActiveField(field.element);
+        const unchangedChoices = field.widget === 'ats-choice' && (await verifyField(field, answer.value)).verified;
+        if (!unchangedChoices) {
+          scrollToField(field.element);
+          highlightActiveField(field.element);
+        }
 
-        const didFill = await fillField(field, answer.value);
+        const didFill = unchangedChoices || await fillField(field, answer.value);
         if (token !== autofillGeneration) break;
 
         // Allow micro-delay for React/framework state settling (interruptible)

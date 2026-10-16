@@ -2,6 +2,7 @@ import { FIELD_TYPES } from '../constants.js';
 import { readComboboxSelection, optionKey, waitForComboboxSelection, findExactOption } from './combobox.js';
 import { detectAdapter } from '../adapters/index.js';
 import { choiceValue } from './labels.js';
+import { readCheckboxQuestion } from '../adapters/application-fields.js';
 
 export async function verifyField(field, expectedValue) {
   if (!field || !field.element) {
@@ -19,12 +20,12 @@ export async function verifyField(field, expectedValue) {
 
   const expectedStr = String(expectedValue || '').trim().toLowerCase();
   if (field.widget) {
-    const actual = detectAdapter().readChoice?.(field) || [];
+    const actual = field.widget === 'ats-choice' ? readCheckboxQuestion(field) : detectAdapter().readChoice?.(field) || [];
     if (field.ats?.multiple) {
       const values = Array.isArray(expectedValue) ? expectedValue : [expectedValue];
       const verified = field.widget === 'workday-choice'
         ? values.length > 0 && values.every(value => field.options.some(option => option.value === value) && actual.includes(value))
-        : values.length > 0 && actual.length === values.length && values.every(value => field.options.some(option => option.value === value) && actual.includes(value));
+        : (values.length > 0 || field.widget === 'ats-choice' && !field.required) && actual.length === values.length && values.every(value => field.options.some(option => option.value === value) && actual.includes(value));
       return { verified, actualValue: actual.join(', '), error: verified ? undefined : 'Expected choices were not accepted' };
     }
     const option = findExactOption(field.options || [], expectedValue, field);

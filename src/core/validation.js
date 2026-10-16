@@ -1,6 +1,7 @@
 import { isVisible, visibleText } from './pageClassifier.js';
 import { isDisabled } from './navigation.js';
 import { detectAdapter } from './adapters/index.js';
+import { readCheckboxQuestion } from './adapters/application-fields.js';
 
 // ARIA alerts announce success and progress as well as errors.
 function isErrorMessage(node) {
@@ -17,13 +18,17 @@ export function inspectValidation(fields, control = null, doc = document) {
   for (const field of fields) {
     const el = field.element;
     if ((!isVisible(el) && !(field.type === 'file' && isVisible(el.parentElement))) || el.disabled) continue;
-    const ids = `${el.getAttribute('aria-errormessage') || ''} ${el.getAttribute('aria-describedby') || ''}`.trim().split(/\s+/);
+    const controls = field.widget === 'ats-choice' ? [el,...field.elements] : [el];
+    const ids = [...new Set(controls.flatMap(node => `${node.getAttribute('aria-errormessage') || ''} ${node.getAttribute('aria-describedby') || ''}`.trim().split(/\s+/)))];
     const nodes = ids.map(id => doc.getElementById(id)).filter(node => node && isVisible(node));
     // ATS widgets can persist an attachment then clear the required native input.
     // Acceptance replaces valueMissing only; explicit rejection still wins.
     const acceptedUpload = field.type === 'file' && detectAdapter().uploadState?.(el)?.accepted;
-    const invalid = el.getAttribute('aria-invalid') === 'true' || el.validity?.valid === false && !(acceptedUpload && el.validity.valueMissing && !el.validity.customError);
-    const missing = field.required && (field.widget ? field.ats?.multiple ? !detectAdapter().readChoice?.(field)?.length : detectAdapter().readChoice?.(field)?.length !== 1 : field.type === 'checkbox' ? !el.checked : field.type === 'radio' ? !(field.elements || [el]).some(r => r.checked) : !String(field.currentValue ?? '').trim());
+    // Only adapter-confirmed group requirements replace individual native required flags.
+    const groupRequirement = field.widget === 'ats-choice' && field.ats?.requiredAtGroup;
+    const invalid = controls.some(node => node.getAttribute('aria-invalid') === 'true' || node.validity?.valid === false && !((acceptedUpload || groupRequirement) && node.validity.valueMissing && !node.validity.customError));
+    const selection = field.widget === 'ats-choice' ? readCheckboxQuestion(field) : field.widget ? detectAdapter().readChoice?.(field) : null;
+    const missing = field.required && (field.widget ? field.ats?.multiple ? !selection?.length : selection?.length !== 1 : field.type === 'checkbox' ? !el.checked : field.type === 'radio' ? !(field.elements || [el]).some(r => r.checked) : !String(field.currentValue ?? '').trim());
     const messages = nodes.filter(node => invalid || isErrorMessage(node));
     messages.forEach(node => owned.add(node));
     if (invalid || missing || messages.some(node => visibleText(node))) errors.push({ fieldId: field.id, label: field.label, kind: el.getAttribute('aria-invalid') === 'true' || messages.length ? 'semantic' : 'native', message: messages.map(visibleText).filter(Boolean).join(' ') || el.validationMessage || 'Required value missing or rejected.' });

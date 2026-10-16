@@ -25,11 +25,13 @@ export const greenhouseAdapter = {
   },
   applicationRoot: doc => doc.querySelector(FORM),
   excludeField: element => Boolean(element.closest('.filters,[class^="filters"],.contact-modal_component')) || element.matches('select') && Boolean(element.previousElementSibling?.matches('.select2-container')),
-  fieldMetadata(element) {
+  fieldMetadata(element, questionContainer) {
     if (!element) return {};
-    const container = element.closest('.field,.form-group,.control-group,.select-shell,.select__container,.text-input-wrapper,fieldset,.demographic_question');
+    const container = questionContainer || element.closest('.field,.form-group,.control-group,.select-shell,.select__container,.text-input-wrapper,fieldset,.demographic_question');
     const title = container?.querySelector('legend') || container?.querySelector('label:not(.select__option)');
     const meta = applicationMetadata(element, 'greenhouse', {container,title,rowSelector:ROW});
+    // React Greenhouse repeats native required on every option of one required question.
+    if (element.matches('input[type="checkbox"]') && container?.matches('fieldset.checkbox[aria-required="true"]')) meta.ats.requiredAtGroup = true;
     if (meta.ats.canonicalKey === 'phone' && element.closest('.phone-input')) meta.ats.canonicalKey = 'phone_stripped';
     if (meta.ats.canonicalKey === 'country' && element.closest('.phone-input')) meta.ats.canonicalKey = 'phone_country';
     return meta;

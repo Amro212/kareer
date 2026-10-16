@@ -17,6 +17,7 @@ import { generateAutofillAnswers } from '../../src/core/ai.js';
 import { saveProfile, saveApiKey } from '../../src/core/storage.js';
 import { normalizeFieldsForAI } from '../../src/core/fields/normalize.js';
 import { isVisible } from '../../src/core/pageClassifier.js';
+import { verifyField } from '../../src/core/fields/verify.js';
 
 let dom;
 function boot(html, url = 'https://jobs.lever.co/acme/12345/apply') {
@@ -37,6 +38,95 @@ function boot(html, url = 'https://jobs.lever.co/acme/12345/apply') {
 }
 
 afterEach(() => dom?.window.close());
+
+test('Lever checkbox lists are one owned question and touch only changed choices', async () => {
+  boot(readFileSync(new URL('../../fixtures/lever-palantir-checkboxes-fixture.html', import.meta.url), 'utf8'));
+  const fields = scanFormFields();
+  const languages = fields.find(field => field.label === 'Language Skill(s) (Check all that apply)');
+  const countries = fields.find(field => field.element.id === 'countries');
+  assert.ok(languages, 'language options must be grouped');
+  assert.equal(languages.label, 'Language Skill(s) (Check all that apply)');
+  assert.equal(languages.required, true);
+  assert.equal(languages.ats.multiple, true);
+  assert.equal(languages.options.length, 33);
+  assert.equal(fields.length, 5);
+  assert.deepEqual(fields.filter(field => field.type === 'checkbox').map(field => field.id), ['consent', 'updates']);
+  const normalized = normalizeFieldsForAI(fields);
+  assert.equal(normalized.length, 5);
+  assert.equal(normalized.find(field => field.fieldId === languages.id).ats.multiple, true);
+  assert.equal(normalized.some(field => field.label === 'English (ENG)'), false);
+
+  const changed = [];
+  document.querySelector('form').addEventListener('change', event => changed.push(event.target.value));
+  assert.equal(await fillField(languages, ['English (ENG)', 'Arabic (ARA)']), true);
+  assert.deepEqual(changed, ['English (ENG)', 'Arabic (ARA)']);
+  assert.equal((await verifyField(languages, ['English (ENG)', 'Arabic (ARA)'])).verified, true);
+  changed.length = 0;
+  assert.equal(await fillField(languages, ['English (ENG)', 'Arabic (ARA)']), true);
+  assert.deepEqual(changed, []);
+  assert.equal(await fillField(languages, ['Invented option']), false);
+  assert.deepEqual(leverAdapter.readChoice(languages), ['English (ENG)', 'Arabic (ARA)']);
+  assert.equal(await fillField(countries, ['Canada', 'United Kingdom']), true);
+  assert.equal((await verifyField(countries, ['Canada', 'United Kingdom'])).verified, true);
+  assert.equal(scanFormFields().find(field => field.id === languages.id).currentValue, 'English (ENG), Arabic (ARA)');
+  assert.equal(document.querySelector('#consent').checked, false);
+  assert.equal(document.querySelector('#updates').checked, false);
+
+  saveProfile({ savedAnswers: { [countries.label]: ['Canada', 'United Kingdom'] } });
+  saveApiKey('');
+  const result = await generateAutofillAnswers(normalizeFieldsForAI([countries]));
+  assert.deepEqual(result.answers[0].value, ['Canada', 'United Kingdom']);
+});
+
+test('Lever independent checkboxes in one question remain separate', () => {
+  boot('<div class="application-question"><label><input id="privacy" name="privacy" type="checkbox">Privacy consent</label><label><input id="marketing" name="marketing" type="checkbox">Marketing consent</label></div>');
+  assert.deepEqual(scanFormFields().map(field => [field.id, field.type]), [['privacy', 'checkbox'], ['marketing', 'checkbox']]);
+});
+
+for (const saved of [['English'], ['1'], 'English', []]) {
+  test(`Lever grouped saved selections ${JSON.stringify(saved)} use owned values`, async () => {
+    boot('<form><div class="application-question"><div class="application-label">Languages (Check all that apply)</div><label><input type="checkbox" name="languages" value="1">English</label><label><input type="checkbox" name="languages" value="2">French</label></div></form>');
+    const [field] = scanFormFields();
+    saveProfile({ savedAnswers: { [field.label]: saved } });
+    saveApiKey('');
+    const { answers } = await generateAutofillAnswers(normalizeFieldsForAI([field]));
+    const expected = Array.isArray(saved) ? saved.length ? ['1'] : [] : '1';
+    assert.deepEqual(answers[0]?.value, expected);
+    assert.equal(answers[0].source, 'saved');
+    assert.equal(await fillField(field, answers[0].value), true);
+    assert.equal((await verifyField(field, expected)).verified, true);
+  });
+}
+
+test('Lever captured checkbox question needs one page answer rather than 33 booleans', async () => {
+  boot(readFileSync(new URL('../../fixtures/lever-palantir-checkboxes-fixture.html', import.meta.url), 'utf8'));
+  saveProfile({ fullName: 'Test Applicant' });
+  saveApiKey('synthetic-key');
+  const fields = scanFormFields().filter(field => field.widget === 'ats-choice');
+  const requests = [];
+  const originalRequest = globalThis.GM_xmlhttpRequest;
+  globalThis.GM_xmlhttpRequest = request => {
+    const requestedFields = JSON.parse(JSON.parse(request.data).messages.at(-1).content).fieldsToFill;
+    requests.push(requestedFields);
+    request.onload({ status: 200, responseText: JSON.stringify({ choices: [{ message: { content: JSON.stringify({ answers: requestedFields.map(field => ({
+      fieldId: field.fieldId, value: field.options.filter(option => ['English (ENG)', 'Arabic (ARA)', 'Canada'].includes(option.label)).map(option => option.label),
+    })) }) } }] }) });
+  };
+  try {
+    const result = await generateAutofillAnswers(normalizeFieldsForAI(fields));
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].length, 2);
+    assert.equal(requests[0][0].options.length, 33);
+    assert.equal(result.answers.length, 2);
+    for (const answer of result.answers) {
+      const field = fields.find(field => field.id === answer.fieldId);
+      assert.equal(await fillField(field, answer.value), true);
+      assert.equal((await verifyField(field, answer.value)).verified, true);
+    }
+  } finally {
+    globalThis.GM_xmlhttpRequest = originalRequest;
+  }
+});
 
 test('select scanning excludes hidden controls and follows Select2 presentation visibility', () => {
   const select = id => `<select id="${id}"><option value="">Choose</option><option>Waterloo</option></select>`;
@@ -358,7 +448,7 @@ test('Lever exact saved answers replace empty deterministic answers', async () =
 
   assert.deepEqual(answers[0], {
     fieldId: 'gender',
-    value: 'Female',
+    value: 'female',
     inferred: false,
     provenance: 'saved',
     source: 'saved',
