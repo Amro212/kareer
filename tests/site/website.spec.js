@@ -33,7 +33,9 @@ test('hero stays hidden before hydration, then enters headline and demo, copy, b
     return event.time;
   };
   expect(Math.abs(at('headline', 'playing') - at('demo', 'playing'))).toBeLessThan(100);
-  for (const name of ['demo', 'copy', 'buttons']) expect(at(name, 'done') - at(name, 'playing')).toBeGreaterThan(600);
+  expect(at('demo', 'done') - at('demo', 'playing')).toBeGreaterThan(600);
+  expect(at('copy', 'done') - at('copy', 'playing')).toBeGreaterThan(300);
+  expect(at('buttons', 'done') - at('buttons', 'playing')).toBeGreaterThan(250);
   expect(at('copy', 'playing')).toBeGreaterThanOrEqual(Math.max(at('headline', 'done'), at('demo', 'done')));
   expect(at('buttons', 'playing')).toBeGreaterThanOrEqual(at('copy', 'done'));
 });

@@ -50,7 +50,7 @@ function Footer() {
   const [version, setVersion] = useState('');
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/version.json', { signal: controller.signal }).then(response => response.ok ? response.json() : null).then(data => { if (typeof data?.version === 'string') setVersion(data.version); }).catch(() => {});
+    fetch('/version.json', { signal: controller.signal }).then(response => response.ok ? response.json() : null).then(data => { if (typeof data?.version === 'string') setVersion(data.version); }).catch(() => { });
     return () => controller.abort();
   }, []);
   return <footer className="site-footer wrap" id="open-source">
@@ -143,8 +143,8 @@ function Home() {
     <section className="hero wrap" aria-labelledby="hero-title">
       <div className="hero-copy">
         <TextReveal as="h1" id="hero-title" className="hero-heading" text={'Job hunting\ntakes enough\nout of you.'} split="line" variant="fold" duration={760} stagger={100} onRevealStateChange={setHeadlinePhase} />
-        <ScrollReveal active={headlinePhase === 'done' && demoDone} onComplete={() => setCopyDone(true)}><div data-hero-stage="copy"><p className="hero-description">The same forms. The same questions.<br />Your résumé, apparently, wasn’t enough.</p><p className="hero-explanation">Kareer fills repetitive applications and helps tailor your documents. Give the busywork less of your day.</p></div></ScrollReveal>
-        <ScrollReveal active={copyDone}><div data-hero-stage="buttons"><div className="hero-actions"><Button size="lg" className="lime-button" onClick={startDemo}>Try the demo <Icon name="play" size={17} /></Button><a href="/setup/" className="text-link">Get Kareer <Icon name="arrow" size={18} /></a></div><div className="hero-reassurance"><Icon name="code" size={15} /><span>Open source. No Kareer subscription. Yours to control.</span></div></div></ScrollReveal>
+        <ScrollReveal active={headlinePhase === 'done' && demoDone} duration={0.4} onComplete={() => setCopyDone(true)}><div data-hero-stage="copy"><p className="hero-description">The same forms. The same questions.<br />Your résumé, apparently, wasn’t enough.</p><p className="hero-explanation">Kareer fills repetitive applications and helps tailor your documents. Give the busywork less of your day.</p></div></ScrollReveal>
+        <ScrollReveal active={copyDone} duration={0.35}><div data-hero-stage="buttons"><div className="hero-actions"><Button size="lg" className="lime-button" onClick={startDemo}>Try the demo <Icon name="play" size={17} /></Button><a href="/setup/" className="text-link">Get Kareer <Icon name="arrow" size={18} /></a></div><div className="hero-reassurance"><Icon name="code" size={15} /><span>Open source. No Kareer subscription. Yours to control.</span></div></div></ScrollReveal>
       </div>
       <ScrollReveal active={headlinePhase !== 'waiting'} onComplete={() => setDemoDone(true)}><div className="hero-demo-entrance" data-hero-stage="demo"><ApplicationDemo run={run} onStart={startDemo} /></div></ScrollReveal>
     </section>

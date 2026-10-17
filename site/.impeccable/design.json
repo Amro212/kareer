@@ -33,7 +33,7 @@
       },
       {
         "name": "section-arrival",
-        "value": "Cojeev MotionSurface: 700ms, cubic-bezier(.2,.8,.2,1), 22px to 0px, blur 2px to 0px; waiting content concealed before hydration with no-JavaScript/reduced-motion fallback",
+        "value": "Cojeev MotionSurface: 700ms demo, 400ms copy, 350ms buttons, cubic-bezier(.2,.8,.2,1), 22px to 0px, blur 2px to 0px; waiting content concealed before hydration with no-JavaScript/reduced-motion fallback",
         "purpose": "One-time, locally scoped hero/supporting-content entrances; reduced motion settles immediately."
       }
     ],

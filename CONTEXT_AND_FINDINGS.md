@@ -1,3 +1,14 @@
+## Turn: 2026-10-16 - Speed up hero copy and buttons animations
+
+- User asked where to increase/decrease timing for hero headline, demo, copy, and buttons sections, and requested speeding up the animations for copy and buttons.
+- `site/src/components/scroll-reveal.tsx`: added an optional `duration` prop (defaulting to 0.7s) to pass through to the `MotionSurface` transition.
+- `site/src/app.tsx`: configured `ScrollReveal` with snappier durations of `0.4s` (400ms) for hero copy and `0.35s` (350ms) for hero buttons, keeping the staged sequence (Headline+Demo -> Copy -> Buttons) while cutting overall wait time by over 600ms.
+- Updated `site/DESIGN.md` and `site/.impeccable/design.json` design system notes to document the new 400ms copy and 350ms buttons arrival timings alongside the 700ms demo arrival.
+- `tests/site/website.spec.js`: updated stage duration assertions to verify copy (>300ms) and buttons (>250ms) while retaining demo (>600ms) and sequence ordering gates.
+- Verification: website TypeScript check passes, production build succeeds cleanly, and all 11 targeted website Playwright browser tests pass (20.7s). Whitespace check passes cleanly. No full extension test suite run or external API calls.
+
+---
+
 ## Turn: 2026-10-16 - PR #11 review fix: scope final validation to application frames
 
 - Confirmed the second review finding: `submissionProblem` unconditionally validated every registered frame with fields. An invalid chat field or an unavailable unrelated widget paused otherwise valid manual and automatic submissions. Four synthetic engine regressions (invalid/unreachable widget, Auto Submit off/on) and one remote scoping case failed before the fix for the expected reasons.
