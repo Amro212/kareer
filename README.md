@@ -64,7 +64,7 @@ Kareer is an open-source browser assistant that scans job application forms, mat
 
 Unlike proprietary autofill extensions that store your sensitive resume data on third-party servers or charge monthly subscriptions, Kareer:
 - **Runs entirely in your browser** with **zero telemetry** and no external backend.
-- Uses **Bring Your Own Key (BYOK)** with OpenRouter, allowing you to use fast, cost-effective models (such as `google/gemini-2.0-flash` or `anthropic/claude-3.5-sonnet`) for fractions of a cent per application.
+- Uses **Bring Your Own Key (BYOK)** with OpenRouter, allowing you to use fast, cost-effective models (such as `google/gemini-2.5-flash-lite` or `anthropic/claude-3.5-sonnet`) for fractions of a cent per application.
 - Uses a **non-intrusive Shadow DOM floating panel** that never conflicts with website stylesheets.
 
 ---
@@ -156,7 +156,7 @@ If you prefer userscripts:
 1. Click the **Kareer** icon in your browser toolbar (or open the floating side panel).
 2. Go to the **Settings** tab:
    - Paste your **OpenRouter API Key**.
-   - Select your preferred model (e.g. `google/gemini-2.0-flash`).
+   - Select your preferred model (e.g. `google/gemini-2.5-flash-lite`).
 3. Go to the **Profile** tab:
    - Fill in your basic information (Full Name, Email, Phone, LinkedIn, GitHub, Portfolio).
    - Paste your **Resume text / context**.
