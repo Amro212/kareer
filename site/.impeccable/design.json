@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-16T23:29:19.763Z",
+  "title": "Design System: Kareer public website",
+  "extensions": {
+    "shadows": [
+      {
+        "name": "application-sheet",
+        "value": "0 18px 48px -14px #353b2826",
+        "purpose": "Lift the application's working sheet above the repeated paperwork."
+      }
+    ],
+    "motion": [
+      {
+        "name": "mode",
+        "value": "subtle",
+        "purpose": "User-selected Cojeev motion mode."
+      },
+      {
+        "name": "flow",
+        "value": "comet; speed 0.85; intensity 1.75; hover true; hoverStrength 0.75",
+        "purpose": "User-selected Cojeev interaction settings."
+      },
+      {
+        "name": "hero-fold",
+        "value": "Cojeev TextReveal: fold, line split, 760ms duration, 100ms stagger; headline and demo together, then copy, then buttons on actual completion",
+        "purpose": "One-time kinetic hero headline on load."
+      },
+      {
+        "name": "headline-mark",
+        "value": "750ms cubic-bezier(.16,1,.3,1); 400ms delay",
+        "purpose": "Draw the existing lime underline after the final headline line arrives."
+      },
+      {
+        "name": "section-arrival",
+        "value": "Cojeev MotionSurface: 700ms demo, 400ms copy, 350ms buttons, cubic-bezier(.2,.8,.2,1), 22px to 0px, blur 2px to 0px; waiting content concealed before hydration with no-JavaScript/reduced-motion fallback",
+        "purpose": "One-time, locally scoped hero/supporting-content entrances; reduced motion settles immediately."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-desktop",
+        "value": "1100px"
+      },
+      {
+        "name": "tablet",
+        "value": "800px"
+      },
+      {
+        "name": "phone",
+        "value": "580px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Lime action on a paper surface; actual runtime uses Cojeev Button.",
+      "html": "<button class=\"primary\">Try the demo</button>",
+      "css": ".primary{display:inline-flex;align-items:center;justify-content:center;height:54px;padding:0 24px;border:0;border-radius:9px;background:var(--lime,#c5f55a);color:var(--ink,#20231c);font:650 16px 'DM Sans',sans-serif;cursor:pointer}.primary:focus-visible{outline:2px solid #496b18;outline-offset:5px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Paperwork with attitude.",
+    "overview": "Warm paper, confident ink typography and electric lime give an exhausted applicant a lighter way into a repetitive task. The voice is playfully fed up with the process. Precise layouts support a few tilted sheets, annotations and stamps.",
+    "keyCharacteristics": [
+      "Warm paper",
+      "Oversized ink typography",
+      "Electric lime",
+      "Controlled disorder",
+      "Cojeev motion"
+    ],
+    "rules": [],
+    "dos": [
+      "Do keep installation, model costs and data transmission explicit.",
+      "Do keep copy grounded in the available product and distribution routes.",
+      "Do give one expressive sequence room to breathe."
+    ],
+    "donts": [
+      "Don't invent testimonials, performance guarantees or application outcomes.",
+      "Don't introduce animation that gates reading or requires hover to understand content."
+    ]
+  }
+}

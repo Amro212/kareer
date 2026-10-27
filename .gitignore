@@ -3,6 +3,7 @@ node_modules/
 
 # Build and distribution artifacts
 dist/
+site-dist/
 # Tracked so Tampermonkey @updateURL keeps working
 !dist/kareer.user.js
 .build-cache.json

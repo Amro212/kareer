@@ -1,0 +1,72 @@
+[
+  {
+    "id": "overview",
+    "title": "Overview",
+    "html": "<p>\n            Kareer is an open-source browser extension and productivity tool created to assist users in completing job application forms efficiently and accurately. Kareer operates on the user’s device (Chrome, Firefox, or supported userscript runtimes) to scan application forms, locate inputs, and assist in matching questions with candidate-supplied resume and profile information.\n          </p>\n<p>\n            This Privacy Policy describes our strict data handling practices, explains our local-first architecture, and discloses all data flows required for the operation of the extension.\n          </p>"
+  },
+  {
+    "id": "local-storage",
+    "title": "Information Stored Locally",
+    "html": "<p>\n            Kareer is designed as a <strong>local-first</strong> application. The following information may be saved directly in your browser’s extension-controlled storage (<code>chrome.storage.local</code> or sandboxed userscript storage):\n          </p>\n<ul>\n            <li><strong>Candidate profile information</strong>: Full name, email address, phone number, location, and social or professional profile URLs (e.g., LinkedIn, GitHub, portfolio).</li>\n            <li><strong>Resume context &amp; notes</strong>: Plaintext resume excerpts, work history summaries, education details, and applicant notes (e.g., salary expectations, work authorization status, preferred pronouns).</li>\n            <li><strong>Extension configuration</strong>: Selected AI model preferences, UI preferences, and feature toggles.</li>\n            <li><strong>AI credentials</strong>: User-provided OpenRouter API key.</li>\n          </ul>\n<div class=\"kr-policy-callout\">\n            <strong>Key Guarantee:</strong> Kareer does not operate a remote server, cloud database, or central backend service. The developers and maintainers of Kareer never have access to your stored profile data or API credentials.\n          </div>"
+  },
+  {
+    "id": "ai-transmission",
+    "title": "Information Transmitted When AI Features Are Used",
+    "html": "<p>\n            Kareer does not continuously broadcast data. However, when you explicitly click <strong>Autofill</strong> or trigger an inline narrative rewrite, Kareer must transmit specific contextual data to generate answers.\n          </p>\n<p>\n            Outgoing AI requests travel directly over encrypted HTTPS from your browser extension background worker to OpenRouter (<code>https://openrouter.ai/api/v1/chat/completions</code>). The network payload includes:\n          </p>\n<ul>\n            <li>The extracted labels, descriptions, and option choices of form fields detected on the current application page.</li>\n            <li>Relevant excerpts of your saved profile and resume context required to formulate answers to those fields.</li>\n            <li>System prompts instructing the language model to return structured JSON grounded strictly in your provided profile without inventing experience.</li>\n          </ul>\n<p>\n            Data transmitted during AI requests is processed by OpenRouter and the specific downstream language model provider chosen by the user (such as Google, Anthropic, or OpenAI) according to their respective privacy terms and data handling practices. Kareer does not proxy, intercept, or record these requests on any intermediary server.\n          </p>"
+  },
+  {
+    "id": "api-keys",
+    "title": "API Keys & Credential Isolation",
+    "html": "<p>\n            Kareer operates on a <strong>Bring Your Own Key (BYOK)</strong> model. You supply your own personal API key from OpenRouter.\n          </p>\n<ul>\n            <li>Your API key is stored exclusively in sandboxed browser extension storage.</li>\n            <li>All network requests to OpenRouter are dispatched exclusively from the extension's privileged background service worker (or sandboxed userscript host).</li>\n            <li>The extension is engineered to prevent exposure of your raw API key to visited web pages, content scripts, DOM elements, or page storage (<code>localStorage</code> / <code>sessionStorage</code>).</li>\n            <li>The developers of Kareer have no ability to view, retrieve, or log your API key.</li>\n          </ul>"
+  },
+  {
+    "id": "permissions",
+    "title": "Browser Extension Permissions Explained",
+    "html": "<p>\n            Kareer requests only the browser permissions strictly required to perform form detection, state synchronization, and secure network dispatch:\n          </p>\n<ul>\n            <li><code>storage</code> &amp; <code>unlimitedStorage</code>: Used to store your candidate profile, resume text, application settings, and API configuration locally on your computer.</li>\n            <li><code>tabs</code>: Used to detect when a supported job application page is open, query the active tab, and mount or toggle the floating assistant interface.</li>\n            <li><code>webNavigation</code>: Used to monitor multi-step application transitions (e.g. moving from Step 1 to Step 2 in Ashby, Greenhouse, Lever, or Workday) so session continuity is maintained without losing answers.</li>\n            <li><code>host_permissions</code> / <code>optional_host_permissions</code> (<code>&lt;all_urls&gt;</code>): Used to allow the extension content script to detect and fill form fields across arbitrary employer job boards and applicant tracking systems.</li>\n            <li><code>https://openrouter.ai/*</code>: Used to allow the background worker to communicate directly with the OpenRouter completion API when you initiate autofill.</li>\n          </ul>"
+  },
+  {
+    "id": "data-categories",
+    "title": "Data Collection Categories (Firefox & Web Store Disclosures)",
+    "html": "<p>\n            In compliance with Mozilla Firefox Add-on and Chrome Web Store privacy declarations, Kareer declares the following data collection categories:\n          </p>\n<ul>\n            <li>\n              <strong>Authentication Information (<code>authenticationInfo</code>):</strong><br>\n              The user's personal OpenRouter API key is required to authenticate outgoing requests to the AI provider. It is stored locally in extension storage and never collected by Kareer.\n            </li>\n            <li>\n              <strong>Personally Identifying Information (<code>personallyIdentifyingInfo</code>):</strong><br>\n              A candidate’s profile and resume can contain personal details including name, contact information, work history, and education. Relevant portions are transmitted to the user's chosen AI provider only when autofill is explicitly requested.\n            </li>\n            <li>\n              <strong>Website Content (<code>websiteContent</code>):</strong><br>\n              Kareer reads form labels, placeholders, and question text on job application pages in order to identify required fields, and sends this question context to the AI model to match answers.\n            </li>\n          </ul>"
+  },
+  {
+    "id": "analytics",
+    "title": "Analytics & Telemetry",
+    "html": "<p>\n            Kareer contains <strong>zero</strong> analytics SDKs, error reporting telemetry (such as Sentry or Bugsnag), advertising identifiers, tracking pixels, or behavioral telemetry systems. We do not track which websites you visit, how many applications you submit, or which jobs you apply for.\n          </p>"
+  },
+  {
+    "id": "advertising",
+    "title": "Data Selling & Advertising",
+    "html": "<p>\n            Kareer does not sell, rent, monetize, or disclose your personal data, resume information, or browsing activity to any third party, broker, or advertiser. We do not display advertisements within the extension or on this website.\n          </p>"
+  },
+  {
+    "id": "retention",
+    "title": "Data Retention",
+    "html": "<ul>\n            <li><strong>Local Data:</strong> All profile data, resume context, and settings remain in your browser’s extension storage until you edit or delete them, or until you uninstall the extension.</li>\n            <li><strong>Third-Party Model Providers:</strong> Data transmitted to OpenRouter or downstream model providers (e.g., Google, Anthropic, OpenAI) during an AI completion request is governed by OpenRouter’s privacy policy and the retention policies of the specific model provider selected. Users should review <a href=\"https://openrouter.ai/privacy\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color: var(--kr-signal); text-decoration: underline;\">OpenRouter’s Privacy Policy</a> for their current data retention and logging commitments.</li>\n          </ul>"
+  },
+  {
+    "id": "user-controls",
+    "title": "User Controls & Data Rights",
+    "html": "<p>You have full, immediate control over all data handled by Kareer:</p>\n<ul>\n            <li><strong>Edit or Delete Profile:</strong> You can edit or clear your saved contact details, resume text, and notes at any time in the extension’s Profile tab.</li>\n            <li><strong>Clear All Data:</strong> You can use the extension's reset controls or browser extension management page to delete all local storage.</li>\n            <li><strong>Revoke API Keys:</strong> You can revoke, rotate, or delete your API key at any time directly through your OpenRouter account dashboard.</li>\n            <li><strong>Audit Code:</strong> Because Kareer is completely open source, you can audit the source code and build the extension yourself from GitHub.</li>\n          </ul>"
+  },
+  {
+    "id": "third-parties",
+    "title": "Third-Party Services",
+    "html": "<p>\n            Kareer connects with <a href=\"https://openrouter.ai/\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color: var(--kr-signal); text-decoration: underline;\">OpenRouter</a> to provide access to large language models. OpenRouter is an independent third-party service provider and is not owned, operated, or controlled by Kareer. Use of OpenRouter is subject to OpenRouter's own Terms of Service and Privacy Policy.\n          </p>"
+  },
+  {
+    "id": "security",
+    "title": "Security Model & Architecture",
+    "html": "<p>\n            For a technical breakdown of our threat boundaries, credential isolation architecture, and human-in-the-loop safeguards, please consult our official <a href=\"https://github.com/Amro212/kareer/blob/master/SECURITY.md\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color: var(--kr-signal); text-decoration: underline;\">Security Policy on GitHub</a>.\n          </p>"
+  },
+  {
+    "id": "open-source",
+    "title": "Open Source Verification",
+    "html": "<p>\n            Kareer is maintained in the open. The complete repository, including all manifests, content scripts, background workers, and build scripts, is available at <a href=\"https://github.com/Amro212/kareer\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color: var(--kr-signal); text-decoration: underline;\">https://github.com/Amro212/kareer</a>.\n          </p>"
+  },
+  {
+    "id": "contact",
+    "title": "Contact & Vulnerability Reporting",
+    "html": "<p>\n            For general questions, bug reports, or feature discussions:\n            <br>\n            <a href=\"https://github.com/Amro212/kareer/issues\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color: var(--kr-signal); text-decoration: underline;\">GitHub Issues Tracker</a>\n          </p>\n<p style=\"margin-top: var(--kr-space-3);\">\n            For reporting security vulnerabilities or potential credential risks, please do not open public issues. Instead, submit a private report using:\n            <br>\n            <a href=\"https://github.com/Amro212/kareer/security/advisories/new\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color: var(--kr-signal); text-decoration: underline;\">GitHub Private Vulnerability Reporting</a>\n          </p>"
+  }
+]

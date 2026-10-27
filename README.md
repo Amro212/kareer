@@ -33,7 +33,7 @@
 </div>
 
 > [!TIP]
-> 🚀 **Official Website & Downloads**: Visit **[kareer.itsamro.me](https://kareer.itsamro.me/)** for the live interactive flight deck preview, direct Firefox `.xpi` self-updating install, and full product walkthrough.
+> 🚀 **Official Website & Downloads**: Visit **[kareer.itsamro.me](https://kareer.itsamro.me/)** for the interactive autofill demo, browser-specific setup guide, direct Firefox `.xpi` installation, and privacy policy.
 
 ---
 

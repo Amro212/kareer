@@ -1,0 +1,219 @@
+{
+  "retrieved": "2026-10-16",
+  "upstream": "https://github.com/luv-jeri/cojeev-ui",
+  "localModifications": {
+    "components/ui/text-reveal.tsx": "Added playback state and onRevealStateChange to conceal pending entrances and coordinate the hero using actual completion. Original hashes below identify imported upstream sources."
+  },
+  "files": [
+    {
+      "target": "components/ui/button.tsx",
+      "source": "https://cojeev.com/ui/r/button.json",
+      "sha256": "d2fc383d83f94a08e767ed1a80244c7c4d79652982b26bcee6267bfd17099be5"
+    },
+    {
+      "target": "components/ui/spinner.tsx",
+      "source": "https://cojeev.com/ui/r/spinner.json",
+      "sha256": "9f66f2c4c9566802f957587bc39e57238b9ef41d5dcac2dbea925f0403dd611f"
+    },
+    {
+      "target": "lib/cojeev-motion/choreography.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "b8d1f83510cb05ae821feef989653dc5526f15ac7da4645c396a93b7187f6f54"
+    },
+    {
+      "target": "lib/cojeev-motion/clock.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "5620faf6a4f167ca9a30543eb58443a574cf23ca822dcf07d39b0ababc410c94"
+    },
+    {
+      "target": "lib/cojeev-motion/settings.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "4726bf4630c91718d8d4a3584a2905933c5f42ddcea507ddd7425a1a1c554b2f"
+    },
+    {
+      "target": "lib/cojeev-motion/use-reduced-motion.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "52d7596420d2a27297d17f4af98fbfb39fd2468622bc52c84d45b777252c2592"
+    },
+    {
+      "target": "lib/cojeev-motion/use-motion-visibility.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "a87d8a354ccc62ebec1f4fabebfafbaa0fa69d5523fc163b924520274bfca828"
+    },
+    {
+      "target": "lib/cojeev-motion/refs.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "dd8b87fcd54b1c8db64ae2ea8d8981d6713a6f3b354738c7b14194fe65e02325"
+    },
+    {
+      "target": "lib/utils.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "d1f1e0d62cb8d8d1e04c26e14de842d8a151f75812d81b046c65b5d1fe8e4b27"
+    },
+    {
+      "target": "components/ui/presence.tsx",
+      "source": "https://cojeev.com/ui/r/presence.json",
+      "sha256": "5b64090fd45407d6417222d82d40897c3b285e14dd4597ef42e510f98a88e4d5"
+    },
+    {
+      "target": "lib/cojeev-motion/flow-press.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "15d93ecc99fa077c697b6512cd7313d6c32dd59a6f65a415c8b8e53d420d7f2b"
+    },
+    {
+      "target": "lib/cojeev-motion/flow.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "92161034e5bf233aa0f79ac6623e3d2f8157c25bfcb031dd4709ab1ea2b71078"
+    },
+    {
+      "target": "lib/cojeev-motion/flow-motion.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "11f2db88e335789b0909ee20ed32df40c56ec57eec811c84d6a7eadf6f3e6469"
+    },
+    {
+      "target": "lib/cojeev-motion/use-morph.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "a3c947fc4aa0d19c41ab8fb1ae1745b9a15fd2cbbe6645e1577e0da0dc97aa1e"
+    },
+    {
+      "target": "lib/cojeev-motion/geometry.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "8309733ec149d7b744432cbc658af316a7338f77fcca6d45214fe1109a2d33c0"
+    },
+    {
+      "target": "lib/cojeev-motion/shapes.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "9feeaeea3af87d66ea28f32eb55c563d9ffea9a2c0320ce6118783929c646d02"
+    },
+    {
+      "target": "lib/cojeev/signature-shapes.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "bc4872978ef8dbd760c3d120778bc835f2c450e17fc4f31d7ac95d49a0b6f8c7"
+    },
+    {
+      "target": "lib/cojeev-motion/body.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "3e61223246113f93dba79ac7b1c4429b7cf0eeea8a70a64b1805dfa96dcc8834"
+    },
+    {
+      "target": "lib/cojeev-motion/category.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "f38677056598471b66f56826ba8e5bbe2089e7a62ea243011f1cc589f188c76d"
+    },
+    {
+      "target": "lib/cojeev-motion/morph-paint.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "c61ea7313e320c427bc5e530da00f5fd10b6516797878a9e9022d3264c557c92"
+    },
+    {
+      "target": "lib/cojeev/control-appearance.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "478a2989411e55d5beab6ff99affc2d5273953d94087679f7ad9bf9f40c23472"
+    },
+    {
+      "target": "components/ui/tabs.tsx",
+      "source": "https://cojeev.com/ui/r/tabs.json",
+      "sha256": "0cbf8481825b3bea5a9769b9ca5e177ac1f8d799538a89c2a54aa69568753f17"
+    },
+    {
+      "target": "lib/cojeev-motion/use-flow.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "ef2af4f7ba69018ac0ab4478b5f5073dbede8527494fb7320a9b32fc8ac58ee7"
+    },
+    {
+      "target": "components/ui/tooltip.tsx",
+      "source": "https://cojeev.com/ui/r/tooltip.json",
+      "sha256": "d90569b77204ac243a8852cd132e804aec70f97c604393c8081fda4b7c411e42"
+    },
+    {
+      "target": "components/ui/text-reveal.tsx",
+      "source": "https://cojeev.com/ui/r/text-reveal.json",
+      "sha256": "a6446e827d350691ddfadd9a4798c339762550ef06dbaae6616ff73112c827bf"
+    },
+    {
+      "target": "lib/cojeev/text-lines.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "f61de167fefaa427be161572cc95af41de214b43a3e8e0eb4aa523019f21a40b"
+    },
+    {
+      "target": "styles/cojeev/button.css",
+      "source": "https://cojeev.com/ui/r/button.json",
+      "sha256": "f0f346c62dd44028b8593837b552752f86671a945886a86dc22f2bf126060b87"
+    },
+    {
+      "target": "styles/cojeev/control-appearance.css",
+      "source": "https://cojeev.com/ui/r/button.json",
+      "sha256": "40976e2f0e1c092ea19521a93785b0e09cecda55bceb977b9a48614420f6fe91"
+    },
+    {
+      "target": "styles/cojeev-fonts.css",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "9e2d0a6fa917e082fb7d7da9f992f3e202d87109902e31e66aac77b997a3b430"
+    },
+    {
+      "target": "styles/cojeev/tokens.css",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "94c9897d9662cabf5e249bdd09a8460c8682e11850e06a212558ca7b390dd2a6"
+    },
+    {
+      "target": "styles/cojeev/theme.css",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "0d18a3e2dd0f7031dc51e06e5da7e1b24b3abf26dc6c19f7007799e841aed1cf"
+    },
+    {
+      "target": "styles/cojeev/base.css",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "0e03c458ea4f2201ef63a30a8c72e32571873e1cdbbc6b1f390c61a72759e70c"
+    },
+    {
+      "target": "styles/cojeev/morph.css",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "48fa6794bbab79f0309902a171dbaa18756f4cd68b356b03a6169d2ef49836d1"
+    },
+    {
+      "target": "styles/cojeev/flow-press.css",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "9dca3894e581b95ca94cbea248a4c2ffdd645bb0ee355b91a27b9406bfc28387"
+    },
+    {
+      "target": "styles/fonts/DMSans-OFL.txt",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "9af36190332437f5ecd09974de43c1f7c77a310a996cdd8ceb25628b458840e1"
+    },
+    {
+      "target": "styles/fonts/BricolageGrotesque-OFL.txt",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "4b5a7d8f37f5602621c8a8d7358a6a2e71317e6c231c661e15aef0275d3e07ba"
+    },
+    {
+      "target": "lib/cojeev/NOTICES.txt",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "76e05708bf2284053ce4b48178696fdf14727159cbfd7aafef24eb561b9d6c73"
+    },
+    {
+      "target": "styles/cojeev/spinner.css",
+      "source": "https://cojeev.com/ui/r/spinner.json",
+      "sha256": "944a684b2a9f17d6f9c32bc0b4c2de7270d4e66be6e290e7bdaf8466b827cff0"
+    },
+    {
+      "target": "styles/cojeev/presence.css",
+      "source": "https://cojeev.com/ui/r/presence.json",
+      "sha256": "ef8ee145e4315514f3d5dfd9b3298d25941e615be6e940c8707acb47ac43dc16"
+    },
+    {
+      "target": "styles/cojeev/tabs.css",
+      "source": "https://cojeev.com/ui/r/tabs.json",
+      "sha256": "c44e9e14cb9a56539befcee8272fe15851dd285cdf97509c06958f976b03ba68"
+    },
+    {
+      "target": "styles/cojeev/tooltip.css",
+      "source": "https://cojeev.com/ui/r/tooltip.json",
+      "sha256": "99a415291d02989c240fd7c73c5e6527f62844bf45b522fe18da8c008825224b"
+    },
+    {
+      "target": "styles/cojeev/text-reveal.css",
+      "source": "https://cojeev.com/ui/r/text-reveal.json",
+      "sha256": "f17808cfee5a70b2265a8f2a1502ce8e802de8c0d47c5961f22613e27e1c29c3"
+    }
+  ]
+}
