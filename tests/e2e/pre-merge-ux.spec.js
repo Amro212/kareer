@@ -29,6 +29,6 @@ test('Java search must not commit JavaScript', async ({ kr }) => {
     };
   });
   await kr.openPanel(page); await page.locator('#kr-autofill-btn').click();
-  await expect(page.locator('#kr-main-panel')).toContainText('Required answers or documents need manual input', {timeout: 60000});
+  await expect(page.locator('#kr-main-panel')).toContainText('Local filling is complete. Add saved answers, activate AI, or complete the remaining required fields manually.', {timeout: 60000});
   expect(await page.locator('[data-automation-id="selectedItem"]').allTextContents(), 'A missing Java option must leave the skills unchanged').toEqual([]);
 });

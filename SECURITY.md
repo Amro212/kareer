@@ -1,72 +1,75 @@
-# Security & Privacy Policy
+# Security
 
-Kareer is designed from the ground up with a **local-first, zero-telemetry, and privacy-preserving** architecture. Because job applications involve sensitive personal data (resumes, work history, contact details) and AI API keys, this document outlines our security model, threat boundaries, and vulnerability reporting procedures.
+Kareer keeps profiles, files and application execution local. Managed AI adds one
+Cloudflare Worker/D1 for Lemon Squeezy payments, reusable licenses, credits and
+OpenRouter routing. Advanced BYOK and the userscript call OpenRouter directly.
 
----
+## Credential boundaries
 
-## 1. Core Security Principles
+License keys, checkout claim secrets and BYOK keys are privileged background
+storage, excluded from content snapshots, backups, logs, page DOM and page storage.
+Only extension pages can write credentials and initiate billing. Core uses the
+platform contract; it never accesses Chrome or GM APIs directly. Credential
+updates preserve the other connection; switching modes is explicit.
 
-1. **Local-First Storage**: Your personal profile, resume data, notes, and application records remain in your browser's private extension storage. We do not operate a backend server, database, or telemetry pipeline.
-2. **Bring Your Own Key (BYOK)**: You supply your own AI provider API key (e.g., via OpenRouter). There are no intermediary proxy servers.
-3. **Strict Key Isolation**: Your API keys are never exposed to the web pages you visit, page scripts, DOM elements, or web logs.
-4. **Truthful Grounding**: The AI model is strictly instructed never to fabricate jobs, dates, skills, metrics, or certifications.
-5. **Human-in-the-Loop Safety Boundaries**: The system automatically halts execution before legal attestations, background check authorizations, electronic signatures, and interactive assessments.
+A reusable license is a bearer credential: anyone holding it may spend its shared
+wallet. No device lock or Kareer account is used. The gateway hashes keys and claim
+secrets. Worker provider credentials are secrets, distinct for staging/production.
+Browser origins and extension IDs are supplementary checks, never payment proof.
 
----
+## Gateway trust boundaries
 
-## 2. Threat Model & Key Isolation
+Webhook HMAC verification uses the raw body. Store, environment, approved offer,
+payment state and checkout binding are checked. Current provider state is retrieved
+before reconciling entitlements; orders/invoices deduplicate immutable grants.
+Activation and status recover missing payment events. Subscription key expiry
+does not invalidate purchased credits; disabled keys and reversals revoke affected
+entitlements. Hosted checkout/receipts/portal belong to Lemon Squeezy; no card data
+or account passwords are stored by Kareer.
 
-Kareer operates on third-party websites (such as ATS portals and employer job boards). To defend against malicious or compromised web pages attempting to steal your credentials:
+Managed requests use a server allowlist: fixed
+`google/gemini-2.5-flash-lite`, same-model routing at no more than $0.10/million
+input and $0.40/million output tokens, no alternate model, reasoning, tools, search,
+images or file plugins. Client URLs, model/provider settings and authorization are
+never forwarded. Body cap: 256 KiB; prompt cap: 128 KiB UTF-8. Output caps:
+4,096 for autofill/repair/discovery, 2,048 for field rewrites, 7,000 for documents.
+Response start timeout is 25 seconds, total generation 120 seconds. Per-license
+limits are two concurrent requests and ten rolling attempts per minute.
 
-### Extension Target (Chrome & Firefox)
-- **Background Worker Dispatch**: All AI API network requests are performed exclusively within the extension's background service worker (`src/targets/extension/background/index.js`).
-- **No In-Page Key Storage**: The API key is stored in `chrome.storage.local` and accessed only by the background worker.
-- **Isolated Messaging**: In-page content scripts communicate with the background worker using structured extension messaging (`chrome.runtime.sendMessage`). The content script transmits only the extracted form field labels and user profile context. The background worker attaches the `Authorization: Bearer <KEY>` header directly to outgoing HTTPS requests to `openrouter.ai`.
-- **Zero Page Leakage**: The key is never exposed to `window`, `document`, page `localStorage`, `sessionStorage`, or debug bundles.
+D1 atomically reserves one credit before generation, spending monthly grants first.
+Validation precedes settlement; settlement precedes delivery. Failures release
+unsettled holds. Holds expire after 150 seconds; stale work cannot settle expired
+holds. Settled requests remain charged if delivery fails. Request IDs and input
+hashes dedupe for 30 days; completed duplicates return status only, never repeat
+generation. No automatic retry of an uncertain completion.
 
-### Userscript Target (Tampermonkey / Violentmonkey)
-- **Privileged Storage**: The API key is stored using `GM_setValue` in Tampermonkey's sandboxed storage, which is inaccessible to page scripts.
-- **Isolated HTTP Requests**: API calls are routed via `GM_xmlhttpRequest`, running in the privileged userscript sandbox rather than the page's `fetch` or `XMLHttpRequest` context.
+## Data and logging
 
----
+Prompts and generated content stay in gateway memory only. Persistent data is
+billing identifiers, credential hashes, credit grants/debits and request metadata:
+IDs/input hashes, status, tokens, provider cost, latency and error codes. No raw keys,
+authorization headers, prompt bodies, outputs or upstream error bodies are logged.
+Worker observability is disabled in config. Infrastructure/AI providers have their
+own network and retention policies; zero external retention is not promised.
 
-## 3. Data Privacy & AI Network Payloads
+Local backups contain personal information but exclude credentials. Users should
+protect backups and review inferred/guessed AI answers. Structural validation does
+not establish factual accuracy. Removing keys or uninstalling does not cancel billing.
 
-### What Leaves Your Machine
-When you click **Autofill** or trigger an inline field rewrite, a single HTTPS request is sent directly to OpenRouter (`https://openrouter.ai/api/v1/chat/completions`).
+## Browser execution and reporting
 
-The payload contains:
-- The extracted labels, placeholders, and field types of the current form.
-- The relevant fields from your saved profile and resume context needed to answer the questions.
-- A system prompt constraining the model to output valid JSON grounded strictly in your supplied profile.
+One top-frame Shadow DOM panel coordinates embedded field agents. Deterministic
+DOM events perform actions; no debugger, stealth, spoofing, randomized typing,
+external browser controller or CAPTCHA solving is used. Auto Submit is off by
+default; user Auto Continue/Submit preferences remain in control. Attestation,
+signature or assessment headings do not trigger blanket autofill pauses. Retries
+and navigation are bounded; Pause preserves local progress.
 
-### What Never Leaves Your Machine
-- Passwords or payment information.
-- Browser history, cookies, or session tokens.
-- Telemetry, analytics, or behavioral usage tracking.
+Report vulnerabilities privately using
+[GitHub Private Vulnerability Reporting](https://github.com/Amro212/kareer/security/advisories/new).
+Do not publish applicant information, credentials, payment details or raw request
+dumps in issues. Recovery and billing use native Lemon Squeezy receipts and portal.
 
----
-
-## 4. Safety Boundaries & Anti-Bot Compliance
-
-Kareer operates as a browser-side productivity assistant, not an automated web scraper or stealth bot.
-
-- **No CAPTCHA Bypassing**: The extension does not attempt to solve or bypass CAPTCHAs, Cloudflare turnstiles, or bot detection mechanisms.
-- **No Stealth / Spoofing Logic**: We do not use `chrome.debugger`, CDP, or fingerprint spoofing.
-- **Protected Actions**: The autofill engine explicitly refuses to automatically sign legal documents, consent to background checks, or complete interactive tests. These fields are flagged in the panel for manual candidate review.
-
----
-
-## 5. Reporting a Vulnerability
-
-We take the security of Kareer seriously. If you discover a security vulnerability or credential leak risk:
-
-1. **Do not disclose publicly**: Please avoid opening public GitHub issues for sensitive security vulnerabilities.
-2. **Submit a Private Report**: Use [GitHub's Private Vulnerability Reporting](https://github.com/Amro212/kareer/security/advisories/new) on the repository.
-3. **Include Details**:
-   - Description of the vulnerability.
-   - Steps to reproduce or proof-of-concept.
-   - Potential impact.
-   - Any suggested remediations.
-
-We will review reports promptly and publish patches alongside responsible disclosure advisories.
+Real staging payments, Chrome/Firefox flows, cost measurements, production setup
+and store approval remain explicit gates in `docs/release-checklist.json`. Local
+tests do not establish external payment behavior or store approval.

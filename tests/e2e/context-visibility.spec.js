@@ -28,8 +28,7 @@ test('unrelated pages stay clear, and a dynamically mounted application opens th
   await expect.poll(async () => (await kr.readStorage('kr:job'))?.workCountry).toBe('United States');
   await kr.openPanel(page);
   await expect(page.locator('#kr-capture-job')).toHaveCount(0);
-  await page.locator('[data-tab=debug]').click();
-  await expect(page.locator('#kr-main-panel')).toContainText('United States');
+  await expect(page.locator('[data-tab=debug]')).toHaveCount(0);
   await expect(page.locator('#kr-recapture-job-btn')).toHaveCount(0);
   await page.evaluate(() => { document.body.querySelector('h1').textContent = 'Videos'; document.body.querySelector('form').remove(); document.body.querySelector('.job__location').remove(); });
   await expect(page.locator('#kareer-root')).toHaveCount(0);

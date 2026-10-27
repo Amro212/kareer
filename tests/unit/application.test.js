@@ -38,6 +38,21 @@ const job = () => ({ title: 'Engineer', company: 'Example', listingUrl: 'https:/
 
 const workflowAnswers = async fields => ({ answers: fields.map(f => ({ fieldId: f.fieldId, value: 'Applicant' })) });
 
+test('local-only filling explains how to connect AI and resume unanswered questions', async () => {
+  dom.reconfigure({ url: 'https://boards.greenhouse.io/acme/jobs/42' });
+  render('<h1>Job Application</h1><form id="application_form">' + input('email', 'Email') + '<label for="why">Why this role?</label><textarea id="why" required></textarea></form>');
+  const engine = createApplicationEngine({ settleMs: 0 });
+  try {
+    await engine.start(job());
+    assert.equal(document.querySelector('#email').value, 'test@example.com');
+    assert.equal(document.querySelector('#why').value, '');
+    assert.equal(engine.session.status, 'paused');
+    assert.match(engine.session.reason, /AI is unavailable/);
+    assert.match(engine.session.reason, /Connect AI in Settings/);
+    assert.match(engine.session.reason, /resume autofill/);
+  } finally { engine.destroy(); }
+});
+
 test('combined autofill validates current parent and frame fields before parent submission', async () => {
   render('<form id="application">' + input() + '<button>Submit application</button></form>');
   let errors = [], submissions = 0;
@@ -518,6 +533,21 @@ test('question changed during AI response never receives the old answer', async 
     assert.match(engine.session.reason, /question.*changed|changed.*question/i);
   } finally { engine.destroy(); }
 });
+
+for (const overwriteExisting of [false, true]) {
+  test(`a manual value entered during AI generation respects overwrite ${overwriteExisting}`, async () => {
+    saveSettings({ overwriteExisting });
+    render(`<form>${input('city', 'City')}<button>Submit application</button></form>`);
+    const engine = createApplicationEngine({ settleMs: 0, transitionMs: 0, answer: async fields => {
+      document.querySelector('#city').value = 'Manual answer';
+      return workflowAnswers(fields);
+    } });
+    try {
+      await engine.start(job());
+      assert.equal(document.querySelector('#city').value, overwriteExisting ? 'Applicant' : 'Manual answer');
+    } finally { engine.destroy(); }
+  });
+}
 
 test('markerless conditional fields stay on one step', async () => {
   render(`${input('city', 'City')}<button>Continue</button>`);

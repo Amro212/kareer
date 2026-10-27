@@ -1,6 +1,7 @@
 import { api, isFirefox } from '../shared/browser.js';
 import { MSG, BROADCAST_KEYS } from '../shared/protocol.js';
-import { buildSnapshot, applySet, applyDelete, applyProfilePatch, writeSecret, clearSecret, hasApiKey } from './storage.js';
+import { buildSnapshot, applySet, applyDelete, applyProfilePatch, writeSecret, clearSecret, hasApiKey, readAiStatus } from './storage.js';
+import { managedOperation } from './managed.js';
 import { proxyAiRequest } from './ai.js';
 import { bindTabSession, getTabSession, watchTabLifecycle } from './tabs.js';
 import { registerFrame, listFrames, dropFrame, dropTab } from './frames.js';
@@ -49,6 +50,11 @@ const handlers = {
   },
 
   [MSG.AI_REQUEST]: ({ options }) => proxyAiRequest(options),
+  [MSG.AI_STATUS]: async () => {
+    if ((await readAiStatus()).mode === 'managed') await managedOperation('status').catch(() => {});
+    return readAiStatus();
+  },
+  [MSG.BILLING]: ({ operation, input }) => managedOperation(operation, input),
 
   [MSG.TAB_BIND]: async ({ sessionId }, sender) => {
     await bindTabSession(sender?.tab?.id, sessionId);
@@ -60,7 +66,7 @@ const handlers = {
   }),
 
   [MSG.OPEN_OPTIONS]: async () => {
-    await api.runtime.openOptionsPage();
+    await api.tabs.create({ url: api.runtime.getURL('options/index.html#connection') });
     return { ok: true };
   },
 
@@ -137,12 +143,22 @@ function forwardToFrame(tabId, { frameId, command }) {
 api.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handler = handlers[message?.type];
   if (!handler) return false;
+  const privileged = [MSG.SECRET_WRITE, MSG.SECRET_CLEAR, MSG.BILLING];
+  if (privileged.includes(message.type) && !sender?.url?.startsWith(api.runtime.getURL(''))) {
+    sendResponse({ error: 'Open Kareer Settings to manage credentials and purchases.' });
+    return false;
+  }
 
   Promise.resolve(handler(message, sender))
     .then(sendResponse)
     .catch((err) => sendResponse({ error: err?.message || String(err) }));
 
   return true; // async response
+});
+
+api.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !['kr:ai-status', 'kr:secrets', 'kr:settings'].some(k => changes[k])) return;
+  void readAiStatus().then(aiStatus => deliver({ type: MSG.STORAGE_CHANGED, keys: {}, aiStatus }));
 });
 
 // Toolbar click toggles the in-page panel, replacing GM_registerMenuCommand.

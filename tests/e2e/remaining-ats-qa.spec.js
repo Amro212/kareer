@@ -42,7 +42,7 @@ test('captured paginated Greenhouse school resolves Guelph and retries the parti
   const primary=JSON.parse(kr.openrouter.requests[0].body.messages.at(-1).content).fieldsToFill;expect(primary).toHaveLength(1);expect(primary[0].label).toBe('Degree');
   const before=await page.evaluate(()=>window.qa);expect(before.first).toHaveLength(100);expect(before.first).not.toContain('University of Guelph');expect(before.found).toEqual(['University of Guelph']);
   await page.evaluate(()=>{window.qa.allowSchool=true;});
-  await page.locator('#kr-autofill-btn').click();await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Auto Continue is off.',{timeout:60000});
+  await page.locator('#kr-autofill-btn').click();await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Review your answers, then submit the application.',{timeout:60000});
   await expect(page.locator('.education--form')).toHaveCount(1);expect(await page.evaluate(()=>window.qa.adds)).toBe(0);
   await expect(page.locator('.select__single-value').first()).toHaveText('University of Guelph');
   await expect(page.locator('#kr-main-panel')).not.toContainText('Ambiguous duplicate field IDs');

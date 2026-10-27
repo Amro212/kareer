@@ -196,6 +196,9 @@ export function hasApiKey() {
   return platform.secrets.has();
 }
 
+export function hasAi() { return platform.ai.status().state === 'ready'; }
+export function isManagedAi() { return platform.ai.status().mode === 'managed'; }
+
 export function saveApiKey(apiKey) {
   platform.secrets.write(apiKey);
 }

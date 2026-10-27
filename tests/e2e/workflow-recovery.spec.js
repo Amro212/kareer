@@ -53,7 +53,7 @@ test('captured mthree disabled consent survives a saved pause and Resume finishe
   const ids=await kr.readStorage('kr:sessions');
   const saved=await kr.readStorage(`kr:sessions:${ids[0]}`);expect(saved.reason).toContain('These fields became disabled:');
   await page.locator('#kr-autofill-btn').click();
-  await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Auto Continue is off.');
+  await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Review your answers, then submit the application.');
   await expect(page.locator('#email')).toHaveValue(profile.email);
   expect(kr.openrouter.requests.length).toBeLessThanOrEqual(1);
 });

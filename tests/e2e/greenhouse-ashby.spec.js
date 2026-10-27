@@ -137,5 +137,5 @@ test('captured Ashby portal menus close before rediscovery and saved contacts fi
   }));
   await kr.openPanel(page);await page.locator('#kr-autofill-btn').click();
   await expect(page.locator('#_systemfield_name')).toHaveValue('Test Applicant',{timeout:60000});await expect(page.locator('#_systemfield_email')).toHaveValue('test@example.com');
-  await expect(page.locator('#kr-main-panel')).toContainText('Required answers or documents need manual input');expect(kr.openrouter.requests).toHaveLength(0);
+  await expect(page.locator('#kr-main-panel')).toContainText('Local filling is complete. Add saved answers, activate AI, or complete the remaining required fields manually.');expect(kr.openrouter.requests).toHaveLength(0);
 });

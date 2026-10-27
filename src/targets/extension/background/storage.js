@@ -55,6 +55,7 @@ export async function buildSnapshot() {
   return {
     data,
     hasApiKey: Boolean(all['kr:secrets']?.apiKey),
+    aiStatus: cachedAiStatus(all),
   };
 }
 
@@ -80,11 +81,31 @@ export async function applyDelete(key) {
 
 export async function writeSecret(apiKey) {
   const clean = typeof apiKey === 'string' ? apiKey.trim() : '';
-  await area().set({ 'kr:secrets': { apiKey: clean } });
+  await updateStoredRecord('kr:secrets', previous => ({ ...previous, apiKey: clean }));
 }
 
 export async function clearSecret() {
-  await area().remove('kr:secrets');
+  const { mode } = await readAiStatus();
+  await updateStoredRecord('kr:settings', previous => ({ ...previous, aiMode: previous?.aiMode || mode }));
+  await updateStoredRecord('kr:secrets', previous => ({ ...previous, apiKey: '' }));
+}
+
+export function cachedAiStatus(all) {
+  const mode = all['kr:settings']?.aiMode || (all['kr:secrets']?.apiKey ? 'byok' : 'managed');
+  if (mode === 'byok') return { mode, state: all['kr:secrets']?.apiKey ? 'ready' : 'activationNeeded' };
+  const saved = all['kr:ai-status'] || {};
+  return { mode: 'managed', state: all['kr:secrets']?.licenseKey ? saved.state || 'unavailable' : 'activationNeeded',
+    monthly: saved.monthly || 0, purchased: saved.purchased || 0, total: saved.total || 0, monthlyExpiresAt: saved.monthlyExpiresAt || null,
+    subscriptions: saved.subscriptions || [] };
+}
+
+export async function readAiStatus() {
+  const records = await Promise.all(['kr:settings', 'kr:secrets', 'kr:ai-status'].map(key => area().get(key)));
+  return cachedAiStatus(Object.assign({}, ...records));
+}
+export async function readSecrets() { return (await area().get('kr:secrets'))['kr:secrets'] || {}; }
+export async function writeLicense(licenseKey) {
+  await updateStoredRecord('kr:secrets', previous => ({ ...previous, licenseKey }));
 }
 
 export async function readApiKey() {

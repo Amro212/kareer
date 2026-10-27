@@ -1,4 +1,4 @@
-import { hasApiKey, getSettings, getProfile, gmGet } from './storage.js';
+import { hasAi, isManagedAi, getSettings, getProfile, gmGet } from './storage.js';
 import { STORAGE_KEYS, DEFAULT_SETTINGS } from './constants.js';
 import { logger } from './debug.js';
 import { platform } from './platform.js';
@@ -225,7 +225,7 @@ function cleanJsonFence(text) {
   return cleaned;
 }
 
-async function requestAiJson({ model, messages, temperature = 0.2, timeout = AUTOFILL_TIMEOUT_MS, tag = 'AI' }) {
+async function requestAiJson({ model, messages, temperature = 0.2, timeout = AUTOFILL_TIMEOUT_MS, tag = 'AI', operation = 'autofill' }) {
   const startTime = Date.now();
   const payload = JSON.stringify({
     model,
@@ -240,6 +240,7 @@ async function requestAiJson({ model, messages, temperature = 0.2, timeout = AUT
     url: OPENROUTER_ENDPOINT,
     data: payload,
     timeout,
+    operation,
   }).catch(err => {
     logger.warn(`${tag} request failed after ${Date.now() - startTime}ms using ${model}: ${err.message}`);
     throw err;
@@ -269,7 +270,7 @@ async function requestAiJson({ model, messages, temperature = 0.2, timeout = AUT
   try {
     parsed = JSON.parse(cleaned);
   } catch (err) {
-    logger.error(`Failed to parse ${tag} answers JSON:`, cleaned);
+    logger.error(`Failed to parse ${tag} answers JSON`);
     throw new Error(`AI returned invalid JSON: ${err.message}`);
   }
 
@@ -281,10 +282,14 @@ async function requestAiJson({ model, messages, temperature = 0.2, timeout = AUT
 }
 
 export async function testConnection() {
+  if (isManagedAi()) {
+    const status = await platform.ai.refresh();
+    return { ok: status.state === 'ready', model: 'Kareer AI', error: status.state === 'ready' ? '' : 'Open Settings to activate Kareer AI or check your credits.' };
+  }
   const settings = getSettings();
-  const model = settings.model || DEFAULT_SETTINGS.model;
+  const model = isManagedAi() ? 'Kareer AI' : settings.model || DEFAULT_SETTINGS.model;
 
-  if (!hasApiKey()) {
+  if (!hasAi()) {
     logger.warn('Test AI invoked without an API key configured.');
     return {
       ok: false,
@@ -414,16 +419,16 @@ async function generatePageAnswers(fields, { settings, profile, allowSearch, job
       if (deterministic) answers.push({ ...deterministic, source: 'profile', provenance: 'unresolved' });
     }
   }
-  const model = settings.model || DEFAULT_SETTINGS.model;
+  const model = isManagedAi() ? 'Kareer AI' : settings.model || DEFAULT_SETTINGS.model;
   if (!unresolved.length && fields.length) return { answers, latencyMs: 0, model };
-  if (!hasApiKey()) return { answers, latencyMs: 0, model };
+  if (!hasAi()) return { answers, latencyMs: 0, model };
   const currentAdapter = detectAdapter();
   const tag = currentAdapter?.label ? `${currentAdapter.label} page` : 'ATS page';
   if (jobContext?.description) {
     logger.info(`Grounding ${unresolved.length} questions in job context: "${jobContext.title || 'Untitled'}" at "${jobContext.company || 'Unknown'}" (${jobContext.description.length} chars)`);
   }
   const writingStyle = getNarrativeStyle(settings.narrativeStyle);
-  const result = await requestAiJson({ model, tag, messages: [
+  const result = await requestAiJson({ model, tag, operation: repairErrors?.length ? 'repair' : allowSearch ? 'autofill' : 'optionDiscovery', messages: [
     { role: 'system', content: `${buildStructuredSystemPrompt({ allowSearch })}\n${buildNarrativeVoicePrompt(profile, settings)}\nFor declared multiple-choice fields only, value may be an array of exact owned option labels. Use all available profile, resume, notes, job, and saved-answer context for ambiguous factual or open-ended questions. Label uncertain context-based estimates with provenance=guessed and inferred=true, and grounded contextual answers provenance=inferred. Never invent career history, qualifications, dates, measurable results, or company facts. For structured fields, never invent facts out of thin air. Select only labels from this field's owned options. Answer every supplied application question, including eligibility, disclosures, and acknowledgments.` },
     { role: 'user', content: JSON.stringify({ applicantProfile: profileForAI(profile), resumeContext: formatStructuredBackground(profile) || profile.resumeContext, applicantNotes: profile.applicantNotes, pageContext: { url: window.location.href, host: window.location.hostname }, jobContext, repairErrors, fieldsToFill: unresolved.map(field => isNarrativeField(field) ? { ...field, writingStyle: `${writingStyle.label}: ${writingStyle.prompt} Preserve facts, limits and explicit language instructions.` } : field) }) },
   ] });
@@ -462,11 +467,11 @@ async function generatePageAnswers(fields, { settings, profile, allowSearch, job
 export async function rewriteNarrativeField({ fieldLabel, currentValue, feedback, constraints, style }) {
   const settings = { ...getSettings(), ...(style === undefined ? {} : { narrativeStyle: style }) };
   const profile = getProfile();
-  const model = settings.narrativeModel || settings.model || DEFAULT_SETTINGS.model;
+  const model = isManagedAi() ? 'Kareer AI' : settings.narrativeModel || settings.model || DEFAULT_SETTINGS.model;
   const writingStyle = getNarrativeStyle(settings.narrativeStyle);
 
-  if (!hasApiKey()) {
-    throw new Error('No OpenRouter API key configured.');
+  if (!hasAi()) {
+    throw new Error('AI is unavailable. Open Settings to check your connection or credits.');
   }
 
   const systemPrompt = `You are Kareer. You are rewriting a single narrative response in a job application for the candidate.
@@ -524,7 +529,8 @@ ${constraints?.maxLength ? `Maximum Length: ${constraints.maxLength} characters`
     method: 'POST',
     url: OPENROUTER_ENDPOINT,
     data: payload,
-    timeout: 25000,
+    timeout: isManagedAi() ? 120000 : 25000,
+    operation: 'fieldRewrite',
   });
 
   const latencyMs = Date.now() - startTime;

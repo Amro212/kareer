@@ -1,5 +1,6 @@
 import { api } from '../shared/browser.js';
-import { readApiKey, updateStoredRecord } from './storage.js';
+import { readApiKey, updateStoredRecord, readAiStatus } from './storage.js';
+import { proxyAiRequest } from './ai.js';
 import { readStored, writeStored, removeStored, listStored } from './documents.js';
 import { buildMaterialSource, validateMaterial, materialJobKey, mergeMaterialRewrite, MATERIAL_KINDS } from '../../../core/materials-model.js';
 import { DEFAULT_SETTINGS } from '../../../core/constants.js';
@@ -39,6 +40,14 @@ Before returning, audit relevance, chronology, factual grounding, skills coverag
 
 export async function writingRequest(input, system, signal) {
   const instructions = `Write in English. ${system}`;
+  if ((await readAiStatus()).mode === 'managed') {
+    const result = await proxyAiRequest({ operation: input.rewrite ? 'documentRewrite' : 'document',
+      data: JSON.stringify({ messages: [{ role: 'system', content: instructions }, { role: 'user', content: JSON.stringify(input) }] }),
+      document: { kind: input.kind, source: input.source, ...(input.rewrite ? { current: input.currentDocument, path: input.rewrite.path } : {}) },
+    }, signal.signal);
+    if (result.error) throw new Error(result.error);
+    return JSON.parse(JSON.parse(result.responseText).choices[0].message.content);
+  }
   const key = await readApiKey();
   if (!key) throw new Error('Add your OpenRouter key in Settings, then retry.');
   const settings = (await api.storage.local.get('kr:settings'))['kr:settings'] || {};

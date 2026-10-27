@@ -108,6 +108,7 @@ export function createGmHost() {
     secretClear: () => storageDelete(SECRETS_KEY),
     secretHas: () => Boolean(secretRead()),
     aiRequest,
+    aiStatus: () => ({ mode: 'byok', state: secretRead() ? 'ready' : 'activationNeeded' }),
     tabBind: (sessionId) => {
       if (typeof GM_getTab === 'function' && typeof GM_saveTab === 'function') {
         GM_getTab((tab) => GM_saveTab({ ...tab, kareerSession: sessionId }));

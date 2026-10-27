@@ -50,8 +50,11 @@ The architecture, implementation roadmap, and engineering patterns follow two di
    core data.
 5. **Single panel host**: one persistent Shadow DOM panel, top frame only.
    Subframes run field agents with no UI.
-6. **Runtime boundary**: browser + page DOM + extension APIs + OpenRouter. No
-   backend, no external browser controller. Playwright is for tests only.
+6. **Runtime boundary**: browser + page DOM + extension APIs. Advanced BYOK calls
+   OpenRouter directly. Managed extension AI uses the isolated `server/` Cloudflare
+   Worker + D1 gateway for Lemon Squeezy billing, license authentication, credits,
+   and fixed-policy OpenRouter requests. Profiles, files and application execution
+   remain local. No external browser controller. Playwright is for tests only.
 7. **Action execution & event strategy**: Actuators and ATS action executors use
    clean, deterministic DOM event dispatch (React-friendly native value setters,
    synthetic `InputEvent`, `ChangeEvent`, and keyboard/combobox sequences). The

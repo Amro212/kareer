@@ -349,7 +349,7 @@ test('numeric prose reaches both active application documents without a numeric 
 });
 
 test('panel generation activates separate documents for the next Autofill and exports real bytes', async ({ kr }, testInfo) => {
-  await kr.seed({ profile: PROFILE, settings: { autoContinue: false, autoSubmit: false } });
+  await kr.seed({ profile: PROFILE, settings: { autoContinue: false, autoSubmit: false, overwriteExisting: true } });
   kr.openrouter.handler = materialResponse;
   const page = await kr.context.newPage();
   await page.goto(kr.fixtureUrl('materials-fixture.html'));
@@ -405,11 +405,14 @@ test('panel generation activates separate documents for the next Autofill and ex
   await workspace.locator('#resume-summary').fill('Engineer focused on dependable APIs.');
   await workspace.locator('#save-document').click();
   await expect(workspace.locator('#feedback')).toContainText('Changes saved');
+  await page.locator('#kr-rescan-btn').click();
   await page.locator('#kr-autofill-btn').click();
   await expect.poll(() => page.locator('#resume').evaluate(el => el.files[0].name)).not.toBe(oldName);
   const bytes = await page.locator('#resume').evaluate(async el => [...new Uint8Array(await el.files[0].arrayBuffer())]);
   expect(await pdfText(bytes)).toContain('Engineer focused on dependable APIs.');
   await page.evaluate(() => { window.resumeUploads = 0; document.querySelector('#resume').addEventListener('change', () => window.resumeUploads++); });
+  await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Review your answers, then submit the application.');
+  await page.locator('#kr-rescan-btn').click();
   await page.locator('#kr-autofill-btn').click();
   await expect(page.locator('#kr-autofill-btn')).toBeEnabled();
   expect(await page.evaluate(() => window.resumeUploads)).toBe(0);
@@ -426,26 +429,29 @@ test('panel generation activates separate documents for the next Autofill and ex
 });
 
 test('a generation finishing during Autofill is used only on the next run and later application steps', async ({ kr }) => {
-  await kr.seed({ profile: PROFILE, settings: { autoContinue: false, autoSubmit: false } }); kr.openrouter.handler = materialResponse;
+  await kr.seed({ profile: PROFILE, settings: { autoContinue: false, autoSubmit: false, overwriteExisting: true } }); kr.openrouter.handler = materialResponse;
   const page = await kr.context.newPage(); await page.goto(kr.fixtureUrl('materials-fixture.html')); await kr.openPanel(page);
   await page.locator('#kr-tailor-resume').click(); await expect(page.locator('#kr-material-resume-status')).toContainText('Ready', { timeout: 45000 });
   await page.locator('#kr-autofill-btn').click(); await expect(page.locator('#resume-name')).toContainText('.pdf');
-  await expect(page.locator('#kr-autofill-btn')).toBeEnabled();
+  await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Review your answers, then submit the application.');
   const previous = await page.locator('#resume').evaluate(el => el.files[0].name);
   kr.openrouter.delayMs = 1500;
   kr.openrouter.handler = body => { const reply = materialResponse(body), input = JSON.parse(body.messages.at(-1).content); if (input.kind === 'resume') { const data = JSON.parse(reply.choices[0].message.content); data.summary = 'Engineer focused on reliable delivery.'; reply.choices[0].message.content = JSON.stringify(data); } return reply; };
   await page.locator('#kr-tailor-resume').click();
   await expect(page.locator('#kr-material-resume-status')).toContainText('Writing');
+  await page.locator('#kr-rescan-btn').click();
   await page.locator('#kr-autofill-btn').click();
   await expect(page.locator('#kr-material-resume-status')).toContainText('Ready', { timeout: 45000 });
   expect(await page.locator('#resume').evaluate(el => el.files[0].name)).toBe(previous);
-  await expect(page.locator('#kr-autofill-btn')).toBeEnabled();
+  await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Review your answers, then submit the application.');
+  await page.locator('#kr-rescan-btn').click();
   await page.locator('#kr-autofill-btn').click();
   await expect.poll(() => page.locator('#resume').evaluate(el => el.files[0].name)).not.toBe(previous);
   expect(await pdfText(await page.locator('#resume').evaluate(async el => [...new Uint8Array(await el.files[0].arrayBuffer())]))).toContain('Engineer focused on reliable delivery.');
   await expect(page.locator('#kr-autofill-btn')).toBeEnabled();
   await page.locator('#kr-generate-cover-letter').click(); await expect(page.locator('#kr-material-coverLetter-status')).toContainText('Ready', { timeout: 45000 });
   await page.evaluate(() => { document.querySelector('form').innerHTML = '<h2>Documents — next step</h2><label>Resume<input id="next-resume" type="file" accept=".pdf"></label><label>Cover letter<input id="next-letter" type="file" accept=".pdf"></label><label>Cover letter text<textarea id="next-text"></textarea></label><button type="submit">Submit application</button>'; });
+  await page.locator('#kr-rescan-btn').click();
   await page.locator('#kr-autofill-btn').click();
   await expect.poll(() => page.locator('#next-resume').evaluate(el => el.files.length)).toBe(1);
   await expect.poll(() => page.locator('#next-letter').evaluate(el => el.files.length)).toBe(1);

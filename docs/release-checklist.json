@@ -1,0 +1,11 @@
+{
+  "gatewayStaging": { "passed": false, "evidence": "Requires configured staging D1 and Worker secrets." },
+  "lemonSandbox": { "passed": false, "evidence": "Requires two sandbox variants with native licenses and verified checkout/webhook/renewal/reversal flows." },
+  "chromeStagingPurchaseAi": { "passed": false, "evidence": "Real Chrome purchase, auto-claim, emailed-key reuse, managed AI and credit exhaustion required." },
+  "firefoxStagingPurchaseAi": { "passed": false, "evidence": "Real Firefox purchase, permission grant, auto-claim, key reuse and managed AI required." },
+  "releaseVerification": { "passed": true, "evidence": "2026-10-17, v0.5.148: full 653-case root unit baseline followed by focused application, managed, panel, build-watch and store-upload regressions; 27 gateway tests; actual workerd/D1 transactions; Wrangler bundle; all 235 extension cases covered across resumed runs with 3 opt-in live captures skipped and failed assertions corrected/retested; 60 corrected/minified browser cases plus 10 final-package checks passed; 11 website browser checks, TypeScript/build, archive CRC/license/version/staging isolation and source archive checks passed. Firefox self-hosted lint has 0 errors and 28 bundled-code warnings for store review. See CONTEXT_AND_FINDINGS.md for overlapping run details. External staging/payment/store gates remain separate and incomplete." },
+  "multiUserCosts": { "passed": false, "evidence": "Measure actual metered costs and caps across representative users; the personal usage CSV is only a baseline." },
+  "productionGateway": { "passed": false, "evidence": "Deploy production gateway with sales disabled, distinct production D1/payment configuration and production origins." },
+  "chromeStoreApproval": { "passed": false, "evidence": "Store listing ID, disclosure review and Chrome Web Store approval pending." },
+  "firefoxSignedRelease": { "passed": false, "evidence": "Signed release verified against the existing download/update channel pending." }
+}

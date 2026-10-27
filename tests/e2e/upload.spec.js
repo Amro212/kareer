@@ -90,7 +90,7 @@ test('embedded Ashby parser completes before the parent asks for answers', async
   await kr.openPanel(page);
   await expect(page.locator('#kr-main-panel')).toContainText('embedded frame');
   await page.locator('#kr-autofill-btn').click();
-  await expect(page.locator('#kr-main-panel')).toContainText('Embedded page filled. Review the application before proceeding.', { timeout: 60000 });
+  await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Review your answers, then submit the application.', { timeout: 60000 });
   const frame = page.frameLocator('iframe');
   await expect(frame.locator('body')).toHaveAttribute('data-parse', 'complete');
   await expect(frame.locator('#name')).toHaveValue('Parsed Applicant');

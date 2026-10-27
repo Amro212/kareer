@@ -22,7 +22,7 @@ test('watch builds refresh copied CSS and HTML for both browsers', { timeout: 60
     assert.fail(`Watch build did not update assets: ${output}`);
   };
   try {
-    for (const name of ['src', 'tools', 'package.json']) {
+    for (const name of ['src', 'tools', 'package.json', 'LICENSE']) {
       fs.cpSync(path.join(root, name), path.join(dir, name), { recursive: true });
     }
     fs.symlinkSync(path.join(root, 'node_modules'), path.join(dir, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');

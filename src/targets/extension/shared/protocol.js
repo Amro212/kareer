@@ -16,6 +16,8 @@ export const MSG = {
 
   // AI proxy
   AI_REQUEST: 'kr:ai-request',
+  AI_STATUS: 'kr:ai-status',
+  BILLING: 'kr:billing',
 
   // Tab-scoped session binding
   TAB_BIND: 'kr:tab-bind',

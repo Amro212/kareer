@@ -33,3 +33,14 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - run: npx web-ext lint --source-dir=dist/firefox --self-hosted
+      - run: npm ci --prefix server
+      - run: npm test --prefix server
+      - run: npm run test:d1 --prefix server
+      - run: npm run check --prefix server
+      - run: npm ci --prefix site
+      - run: npm run typecheck --prefix site
+      - run: npm run build --prefix site
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - run: npx playwright test --config tests/site/playwright.config.js

@@ -52,6 +52,7 @@ test('Lever overwrite repairs multiple pronouns; another run preserves existing 
   await expect(page.locator('#kr-autofill-btn')).toBeEnabled({ timeout: 60000 });
   await expect(page.locator('#candidatePronounsCheckboxes input:checked')).toHaveCount(1);
   await expect(page.locator('[value="He/him"]')).toBeChecked();
+  await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Review your answers, then submit the application.', { timeout: 60000 });
   await kr.seed({ profile, settings: { overwriteExisting: false } });
   await page.reload();
   await kr.openPanel(page);

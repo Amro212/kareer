@@ -48,12 +48,12 @@ test.describe('extension shell', () => {
     await expect(page.locator('#kr-main-panel')).toContainText('detected');
   });
 
-  test('a missing key surfaces as No API Key without exposing storage to the page', async ({ kr }) => {
+  test('a new installation asks for activation without collecting credentials in the page', async ({ kr }) => {
     const page = await kr.context.newPage();
     await page.goto(kr.fixtureUrl('phase2-form-fixture.html'));
     await kr.openPanel(page);
 
-    await expect(page.locator('#kr-main-panel')).toContainText('No API Key');
+    await expect(page.locator('#kr-main-panel')).toContainText('Activation needed');
 
     // The panel offers the options page instead of collecting the key in-page.
     await page.locator('[data-tab=settings]').click();
@@ -83,19 +83,30 @@ test.describe('extension shell', () => {
     expect(leaked).toBe(false);
   });
 
-  test('options page persists the key, model, and profile', async ({ kr }) => {
+  test('options page persists the key, model, and profile', async ({ kr }, testInfo) => {
     const page = await kr.context.newPage();
     await page.goto(kr.optionsUrl());
 
     await page.locator('.app-configuration > .nav-item').click();
+    await page.locator('#advanced-ai summary').click();
+    await page.locator('#ai-mode').selectOption('byok');
     await page.locator('#api-key').fill('sk-or-v1-from-options-page');
     await page.locator('#save-key').click();
     await expect(page.locator('#key-status')).toHaveText('Key saved');
 
     await page.locator('.configuration-links a[href="#models"]').click();
-    await page.locator('#model').selectOption('openai/gpt-4o-mini');
+    await page.locator('#byok-model summary').click();
+    await expect(page.locator('#model')).toHaveJSProperty('tagName', 'INPUT');
+    await expect(page.locator('#model')).toHaveValue('');
+    await expect(page.locator('#model')).toHaveAttribute('placeholder', 'provider/model-id');
+    await page.screenshot({ path: testInfo.outputPath('byok-model-desktop.png'), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('byok-model-mobile.png'), fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.locator('#model').fill('openai/gpt-4o-mini');
     await page.locator('#save-model').click();
-    await expect(page.locator('#model-feedback')).toHaveText('Model and writing style saved.');
+    await expect(page.locator('#model-feedback')).toHaveText('Writing preferences saved.');
 
     await page.locator('#profile-nav-link').click();
     await page.locator('[data-profile-section=identity] .profile-edit-button').click();
@@ -111,6 +122,13 @@ test.describe('extension shell', () => {
     await expect(page.locator('#profile-feedback')).toHaveText('Profile saved locally.');
 
     expect(await kr.readStorage('kr:secrets')).toEqual({ apiKey: 'sk-or-v1-from-options-page' });
+    expect((await kr.readStorage('kr:settings')).model).toBe('openai/gpt-4o-mini');
+    await page.reload();
+    await page.goto(`${kr.optionsUrl()}#models`);
+    await page.locator('#byok-model summary').click();
+    await expect(page.locator('#model')).toHaveValue('openai/gpt-4o-mini');
+    await page.locator('#model').fill('');
+    await page.locator('#save-model').click();
     expect((await kr.readStorage('kr:settings')).model).toBe('openai/gpt-4o-mini');
 
     const profile = await kr.readStorage('kr:profile');
@@ -177,7 +195,7 @@ test.describe('extension shell', () => {
     await expect(page.locator('#kareer-root [name=fullName]')).toHaveValue('Broadcast Applicant');
   });
 
-  test('popup reports field and frame counts for the active tab', async ({ kr }) => {
+  test('popup reports fields without internal frame diagnostics', async ({ kr }) => {
     await kr.seed({ apiKey: 'sk-or-v1-e2e-test-key' });
 
     const page = await kr.context.newPage();
@@ -188,7 +206,7 @@ test.describe('extension shell', () => {
     const popup = await kr.context.newPage();
     await popup.goto(kr.popupUrl());
     await expect(popup.locator('#key-status')).toHaveText('Key saved');
-    await expect(popup.locator('#frame-count')).not.toHaveText('-');
+    await expect(popup.locator('#frame-count')).toHaveCount(0);
     expect(Number(await popup.locator('#field-count').textContent())).toBeGreaterThan(0);
   });
 });

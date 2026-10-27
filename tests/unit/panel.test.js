@@ -4,6 +4,30 @@ import { build } from 'esbuild';
 import { JSDOM } from 'jsdom';
 import { summarizeFieldResults } from '../../src/core/ui.js';
 
+test('saved BYOK model names and provider errors render as text rather than markup', async () => {
+  const bundle = await build({ entryPoints: ['src/targets/userscript/entry.js'], bundle: true, format: 'iife', write: false });
+  const model = '<img id="injected-model" src=x>';
+  const dom = new JSDOM('<h1>Job Application</h1><form><label>Email<input type="email"></label></form>', { url: 'https://jobs.lever.co/example/apply', runScripts: 'dangerously', pretendToBeVisual: true });
+  dom.window.GM_getValue = (key, fallback) => key === 'kr:settings' ? { model } : key === 'kr:secrets' ? { apiKey: 'synthetic-test-key' } : fallback;
+  dom.window.GM_setValue = () => {};
+  dom.window.CSS = { escape: value => value };
+  Object.defineProperty(dom.window.HTMLElement.prototype, 'offsetWidth', { get: () => 200 });
+  try {
+    dom.window.eval(bundle.outputFiles[0].text);
+    await new Promise(resolve => setTimeout(resolve, 250));
+    const root = dom.window.document.querySelector('#kareer-root').shadowRoot;
+    assert.equal(root.querySelector('#injected-model'), null);
+    assert.ok(root.textContent.includes(model));
+    const error = '<img id="injected-error" src=x>';
+    dom.window.GM_xmlhttpRequest = options => options.onload({ status: 503, responseText: JSON.stringify({ error: { message: error } }) });
+    root.querySelector('#kr-test-ai-btn').click();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    assert.equal(root.querySelector('#injected-model'), null);
+    assert.equal(root.querySelector('#injected-error'), null);
+    assert.ok(root.textContent.includes(error));
+  } finally { dom.window.close(); }
+});
+
 test('panel hides historical required-field errors when its current FAILED count is zero',async()=>{
   const bundle=await build({entryPoints:['src/targets/userscript/entry.js'],bundle:true,format:'iife',write:false});
   const url='https://job-boards.greenhouse.io/acme/jobs/1';
@@ -282,11 +306,9 @@ test('workflow shows verified completion count and retained structural diagnosti
     assert.match(root.textContent, /1\s+step completed/);
     assert.equal(root.querySelector('[data-tab=review]'), null);
     const tabs = Array.from(root.querySelectorAll('.kr-tab-btn')).map(btn => btn.getAttribute('data-tab'));
-    assert.deepEqual(tabs, ['home', 'profile', 'settings', 'debug']);
-    root.querySelector('[data-tab=debug]').click();
-    assert.match(root.textContent, /Last Workflow Change/);
-    assert.match(root.textContent, /"fieldId": "language"/);
-    assert.match(root.textContent, /"navigationClick": false/);
+    assert.deepEqual(tabs, ['home', 'profile', 'settings']);
+    assert.equal(root.querySelector('#kr-capture-fixture'), null);
+    assert.doesNotMatch(root.textContent, /Last Workflow Change/);
   } finally { dom.window.close(); }
 });
 
@@ -461,6 +483,12 @@ test('panel writing style previews, saves, reloads, and preserves unrelated sett
     root.querySelector('#kr-toggle-btn').click();
     root.querySelector('[data-tab=settings]').click();
     const select = root.querySelector('[name=narrativeStyle]');
+    const modelInput = root.querySelector('[name=model]');
+    assert.equal(modelInput.tagName, 'INPUT');
+    assert.equal(modelInput.value, '');
+    assert.equal(modelInput.labels.length, 1);
+    assert.equal(root.querySelector('#kr-model-select'), null);
+    modelInput.value = 'provider/chosen-model';
     assert.ok(select);
     assert.equal(select.labels.length, 1);
     assert.equal(select.value, 'natural');
@@ -471,10 +499,12 @@ test('panel writing style previews, saves, reloads, and preserves unrelated sett
     assert.equal(storage.get('kr:settings').narrativeStyle, 'unknown', 'preview does not save');
     root.querySelector('#kr-settings-form').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
     assert.equal(storage.get('kr:settings').narrativeStyle, 'light-wit');
+    assert.equal(storage.get('kr:settings').model, 'provider/chosen-model');
     assert.equal(storage.get('kr:settings').futureSetting, 'preserve');
     assert.equal(storage.get('kr:settings').narrativeModel, 'other-model');
     root.querySelector('[data-tab=home]').click();
     root.querySelector('[data-tab=settings]').click();
     assert.equal(root.querySelector('[name=narrativeStyle]').value, 'light-wit');
+    assert.equal(root.querySelector('[name=model]').value, 'provider/chosen-model');
   } finally { dom.window.close(); }
 });

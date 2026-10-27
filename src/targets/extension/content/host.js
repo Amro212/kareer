@@ -15,6 +15,7 @@ export function createExtensionHost() {
   const listeners = new Set();
   const navListeners = new Set();
   let keyPresent = false;
+  let aiStatus = { mode: 'managed', state: 'activationNeeded' };
   let hydrated = null;
   // Seeded from the background so a freshly loaded document inherits the tab's
   // navigation count instead of restarting at zero.
@@ -31,6 +32,7 @@ export function createExtensionHost() {
       cache.clear();
       for (const [key, value] of Object.entries(snapshot.data)) cache.set(key, value);
       keyPresent = Boolean(snapshot.hasApiKey);
+      aiStatus = snapshot.aiStatus || { mode: 'byok', state: keyPresent ? 'ready' : 'activationNeeded' };
       if (nav && !nav.error) navigation = nav;
     });
   }
@@ -50,6 +52,7 @@ export function createExtensionHost() {
       else cache.set(key, value);
     }
     if (message.secretChanged) keyPresent = Boolean(message.hasApiKey);
+    if (message.aiStatus) aiStatus = message.aiStatus;
     for (const listener of listeners) {
       try { listener(message.keys || {}); } catch {}
     }
@@ -114,6 +117,8 @@ export function createExtensionHost() {
       sendMessage({ type: MSG.SECRET_CLEAR }).catch(() => {});
     },
     secretHas: () => keyPresent,
+    aiStatus: () => aiStatus,
+    aiRefresh: async () => { aiStatus = await sendMessage({ type: MSG.AI_STATUS }); return aiStatus; },
     aiRequest,
     tabBind: (sessionId) => {
       sendMessage({ type: MSG.TAB_BIND, sessionId }).catch(() => {});

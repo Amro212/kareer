@@ -86,7 +86,10 @@ jobs:
 
       - name: Build Firefox extension
         if: env.IS_SYNC_ONLY != 'true'
-        run: npm run build:extension
+        run: |
+          node server/tools/release-gate.js
+          npm run build:extension
+          npx web-ext lint --source-dir=dist/firefox --self-hosted
 
       - name: Stamp unique version in extension manifest
         if: env.IS_SYNC_ONLY != 'true'
@@ -109,10 +112,12 @@ jobs:
           AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
         run: |
           mkdir -p dist/signed
+          git archive --format=zip --output=dist/kareer-source.zip HEAD src tools package.json package-lock.json LICENSE README.md
           npx web-ext sign \
             --source-dir=dist/firefox \
             --artifacts-dir=dist/signed \
             --channel=unlisted \
+            --upload-source-code=dist/kareer-source.zip \
             --api-key="$AMO_JWT_ISSUER" \
             --api-secret="$AMO_JWT_SECRET" \
             --approval-timeout=480000 \
@@ -126,6 +131,7 @@ jobs:
           VERSION: ${{ env.VERSION }}
           BASE_VERSION: ${{ env.BASE_VERSION }}
         run: |
+          node server/tools/release-gate.js
           node tools/sync-amo.js
 
       - name: Setup Pages

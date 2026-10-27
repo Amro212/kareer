@@ -9,7 +9,13 @@ import { TOKENS, FONT_FILES, fontFaceCSS, VISUAL_NAME } from '../src/core/theme.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, '..');
 const srcDir = path.join(rootDir, 'src');
-const distDir = path.join(rootDir, 'dist');
+const staging = process.argv.includes('--staging');
+const gatewayArg = process.argv.find(arg => arg.startsWith('--gateway='))?.slice('--gateway='.length);
+if (Boolean(gatewayArg) !== staging) throw new Error('A staging gateway requires both --staging and --gateway=https://...');
+const gateway = staging ? new URL(gatewayArg) : new URL('https://api.kareer.itsamro.me');
+if (gateway.protocol !== 'https:' || gateway.username || gateway.password || gateway.search || gateway.hash || gateway.pathname !== '/') throw new Error('Gateway must be an HTTPS origin.');
+if (staging && gateway.hostname === 'api.kareer.itsamro.me') throw new Error('Staging cannot use the production gateway.');
+const distDir = path.join(rootDir, 'dist', ...(staging ? ['staging'] : []));
 const pkgPath = path.join(rootDir, 'package.json');
 const cachePath = path.join(distDir, '.build-cache.json');
 
@@ -100,6 +106,7 @@ function syncSiteAndUpdates(version) {
 
 function prepareVersion() {
   const pkg = readPackage();
+  if (staging) return pkg;
   const currentHash = computeSourceHash();
   const cache = getBuildCache();
 
@@ -190,6 +197,7 @@ function extensionOptions(pkg, browser) {
   const extDir = path.join(srcDir, 'targets', 'extension');
   return {
     ...shared(pkg),
+    minify: true,
     entryPoints: {
       'content/index': path.join(extDir, 'content', 'index.js'),
       'background/index': path.join(extDir, 'background', 'index.js'),
@@ -202,6 +210,7 @@ function extensionOptions(pkg, browser) {
     define: {
       ...shared(pkg).define,
       __TARGET_BROWSER__: JSON.stringify(browser),
+      KAREER_GATEWAY_URL: JSON.stringify(gateway.origin),
     },
   };
 }
@@ -214,7 +223,17 @@ function writeExtensionStaticFiles(pkg, browser) {
   const base = JSON.parse(fs.readFileSync(path.join(extDir, 'manifest.base.json'), 'utf8'));
   const overlay = JSON.parse(fs.readFileSync(path.join(extDir, `manifest.${browser}.json`), 'utf8'));
   const manifest = { ...base, ...overlay, version: pkg.version };
+  if (staging) {
+    manifest.name += ' (Staging)';
+    manifest.host_permissions = [...manifest.host_permissions, `${gateway.origin}/*`];
+    if (manifest.optional_host_permissions) manifest.optional_host_permissions.push(`${gateway.origin}/*`);
+    if (manifest.browser_specific_settings?.gecko) {
+      manifest.browser_specific_settings.gecko.id = 'kareer-staging@amro212';
+      delete manifest.browser_specific_settings.gecko.update_url;
+    }
+  }
   fs.mkdirSync(outDir, { recursive: true });
+  fs.copyFileSync(path.join(rootDir, 'LICENSE'), path.join(outDir, 'LICENSE'));
   fs.writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8');
   fs.cpSync(path.join(srcDir, 'assets', 'fonts'), path.join(outDir, 'assets', 'fonts'), { recursive: true });
   const pageStyles = fs.readFileSync(path.join(extDir, 'shared', 'pages.css'), 'utf8');

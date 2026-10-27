@@ -10,10 +10,10 @@ web
 Job seekers applying to multiple positions across major Applicant Tracking Systems (Workday, Greenhouse, Lever, Ashby, and generic web forms) who want to apply quickly, accurately, and privately without repetitive manual copy-pasting.
 
 ## Product Purpose
-Kareer is an open-source, local-first browser assistant (Chrome/Firefox extension and Tampermonkey userscript) that scans job application forms, matches questions to a user's verified profile data, and fills out complex web forms (inputs, comboboxes, dropdowns, radios, checkboxes, file uploads). It speeds up applications from 15+ minutes to seconds while guaranteeing zero data leakage and strictly avoiding AI hallucinations.
+Kareer is an open-source, local-first browser assistant (Chrome/Firefox extension and Tampermonkey userscript) that matches job application fields to saved profile facts and contextual AI answers. It fills inputs, comboboxes, radios, checkboxes and file uploads. Users review saved, inferred, guessed, verified and unresolved values; AI answers can be wrong.
 
 ## Positioning
-Private, local-first Bring-Your-Own-Key (BYOK) architecture with zero telemetry, running entirely in the user's browser without external backends or subscriptions, with strict truthful grounding that refuses to fabricate credentials or answers.
+Local profiles, files and application execution, with optional managed Kareer AI in extensions and explicit advanced BYOK. Managed AI uses a Cloudflare Worker/D1 for Lemon Squeezy payments, reusable license credentials, credits and OpenRouter routing. Request accounting metadata is retained; prompt bodies and generated content are not persisted by the gateway. The userscript remains BYOK.
 
 ## Operating Context
 Operates directly within candidate-facing application pages across Ashby, Greenhouse, Lever, Workday, and generic job boards. The user interacts with the tool while viewing the job application form itself in real-time.
@@ -24,7 +24,7 @@ Operates directly within candidate-facing application pages across Ashby, Greenh
 - Sandboxed API key handling in background workers/GM storage (isolated from page scripts).
 - Single persistent Shadow DOM host in top frame only, avoiding host page style collisions.
 - Frozen actuator layer (no chrome.debugger, no stealth scripts, no CAPTCHA solving).
-- Safety boundaries: pauses for assessments, identity verification, recorded interviews, e-signatures, and legal attestations.
+- Bounded fill/repair loops; Auto Continue and Auto Submit preferences remain under user control, with Auto Submit off by default. Headings and attestations do not trigger a blanket autofill pause.
 
 ## Brand Commitments
 - Name: Kareer
@@ -39,7 +39,7 @@ Operates directly within candidate-facing application pages across Ashby, Greenh
 ## Product Principles
 - **Unobtrusive presence**: The assistant serves the task; it never obscures critical form fields or submit buttons.
 - **Truthful grounding**: Never invent credentials, dates, tools, or metrics. Highlight missing data for the user.
-- **Safety first**: Pause for legal, financial, signature, or assessment gates.
+- **Reviewable execution**: Preserve local work, show answer provenance and honor user navigation/submission settings.
 - **Instant scanability**: Status, progress, and reviewable items must be readable in milliseconds.
 
 ## Accessibility & Inclusion

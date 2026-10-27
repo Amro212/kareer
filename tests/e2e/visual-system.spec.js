@@ -44,7 +44,8 @@ test('launcher opens the panel in one click and every tab uses Geist without ove
   const loaded = await fonts(page);
   expect(loaded).toHaveLength(2);
   expect(loaded.every(face => face.status === 'loaded')).toBe(true);
-  for (const tab of ['home', 'profile', 'settings', 'debug']) {
+  await expect(page.locator('[data-tab=debug]')).toHaveCount(0);
+  for (const tab of ['home', 'profile', 'settings']) {
     await page.locator(`[data-tab=${tab}]`).click();
     expect(await page.locator('.kr-content').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
     await page.locator('#kr-main-panel').screenshot({ path: info.outputPath(`panel-${tab}.png`) });

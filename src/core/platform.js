@@ -41,6 +41,8 @@ export const platform = {
     has: () => host.secretHas(),
   },
   ai: {
+    status: () => host.aiStatus?.() || { mode: 'byok', state: host.secretHas() ? 'ready' : 'activationNeeded' },
+    refresh: () => host.aiRefresh?.() || Promise.resolve(platform.ai.status()),
     // Hosts attach the Authorization header themselves so the key never has to
     // pass through core or, in the extension, through the content script.
     request: (options) => host.aiRequest(options),

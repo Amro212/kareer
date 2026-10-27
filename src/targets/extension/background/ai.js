@@ -1,4 +1,6 @@
-import { readApiKey } from './storage.js';
+import { api } from '../shared/browser.js';
+import { readApiKey, readAiStatus } from './storage.js';
+import { managedRequest } from './managed.js';
 
 const ALLOWED_ORIGIN = 'https://openrouter.ai';
 
@@ -7,8 +9,18 @@ const ALLOWED_ORIGIN = 'https://openrouter.ai';
  * Authorization header here so the key never leaves the worker. Returns a plain
  * object because errors cannot cross the message boundary as Error instances.
  */
-export async function proxyAiRequest(options) {
+export async function proxyAiRequest(options, externalSignal) {
   const { method = 'POST', url, headers = {}, data, timeout = 60000 } = options || {};
+  if ((await readAiStatus()).mode === 'managed') {
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    externalSignal?.addEventListener('abort', abort, { once: true });
+    const timer = setTimeout(abort, 125000);
+    const keepalive = setInterval(() => { void api.storage.local.get('kr:settings'); }, 20000);
+    try { return await managedRequest(options, controller.signal); }
+    catch (error) { return { error: error.message, kind: 'MANAGED' }; }
+    finally { clearTimeout(timer); clearInterval(keepalive); externalSignal?.removeEventListener('abort', abort); }
+  }
 
   if (typeof url !== 'string' || !url.startsWith(`${ALLOWED_ORIGIN}/`)) {
     return { error: `Blocked request to non-OpenRouter URL`, kind: 'BLOCKED' };

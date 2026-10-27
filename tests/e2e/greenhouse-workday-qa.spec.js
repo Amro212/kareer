@@ -23,7 +23,7 @@ for(const numbered of [false,true]) test(`captured Greenhouse education harvests
     }
   },numbered);
   await kr.openPanel(page);const started=Date.now();await page.locator('#kr-autofill-btn').click();
-  await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Auto Continue is off.',{timeout:60000});
+  await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Review your answers, then submit the application.',{timeout:60000});
   await expect(page.locator('.select__single-value')).toHaveText(['Test University','Bachelor degree',numbered?'02':'February',numbered?'06':'June']);
   const qa=await page.evaluate(()=>window.qa);expect(qa.submits).toBe(0);expect(qa.queries.some(query=>query.value==='Bachelor of Engineering'||['02','06'].includes(query.value))).toBe(false);
   expect(kr.openrouter.requests).toHaveLength(1);
@@ -38,7 +38,7 @@ test('required-field repair leaves no historical warning after all current field
   const page=await kr.context.newPage();await page.goto(kr.fixtureUrl('job-boards.greenhouse.io-2026-10-06-03-13.html',GREENHOUSE_HOST));
   await page.locator('form').evaluate(form=>{form.innerHTML='<label for="email">Email *</label><input id="email" type="email" required>';});
   await kr.openPanel(page);await page.locator('#kr-autofill-btn').click();
-  await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Auto Continue is off.',{timeout:60000});
+  await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Review your answers, then submit the application.',{timeout:60000});
   await expect(page.locator('#kr-main-panel')).toContainText('0 FAILED');
   await expect(page.locator('#kr-main-panel')).not.toContainText('Required value missing or rejected.');
   expect(kr.openrouter.requests).toHaveLength(2);

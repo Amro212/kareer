@@ -1,14 +1,15 @@
 import { TOKENS, VISUAL_NAME, installPanelFonts } from './theme.js';
-import { APP_VERSION, APP_NAME, POPULAR_MODELS, UI_IDS, FILL_STATUS, STORAGE_KEYS, DEFAULT_SETTINGS } from './constants.js';
+import { APP_VERSION, APP_NAME, UI_IDS, FILL_STATUS, STORAGE_KEYS } from './constants.js';
 import { PROFILE_SECTIONS, PROFILE_FIELDS, calculateProfileStrength } from './profile.js';
 import {
   getSettings,
   saveSettings,
   getProfile,
   saveProfile,
+  hasAi,
   hasApiKey,
+  isManagedAi,
   saveApiKey,
-  getSanitizedState,
   gmGet,
 } from './storage.js';
 import { platform, getHostName } from './platform.js';
@@ -34,8 +35,7 @@ import {
   destroyInlineRewriteBadge,
 } from './fields/highlight.js';
 import { startFormObserver, pauseFormObserver, resumeFormObserver, stopFormObserver } from './observer.js';
-import { collectRemoteFields, applyRemoteAnswers, searchRemoteOptions, listRemoteFrames, captureRemoteFixtures, isRemoteFieldId, applyRemoteResumeUploads, locateRemoteField, inspectRemoteFields, embeddedApplicationStates } from './remote.js';
-import { captureFixture, fixtureFileName } from './capture.js';
+import { collectRemoteFields, applyRemoteAnswers, searchRemoteOptions, listRemoteFrames, isRemoteFieldId, applyRemoteResumeUploads, locateRemoteField, inspectRemoteFields, embeddedApplicationStates } from './remote.js';
 import { createApplicationEngine } from './application.js';
 import { classifyPage } from './pageClassifier.js';
 import { detectAdapter } from './adapters/index.js';
@@ -1680,10 +1680,9 @@ button svg { flex-shrink: 0; }
 .kr-review-value { font-family: var(--kr-font); }
 .kr-review-item { background: transparent; border: 0; border-bottom: 1px solid var(--kr-line); border-radius: 0; padding: 10px 0; }
 .kr-review-item:last-child { border-bottom: 0; }
-.kr-tab-btn[data-tab="debug"] { flex: .8; margin-left: 8px; border-left-color: var(--kr-line); border-radius: 0; }
 .kr-wf-actions { flex-wrap: wrap; }
 .kr-wf-actions .kr-btn { flex: 1 1 auto; }
-#kr-model-select, #kr-custom-model-input { font-family: var(--kr-font-mono); }
+#kr-model-input { font-family: var(--kr-font-mono); }
 @media (max-width: 520px) {
   .kr-widget-container { right: 12px; bottom: 12px; }
   .kr-panel { max-width: calc(100vw - 24px); }
@@ -1746,8 +1745,14 @@ function setSafeHTML(element, htmlString) {
 }
 
 function getStatusInfo() {
-  if (!hasApiKey() && (detectAdapter().resolveAnswer || remoteFieldsCache.some(field => field.ats?.adapter))) return { label: 'Profile Autofill Ready', dotClass: '', badgeClass: 'kr-badge-green', text: 'Known profile values are ready. Add an API key for unanswered questions.' };
-  if (!hasApiKey()) {
+  if (isManagedAi()) {
+    const status = platform.ai.status();
+    const label = { ready: 'Ready', activationNeeded: 'Activation needed', outOfCredits: 'Out of credits', unavailable: 'Temporarily unavailable' }[status.state] || 'Temporarily unavailable';
+    return { label, dotClass: status.state === 'ready' ? '' : 'no-key', badgeClass: status.state === 'ready' ? 'kr-badge-green' : 'kr-badge-amber',
+      text: status.state === 'ready' ? `Kareer AI: ${status.total} credits remaining.` : `${label}. Local profile filling remains available. Open Settings to activate AI or buy credits.` };
+  }
+  if (!hasAi() && (detectAdapter().resolveAnswer || remoteFieldsCache.some(field => field.ats?.adapter))) return { label: 'Profile Autofill Ready', dotClass: '', badgeClass: 'kr-badge-green', text: 'Known profile values are ready. Add an API key for unanswered questions.' };
+  if (!hasAi()) {
     return {
       label: 'No API Key',
       dotClass: 'no-key',
@@ -1919,12 +1924,6 @@ async function handleUnifiedAutofillClick() {
   const embeddedStates = await embeddedApplicationStates();
   if (!current()) return;
   const supportedEmbedded = embeddedStates.length > 0;
-  if (!hasApiKey() && !adapter.resolveAnswer && !supportedEmbedded && !remoteFieldsCache.some(field => field.ats?.adapter)) {
-    alert('Please configure your OpenRouter API Key in Settings first.');
-    currentTab = 'settings';
-    updatePanelDOM();
-    return;
-  }
 
   const profile = getProfile();
   if (!profile.fullName && !profile.email) {
@@ -1977,12 +1976,6 @@ async function executeAutofillFlow() {
   const page = classifyPage();
   if (['captcha', 'confirmation'].includes(page.type)) {
     autofillProgress.statusText = page.reason;
-    updatePanelDOM();
-    return;
-  }
-  if (!hasApiKey() && !detectAdapter().resolveAnswer && !remoteFieldsCache.some(field => field.ats?.adapter)) {
-    alert('Please configure your OpenRouter API Key in Settings first.');
-    currentTab = 'settings';
     updatePanelDOM();
     return;
   }
@@ -2106,7 +2099,7 @@ async function executeAutofillFlow() {
     }
     let aiResponse = { answers: [] };
     if (normalized.length) {
-      autofillProgress.statusText = detectAdapter().resolveAnswer || remoteFields.some(field => field.ats?.adapter) ? 'Resolving application answers...' : `Generating answers with AI (${settings.model})...`;
+      autofillProgress.statusText = detectAdapter().resolveAnswer || remoteFields.some(field => field.ats?.adapter) ? 'Resolving application answers...' : `Generating answers with AI (${aiLabel()})...`;
       updatePanelDOM();
       aiResponse = await generateAutofillAnswers(normalized, { jobContext: currentJob });
     }
@@ -2296,34 +2289,6 @@ function downloadText(fileName, text, type = 'text/html') {
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
-
-/**
- * Saves this page, plus each embedded frame, as sanitized fixture files. Frames
- * capture themselves because their documents are unreachable from here.
- */
-async function saveFixtureSnapshot() {
-  const feedback = shadowRootRef?.querySelector('#kr-capture-feedback');
-  const report = (text) => { if (feedback) feedback.textContent = text; };
-
-  try {
-    report('Capturing...');
-    const frameCaptures = await captureRemoteFixtures();
-    const frameFiles = frameCaptures.map((capture, index) => fixtureFileName(capture.url || window.location.href, `frame${index + 1}`));
-
-    const { html, meta } = captureFixture(document, { frameFiles });
-    const mainFile = fixtureFileName(window.location.href);
-    downloadText(mainFile, html);
-    frameCaptures.forEach((capture, index) => downloadText(frameFiles[index], capture.html));
-
-    const total = 1 + frameCaptures.length;
-    report(`Saved ${total} file${total === 1 ? '' : 's'}: ${meta.fieldCount} fields here${frameCaptures.length ? `, ${frameCaptures.length} embedded frame${frameCaptures.length === 1 ? '' : 's'}` : ''}. Move them into fixtures/.`);
-    logger.info(`Captured fixture for ${meta.host} (${meta.fieldCount} fields, ${frameCaptures.length} frames)`);
-  } catch (err) {
-    logger.error('Fixture capture failed:', err);
-    report(`Capture failed: ${err.message}`);
-  }
-}
-
 
 function renderHud() {
   const status = getStatusInfo();
@@ -2538,6 +2503,9 @@ function renderHomeTab() {
   } else if (session?.reason) {
     const isErr = wfIsPaused || wfIsWaiting;
     heroStatusHtml = `<div class="kr-wf-reason ${isErr ? 'wf-error' : ''}">${escapeHtml(session.reason)}</div>`;
+    if (wfIsPaused && !hasAi() && !platform.capabilities.writeSecretsInPage) {
+      heroStatusHtml += '<button type="button" class="kr-btn kr-btn-secondary" id="kr-open-options">Connect AI</button>';
+    }
   }
 
   // Profile strength & MVP check
@@ -2613,19 +2581,19 @@ function renderHomeTab() {
   }
 
   let testResultHtml = '';
-  if (lastAiTestResult) {
+  if (lastAiTestResult && !isManagedAi()) {
     if (lastAiTestResult.ok) {
       testResultHtml = `
         <div class="kr-alert kr-alert-success">
           <strong>${ICONS.check} AI Connected</strong> (${lastAiTestResult.latencyMs}ms)<br/>
-          <span style="font-family: var(--kr-font-mono); font-size: 11px; color: var(--kr-text-2);">Model: ${lastAiTestResult.model}</span>
+          <span style="font-family: var(--kr-font-mono); font-size: 11px; color: var(--kr-text-2);">Model: ${escapeHtml(lastAiTestResult.model)}</span>
         </div>
       `;
     } else {
       testResultHtml = `
         <div class="kr-alert kr-alert-error">
           <strong>${ICONS.x} Connection Failed</strong> (${lastAiTestResult.latencyMs}ms)<br/>
-          <span style="font-size: 11px;">${lastAiTestResult.error}</span>
+          <span style="font-size: 11px;">${escapeHtml(lastAiTestResult.error)}</span>
         </div>
       `;
     }
@@ -2697,7 +2665,7 @@ function renderHomeTab() {
         <span class="kr-badge ${status.badgeClass}">${status.label}</span>
       </div>
       <div style="font-size: 12px; color: var(--kr-text-2);">
-        ${status.text}
+        ${escapeHtml(status.text)}
       </div>
       <div class="kr-row" style="margin-top: 6px;">
         <span class="kr-label">Adapter</span>
@@ -2708,8 +2676,8 @@ function renderHomeTab() {
         <span class="kr-val" style="font-family: var(--kr-font-mono); font-size: 11px;">${currentHost}</span>
       </div>
       <div class="kr-row">
-        <span class="kr-label">Model</span>
-        <span class="kr-val" style="font-family: var(--kr-font-mono); font-size: 11px;">${settings.model}</span>
+        <span class="kr-label">AI</span>
+        <span class="kr-val" style="font-family: var(--kr-font-mono); font-size: 11px;">${escapeHtml(aiLabel())}</span>
       </div>
       <div class="kr-row" style="margin-top: 4px;">
         <button class="kr-btn kr-btn-secondary" id="kr-test-ai-btn" style="flex: 1;" ${isAiTesting ? 'disabled' : ''}>
@@ -2859,7 +2827,17 @@ function renderProfileTab() {
   `;
 }
 
+function aiLabel() { return isManagedAi() ? `Kareer AI · ${platform.ai.status().total || 0} credits` : gmGet(STORAGE_KEYS.SETTINGS, {})?.model || 'OpenRouter'; }
+
 function renderApiKeyGroup() {
+  if (isManagedAi()) {
+    const status = platform.ai.status();
+    return `<div class="kr-card"><span class="kr-card-title">Kareer AI · ${escapeHtml(getStatusInfo().label)}</span>
+      <p>Monthly: ${status.monthly || 0} · Purchased: ${status.purchased || 0}</p>
+      ${status.monthlyExpiresAt ? `<p>Monthly credits expire ${escapeHtml(new Date(status.monthlyExpiresAt).toLocaleDateString())}.</p>` : ''}
+      <p>Each completed AI request costs one credit. A run can make multiple requests.</p>
+      <button type="button" class="kr-btn kr-btn-secondary" id="kr-open-options">${status.state === 'ready' ? 'Manage Kareer AI' : 'Set up Kareer AI'}</button></div>`;
+  }
   const keySaved = hasApiKey();
 
   // Extension hosts keep the key in the background worker, so the panel never
@@ -2897,24 +2875,17 @@ function renderSettingsTab() {
   const settings = getSettings();
   const selectedStyle = getNarrativeStyle(settings.narrativeStyle);
 
-  const modelOptions = POPULAR_MODELS.map((m) => {
-    const selected = settings.model === m ? 'selected' : '';
-    return `<option value="${m}" ${selected}>${m}</option>`;
-  }).join('');
-
   return `
     <form id="kr-settings-form" style="display: flex; flex-direction: column; gap: 14px;">
       ${renderApiKeyGroup()}
 
-      <div class="kr-form-group">
-        <label>AI Model</label>
-        <select class="kr-select" name="model" id="kr-model-select">
-          ${modelOptions}
-          <option value="custom" ${!POPULAR_MODELS.includes(settings.model) ? 'selected' : ''}>Custom Model...</option>
-        </select>
-        <input class="kr-input" id="kr-custom-model-input" type="text" placeholder="Enter custom model ID" value="${escapeHtml(settings.model)}" style="margin-top: 6px; display: ${!POPULAR_MODELS.includes(settings.model) ? 'block' : 'none'};" />
+${isManagedAi() ? '' : `      <div class="kr-form-group">
+        <label for="kr-model-input">OpenRouter model ID</label>
+        <input class="kr-input" name="model" id="kr-model-input" type="text" placeholder="provider/model-id" autocomplete="off" spellcheck="false" aria-describedby="kr-model-help" value="${escapeHtml(gmGet(STORAGE_KEYS.SETTINGS, {})?.model || '')}" />
+        <span id="kr-model-help" style="font-size: 11px; color: var(--kr-text-3);">Copy the model ID from OpenRouter and paste it here.</span>
       </div>
 
+`}
       <div class="kr-form-group">
         <label for="kr-narrative-style">Writing style</label>
         <select class="kr-select" name="narrativeStyle" id="kr-narrative-style" aria-describedby="kr-style-description">
@@ -2978,137 +2949,13 @@ function renderSettingsTab() {
       <div class="kr-row" style="margin-top: 4px;">
         <button type="button" class="kr-btn kr-btn-secondary" id="kr-export-data" style="flex: 1;">Export backup JSON</button>
       </div>
-      <p style="font-size: 11px; color: var(--kr-text-3); margin: 0;">Profile, settings, memory, and job only. The API key is never included.</p>
+      <p style="font-size: 11px; color: var(--kr-text-3); margin: 0;">Profile, settings, memory, and job only. API keys and license credentials are never included.</p>
 
       <div class="kr-row">
         <button class="kr-btn" type="submit" style="flex: 1;">Save Settings</button>
         <span class="kr-save-feedback" id="kr-settings-feedback">Saved ✓</span>
       </div>
     </form>
-  `;
-}
-
-function renderDebugTab() {
-  const state = getSanitizedState();
-  const logs = logger.getLogs();
-  const lastPageChange = applicationState?.session?.lastPageChange;
-
-  let currentJob = applicationState?.session?.job || gmGet(STORAGE_KEYS.JOB);
-  if (!currentJob || (currentJob.listingUrl !== window.location.href && currentJob.applicationUrl !== window.location.href)) {
-    try {
-      currentJob = captureJob();
-    } catch { /* Ignore early DOM access */ }
-  }
-
-  if (currentJob?.pendingHydration && !currentJob._hydrationHooked) {
-    currentJob._hydrationHooked = true;
-    currentJob.pendingHydration.then(() => {
-      updatePanelDOM();
-    }).catch(() => {});
-  }
-
-  const logsHtml = logs.length === 0
-    ? '<span style="color: var(--kr-text-3);">No debug logs recorded yet.</span>'
-    : logs.slice().reverse().map((l) => {
-        const time = l.timestamp.split('T')[1]?.slice(0, 8) || '';
-        const metaText = l.meta && typeof l.meta === 'object' && Object.keys(l.meta).length > 0
-          ? ` <span style="color: var(--kr-text-3); font-size: 10px;">${escapeHtml(JSON.stringify(l.meta))}</span>`
-          : (l.meta && typeof l.meta === 'string' ? ` <span style="color: var(--kr-text-3); font-size: 10px;">${escapeHtml(l.meta)}</span>` : '');
-        return `
-          <div class="kr-log-item">
-            <span class="kr-log-time">[${time}]</span>
-            <span class="kr-log-level-${l.level}">[${l.level}]</span>
-            <span>${escapeHtml(l.message)}</span>${metaText}
-          </div>
-        `;
-      }).join('');
-
-  return `
-    <div class="kr-card">
-      <div class="kr-row">
-        <span class="kr-card-title">System Information</span>
-        <span class="kr-val" style="font-size: 11px;">v${state.version}</span>
-      </div>
-      <div class="kr-row">
-        <span class="kr-label">API Key Stored</span>
-        <span class="kr-badge ${state.hasApiKey ? 'kr-badge-green' : 'kr-badge-amber'}">
-          ${state.hasApiKey ? 'Present (Isolated in Secrets)' : 'Not Configured'}
-        </span>
-      </div>
-      <div class="kr-row">
-        <span class="kr-label">Current Host</span>
-        <span class="kr-val" style="font-size: 11px;">${state.host}</span>
-      </div>
-    </div>
-
-    <div class="kr-card">
-      <div class="kr-row">
-        <span class="kr-card-title">Captured Job & Description</span>
-      </div>
-      <div class="kr-row">
-        <span class="kr-label">Title</span>
-        <span class="kr-val" style="font-size: 11px;">${escapeHtml(currentJob?.title || 'None detected')}</span>
-      </div>
-      <div class="kr-row">
-        <span class="kr-label">Company</span>
-        <span class="kr-val" style="font-size: 11px;">${escapeHtml(currentJob?.company || 'None detected')}</span>
-      </div>
-      <div class="kr-row">
-        <span class="kr-label">Job Location</span>
-        <span class="kr-val" style="font-size: 11px;">${escapeHtml(currentJob?.location || 'Unknown')}</span>
-      </div>
-      <div class="kr-row">
-        <span class="kr-label">Work Country</span>
-        <span class="kr-val" style="font-size: 11px;">${escapeHtml(currentJob?.workCountry || 'Unknown or multiple countries — eligibility needs a country')}</span>
-      </div>
-      <div class="kr-row">
-        <span class="kr-label">Description Status</span>
-        <span class="kr-badge ${currentJob?.description ? 'kr-badge-green' : 'kr-badge-amber'}">
-          ${currentJob?.description ? `${currentJob.description.length} chars (${currentJob.description.trim().split(/\s+/).filter(Boolean).length} words)` : 'None / Empty'}
-        </span>
-      </div>
-      ${currentJob?.description ? `
-        <div style="margin-top: 8px;">
-          <div style="font-size: 10px; color: var(--kr-text-3); margin-bottom: 4px;">Captured Description Preview:</div>
-          <pre style="margin: 0; font-family: var(--kr-font-mono); font-size: 11px; max-height: 160px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; color: var(--kr-text-2); background: rgba(11, 15, 25, 0.7); padding: 8px; border-radius: var(--kr-radius-sm); border: 1px solid var(--kr-line);">${escapeHtml(currentJob.description)}</pre>
-        </div>
-      ` : `
-        <div style="font-size: 11px; color: var(--kr-text-3); margin-top: 6px;">
-          No description captured from this page DOM. Click "Re-capture" to try scanning now.
-        </div>
-      `}
-    </div>
-
-    <div class="kr-card">
-      <div class="kr-row">
-        <span class="kr-card-title">Sanitized Settings</span>
-      </div>
-      <pre style="margin: 0; font-family: var(--kr-font-mono); font-size: 11px; color: var(--kr-text-2); background: rgba(11, 15, 25, 0.7); padding: 8px; border-radius: var(--kr-radius-sm); overflow-x: auto; border: 1px solid var(--kr-line);">${escapeHtml(JSON.stringify(state.settings, null, 2))}</pre>
-    </div>
-
-    <div class="kr-card">
-      <div class="kr-row">
-        <span class="kr-card-title">Regression Fixture</span>
-        <button class="kr-btn kr-btn-secondary" id="kr-capture-fixture" style="padding: 4px 8px; font-size: 10px;">Save page fixture</button>
-      </div>
-      <div style="font-size: 11px; color: var(--kr-text-3);">
-        Downloads a sanitized copy of this page, including embedded frames, for the
-        regression suite. Your answers, scripts, and inline handlers are removed.
-      </div>
-      <div style="font-size: 11px; color: var(--kr-text-2);" id="kr-capture-feedback"></div>
-    </div>
-
-    <div class="kr-card">
-      ${lastPageChange ? `<div class="kr-row"><span class="kr-card-title">Last Workflow Change</span></div>
-      <pre style="font-size: 11px; font-family: var(--kr-font-mono); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--kr-text-2); background: rgba(11, 15, 25, 0.7); padding: 8px; border-radius: var(--kr-radius-sm); border: 1px solid var(--kr-line);">${escapeHtml(JSON.stringify(lastPageChange, null, 2))}</pre>` : ''}
-      <div class="kr-row">
-        <span class="kr-card-title">Recent Activity Logs (${logs.length})</span>
-        <button class="kr-btn kr-btn-secondary" id="kr-clear-logs-btn" style="padding: 4px 8px; font-size: 10px;">Clear</button>
-      </div>
-      <div class="kr-log-box" id="kr-log-container">
-        ${logsHtml}
-      </div>
-    </div>
   `;
 }
 
@@ -3130,7 +2977,6 @@ function updatePanelDOM() {
     if (currentTab === 'home') tabContent = renderHomeTab();
     else if (currentTab === 'profile') tabContent = renderProfileTab();
     else if (currentTab === 'settings') tabContent = renderSettingsTab();
-    else if (currentTab === 'debug') tabContent = renderDebugTab();
 
     const tabs = existingPanel.querySelectorAll('.kr-tab-btn');
     tabs.forEach((tab) => {
@@ -3143,8 +2989,8 @@ function updatePanelDOM() {
 
     const modelChip = existingPanel.querySelector('.kr-model-chip');
     if (modelChip) {
-      modelChip.textContent = settings.model;
-      modelChip.title = settings.model;
+      modelChip.textContent = aiLabel();
+      modelChip.title = aiLabel();
     }
 
     const contentEl = existingPanel.querySelector('.kr-content');
@@ -3163,7 +3009,6 @@ function updatePanelDOM() {
     if (currentTab === 'home') tabContent = renderHomeTab();
     else if (currentTab === 'profile') tabContent = renderProfileTab();
     else if (currentTab === 'settings') tabContent = renderSettingsTab();
-    else if (currentTab === 'debug') tabContent = renderDebugTab();
 
     const animateClass = panelJustOpened ? 'kr-panel-animate' : '';
     panelJustOpened = false;
@@ -3177,7 +3022,7 @@ function updatePanelDOM() {
             <span class="kr-version-tag">v${APP_VERSION}</span>
           </div>
           <div class="kr-header-actions">
-            <span class="kr-model-chip" title="${escapeHtml(settings.model)}">${escapeHtml(settings.model)}</span>
+            <span class="kr-model-chip" title="${escapeHtml(aiLabel())}">${escapeHtml(aiLabel())}</span>
             <button class="kr-close-btn" id="kr-close-panel-btn" title="Minimize panel">${ICONS.x}</button>
           </div>
         </div>
@@ -3186,7 +3031,6 @@ function updatePanelDOM() {
           <button class="kr-tab-btn ${currentTab === 'home' ? 'active' : ''}" data-tab="home">${ICONS.play} Run</button>
           <button class="kr-tab-btn ${currentTab === 'profile' ? 'active' : ''}" data-tab="profile">${ICONS.user} Profile</button>
           <button class="kr-tab-btn ${currentTab === 'settings' ? 'active' : ''}" data-tab="settings">${ICONS.settings} Settings</button>
-          <button class="kr-tab-btn ${currentTab === 'debug' ? 'active' : ''}" data-tab="debug">${ICONS.terminal} Debug</button>
         </div>
 
         <div class="kr-content">
@@ -3269,6 +3113,9 @@ function makeDraggable(element, container) {
 }
 
 function attachEventHandlers() {
+  const openOptionsBtn = shadowRootRef.querySelector('#kr-open-options');
+  if (openOptionsBtn) openOptionsBtn.onclick = () => platform.openOptions();
+
   if (!shadowRootRef) return;
 
   const container = shadowRootRef.querySelector('.kr-widget-container');
@@ -3512,23 +3359,7 @@ function attachEventHandlers() {
       shadowRootRef.querySelector('#kr-style-description').textContent = style.description;
       shadowRootRef.querySelector('#kr-style-example').textContent = style.examples[0].answer;
     };
-    const modelSelect = shadowRootRef.querySelector('#kr-model-select');
-    const customInput = shadowRootRef.querySelector('#kr-custom-model-input');
-    if (modelSelect && customInput) {
-      modelSelect.onchange = () => {
-        if (modelSelect.value === 'custom') {
-          customInput.style.display = 'block';
-        } else {
-          customInput.style.display = 'none';
-          customInput.value = modelSelect.value;
-        }
-      };
-    }
-
-    const openOptionsBtn = shadowRootRef.querySelector('#kr-open-options');
-    if (openOptionsBtn) {
-      openOptionsBtn.onclick = () => platform.openOptions();
-    }
+    const modelInput = shadowRootRef.querySelector('#kr-model-input');
 
     const toggleKeyBtn = shadowRootRef.querySelector('#kr-toggle-key-btn');
     const apiKeyInput = shadowRootRef.querySelector('#kr-api-key-input');
@@ -3546,10 +3377,8 @@ function attachEventHandlers() {
       e.preventDefault();
       const formData = new FormData(settingsForm);
 
-      let selectedModel = modelSelect?.value || DEFAULT_SETTINGS.model;
-      if (selectedModel === 'custom' && customInput) {
-        selectedModel = customInput.value.trim() || DEFAULT_SETTINGS.model;
-      }
+      const savedModel = gmGet(STORAGE_KEYS.SETTINGS, {})?.model || '';
+      const selectedModel = modelInput?.value.trim() || savedModel;
 
       const newSettings = {
         model: selectedModel,
@@ -3577,20 +3406,7 @@ function attachEventHandlers() {
     };
   }
 
-  const captureFixtureBtn = shadowRootRef.querySelector('#kr-capture-fixture');
-  if (captureFixtureBtn) {
-    captureFixtureBtn.onclick = () => void saveFixtureSnapshot();
-  }
 
-
-  // Debug: Clear logs
-  const clearLogsBtn = shadowRootRef.querySelector('#kr-clear-logs-btn');
-  if (clearLogsBtn) {
-    clearLogsBtn.onclick = () => {
-      logger.clear();
-      updatePanelDOM();
-    };
-  }
 }
 
 /**

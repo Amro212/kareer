@@ -110,6 +110,7 @@ test('legacy exports upgrade on every entry path without AI or lost wording; act
     const resumed = await request(workspace, 'snapshot', { sessionId: session.id, resumeRun: true });
     expect(resumed.records[kind].files.pdf.data).toBe(current.records[kind].files.pdf.data);
     await request(workspace, 'endRun', { sessionId: session.id, runRef: current.runRef });
+    await page.locator('#kr-rescan-btn').click();
     await page.locator('#kr-autofill-btn').click();
     const control = kind === 'resume' ? '#resume' : '#cover';
     await expect.poll(() => page.locator(control).evaluate(el => el.files.length)).toBe(1);

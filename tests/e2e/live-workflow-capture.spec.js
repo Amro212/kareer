@@ -1,4 +1,5 @@
 import {test,expect} from './support/fixtures.js';
+import { capturePage } from './support/capture.js';
 import path from 'node:path';
 import fs from 'node:fs';
 const pages=[
@@ -13,10 +14,7 @@ for(const [name,url] of pages)test(`read-only live capture: ${name}`,async({kr})
   await kr.openPanel(page);
   const signals=await page.evaluate(()=>[...document.querySelectorAll('[role=progressbar],[aria-busy=true]')].map(element=>{const ancestors=[];for(let node=element;node&&ancestors.length<5;node=node.parentElement){const style=getComputedStyle(node);ancestors.push({tag:node.tagName,cls:node.className,state:node.getAttribute('data-state'),display:style.display,visibility:style.visibility,opacity:style.opacity});}return ancestors;}));
   fs.writeFileSync(path.join(process.cwd(),'scratch','regression-debug',`${name}-signals.json`),JSON.stringify(signals,null,2));
-  await page.locator('[data-tab=debug]').click();
-  const downloading=page.waitForEvent('download');
-  await page.locator('#kr-capture-fixture').click();
-  const download=await downloading;
-  await download.saveAs(path.join(process.cwd(),'fixtures',`${name}-captured.html`));
+  const [capture] = await capturePage(page, kr);
+  fs.writeFileSync(path.join(process.cwd(),'fixtures',`${name}-captured.html`), capture.body);
   expect(fs.readFileSync(path.join(process.cwd(),'fixtures',`${name}-captured.html`),'utf8')).toContain('Kareer captured fixture');
 });

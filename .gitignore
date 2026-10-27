@@ -1,5 +1,7 @@
 # Dependencies
 node_modules/
+server/.wrangler/
+server/.dev.vars*
 
 # Build and distribution artifacts
 dist/
@@ -31,6 +33,7 @@ sample-output/
 scratch/
 pages/*
 docs/*.json
+!docs/release-checklist.json
 
 # Editor, AI workspace, and IDE metadata
 .cursor/

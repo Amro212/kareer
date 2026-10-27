@@ -1,6 +1,6 @@
 const api = typeof browser !== 'undefined' && browser.runtime ? browser : chrome;
 
-const ORIGINS = ['<all_urls>', 'https://openrouter.ai/*'];
+const ORIGINS = ['<all_urls>', 'https://openrouter.ai/*', 'https://api.kareer.itsamro.me/*'];
 
 const status = document.getElementById('status');
 const button = document.getElementById('grant');

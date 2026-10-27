@@ -1,0 +1,16 @@
+{
+  "name": "kareer-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-sqlite --test --test-concurrency=1 test/*.test.js",
+    "test:d1": "node test/d1-smoke.mjs",
+    "dev": "wrangler dev --env staging",
+    "check": "wrangler deploy --env staging --dry-run",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:production": "node tools/release-gate.js && wrangler deploy --env production"
+  },
+  "devDependencies": { "wrangler": "4.151.1", "miniflare": "5.20261012.1-beta", "esbuild": "0.28.2" },
+  "engines": { "node": ">=22.15" }
+}

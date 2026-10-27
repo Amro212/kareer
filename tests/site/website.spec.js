@@ -154,8 +154,8 @@ test('document tabs, FAQ disclosures and keyboard activation work', async ({ pag
   await letter.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'A proper introduction.' })).toBeVisible();
-  await page.getByText('Is Kareer actually free?', { exact: true }).click();
-  await expect(page.getByText('Kareer is free and open source, with no Kareer subscription or premium tier.', { exact: false })).toBeVisible();
+  await page.getByText('What does Kareer cost?', { exact: true }).click();
+  await expect(page.getByText('US$10/month for 1,000 credits', { exact: false }).last()).toBeVisible();
 });
 
 test('hero typography and scroll entrances animate once without shifting section layout', async ({ page }) => {

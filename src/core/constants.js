@@ -53,17 +53,6 @@ export const DEFAULT_PROFILE = {
   languageRecords: [],
 };
 
-export const POPULAR_MODELS = [
-  'google/gemini-2.5-flash-lite',
-  'anthropic/claude-haiku-5.5',
-  'inception/mercury-2.5',
-  'google/gemma-4-26b-a4b-it',
-  'openai/gpt-4o',
-  'openai/gpt-4o-mini',
-  'meta-llama/llama-3.3-70b-instruct',
-  'deepseek/deepseek-chat',
-];
-
 export const UI_IDS = {
   CONTAINER: 'kareer-root',
   INLINE_REWRITE: 'kareer-inline-rewrite',

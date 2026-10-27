@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { test, expect } from './support/fixtures.js';
+import { capturePage } from './support/capture.js';
 
 const PROFILE = {
   fullName: 'Amrit Kaur Singh',
@@ -9,23 +10,6 @@ const PROFILE = {
   location: 'Toronto, Ontario, Canada',
   resumeContext: 'Shipped payments systems at scale.',
 };
-
-/** Collects every file the page downloads during `action`. */
-async function collectDownloads(page, action) {
-  const files = [];
-  const pending = [];
-  page.on('download', (download) => {
-    pending.push((async () => {
-      const target = path.join(fs.mkdtempSync(path.join(process.env.TEMP || '/tmp', 'kr-dl-')), download.suggestedFilename());
-      await download.saveAs(target);
-      files.push({ name: download.suggestedFilename(), body: fs.readFileSync(target, 'utf8') });
-    })());
-  });
-  await action();
-  await page.waitForTimeout(2500);
-  await Promise.all(pending);
-  return files;
-}
 
 test.describe('fixture capture', () => {
   test('captures a page and its cross-origin frame as separate sanitized files', async ({ kr }) => {
@@ -43,14 +27,12 @@ test.describe('fixture capture', () => {
     await frame.locator('#email').fill('amrit.singh@example.com');
     await frame.locator('#why').fill('Shipped payments systems at scale.');
 
-    await page.locator('[data-tab=debug]').click();
+    await expect(page.locator('[data-tab=debug]')).toHaveCount(0);
 
-    const files = await collectDownloads(page, async () => {
-      await page.locator('#kr-capture-fixture').click();
-    });
+    const files = await capturePage(page, kr);
 
     expect(files.length).toBe(2);
-    await expect(page.locator('#kr-capture-feedback')).toContainText('Saved 2 files');
+    await expect(page.locator('#kr-capture-fixture')).toHaveCount(0);
 
     const host = files.find((file) => !file.name.includes('frame1'));
     const embed = files.find((file) => file.name.includes('frame1'));
@@ -81,11 +63,12 @@ test.describe('fixture capture', () => {
     const page = await kr.context.newPage();
     await page.goto(kr.fixtureUrl('phase2-form-fixture.html'));
     await kr.openPanel(page);
-    await page.locator('[data-tab=debug]').click();
+    await expect(page.locator('[data-tab=debug]')).toHaveCount(0);
+    const detected = page.locator('#kr-main-panel .kr-badge-blue').first();
+    await expect(detected).toHaveText(/\d+ detected/);
+    const originalCount = await detected.textContent();
 
-    const files = await collectDownloads(page, async () => {
-      await page.locator('#kr-capture-fixture').click();
-    });
+    const files = await capturePage(page, kr);
     expect(files.length).toBe(1);
 
     // Serve the capture back and confirm the scanner still sees the same fields.
@@ -97,8 +80,7 @@ test.describe('fixture capture', () => {
       const replay = await kr.context.newPage();
       await replay.goto(kr.fixtureUrl(replayName));
       await kr.openPanel(replay);
-      // The original page reports 18 detected fields; a lossless capture matches.
-      await expect(replay.locator('#kr-main-panel .kr-badge-blue').first()).toHaveText('18 detected', { timeout: 20000 });
+      await expect(replay.locator('#kr-main-panel .kr-badge-blue').first()).toHaveText(originalCount, { timeout: 20000 });
     } finally {
       fs.rmSync(replayPath, { force: true });
     }

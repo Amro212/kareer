@@ -15,7 +15,7 @@ test('embedded late degree discovery resolves an equivalent owned option without
   });
   await kr.openPanel(page);await expect(page.locator('#kr-main-panel')).toContainText('embedded frame');await page.locator('#kr-autofill-btn').click();
   await expect(frame.locator('#highestDegree')).toHaveValue('Bachelor degree',{timeout:60000});
-  await expect(page.locator('#kr-main-panel')).toContainText('Embedded page filled. Review the application before proceeding.');
+  await expect(page.locator('.kr-review-item').filter({hasText:'Highest degree'})).toContainText('INFERRED');
   expect(kr.openrouter.requests).toHaveLength(1);
 });
 
@@ -77,7 +77,7 @@ test('captured Reddit phone formatting and committed city remain verified',async
   await kr.openPanel(page);await page.locator('#kr-autofill-btn').click();
   await expect(page.locator('#phone')).toHaveValue('(416) 555-0199',{timeout:60000});
   await expect(page.locator('#candidate-location').locator('xpath=ancestor::*[contains(@class,"select-shell")][1]').locator('.select__single-value')).toHaveText('Milton, Ontario, Canada');
-  await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Auto Continue is off.',{timeout:60000});
+  await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Review your answers, then submit the application.',{timeout:60000});
   const rows=page.locator('.kr-review-item');
   await expect(rows.filter({hasText:'Phone'})).toContainText('VERIFIED');
   await expect(rows.filter({hasText:'Location (City)'})).toContainText('VERIFIED');

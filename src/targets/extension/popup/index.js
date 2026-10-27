@@ -1,6 +1,6 @@
 import { api, sendMessage } from '../shared/browser.js';
 import { MSG } from '../shared/protocol.js';
-import { APP_VERSION, DEFAULT_SETTINGS, STORAGE_KEYS } from '../../../core/constants.js';
+import { APP_VERSION, STORAGE_KEYS } from '../../../core/constants.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -36,12 +36,17 @@ async function init() {
   $('version').textContent = `v${APP_VERSION}`;
 
   const snapshot = await sendMessage({ type: MSG.SNAPSHOT }).catch(() => null);
-  const settings = { ...DEFAULT_SETTINGS, ...(snapshot?.data?.[STORAGE_KEYS.SETTINGS] || {}) };
-  $('model').textContent = settings.model;
-
-  const badge = $('key-status');
-  badge.textContent = snapshot?.hasApiKey ? 'Key saved' : 'No key';
-  badge.className = `badge ${snapshot?.hasApiKey ? 'ok' : 'warn'}`;
+  const settings = snapshot?.data?.[STORAGE_KEYS.SETTINGS] || {};
+  function showStatus(status) {
+    const managed = status?.mode !== 'byok';
+    $('model').textContent = managed ? 'Kareer AI' : settings.model || 'OpenRouter';
+    $('credits').textContent = managed ? String(status?.total || 0) : 'Personal API key';
+    const badge = $('key-status');
+    badge.textContent = managed ? ({ ready: 'Ready', activationNeeded: 'Activation needed', outOfCredits: 'Out of credits', unavailable: 'Temporarily unavailable' }[status?.state] || 'Temporarily unavailable') : snapshot?.hasApiKey ? 'Key saved' : 'No key';
+    badge.className = `badge ${status?.state === 'ready' ? 'ok' : 'warn'}`;
+  }
+  showStatus(snapshot?.aiStatus);
+  void sendMessage({ type: MSG.AI_STATUS }).then(showStatus).catch(() => {});
 
   const tab = await activeTab();
   if (tab?.id !== undefined) {
@@ -51,14 +56,12 @@ async function init() {
       const withFields = frames.filter((f) => f.fieldCount > 0);
       const top = frames.find((f) => f.isTop);
       $('field-count').textContent = String(frames.reduce((sum, f) => sum + f.fieldCount, 0));
-      $('frame-count').textContent = String(withFields.length);
       if (withFields.length && !top?.fieldCount) {
-        $('note').textContent = 'Fields are inside an embedded frame. The panel fills them through the frame agents.';
+        $('note').textContent = 'Open the panel to fill this application.';
       }
     } else {
       $('field-count').textContent = '0';
-      $('frame-count').textContent = '0';
-      $('note').textContent = 'No frame reported in yet. Reload the page if the panel is missing.';
+      $('note').textContent = 'Open a job application. Reload the page if the panel is missing.';
     }
   }
 

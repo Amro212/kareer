@@ -9,6 +9,7 @@
     "webNavigation"
   ],
   "host_permissions": [
+    "https://api.kareer.itsamro.me/*",
     "https://openrouter.ai/*",
     "<all_urls>"
   ],

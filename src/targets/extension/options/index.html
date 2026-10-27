@@ -18,8 +18,8 @@
       <nav class="app-configuration" aria-label="Configuration">
         <a href="#connection" class="nav-item">Settings</a>
         <div class="configuration-links" id="configuration-links" hidden>
-          <a href="#connection" class="nav-item">API connection</a>
-          <a href="#models" class="nav-item">Writing model</a>
+          <a href="#connection" class="nav-item">AI &amp; billing</a>
+          <a href="#models" class="nav-item">Writing preferences</a>
           <a href="#resume" class="nav-item">Uploaded resume</a>
           <a href="#advanced" class="nav-item">Backup &amp; migration</a>
         </div>
@@ -30,6 +30,49 @@
 <header class="page-heading" id="options-heading" hidden><h1 id="options-title">Settings</h1><p class="hint">Manage the settings for your application workspace.</p></header>
 
     <section id="connection" hidden>
+      <div id="managed-ai">
+        <div class="ai-introduction">
+          <div class="ai-introduction-copy">
+            <div class="ai-introduction-heading"><h2>Kareer AI</h2><span class="badge warn" id="managed-state" role="status" aria-live="polite">Activation needed</span></div>
+            <h3>Put your experience<br />to work.</h3>
+            <p>Spend less time turning the same career facts into new answers. Connect Kareer AI for help with application questions and documents, grounded in your profile and the job.</p>
+            <div class="actions"><button id="start-checkout">View plans <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></button></div>
+            <p class="ai-purchase-note">Choose your plan on Kareer's secure purchase page. No AI provider account or API key to set up.</p>
+            <p id="purchase-status" role="status" aria-live="polite"></p>
+          </div>
+          <ul class="ai-capabilities" aria-label="What Kareer AI helps with">
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5ZM8 9h8M8 12h5" /></svg><div><strong>Answers for this application</strong><span>Use your saved experience and job context for questions beyond exact profile matches.</span></div></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H5v18h14V8l-5-5ZM14 3v5h5M8 12h8M8 16h6" /></svg><div><strong>Documents for this role</strong><span>Tailor resumes and cover letters from your structured profile.</span></div></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6M4 21h16" /></svg><div><strong>You review the results</strong><span>Check generated answers and make changes before submitting.</span></div></li>
+          </ul>
+        </div>
+        <details id="license-activation" class="ai-disclosure">
+          <summary><span>Already purchased?<small>Activate the key from your receipt email</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></summary>
+          <div class="ai-disclosure-body">
+            <div class="group"><label for="license-key">Kareer license key</label><input id="license-key" type="password" autocomplete="off" spellcheck="false" aria-describedby="license-help activation-feedback" placeholder="Paste your license key" /></div>
+            <p class="hint" id="license-help">Bought on another installation? Reuse the same key to access your balance here.</p>
+            <div class="actions"><button id="activate-license" class="secondary" disabled>Activate key</button><a href="https://app.lemonsqueezy.com/my-orders" target="_blank" rel="noopener noreferrer">Find my receipt</a></div>
+            <p class="feedback" id="activation-feedback" role="status" aria-live="polite"></p>
+          </div>
+        </details>
+        <section id="usage-details" class="ai-usage" aria-labelledby="usage-heading" hidden>
+          <div class="ai-usage-heading"><h2 id="usage-heading">Your AI usage</h2><button class="secondary" id="refresh-usage">Refresh usage</button></div>
+          <dl><div><dt>Monthly credits</dt><dd id="monthly-balance">0</dd></div><div><dt>Purchased credits</dt><dd id="purchased-balance">0</dd></div></dl>
+          <p class="hint" id="monthly-expiry"></p><p class="hint" id="plan-status"></p>
+          <div class="actions"><button class="secondary" id="manage-billing">Manage billing</button><button class="secondary danger" id="disconnect-license">Remove key from this browser</button></div>
+          <p class="hint">Removing a key does not cancel a subscription. Manage or cancel it through billing.</p>
+        </section>
+        <p class="feedback" id="managed-feedback" role="status" aria-live="polite"></p>
+      </div>
+      <details id="advanced-ai" class="ai-disclosure">
+        <summary><span>Advanced<small>Use your own API key</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></summary>
+        <div class="ai-disclosure-body">
+        <div class="group">
+          <label for="ai-mode">AI connection</label>
+          <select id="ai-mode"><option value="managed">Kareer AI</option><option value="byok">Use my own OpenRouter key</option></select>
+          <p class="hint">Your own key uses your OpenRouter balance. Kareer never switches connections automatically. Saved profile filling remains available without AI.</p>
+        </div>
+      <div id="byok-connection" hidden>
       <div>
         <h2>OpenRouter API key</h2>
         <p class="hint">Stored by the extension. It is never sent to the page, the content script, or any log.</p>
@@ -47,18 +90,24 @@
         <button class="secondary danger" id="clear-key">Remove key</button>
         <span class="feedback" role="status" aria-live="polite" id="key-feedback"></span>
       </div>
+      </div>
+        </div>
+      </details>
     </section>
 
     <section id="models" hidden>
       <div>
-        <h2>Model</h2>
+        <h2>Writing preferences</h2>
         <p class="hint">Used for the primary autofill request, repairs, and rewrites.</p>
       </div>
-      <div class="group">
-        <label for="model">OpenRouter model</label>
-        <select id="model"></select>
-        <input aria-label="Custom model ID" id="model-custom" type="text" placeholder="Custom model id" hidden />
-      </div>
+      <details id="byok-model">
+        <summary>Advanced: AI model</summary>
+        <div class="group">
+        <label for="model">OpenRouter model ID</label>
+        <input id="model" type="text" placeholder="provider/model-id" autocomplete="off" spellcheck="false" aria-describedby="model-help" />
+        <p class="hint" id="model-help">Copy the model ID from OpenRouter and paste it here.</p>
+        </div>
+      </details>
       <div class="group">
         <label for="narrative-style">Writing style</label>
         <select id="narrative-style" aria-describedby="style-description"></select>
@@ -67,7 +116,7 @@
         <p id="style-example"></p>
       </div>
       <div class="actions">
-        <button id="save-model">Save model &amp; style</button>
+        <button id="save-model">Save writing preferences</button>
         <span class="feedback" role="status" aria-live="polite" id="model-feedback"></span>
       </div>
     </section>

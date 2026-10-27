@@ -1,0 +1,43 @@
+name = "kareer-gateway"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = false
+
+[observability]
+enabled = false
+
+[env.staging]
+name = "kareer-gateway-staging"
+workers_dev = true
+[env.staging.vars]
+SALES_ENABLED = "false"
+LS_TEST_MODE = "true"
+LS_STORE_ID = "CONFIGURE_SANDBOX_STORE"
+LS_MONTHLY_VARIANT = "CONFIGURE_SANDBOX_MONTHLY"
+LS_PACK_VARIANT = "CONFIGURE_SANDBOX_PACK"
+ALLOWED_ORIGINS = ""
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "kareer-staging"
+database_id = "00000000-0000-0000-0000-000000000001"
+migrations_dir = "migrations"
+[env.staging.triggers]
+crons = ["*/5 * * * *"]
+
+[env.production]
+name = "kareer-gateway"
+routes = [{ pattern = "api.kareer.itsamro.me", custom_domain = true }]
+[env.production.vars]
+SALES_ENABLED = "false"
+LS_TEST_MODE = "false"
+LS_STORE_ID = "CONFIGURE_LIVE_STORE"
+LS_MONTHLY_VARIANT = "CONFIGURE_LIVE_MONTHLY"
+LS_PACK_VARIANT = "CONFIGURE_LIVE_PACK"
+ALLOWED_ORIGINS = "https://kareer.itsamro.me"
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "kareer-production"
+database_id = "00000000-0000-0000-0000-000000000002"
+migrations_dir = "migrations"
+[env.production.triggers]
+crons = ["*/5 * * * *"]

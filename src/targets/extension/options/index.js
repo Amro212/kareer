@@ -1,10 +1,11 @@
 import { api, sendMessage } from '../shared/browser.js';
 import { MSG } from '../shared/protocol.js';
-import { APP_VERSION, POPULAR_MODELS, DEFAULT_SETTINGS, DEFAULT_PROFILE, STORAGE_KEYS } from '../../../core/constants.js';
+import { APP_VERSION, DEFAULT_SETTINGS, DEFAULT_PROFILE, STORAGE_KEYS } from '../../../core/constants.js';
 import { PROFILE_SECTIONS, createWorkExperience, createEducation, createProject, createWorkEligibility, createLanguage } from '../../../core/profile.js';
 import { exportPayload, importPayload } from '../../../core/migration.js';
 import { createProfileWorkspace } from './profile-workspace.js';
 import { NARRATIVE_STYLES, getNarrativeStyle } from '../../../core/narrative-styles.js';
+import { setupBilling } from './billing.js';
 
 let currentWork = [];
 let currentEducation = [];
@@ -1415,31 +1416,7 @@ function renderProfile(profile) {
 }
 
 function renderModel(settings) {
-  const select = $('model');
-  const custom = $('model-custom');
-  const isKnown = POPULAR_MODELS.includes(settings.model);
-  select.replaceChildren(
-    ...POPULAR_MODELS.map((model) => {
-      const option = document.createElement('option');
-      option.value = model;
-      option.textContent = model;
-      option.selected = settings.model === model;
-      return option;
-    }),
-  );
-  const customOption = document.createElement('option');
-  customOption.value = 'custom';
-  customOption.textContent = 'Custom model...';
-  customOption.selected = !isKnown;
-  select.append(customOption);
-
-  custom.hidden = isKnown;
-  custom.value = settings.model || DEFAULT_SETTINGS.model;
-
-  select.onchange = () => {
-    custom.hidden = select.value !== 'custom';
-    if (select.value !== 'custom') custom.value = select.value;
-  };
+  $('model').value = settings.model || '';
 }
 
 function setKeyBadge(hasKey) {
@@ -1456,7 +1433,8 @@ async function init() {
   const profile = { ...DEFAULT_PROFILE, ...(snapshot.data[STORAGE_KEYS.PROFILE] || {}) };
 
   setKeyBadge(snapshot.hasApiKey);
-  renderModel(settings);
+  setupBilling(snapshot);
+  renderModel(snapshot.data[STORAGE_KEYS.SETTINGS] || {});
   const styleSelect = $('narrative-style');
   styleSelect.replaceChildren(...NARRATIVE_STYLES.map(style => {
     const option = document.createElement('option');
@@ -1531,6 +1509,11 @@ async function init() {
   };
 
   $('test-key').onclick = async () => {
+    const status = await sendMessage({ type: MSG.AI_STATUS });
+    if (status?.mode === 'managed') {
+      flash($('key-feedback'), status.state === 'ready' ? 'Kareer AI is ready. No credit used.' : 'Check activation and credits under AI & billing.', status.state !== 'ready');
+      return;
+    }
     const feedback = $('key-feedback');
     feedback.classList.remove('error');
     feedback.textContent = 'Testing...';
@@ -1556,12 +1539,12 @@ async function init() {
   };
 
   $('save-model').onclick = async () => {
-    const select = $('model');
-    const model = (select.value === 'custom' ? $('model-custom').value.trim() : select.value) || DEFAULT_SETTINGS.model;
+    const enteredModel = $('model').value.trim();
     const current = await readStore();
+    const model = enteredModel || current.data[STORAGE_KEYS.SETTINGS]?.model || '';
     const next = { ...DEFAULT_SETTINGS, ...(current.data[STORAGE_KEYS.SETTINGS] || {}), model, narrativeStyle: getNarrativeStyle(styleSelect.value).id };
     await sendMessage({ type: MSG.STORAGE_SET, key: STORAGE_KEYS.SETTINGS, value: next });
-    flash($('model-feedback'), 'Model and writing style saved.');
+    flash($('model-feedback'), 'Writing preferences saved.');
   };
 
   $('add-work-btn').onclick = () => {
@@ -1664,7 +1647,7 @@ async function init() {
       storedProfileSnapshot = { ...DEFAULT_PROFILE, ...(refreshed.data[STORAGE_KEYS.PROFILE] || {}) };
       renderProfile(storedProfileSnapshot);
       profileWorkspace.saved();
-      renderModel({ ...DEFAULT_SETTINGS, ...(refreshed.data[STORAGE_KEYS.SETTINGS] || {}) });
+      renderModel(refreshed.data[STORAGE_KEYS.SETTINGS] || {});
       flash($('migration-feedback'), `Imported ${Object.keys(entries).length} records. Re-enter your API key above.`);
     } catch (err) {
       flash($('migration-feedback'), `Import failed: ${err.message}`, true);
@@ -1689,7 +1672,7 @@ function showOptionsRoute() {
   for (const section of document.querySelectorAll('.settings-main > section')) {
     section.hidden = section.id !== targetId;
   }
-  const titles = { connection: 'Connection', models: 'Writing model', resume: 'Uploaded resume', advanced: 'Backup & migration' };
+  const titles = { connection: 'AI & billing', models: 'Writing preferences', resume: 'Uploaded resume', advanced: 'Backup & migration' };
   $('options-heading').hidden = targetId === 'profile';
   $('configuration-links').hidden = targetId === 'profile';
   $('profile-subsections').hidden = targetId !== 'profile';

@@ -4,7 +4,7 @@ import { classifyPage, isVisible } from './pageClassifier.js';
 import { inspectValidation } from './validation.js';
 import { findContinue, inspectContinue, inspectSubmit, pageSignature, isDisabled, observePage, comparePages, workflowLabel, questionIdentity } from './navigation.js';
 import { rememberAnswer, recallAnswer } from './memory.js';
-import { getSettings, getProfile, hasApiKey } from './storage.js';
+import { getSettings, getProfile, hasAi } from './storage.js';
 import { scanFormFields as scanAllFields, harvestComboboxOptions } from './fields/scanner.js';
 import { normalizeFieldsForAI } from './fields/normalize.js';
 import { fillField } from './fields/fillers.js';
@@ -363,6 +363,8 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       }
       if (!field) continue; // A conditional question can disappear on this step.
       if (field.type === 'file') continue;
+      if (!getSettings().overwriteExisting && !empty(field)
+        && JSON.stringify(field.currentValue ?? '') !== JSON.stringify(original.currentValue ?? '')) continue;
       field.options = original.options;
       const unchangedChoices = field.widget === 'ats-choice' && (await verifyField(field, entry.value)).verified;
       if (!unchangedChoices) field.element.scrollIntoView?.({ block: 'center', behavior: 'instant' });
@@ -408,10 +410,10 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
   async function repair(errors, step, token, signature) {
     const blocked=errors.every(error=>{
       const field=scanFormFields().find(field=>field.id===error.fieldId);
-      return field?.type==='file' || answer === generateAutofillAnswers && !hasApiKey() && field?.ats?.canonicalKey && step.answers[field.id]?.value==='';
+      return field?.type==='file' || answer === generateAutofillAnswers && !hasAi() && field?.ats?.canonicalKey && step.answers[field.id]?.value==='';
     });
     if (blocked) {status('paused','Required saved values or documents are unavailable. Review the highlighted questions before resuming.');return false;}
-    if (answer === generateAutofillAnswers && !hasApiKey()) {status('paused','Required answers or documents need manual input. Add saved answers or an API key before resuming.');return false;}
+    if (answer === generateAutofillAnswers && !hasAi()) {status('paused','AI is unavailable. Kareer used your saved information. Connect AI in Settings to help answer the remaining questions, then resume autofill. You can also complete them manually. Review answers before submitting.');return false;}
     if (step.repairs >= 2) { status('paused', 'Repair limit reached (2/2). Review errors and resume manually.'); return false; }
     step.repairs++;
     session.errors.push(...errors.map(error => ({ ...error, attempt: step.repairs, url: window.location.href, at: new Date().toISOString() })));
