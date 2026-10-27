@@ -3557,3 +3557,18 @@ Narrative voice prompt updated and verified.
 - Verification: `npm test` passed all 646 unit tests, zero failures. No behavior changes; only documentation and GitHub metadata affected.
 - Files changed: `.gitattributes` (new), `README.md` (2 model reference updates), `CONTEXT_AND_FINDINGS.md` (this entry).
 - Status: PR #12 opened into `master` at https://github.com/Amro212/kareer/pull/12.
+
+## 2026-10-27 - Site overhaul PR with master merge (PR #13)
+
+- Task: open PR from `feat/site-overhaul` into `master` with conflicts resolved. PR and conflict fixes only, no merge.
+- Merged `origin/master` into `feat/site-overhaul` non-destructively (no force-push, no commit rewrites).
+- Conflicts resolved:
+  - `CONTEXT_AND_FINDINGS.md`: manual resolution keeping both site overhaul entries (Oct 16) and PR #12 entry (Oct 23) in chronological order.
+  - `README.md`: auto-merged cleanly, preserving both site overhaul website summary and master's `gemini-2.5-flash-lite` model reference fix.
+  - `.gitattributes`: added from master (`fixtures/** linguist-vendored`).
+- Test verification after merge:
+  - Root unit tests: 648 passed, 0 failed (184s).
+  - Site build tests: 2 passed.
+  - Site Playwright tests: 11 passed (20.8s).
+- Files changed this turn: `CONTEXT_AND_FINDINGS.md` (conflict resolution and this entry).
+- Status: PR #13 opened at https://github.com/Amro212/kareer/pull/13. Branch pushed with merge commit. No merge performed per explicit instruction.
