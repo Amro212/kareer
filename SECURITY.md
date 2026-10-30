@@ -1,7 +1,7 @@
 # Security
 
 Kareer keeps profiles, files and application execution local. Managed AI adds one
-Cloudflare Worker/D1 for Lemon Squeezy payments, reusable licenses, credits and
+Cloudflare Worker/D1 for Stripe payments, reusable Kareer keys, credits and
 OpenRouter routing. Advanced BYOK and the userscript call OpenRouter directly.
 
 ## Credential boundaries
@@ -19,15 +19,20 @@ Browser origins and extension IDs are supplementary checks, never payment proof.
 
 ## Gateway trust boundaries
 
-Webhook HMAC verification uses the raw body. Store, environment, approved offer,
-payment state and checkout binding are checked. Current provider state is retrieved
-before reconciling entitlements; orders/invoices deduplicate immutable grants.
-Activation and status recover missing payment events. Subscription key expiry
-does not invalidate purchased credits; disabled keys and reversals revoke affected
-entitlements. Hosted checkout/receipts/portal belong to Lemon Squeezy; no card data
-or account passwords are stored by Kareer.
+Stripe webhook signatures are verified on the raw body with the Stripe SDK
+(five-minute tolerance), and events are deduplicated by ID. Livemode must match the
+restricted key; price, quantity 1, exact USD amount, no discount and the purchase
+binding are checked before any grant. Grants are idempotent per payment and record
+the paying PaymentIntent, so a refund or dispute revokes only that payment's credits;
+tombstones block late grants. Keys are minted on the first claim of a paid purchase,
+returned once and stored only as hashes. If the webhook is late the claim retrieves
+the Checkout Session from Stripe itself, at most every 15 seconds per purchase.
+Activation, status and AI authentication read D1 only. Checkout and the customer
+portal belong to Stripe; no card data or account passwords are stored by Kareer.
 
-Managed requests use a server allowlist: fixed
+Managed requests carry structured Kareer operations only (fields, options, profile
+facts, job context); the gateway builds every prompt itself and rejects client
+messages. The upstream call uses a server allowlist: fixed
 `google/gemini-2.5-flash-lite`, same-model routing at no more than $0.10/million
 input and $0.40/million output tokens, no alternate model, reasoning, tools, search,
 images or file plugins. Client URLs, model/provider settings and authorization are
@@ -68,7 +73,8 @@ and navigation are bounded; Pause preserves local progress.
 Report vulnerabilities privately using
 [GitHub Private Vulnerability Reporting](https://github.com/Amro212/kareer/security/advisories/new).
 Do not publish applicant information, credentials, payment details or raw request
-dumps in issues. Recovery and billing use native Lemon Squeezy receipts and portal.
+dumps in issues. Billing uses Stripe's customer portal; lost keys are recovered by
+email to amromousa8@gmail.com after the purchase is confirmed in Stripe.
 
 Real staging payments, Chrome/Firefox flows, cost measurements, production setup
 and store approval remain explicit gates in `docs/release-checklist.json`. Local

@@ -17,17 +17,17 @@
   {
     "id": "api-keys",
     "title": "Credentials and Activation",
-    "html": "<p>A personal reusable Lemon Squeezy key authenticates managed AI. Anyone with the key can spend your shared wallet. Raw keys and private checkout claim secrets stay in privileged background storage, excluded from content snapshots, backups, page DOM and logs. The gateway stores hashes and verified payment identifiers. Keys are not device locked. BYOK keys stay local and are never sent to the gateway. Changing connections is explicit; credit exhaustion never silently spends a personal key. Removing one credential preserves the other.</p>"
+    "html": "<p>A personal reusable Kareer key authenticates Kareer AI. Kareer creates it when your first payment is confirmed and shows it once in Settings; it is never emailed. Anyone with the key can spend your shared credits. Raw keys and private checkout claim secrets stay in privileged background storage, excluded from content snapshots, backups, page DOM and logs. The gateway stores only key hashes and verified payment identifiers. Keys are not device locked. BYOK keys stay local and are never sent to the gateway. Changing connections is explicit; credit exhaustion never silently spends a personal key. Removing one credential preserves the other.</p>"
   },
   {
     "id": "billing",
     "title": "Payments and Usage Accounting",
-    "html": "<p>Lemon Squeezy hosts checkout, processes payments, issues receipts and keys, and provides its portal. Kareer receives no card details and creates no accounts or passwords.</p><p>Cloudflare D1 stores billing identifiers, credential hashes, grants/debits, subscription state, request IDs and input hashes, status, token counts, provider cost, latency and error codes. Request deduplication records are retained for 30 days with periodic cleanup. Payment and credit ledgers remain for entitlement and financial reconciliation. Prompts, outputs, raw keys and authorization headers are never persisted in application logs or the database. Infrastructure processes IP addresses and request metadata to provide and secure its services.</p>"
+    "html": "<p>Stripe hosts checkout, processes payments and provides the billing portal. Kareer receives no card details and creates no accounts or passwords. Kareer stores the Stripe customer, subscription, invoice and payment IDs it needs to grant and revoke credits.</p><p>Cloudflare D1 stores those billing identifiers, credential hashes, grants/debits, subscription state, dispute state, request IDs and input hashes, status, token counts, provider cost, latency and error codes. Request deduplication records and webhook event IDs are retained for 30 days with periodic cleanup. Payment and credit ledgers remain for entitlement and financial reconciliation. Prompts, outputs, raw keys and authorization headers are never persisted in application logs or the database. Infrastructure processes IP addresses and request metadata to provide and secure its services.</p>"
   },
   {
     "id": "credits",
     "title": "Credits, Cancellation and Charging",
-    "html": "<p>Launch pricing is US$10/month for 1,000 credits per paid billing period, or US$5 once for 300 non-expiring credits. Taxes may apply. Monthly credits expire at period end and are spent first. Cancel in Manage billing; the paid allowance remains until expiry. Packs need no subscription and remain after cancellation. Failed renewals grant nothing new.</p><p>Each completed AI request costs one credit, including automatic follow-ups, repairs and rewrites. A run may use multiple credits. Oversized inputs, provider errors, timeouts, truncated or invalid completions are not charged. A validated, settled completion remains charged if delivery fails or an application rejects it. Server outputs cannot be recovered because they are not stored. Explicit retry is a new request and may spend another credit. No trial or automatic top-ups. Purchases are non-refundable, subject to rights required by law; no custom refund workflow. Provider reversals and disabled licenses revoke affected entitlements.</p>"
+    "html": "<p>Launch pricing is US$10/month for 1,000 credits per paid billing period, or US$5 once for 300 non-expiring credits. Taxes may apply. Monthly credits expire at period end and are spent first. Cancel in Manage billing; the paid allowance remains until expiry. Packs need no subscription and remain after cancellation. Failed renewals grant nothing new.</p><p>Each completed AI request costs one credit, including automatic follow-ups, repairs and rewrites. A run may use multiple credits. Oversized inputs, provider errors, timeouts, truncated or invalid completions are not charged. A validated, settled completion remains charged if delivery fails or an application rejects it. Server outputs cannot be recovered because they are not stored. Explicit retry is a new request and may spend another credit. No trial or automatic top-ups. Credits are usage units with no cash value. All sales are final, except where the law requires a refund. A refunded or disputed payment loses the credits it bought; a disputed payment also pauses new purchases until the dispute is resolved. See the <a href=\"/terms/\">Terms of Service</a>.</p>"
   },
   {
     "id": "retention",
@@ -47,12 +47,12 @@
   {
     "id": "control",
     "title": "Your Controls",
-    "html": "<p>Edit or delete local profiles and files in the extension. Activate the emailed key after reinstalling to regain the wallet; this does not restore files. Uninstalling or removing a key does not cancel billing. Use Manage billing or your Lemon Squeezy receipt to cancel, update payment details or recover keys. No custom accounts, email delivery or manual recovery tooling. Never post personal information or keys in bug reports.</p>"
+    "html": "<p>Edit or delete local profiles and files in the extension. Save your Kareer key (Settings → Show key) and activate it after reinstalling to regain your credits; this does not restore files. Lost your key? Email <a href=\"mailto:amromousa8@gmail.com\">amromousa8@gmail.com</a> from the address you paid with. Uninstalling or removing a key does not cancel billing. Use Manage billing to cancel or update payment details. Never post personal information or keys in bug reports.</p>"
   },
   {
     "id": "third-parties",
     "title": "Third-Party Services",
-    "html": "<p>Managed AI uses <a href=\"https://www.cloudflare.com/privacypolicy/\">Cloudflare</a>, <a href=\"https://www.lemonsqueezy.com/privacy\">Lemon Squeezy</a>, <a href=\"https://openrouter.ai/privacy\">OpenRouter</a> and downstream providers. BYOK uses OpenRouter and your chosen provider. Their policies govern their processing. Application sites receive answers and files you enter or submit.</p>"
+    "html": "<p>Managed AI uses <a href=\"https://www.cloudflare.com/privacypolicy/\">Cloudflare</a>, <a href=\"https://stripe.com/privacy\">Stripe</a>, <a href=\"https://openrouter.ai/privacy\">OpenRouter</a> and downstream providers. BYOK uses OpenRouter and your chosen provider. Their policies govern their processing. Application sites receive answers and files you enter or submit.</p>"
   },
   {
     "id": "security",
@@ -67,6 +67,6 @@
   {
     "id": "contact",
     "title": "Contact and Vulnerability Reporting",
-    "html": "<p>Report bugs without personal information through <a href=\"https://github.com/Amro212/kareer/issues\">GitHub Issues</a>. Report vulnerabilities privately using <a href=\"https://github.com/Amro212/kareer/security/advisories/new\">GitHub Private Vulnerability Reporting</a>. Billing/key recovery uses Lemon Squeezy receipts and its portal.</p>"
+    "html": "<p>Report bugs without personal information through <a href=\"https://github.com/Amro212/kareer/issues\">GitHub Issues</a>. Report vulnerabilities privately using <a href=\"https://github.com/Amro212/kareer/security/advisories/new\">GitHub Private Vulnerability Reporting</a>. Billing questions and lost keys: <a href=\"mailto:amromousa8@gmail.com\">amromousa8@gmail.com</a>.</p>"
   }
 ]

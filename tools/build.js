@@ -227,10 +227,11 @@ function writeExtensionStaticFiles(pkg, browser) {
   const base = JSON.parse(fs.readFileSync(path.join(extDir, 'manifest.base.json'), 'utf8'));
   const overlay = JSON.parse(fs.readFileSync(path.join(extDir, `manifest.${browser}.json`), 'utf8'));
   const manifest = { ...base, ...overlay, version: pkg.version };
+  // The gateway origin comes from src/core/endpoints.js (or --gateway for staging).
+  manifest.host_permissions = [`${gateway.origin}/*`, ...manifest.host_permissions];
+  if (manifest.optional_host_permissions) manifest.optional_host_permissions.unshift(`${gateway.origin}/*`);
   if (staging) {
     manifest.name += ' (Staging)';
-    manifest.host_permissions = [...manifest.host_permissions, `${gateway.origin}/*`];
-    if (manifest.optional_host_permissions) manifest.optional_host_permissions.push(`${gateway.origin}/*`);
     if (manifest.browser_specific_settings?.gecko) {
       manifest.browser_specific_settings.gecko.id = 'kareer-staging@amro212';
       delete manifest.browser_specific_settings.gecko.update_url;
