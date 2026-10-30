@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { database } from './db.js';
 import worker from '../src/index.js';
 import { webhook, startPurchase, selectPurchase, status } from '../src/payments.js';
-import { balances } from '../src/ledger.js';
+import { balances, cleanup } from '../src/ledger.js';
 import { environment, mockStripe, sign, event, packSession, monthlySession, invoice, subscription, PERIOD } from './stripe.js';
 
 const env = environment();
@@ -197,4 +197,18 @@ test('checkout expiry ends the claim window', async () => {
   stripe.objects[p.session] = { id: p.session, status: 'expired', client_reference_id: p.id };
   await deliver(db, stripe, event('checkout.session.expired', { id: p.session }));
   assert.equal(db.sql.prepare('SELECT status FROM purchases').get().status, 'expired');
+});
+
+test('renewals still grant after cleanup removed the original purchase row', async () => {
+  const db = database(), stripe = mockStripe();
+  monthlyPayments(stripe);
+  const p = await purchase(db, stripe, 'monthly');
+  stripe.objects[p.session] = monthlySession(p.session, p.id);
+  await deliver(db, stripe, event('checkout.session.completed', { id: p.session, object: 'checkout.session' }));
+  await cleanup(db, Date.now() + 60 * DAY * 1000);
+  assert.equal(count(db, 'purchases'), 0);
+  await deliver(db, stripe, event('invoice.paid', invoice('in_2', { reason: 'subscription_cycle', start: PERIOD + 30 * DAY, purchase: p.id })));
+  assert.equal(db.sql.prepare("SELECT credits FROM grants WHERE id='invoice:in_2'").get().credits, 1000);
+  await deliver(db, stripe, event('customer.subscription.updated', subscription({ purchase: p.id, cancel_at_period_end: true })));
+  assert.equal(db.sql.prepare('SELECT cancel_at_period_end FROM subscriptions').get().cancel_at_period_end, 1);
 });

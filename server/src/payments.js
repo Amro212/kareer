@@ -108,7 +108,8 @@ export async function fulfilSession(db, env, stripe, sessionId, now = Date.now()
     await grant(db, { id: `pack:${payment}`, wallet, credits: OFFERS.pack.credits, kind: 'pack', payment, now });
   } else {
     const sub = typeof s.subscription === 'object' ? s.subscription : await stripe.subscriptions.retrieve(idOf(s.subscription));
-    await saveSubscription(db, env, sub, wallet, now);
+    // Stripe event timestamps are whole seconds; same-second events must still win.
+    await saveSubscription(db, env, sub, wallet, Math.floor(now / 1000) * 1000);
     const invoice = typeof s.invoice === 'object' && s.invoice ? s.invoice : await stripe.invoices.retrieve(idOf(s.invoice || sub.latest_invoice));
     await grantInvoice(db, env, stripe, invoice, wallet, now);
   }

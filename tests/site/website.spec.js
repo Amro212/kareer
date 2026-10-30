@@ -111,7 +111,7 @@ test('fictional autofill demo completes, explains answers and replays without AI
   expect(pageErrors).toEqual([]);
 });
 
-test('setup and privacy are directly accessible static pages', async ({ page }) => {
+test('setup, privacy and terms are directly accessible static pages', async ({ page }) => {
   await page.goto('/setup/');
   await expect(page.getByRole('heading', { name: 'A little setup. A lot less repetition.' })).toBeVisible();
   await page.getByRole('tab', { name: 'Chrome & Edge' }).click();
@@ -120,12 +120,21 @@ test('setup and privacy are directly accessible static pages', async ({ page }) 
   await expect(page.getByRole('heading', { name: 'Your data. Your business.' })).toBeVisible();
   await expect(page.locator('#ai-transmission')).toContainText('OpenRouter');
   await expect(page.locator('#retention')).toBeVisible();
+  await expect(page.locator('#billing')).toContainText('Stripe');
+  await expect(page.locator('main')).not.toContainText(/Lemon Squeezy|receipt email/);
+  await page.getByRole('contentinfo').getByRole('link', { name: 'Terms', exact: true }).click();
+  await expect(page).toHaveURL(/\/terms\/$/);
+  await expect(page.getByRole('heading', { name: 'Plain terms. No surprises.' })).toBeVisible();
+  await expect(page.locator('#about')).toContainText('form-filling assistant');
+  await expect(page.locator('#refunds')).toContainText('All sales are final');
+  await expect(page.locator('#keys')).toContainText('amromousa8@gmail.com');
+  await expect(page.locator('#about')).toContainText('Ontario, Canada');
 });
 
 test('mobile navigation, reduced-motion demo and pages fit a narrow viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  for (const route of ['/', '/setup/', '/privacy/']) {
+  for (const route of ['/', '/setup/', '/privacy/', '/terms/']) {
     await page.goto(route);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `No overflow on ${route}`).toBe(true);
   }
@@ -140,10 +149,11 @@ test('mobile navigation, reduced-motion demo and pages fit a narrow viewport', a
 test('content and installation links are available without JavaScript', async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
-  for (const [route, heading] of [['/', 'Job hunting takes enough out of you.'], ['/setup/', 'A little setup. A lot less repetition.'], ['/privacy/', 'Your data. Your business.']]) {
+  for (const [route, heading] of [['/', 'Job hunting takes enough out of you.'], ['/setup/', 'A little setup. A lot less repetition.'], ['/privacy/', 'Your data. Your business.'], ['/terms/', 'Plain terms. No surprises.']]) {
     await page.goto(`http://127.0.0.1:4177${route}`);
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Privacy', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Terms', exact: true })).toBeVisible();
   }
   await context.close();
 });
