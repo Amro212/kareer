@@ -7,13 +7,13 @@ import { grant, balances } from '../src/ledger.js';
 
 async function fixture() {
   const DB = database(), key = 'private-license-key';
-  await DB.prepare('INSERT INTO wallets VALUES (?,?)').bind('w', '7').run();
-  await DB.prepare('INSERT INTO credentials VALUES (?,?,?,?,?,?)').bind(await digest(key), 'w', '5', '1', 0, Date.now()).run();
-  await grant(DB, { id: 'pack', wallet: 'w', credits: 1, kind: 'pack' });
+  await DB.prepare('INSERT INTO wallets(id,customer_id) VALUES (?,?)').bind('w', 'cus_1').run();
+  await DB.prepare('INSERT INTO credentials(hash,wallet_id,created_at) VALUES (?,?,?)').bind(await digest(key), 'w', Date.now()).run();
+  await grant(DB, { id: 'pack', wallet: 'w', credits: 1, kind: 'pack', payment: 'pi_1' });
   return { key, DB, SALES_ENABLED: 'false', OPENROUTER_API_KEY: 'upstream-secret', ALLOWED_ORIGINS: 'chrome-extension://abc' };
 }
 const req = (env, body) => new Request('https://api.test/v1/ai', { method: 'POST', headers: { Authorization: `Bearer ${env.key}`, Origin: 'chrome-extension://abc', 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-const input = { id: 'request-0001', operation: 'autofill', messages: [{ role: 'user', content: 'private prompt' }] };
+const input = { id: 'request-0001', operation: 'autofill', input: { applicantProfile: { firstName: 'Private' }, fieldsToFill: [{ fieldId: 'f1', label: 'private prompt' }] } };
 
 test('settles valid completion before delivery and never regenerates duplicates', async () => {
   const env = await fixture(); let calls = 0;
@@ -21,7 +21,10 @@ test('settles valid completion before delivery and never regenerates duplicates'
   globalThis.fetch = async (url, options) => {
     calls++;
     assert.equal(url, 'https://openrouter.ai/api/v1/chat/completions');
-    assert.equal(JSON.parse(options.body).max_tokens, 4096);
+    const sent = JSON.parse(options.body);
+    assert.equal(sent.max_tokens, 4096);
+    assert.deepEqual(sent.messages.map(m => m.role), ['system', 'user'], 'the gateway writes the system prompt itself');
+    assert.equal(JSON.parse(sent.messages[1].content).fieldsToFill[0].fieldId, 'f1');
     return Response.json({ model: 'hidden', choices: [{ finish_reason: 'stop', message: { content: '{"answers":[]}' } }], usage: { prompt_tokens: 2, completion_tokens: 3, cost: 0.0001 } });
   };
   try {
@@ -55,12 +58,13 @@ test('truncation releases credit and sanitizes upstream errors', async () => {
   } finally { globalThis.fetch = original; }
 });
 
-test('unknown origins, policy tampering and live checkout gating fail before generation', async () => {
+test('unknown origins, policy tampering and disabled sales fail before generation', async () => {
   const env = await fixture();
   assert.equal((await worker.fetch(req(env, { ...input, model: 'override' }), env, {})).status, 400);
+  assert.equal((await worker.fetch(req(env, { id: input.id, operation: 'autofill', messages: [{ role: 'system', content: 'anything' }] }), env, {})).status, 400);
   const bad = req(env, input); bad.headers.set('Origin', 'https://evil.test');
   assert.equal((await worker.fetch(bad, env, {})).status, 403);
-  const purchase = new Request('https://api.test/v1/checkouts', { method: 'POST', body: '{"offer":"pack"}' });
+  const purchase = new Request('https://api.test/v1/purchases', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   assert.equal((await worker.fetch(purchase, env, {})).status, 503);
   assert.equal((await balances(env.DB, 'w')).total, 1);
   const firefox = req(env, { ...input, model: 'override' });
