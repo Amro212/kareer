@@ -47,11 +47,11 @@
           </ul>
         </div>
         <details id="license-activation" class="ai-disclosure">
-          <summary><span>Already purchased?<small>Activate the key from your receipt email</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></summary>
+          <summary><span>Already purchased?<small>Activate your Kareer key</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></summary>
           <div class="ai-disclosure-body">
-            <div class="group"><label for="license-key">Kareer license key</label><input id="license-key" type="password" autocomplete="off" spellcheck="false" aria-describedby="license-help activation-feedback" placeholder="Paste your license key" /></div>
-            <p class="hint" id="license-help">Bought on another installation? Reuse the same key to access your balance here.</p>
-            <div class="actions"><button id="activate-license" class="secondary" disabled>Activate key</button><a href="https://app.lemonsqueezy.com/my-orders" target="_blank" rel="noopener noreferrer">Find my receipt</a></div>
+            <div class="group"><label for="license-key">Kareer key</label><input id="license-key" type="password" autocomplete="off" spellcheck="false" aria-describedby="license-help activation-feedback" placeholder="kr_…" /></div>
+            <p class="hint" id="license-help">Bought on another browser? Open Show key there, then paste it here to use the same credits. Lost your key? Email <a href="mailto:amromousa8@gmail.com">amromousa8@gmail.com</a>.</p>
+            <div class="actions"><button id="activate-license" class="secondary" disabled>Activate key</button></div>
             <p class="feedback" id="activation-feedback" role="status" aria-live="polite"></p>
           </div>
         </details>
@@ -59,8 +59,9 @@
           <div class="ai-usage-heading"><h2 id="usage-heading">Your AI usage</h2><button class="secondary" id="refresh-usage">Refresh usage</button></div>
           <dl><div><dt>Monthly credits</dt><dd id="monthly-balance">0</dd></div><div><dt>Purchased credits</dt><dd id="purchased-balance">0</dd></div></dl>
           <p class="hint" id="monthly-expiry"></p><p class="hint" id="plan-status"></p>
-          <div class="actions"><button class="secondary" id="manage-billing">Manage billing</button><button class="secondary danger" id="disconnect-license">Remove key from this browser</button></div>
-          <p class="hint">Removing a key does not cancel a subscription. Manage or cancel it through billing.</p>
+          <div class="actions"><button class="secondary" id="manage-billing">Manage billing</button><button class="secondary" id="reveal-license">Show key</button><button class="secondary danger" id="disconnect-license">Remove key from this browser</button></div>
+          <div class="group" id="license-reveal" hidden><label for="license-value">Your Kareer key</label><input id="license-value" type="text" readonly spellcheck="false" aria-describedby="license-reveal-help" /><p class="hint" id="license-reveal-help">Keep this key somewhere safe to use your credits on another browser. Kareer does not email it.</p></div>
+          <p class="hint">Removing a key does not cancel a subscription. Manage or cancel it through Manage billing.</p>
         </section>
         <p class="feedback" id="managed-feedback" role="status" aria-live="polite"></p>
       </div>

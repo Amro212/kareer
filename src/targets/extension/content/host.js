@@ -15,7 +15,7 @@ export function createExtensionHost() {
   const listeners = new Set();
   const navListeners = new Set();
   let keyPresent = false;
-  let aiStatus = { mode: 'managed', state: 'activationNeeded' };
+  let aiStatus = { mode: 'byok', state: 'activationNeeded' };
   let hydrated = null;
   // Seeded from the background so a freshly loaded document inherits the tab's
   // navigation count instead of restarting at zero.

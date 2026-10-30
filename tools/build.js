@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { zipDirectory } from './zip.js';
 import { TOKENS, FONT_FILES, fontFaceCSS, VISUAL_NAME } from '../src/core/theme.js';
+import { GATEWAY_ORIGIN } from '../src/core/endpoints.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, '..');
@@ -12,9 +13,11 @@ const srcDir = path.join(rootDir, 'src');
 const staging = process.argv.includes('--staging');
 const gatewayArg = process.argv.find(arg => arg.startsWith('--gateway='))?.slice('--gateway='.length);
 if (Boolean(gatewayArg) !== staging) throw new Error('A staging gateway requires both --staging and --gateway=https://...');
-const gateway = staging ? new URL(gatewayArg) : new URL('https://api.kareer.itsamro.me');
+const gateway = new URL(staging ? gatewayArg : GATEWAY_ORIGIN);
+// Kareer AI stays opt-in until the managed release gate passes; staging builds test it by default.
+const managedDefault = staging || process.argv.includes('--managed');
 if (gateway.protocol !== 'https:' || gateway.username || gateway.password || gateway.search || gateway.hash || gateway.pathname !== '/') throw new Error('Gateway must be an HTTPS origin.');
-if (staging && gateway.hostname === 'api.kareer.itsamro.me') throw new Error('Staging cannot use the production gateway.');
+if (staging && gateway.origin === GATEWAY_ORIGIN) throw new Error('Staging cannot use the production gateway.');
 const distDir = path.join(rootDir, 'dist', ...(staging ? ['staging'] : []));
 const pkgPath = path.join(rootDir, 'package.json');
 const cachePath = path.join(distDir, '.build-cache.json');
@@ -211,6 +214,7 @@ function extensionOptions(pkg, browser) {
       ...shared(pkg).define,
       __TARGET_BROWSER__: JSON.stringify(browser),
       KAREER_GATEWAY_URL: JSON.stringify(gateway.origin),
+      KAREER_MANAGED_DEFAULT: JSON.stringify(managedDefault),
     },
   };
 }

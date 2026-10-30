@@ -86,9 +86,17 @@ jobs:
 
       - name: Build Firefox extension
         if: env.IS_SYNC_ONLY != 'true'
+        env:
+          MANAGED_AI_RELEASE: ${{ vars.MANAGED_AI_RELEASE }}
         run: |
-          node server/tools/release-gate.js
-          npm run build:extension
+          # Kareer AI is on by default only after its release evidence is recorded.
+          # Without it, packages default to your own OpenRouter key and still ship.
+          if [ "$MANAGED_AI_RELEASE" = "true" ]; then
+            node server/tools/release-gate.js --submission
+            npm run build:extension -- --managed
+          else
+            npm run build:extension
+          fi
           npx web-ext lint --source-dir=dist/firefox --self-hosted
 
       - name: Stamp unique version in extension manifest
@@ -130,9 +138,7 @@ jobs:
           AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
           VERSION: ${{ env.VERSION }}
           BASE_VERSION: ${{ env.BASE_VERSION }}
-        run: |
-          node server/tools/release-gate.js
-          node tools/sync-amo.js
+        run: node tools/sync-amo.js
 
       - name: Setup Pages
         if: steps.sync_amo.outputs.deploy_needed == 'true'
