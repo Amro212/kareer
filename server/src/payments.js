@@ -1,285 +1,280 @@
-import { fail, digest } from './policy.js';
-import { grant, balances } from './ledger.js';
-import { OFFERS, CHARGING_TERMS } from './offers.js';
+import Stripe from 'stripe';
+import { fail, digest, ApiError } from './policy.js';
+import { grant, balances, revokePayment, restorePayment } from './ledger.js';
+import { OFFERS } from './offers.js';
+import { SITE_ORIGIN } from '../../src/core/endpoints.js';
 
+export const STRIPE_API_VERSION = '2026-09-30.endive';
+const MINUTE = 60000, HOUR = 60 * MINUTE;
+// The plans page accepts a choice for one hour. Stripe Checkout then stays open until two hours
+// after "View plans" (always 60+ minutes, inside Stripe's 30 min to 24 h range). The extension
+// can claim for 24 hours, so closing Settings for a while never loses a paid purchase.
+export const SELECT_WINDOW = HOUR, SESSION_EXPIRY = 2 * HOUR, CLAIM_WINDOW = 24 * HOUR;
+const CHECK_INTERVAL = 15000;
+
+export function stripeClient(env) {
+  return new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: STRIPE_API_VERSION, httpClient: Stripe.createFetchHttpClient(), maxNetworkRetries: 1, timeout: 15000 });
+}
+const cryptoProvider = Stripe.createSubtleCryptoProvider();
 const q = (db, sql, ...args) => db.prepare(sql).bind(...args);
-const attrs = r => r?.attributes || {};
-const offerFor = (env, variant) => String(variant) === env.LS_MONTHLY_VARIANT ? 'monthly' : String(variant) === env.LS_PACK_VARIANT ? 'pack' : null;
-function verify(env, record) {
-  const a = attrs(record);
-  if (String(a.store_id) !== String(env.LS_STORE_ID) || a.test_mode !== (env.LS_TEST_MODE === 'true')) fail('INVALID_PURCHASE', 403);
-  return a;
-}
+const idOf = value => typeof value === 'string' ? value : value?.id ?? null;
+const live = env => /^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY || '');
+const priceOf = env => ({ monthly: env.STRIPE_PRICE_MONTHLY, pack: env.STRIPE_PRICE_PACK });
+const offerForPrice = (env, price) => Object.entries(priceOf(env)).find(([, id]) => id && id === price)?.[0] || null;
+const checkoutUrl = url => /^https:\/\/checkout\.stripe\.com\//.test(url || '') ? url : fail('BILLING_UNAVAILABLE', 503);
+const invalid = () => fail('INVALID_PURCHASE', 422);
 
-export function lemon(env, fetcher = fetch) {
-  async function call(path, init = {}) {
-    const response = await fetcher(`https://api.lemonsqueezy.com/v1/${path}`, {
-      ...init, headers: { Accept: 'application/vnd.api+json', 'Content-Type': 'application/vnd.api+json', Authorization: `Bearer ${env.LS_API_KEY}` },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!response.ok) fail('BILLING_UNAVAILABLE', 503);
-    return response.json();
-  }
-  return {
-    get: async path => (await call(path)).data,
-    create: async data => (await call('checkouts', { method: 'POST', body: JSON.stringify({ data }) })).data,
-    async list(type, filters) {
-      const all = [];
-      for (let page = 1; page <= 100; page++) {
-        const params = new URLSearchParams({ 'page[size]': '100', 'page[number]': String(page) });
-        for (const [k, v] of Object.entries(filters)) params.set(`filter[${k}]`, v);
-        const result = await call(`${type}?${params}`);
-        all.push(...result.data);
-        if (!result.links?.next) return all;
-      }
-      fail('BILLING_UNAVAILABLE', 503);
-    },
-    async validate(key) {
-      const response = await fetcher('https://api.lemonsqueezy.com/v1/licenses/validate', {
-        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-        body: new URLSearchParams({ license_key: key }), signal: AbortSignal.timeout(15000),
-      });
-      // Expired subscription keys may be invalid in the native API but still identify a purchased wallet.
-      if (!response.ok) fail('INVALID_KEY', 401);
-      return response.json();
-    },
-  };
-}
-
-export async function reconcileOrder(db, env, provider, orderId, checkout = null, now = Date.now()) {
-  const order = await provider.get(`orders/${orderId}`), a = verify(env, order);
-  const offer = offerFor(env, a.first_order_item?.variant_id);
-  if (!offer || !a.first_order_item?.id) fail('INVALID_PURCHASE', 403);
-  const item = attrs(await provider.get(`order-items/${a.first_order_item.id}`));
-  if (String(item.order_id) !== String(order.id) || String(item.variant_id) !== String(a.first_order_item.variant_id) || item.quantity !== 1
-    || a.subtotal_usd !== OFFERS[offer].cents || a.discount_total_usd !== 0) fail('INVALID_PURCHASE', 403);
-  if (checkout && (checkout.offer !== offer || (checkout.order_id && checkout.order_id !== String(order.id)))) fail('INVALID_PURCHASE', 403);
-  const existing = await q(db, 'SELECT * FROM payments WHERE order_id=?', String(order.id)).first();
-  const customerWallet = await q(db, 'SELECT id FROM wallets WHERE customer_id=?', String(a.customer_id)).first();
-  const candidate = existing?.wallet_id || checkout?.wallet_id || customerWallet?.id || crypto.randomUUID();
-  const linked = await db.batch([
-    q(db, 'INSERT OR IGNORE INTO wallets(id,customer_id) VALUES (?,?)', candidate, String(a.customer_id)),
-    q(db, `INSERT OR IGNORE INTO payments(order_id,wallet_id,customer_id,offer)
-      SELECT ?,COALESCE(?,(SELECT id FROM wallets WHERE customer_id=?)),?,?`, String(order.id), checkout?.wallet_id || null, String(a.customer_id), String(a.customer_id), offer),
-    q(db, 'SELECT wallet_id FROM payments WHERE order_id=?', String(order.id)),
+// Wallets are keyed by Stripe customer. A purchase started from an activated key already names
+// its wallet and reuses that customer; a first purchase gets a new wallet for the new customer.
+async function walletFor(db, customer, purchaseId) {
+  if (!customer) invalid();
+  const purchase = purchaseId ? await q(db, 'SELECT wallet_id FROM purchases WHERE id=?', purchaseId).first() : null;
+  const [, found] = await db.batch([
+    q(db, 'INSERT OR IGNORE INTO wallets(id,customer_id) VALUES (?,?)', purchase?.wallet_id || crypto.randomUUID(), customer),
+    q(db, 'SELECT id FROM wallets WHERE customer_id=?', customer),
   ]);
-  const wallet = linked[2].results[0].wallet_id;
-  if (checkout) {
-    await q(db, 'UPDATE checkouts SET order_id=? WHERE id=? AND (order_id IS NULL OR order_id=?)', String(order.id), checkout.id, String(order.id)).run();
+  const wallet = found.results[0]?.id;
+  if (!wallet) invalid();
+  if (purchase) await q(db, 'UPDATE purchases SET wallet_id=? WHERE id=? AND wallet_id IS NULL', wallet, purchaseId).run();
+  return wallet;
+}
+async function boundWallet(db, customer, purchaseId) {
+  const known = customer && await q(db, 'SELECT id FROM wallets WHERE customer_id=?', customer).first();
+  if (known) return known.id;
+  if (purchaseId && await q(db, 'SELECT 1 FROM purchases WHERE id=?', purchaseId).first()) return walletFor(db, customer, purchaseId);
+  // Not yet linked to a Kareer purchase: Stripe retries, and checkout completion links it.
+  fail('UNBOUND_PURCHASE', 409);
+}
+
+function verifySession(env, s) {
+  const items = s.line_items?.data || [];
+  const offer = offerForPrice(env, idOf(items[0]?.price));
+  if (!offer || items.length !== 1 || s.livemode !== live(env) || s.currency !== 'usd' || s.metadata?.offer !== offer
+    || s.mode !== (offer === 'monthly' ? 'subscription' : 'payment') || items[0].quantity !== 1
+    || items[0].amount_subtotal !== OFFERS[offer].cents || s.amount_subtotal !== OFFERS[offer].cents || s.total_details?.amount_discount) invalid();
+  return offer;
+}
+function verifyInvoice(env, invoice) {
+  const lines = invoice.lines?.data || [];
+  const line = lines[0];
+  const price = idOf(line?.pricing?.price_details?.price) || idOf(line?.price);
+  if (lines.length !== 1 || invoice.livemode !== live(env) || invoice.currency !== 'usd' || offerForPrice(env, price) !== 'monthly'
+    || line.quantity !== 1 || line.amount !== OFFERS.monthly.cents || invoice.subtotal !== OFFERS.monthly.cents
+    || (invoice.total_discount_amounts || []).some(d => d.amount > 0) || !line.period?.end) invalid();
+  return line;
+}
+function verifySubscription(env, sub) {
+  const items = sub.items?.data || [];
+  if (items.length !== 1 || sub.livemode !== live(env) || offerForPrice(env, idOf(items[0].price)) !== 'monthly' || items[0].quantity !== 1) invalid();
+  return items[0];
+}
+
+async function paymentRef(stripe, invoice) {
+  // Recent API versions link invoices to PaymentIntents only through invoice payments.
+  const { data } = await stripe.invoicePayments.list({ invoice: invoice.id, limit: 10 });
+  return idOf(data.find(p => p.status === 'paid' && p.payment?.payment_intent)?.payment.payment_intent) || `invoice:${invoice.id}`;
+}
+
+async function grantInvoice(db, env, stripe, invoice, wallet, now) {
+  if (!['subscription_create', 'subscription_cycle'].includes(invoice.billing_reason) || invoice.status !== 'paid') return;
+  const line = verifyInvoice(env, invoice);
+  await grant(db, { id: `invoice:${invoice.id}`, wallet, credits: OFFERS.monthly.credits, kind: 'monthly', payment: await paymentRef(stripe, invoice),
+    subscription: idOf(invoice.parent?.subscription_details?.subscription), starts: line.period.start * 1000, expires: line.period.end * 1000, now });
+}
+
+async function saveSubscription(db, env, sub, wallet, updatedAt) {
+  const item = verifySubscription(env, sub);
+  const end = item.current_period_end ?? sub.current_period_end;
+  await q(db, `INSERT INTO subscriptions(id,wallet_id,status,cancel_at_period_end,period_end,updated_at) VALUES (?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET status=excluded.status,cancel_at_period_end=excluded.cancel_at_period_end,period_end=excluded.period_end,updated_at=excluded.updated_at
+    WHERE excluded.updated_at>=subscriptions.updated_at`, sub.id, wallet, String(sub.status), sub.cancel_at_period_end || sub.cancel_at ? 1 : 0, end ? end * 1000 : null, updatedAt).run();
+}
+
+/** Retrieves the session from Stripe and applies it; shared by the webhook and the claim fallback. */
+export async function fulfilSession(db, env, stripe, sessionId, now = Date.now()) {
+  const s = await stripe.checkout.sessions.retrieve(sessionId, { expand: ['line_items', 'subscription', 'invoice'] });
+  const purchaseId = s.client_reference_id || null;
+  if (s.status === 'expired') {
+    if (purchaseId) await q(db, "UPDATE purchases SET status='expired' WHERE id=? AND status='pending'", purchaseId).run();
+    return null;
   }
-  if (a.status === 'paid' && !a.refunded && !existing?.revoked && offer === 'pack') {
-    await grant(db, { id: `order:${order.id}`, wallet, credits: OFFERS.pack.credits, kind: 'pack', order: String(order.id), now });
-  } else if (a.refunded || ['refunded', 'partial_refund'].includes(a.status)) {
-    await db.batch([q(db, 'UPDATE payments SET revoked=1 WHERE order_id=?', String(order.id)), q(db, 'UPDATE grants SET revoked=1 WHERE order_id=?', String(order.id))]);
+  if (s.status !== 'complete' || s.payment_status !== 'paid') return null;
+  const offer = verifySession(env, s);
+  const purchase = purchaseId ? await q(db, 'SELECT offer,session_id FROM purchases WHERE id=?', purchaseId).first() : null;
+  if (purchase && (purchase.offer !== offer || purchase.session_id !== s.id)) invalid();
+  const wallet = await walletFor(db, idOf(s.customer), purchase ? purchaseId : null);
+  if (offer === 'pack') {
+    const payment = idOf(s.payment_intent) || invalid();
+    await grant(db, { id: `pack:${payment}`, wallet, credits: OFFERS.pack.credits, kind: 'pack', payment, now });
+  } else {
+    const sub = typeof s.subscription === 'object' ? s.subscription : await stripe.subscriptions.retrieve(idOf(s.subscription));
+    await saveSubscription(db, env, sub, wallet, now);
+    const invoice = typeof s.invoice === 'object' && s.invoice ? s.invoice : await stripe.invoices.retrieve(idOf(s.invoice || sub.latest_invoice));
+    await grantInvoice(db, env, stripe, invoice, wallet, now);
   }
+  if (purchase) await q(db, "UPDATE purchases SET status='fulfilled' WHERE id=? AND status='pending'", purchaseId).run();
   return wallet;
 }
 
-function nextAnchor(invoiceDate, subscription) {
-  const date = new Date(invoiceDate), origin = new Date(subscription.created_at);
-  if (!Number.isFinite(+date) || !Number.isFinite(+origin)) fail('BILLING_UNAVAILABLE', 503);
-  const year = date.getUTCFullYear(), month = date.getUTCMonth() + 1;
-  const day = Math.min(subscription.billing_anchor || origin.getUTCDate(), new Date(Date.UTC(year, month + 1, 0)).getUTCDate());
-  return Date.UTC(year, month, day, origin.getUTCHours(), origin.getUTCMinutes(), origin.getUTCSeconds());
-}
-
-export async function reconcileSubscription(db, env, provider, id, wallet, now = Date.now()) {
-  // Always retrieve current state; the webhook payload may be an older retry.
-  const subscription = await provider.get(`subscriptions/${id}`), a = verify(env, subscription);
-  if (offerFor(env, a.variant_id) !== 'monthly') fail('INVALID_PURCHASE', 403);
-  const paidWallet = await reconcileOrder(db, env, provider, a.order_id, null, now);
-  if (wallet && wallet !== paidWallet) fail('INVALID_PURCHASE', 403);
-  wallet = paidWallet;
-  const invoices = await provider.list('subscription-invoices', { subscription_id: String(id), store_id: env.LS_STORE_ID });
-  const payment = await q(db, 'SELECT revoked FROM payments WHERE order_id=?', String(a.order_id)).first();
-  const sorted = invoices.sort((x, y) => Date.parse(attrs(x).created_at) - Date.parse(attrs(y).created_at));
-  for (let i = 0; i < sorted.length; i++) {
-    const invoice = sorted[i], b = verify(env, invoice);
-    if (String(b.subscription_id) !== String(id) || String(b.customer_id) !== String(a.customer_id)) fail('INVALID_PURCHASE', 403);
-    if (!['initial', 'renewal'].includes(b.billing_reason)) continue;
-    if (b.status !== 'paid' || b.refunded || payment.revoked) {
-      if (b.refunded || ['refunded', 'partial_refund'].includes(b.status)) await db.batch([
-        q(db, 'INSERT OR IGNORE INTO revocations(id) VALUES (?)', `invoice:${invoice.id}`),
-        q(db, 'UPDATE grants SET revoked=1 WHERE id=?', `invoice:${invoice.id}`),
-      ]);
-      continue;
+export async function webhook(db, env, stripe, raw, signature, now = Date.now()) {
+  let event;
+  try { event = await stripe.webhooks.constructEventAsync(raw, signature || '', env.STRIPE_WEBHOOK_SECRET, undefined, cryptoProvider); }
+  catch { fail('INVALID_SIGNATURE', 400); }
+  if (event.livemode !== live(env)) invalid();
+  if (await q(db, 'SELECT 1 FROM webhook_events WHERE id=?', event.id).first()) return { duplicate: true };
+  const object = event.data.object, at = event.created * 1000;
+  switch (event.type) {
+    case 'checkout.session.completed':
+    case 'checkout.session.expired':
+      await fulfilSession(db, env, stripe, object.id, now);
+      break;
+    case 'invoice.paid':
+      if (['subscription_create', 'subscription_cycle'].includes(object.billing_reason)) {
+        verifyInvoice(env, object);
+        const wallet = await boundWallet(db, idOf(object.customer), object.parent?.subscription_details?.metadata?.kareer_purchase);
+        await grantInvoice(db, env, stripe, object, wallet, now);
+      }
+      break;
+    case 'customer.subscription.updated':
+    case 'customer.subscription.deleted':
+      verifySubscription(env, object);
+      await saveSubscription(db, env, object, await boundWallet(db, idOf(object.customer), object.metadata?.kareer_purchase), at);
+      break;
+    case 'charge.refunded':
+      if (idOf(object.payment_intent)) await revokePayment(db, idOf(object.payment_intent), 'refund');
+      break;
+    case 'charge.dispute.created':
+    case 'charge.dispute.closed': {
+      const payment = idOf(object.payment_intent);
+      if (!payment) break;
+      // Revoke while a dispute is open or lost; restore only when it closes in the seller's favour.
+      const closed = s => ['won', 'lost', 'warning_closed'].includes(s);
+      const previous = await q(db, 'SELECT status FROM disputes WHERE id=?', object.id).first();
+      if (previous && closed(previous.status)) break;
+      const owner = await q(db, 'SELECT wallet_id FROM grants WHERE payment_ref=? LIMIT 1', payment).first();
+      await q(db, `INSERT INTO disputes(id,payment_ref,wallet_id,status) VALUES (?,?,?,?)
+        ON CONFLICT(id) DO UPDATE SET status=excluded.status`, object.id, payment, owner?.wallet_id || null, String(object.status)).run();
+      if (!closed(object.status) || object.status === 'lost') await revokePayment(db, payment, 'dispute');
+      else await restorePayment(db, payment, 'dispute');
+      if (owner) await q(db, "UPDATE wallets SET flagged=EXISTS(SELECT 1 FROM disputes WHERE wallet_id=wallets.id AND status NOT IN ('won','warning_closed')) WHERE id=?", owner.wallet_id).run();
+      break;
     }
-    if (b.subtotal_usd !== OFFERS.monthly.cents || b.discount_total_usd !== 0) fail('INVALID_PURCHASE', 403);
-    const start = Date.parse(b.created_at);
-    let end = nextAnchor(b.created_at, a);
-    // Only a paid, current cycle can use the provider's current boundary. A retry date is never an allowance.
-    if (i === sorted.length - 1 && ['active', 'cancelled'].includes(a.status)) {
-      const providerEnd = Date.parse(a.ends_at || a.renews_at);
-      if (providerEnd > start && providerEnd <= end + 3 * 86400000) end = providerEnd;
-    }
-    await grant(db, { id: `invoice:${invoice.id}`, wallet, credits: OFFERS.monthly.credits, kind: 'monthly', starts: start,
-      expires: end, subscription: String(id), order: String(a.order_id), now });
+    default: break; // invoice.payment_failed: nothing is granted; customer.subscription.updated carries past_due.
   }
-  const end = Date.parse(a.ends_at || (a.status === 'active' ? a.renews_at : ''));
-  await q(db, `INSERT INTO subscriptions(id,wallet_id,order_id,status,period_end,updated_at) VALUES (?,?,?,?,?,?)
-    ON CONFLICT(id) DO UPDATE SET status=excluded.status,period_end=excluded.period_end,updated_at=excluded.updated_at
-    WHERE excluded.updated_at>=subscriptions.updated_at`, String(id), wallet, String(a.order_id), a.status, Number.isFinite(end) ? end : null, Date.parse(a.updated_at) || now).run();
-  return wallet;
+  await q(db, 'INSERT OR IGNORE INTO webhook_events(id,type,created_at) VALUES (?,?,?)', event.id, event.type, now).run();
+  return { duplicate: false };
 }
 
-export async function activate(db, env, provider, key, now = Date.now()) {
-  if (typeof key !== 'string' || key.length < 8 || key.length > 256) fail('INVALID_KEY', 401);
+export async function authenticate(db, key, code = 'ACTIVATION_NEEDED') {
+  if (typeof key !== 'string' || key.length < 8 || key.length > 256) fail(code, 401);
   const hash = await digest(key);
-  const known = await q(db, 'SELECT * FROM credentials WHERE hash=?', hash).first();
-  const identified = known ? { license_key: { id: known.license_id } } : await provider.validate(key);
-  const id = identified?.license_key?.id;
-  if (!id || !/^\d+$/.test(String(id))) fail('INVALID_KEY', 401);
-  const license = await provider.get(`license-keys/${id}`), a = verify(env, license);
-  if (await digest(a.key || '') !== hash) fail('INVALID_KEY', 401);
-  const wallet = await reconcileOrder(db, env, provider, a.order_id, null, now);
-  await q(db, `INSERT INTO credentials(hash,wallet_id,license_id,order_id,disabled,checked_at) VALUES (?,?,?,?,?,?)
-    ON CONFLICT(hash) DO UPDATE SET disabled=excluded.disabled,checked_at=excluded.checked_at
-    WHERE excluded.checked_at>=credentials.checked_at`, hash, wallet, String(id), String(a.order_id), a.disabled ? 1 : 0, now).run();
-  const credential = await q(db, 'SELECT disabled FROM credentials WHERE hash=?', hash).first();
-  if (credential.disabled) {
-    await db.batch([q(db, 'UPDATE payments SET revoked=1 WHERE order_id=?', String(a.order_id)), q(db, 'UPDATE grants SET revoked=1 WHERE order_id=?', String(a.order_id))]);
-    fail('KEY_DISABLED', 403);
-  }
-  // Recover orders/renewals even when no webhook arrived. No raw customer records are saved.
-  const { results: customers } = await q(db, 'SELECT DISTINCT customer_id FROM payments WHERE wallet_id=?', wallet).all();
-  for (const customer of customers) {
-    const subscriptions = await provider.list('subscriptions', { store_id: env.LS_STORE_ID, customer_id: customer.customer_id });
-    for (const sub of subscriptions) {
-      if (offerFor(env, attrs(sub).variant_id) === 'monthly') await reconcileSubscription(db, env, provider, sub.id, null, now);
-    }
-  }
-  return { wallet, hash };
-}
-
-export async function authenticate(db, env, provider, key, now = Date.now(), refresh = false) {
-  const hash = await digest(key);
-  const row = await q(db, 'SELECT * FROM credentials WHERE hash=?', hash).first();
-  if (!row || row.disabled) fail('ACTIVATION_NEEDED', 401);
-  if (refresh || row.checked_at < now - 60000) return activate(db, env, provider, key, now);
+  const row = await q(db, 'SELECT wallet_id FROM credentials WHERE hash=? AND disabled=0', hash).first();
+  if (!row) fail(code, 401);
   return { wallet: row.wallet_id, hash };
 }
 
-export async function status(db, provider, wallet, now = Date.now()) {
+export async function status(db, wallet, now = Date.now()) {
   const credits = await balances(db, wallet, now);
-  const { results: subscriptions } = await q(db, 'SELECT status,period_end FROM subscriptions WHERE wallet_id=? ORDER BY period_end DESC', wallet).all();
-  const customer = await q(db, 'SELECT customer_id FROM wallets WHERE id=?', wallet).first();
-  const c = await provider.get(`customers/${customer.customer_id}`);
-  const portal = attrs(c).urls?.customer_portal || null;
-  return { state: credits.total ? 'ready' : 'outOfCredits', ...credits,
-    subscriptions: subscriptions.map(s => ({ status: s.status, periodEnd: s.period_end ? new Date(s.period_end).toISOString() : null })),
-    billingUrl: portal && /^https:\/\/[a-z0-9-]+\.lemonsqueezy\.com\//i.test(portal) ? portal : null };
+  const { results } = await q(db, 'SELECT status,cancel_at_period_end,period_end FROM subscriptions WHERE wallet_id=? ORDER BY period_end DESC', wallet).all();
+  const flagged = Boolean((await q(db, 'SELECT flagged FROM wallets WHERE id=?', wallet).first())?.flagged);
+  return { state: credits.total ? 'ready' : 'outOfCredits', ...credits, flagged,
+    subscriptions: results.map(s => ({ status: s.status, cancelAtPeriodEnd: Boolean(s.cancel_at_period_end), periodEnd: s.period_end ? new Date(s.period_end).toISOString() : null })) };
 }
 
-async function validateOffer(db, offer, wallet, now) {
+export async function billingPortal(db, env, stripe, wallet) {
+  const row = await q(db, 'SELECT customer_id FROM wallets WHERE id=?', wallet).first();
+  if (!row?.customer_id) fail('NO_BILLING', 404);
+  const session = await stripe.billingPortal.sessions.create({ customer: row.customer_id, return_url: `${SITE_ORIGIN}/`,
+    ...(env.STRIPE_PORTAL_CONFIGURATION ? { configuration: env.STRIPE_PORTAL_CONFIGURATION } : {}) });
+  if (!/^https:\/\/billing\.stripe\.com\//.test(session.url || '')) fail('BILLING_UNAVAILABLE', 503);
+  return { url: session.url };
+}
+
+async function validateOffer(db, offer, wallet) {
   if (!Object.hasOwn(OFFERS, offer)) fail('INVALID_OFFER');
   if (wallet && offer === 'monthly') {
-    const active = await q(db, "SELECT id FROM subscriptions WHERE wallet_id=? AND (status IN ('active','past_due','unpaid','paused') OR (status='cancelled' AND period_end>?))", wallet, now).first();
+    const active = await q(db, "SELECT id FROM subscriptions WHERE wallet_id=? AND status NOT IN ('canceled','incomplete_expired')", wallet).first();
     if (active) fail('SUBSCRIPTION_EXISTS', 409);
   }
 }
 
 export async function startPurchase(db, wallet = null, now = Date.now()) {
+  if (wallet && (await q(db, 'SELECT flagged FROM wallets WHERE id=?', wallet).first())?.flagged) fail('WALLET_FLAGGED', 403);
   const id = crypto.randomUUID(), secret = `${crypto.randomUUID()}${crypto.randomUUID()}`;
-  await q(db, 'INSERT INTO checkouts(id,secret_hash,offer,wallet_id,created_at,expires_at) VALUES (?,?,?,?,?,?)', id, await digest(secret), 'pending', wallet, now, now + 900000).run();
-  return { id, claimSecret: secret, expiresAt: new Date(now + 900000).toISOString() };
+  await q(db, 'INSERT INTO purchases(id,secret_hash,wallet_id,created_at,expires_at) VALUES (?,?,?,?,?)', id, await digest(secret), wallet, now, now + CLAIM_WINDOW).run();
+  return { id, claimSecret: secret, expiresAt: new Date(now + CLAIM_WINDOW).toISOString() };
 }
 
 export async function purchaseSession(db, id, now = Date.now()) {
-  const row = await q(db, 'SELECT * FROM checkouts WHERE id=? AND expires_at>? AND claimed_at IS NULL', id, now).first();
+  const row = await q(db, "SELECT * FROM purchases WHERE id=? AND claimed_at IS NULL AND status IN ('open','creating','pending') AND created_at>?", id, now - SELECT_WINDOW).first();
   if (!row) fail('CLAIM_UNAVAILABLE', 410);
   return row;
 }
 
-export async function selectPurchase(db, env, provider, id, offer, now = Date.now()) {
+export async function selectPurchase(db, env, stripe, id, offer, origin, now = Date.now()) {
   const row = await purchaseSession(db, id, now);
-  await validateOffer(db, offer, row.wallet_id, now);
-  const lock = `creating:${id}`;
-  if (row.provider_id && row.provider_id !== lock) {
+  await validateOffer(db, offer, row.wallet_id);
+  if (row.session_id) {
     if (row.offer !== offer) fail('INVALID_OFFER', 409);
-    const existing = attrs(await provider.get(`checkouts/${row.provider_id}`)).url;
-    if (!/^https:\/\/[a-z0-9-]+\.lemonsqueezy\.com\//i.test(existing || '')) fail('BILLING_UNAVAILABLE', 503);
-    return existing;
+    const existing = await stripe.checkout.sessions.retrieve(row.session_id);
+    if (existing.status !== 'open') fail('CLAIM_UNAVAILABLE', 410);
+    return checkoutUrl(existing.url);
   }
-  const locked = await q(db, "UPDATE checkouts SET offer=?,provider_id=? WHERE id=? AND offer='pending' AND provider_id IS NULL AND expires_at>?", offer, lock, id, now).run();
+  const locked = await q(db, "UPDATE purchases SET offer=?,status='creating' WHERE id=? AND status='open'", offer, id).run();
   if (!locked.meta.changes) fail('BUSY', 409);
   try {
-    return await checkoutUrl(db, env, provider, id, offer, row.expires_at);
+    const customer = row.wallet_id ? (await q(db, 'SELECT customer_id FROM wallets WHERE id=?', row.wallet_id).first())?.customer_id : null;
+    const monthly = offer === 'monthly', metadata = { kareer_purchase: id };
+    // Every parameter is derived from the purchase row, so a retry after a lost response reuses the same session.
+    const session = await stripe.checkout.sessions.create({
+      mode: monthly ? 'subscription' : 'payment', line_items: [{ price: priceOf(env)[offer], quantity: 1 }],
+      client_reference_id: id, metadata: { ...metadata, offer }, automatic_tax: { enabled: true },
+      payment_method_types: ['card', 'link'], adaptive_pricing: { enabled: false },
+      expires_at: Math.floor((row.created_at + SESSION_EXPIRY) / 1000),
+      success_url: `${SITE_ORIGIN}/setup/?purchase=complete`, cancel_url: `${origin}/plans/${id}`,
+      ...(customer ? { customer, customer_update: { address: 'auto', name: 'auto' } } : monthly ? {} : { customer_creation: 'always' }),
+      ...(monthly ? { subscription_data: { metadata } } : { payment_intent_data: { metadata } }),
+    }, { idempotencyKey: `kareer-purchase:${id}:${offer}` });
+    const url = checkoutUrl(session.url);
+    await q(db, "UPDATE purchases SET session_id=?,status='pending' WHERE id=?", session.id, id).run();
+    return url;
   } catch (error) {
-    await q(db, "UPDATE checkouts SET offer='pending',provider_id=NULL WHERE id=? AND provider_id=?", id, lock).run();
+    await q(db, "UPDATE purchases SET offer=NULL,status='open' WHERE id=? AND status='creating'", id).run();
     throw error;
   }
 }
 
-export async function createCheckout(db, env, provider, offer, wallet = null, now = Date.now()) {
-  await validateOffer(db, offer, wallet, now);
-  const purchase = await startPurchase(db, wallet, now);
-  const url = await selectPurchase(db, env, provider, purchase.id, offer, now);
-  return { ...purchase, url };
+function newKey() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return `kr_${btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`;
 }
 
-async function checkoutUrl(db, env, provider, id, offer, expiresAt) {
-  const variant = offer === 'monthly' ? env.LS_MONTHLY_VARIANT : env.LS_PACK_VARIANT;
-  const result = await provider.create({ type: 'checkouts', attributes: {
-    test_mode: env.LS_TEST_MODE === 'true', expires_at: new Date(expiresAt).toISOString(),
-    product_options: { enabled_variants: [Number(variant)], redirect_url: 'https://kareer.itsamro.me/setup?purchase=complete',
-      description: `${OFFERS[offer].price}${offer === 'monthly' ? '/month' : ' once'}. ${OFFERS[offer].terms} ${CHARGING_TERMS}` },
-    checkout_options: { embed: false, media: false, discount: false, skip_trial: true, subscription_preview: true },
-    checkout_data: { custom: { kareer_checkout: id }, variant_quantities: [{ variant_id: Number(variant), quantity: 1 }] },
-  }, relationships: { store: { data: { type: 'stores', id: env.LS_STORE_ID } }, variant: { data: { type: 'variants', id: variant } } } });
-  const url = attrs(result).url;
-  if (!/^https:\/\/[a-z0-9-]+\.lemonsqueezy\.com\//i.test(url || '')) fail('BILLING_UNAVAILABLE', 503);
-  await q(db, 'UPDATE checkouts SET provider_id=? WHERE id=?', String(result.id), id).run();
-  return url;
-}
-
-export async function claimCheckout(db, env, provider, id, secret, now = Date.now()) {
-  const row = await q(db, 'SELECT * FROM checkouts WHERE id=? AND secret_hash=? AND expires_at>? AND claimed_at IS NULL', id, await digest(secret), now).first();
-  if (!row) fail('CLAIM_UNAVAILABLE', 410);
-  if (!row.order_id) return { status: 'pending' };
-  const keys = await provider.list('license-keys', { order_id: row.order_id, store_id: env.LS_STORE_ID });
-  const license = keys.find(k => !attrs(k).disabled && String(attrs(k).order_id) === row.order_id);
-  if (!license) return { status: 'pending' };
-  const key = attrs(license).key;
-  const auth = await activate(db, env, provider, key, now);
-  const aiStatus = await status(db, provider, auth.wallet, now);
-  const consumed = await q(db, 'UPDATE checkouts SET claimed_at=? WHERE id=? AND claimed_at IS NULL AND expires_at>?', now, id, now).run();
-  if (!consumed.meta.changes) fail('CLAIM_UNAVAILABLE', 410);
-  return { status: 'complete', licenseKey: key, aiStatus };
-}
-
-export async function verifySignature(raw, signature, secret) {
-  if (!secret || !/^[a-f0-9]{64}$/i.test(signature || '')) return false;
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
-  return crypto.subtle.verify('HMAC', key, Uint8Array.from(signature.match(/../g), n => parseInt(n, 16)), new TextEncoder().encode(raw));
-}
-
-export async function webhook(db, env, provider, raw, signature, now = Date.now()) {
-  if (!await verifySignature(raw, signature, env.LS_WEBHOOK_SECRET)) fail('INVALID_SIGNATURE', 401);
-  let event; try { event = JSON.parse(raw); } catch { fail('INVALID_REQUEST'); }
-  const { data, meta } = event;
-  verify(env, data);
-  const a = attrs(data);
-  const orderId = data.type === 'orders' ? data.id : a.order_id;
-  const binding = meta?.custom_data?.kareer_checkout;
-  const checkout = binding ? await q(db, 'SELECT * FROM checkouts WHERE id=? AND provider_id IS NOT NULL', String(binding)).first() : null;
-  if (binding && !checkout) fail('INVALID_PURCHASE', 403);
-  const known = orderId ? await q(db, 'SELECT wallet_id FROM payments WHERE order_id=?', String(orderId)).first() : null;
-  if (data.type === 'orders' || data.type === 'license-keys' || data.type === 'subscriptions') {
-    if (!checkout && !known) fail('UNBOUND_PURCHASE', 409);
-    const wallet = await reconcileOrder(db, env, provider, orderId, checkout, now);
-    if (data.type === 'subscriptions') await reconcileSubscription(db, env, provider, data.id, wallet, now);
-    if (data.type === 'license-keys') {
-      const license = await provider.get(`license-keys/${data.id}`);
-      if (attrs(license).key) {
-        try { await activate(db, env, provider, attrs(license).key, now); } catch (error) { if (error.code !== 'KEY_DISABLED') throw error; }
-      }
+/**
+ * The extension polls with its private claim secret. Once the purchase is paid, the first
+ * successful claim mints the key and returns it once; Kareer never emails or stores it.
+ * If the webhook is late, the claim retrieves the Checkout Session from Stripe itself.
+ */
+export async function claimPurchase(db, env, stripe, id, secret, now = Date.now()) {
+  const row = await q(db, 'SELECT * FROM purchases WHERE id=? AND secret_hash=?', id, await digest(secret)).first();
+  if (!row || row.claimed_at || row.expires_at <= now || row.status === 'expired'
+    || (['open', 'creating'].includes(row.status) && row.created_at <= now - SELECT_WINDOW)) fail('CLAIM_UNAVAILABLE', 410);
+  if (row.status === 'pending' && row.session_id) {
+    const due = await q(db, 'UPDATE purchases SET checked_at=? WHERE id=? AND checked_at<=?', now, id, now - CHECK_INTERVAL).run();
+    if (due.meta.changes) {
+      try { await fulfilSession(db, env, stripe, row.session_id, now); }
+      catch (error) { if (error instanceof ApiError) throw error; fail('BILLING_UNAVAILABLE', 503); }
     }
-  } else if (data.type === 'subscription-invoices') {
-    const subscription = await provider.get(`subscriptions/${a.subscription_id}`);
-    const order = attrs(subscription).order_id;
-    const payment = await q(db, 'SELECT wallet_id FROM payments WHERE order_id=?', String(order)).first();
-    if (!checkout && !payment) fail('UNBOUND_PURCHASE', 409);
-    const wallet = await reconcileOrder(db, env, provider, order, checkout, now);
-    await reconcileSubscription(db, env, provider, a.subscription_id, wallet, now);
   }
+  const key = newKey(), hash = await digest(key);
+  const [minted] = await db.batch([
+    q(db, "UPDATE purchases SET claimed_at=?,key_hash=? WHERE id=? AND status='fulfilled' AND claimed_at IS NULL AND wallet_id IS NOT NULL", now, hash, id),
+    q(db, 'INSERT INTO credentials(hash,wallet_id,created_at) SELECT key_hash,wallet_id,? FROM purchases WHERE id=? AND key_hash=?', now, id, hash),
+  ]);
+  if (minted.meta.changes) {
+    const { wallet_id: wallet } = await q(db, 'SELECT wallet_id FROM purchases WHERE id=?', id).first();
+    return { status: 'complete', licenseKey: key, aiStatus: await status(db, wallet, now) };
+  }
+  const current = await q(db, 'SELECT status,claimed_at FROM purchases WHERE id=?', id).first();
+  if (current.claimed_at || current.status === 'expired') fail('CLAIM_UNAVAILABLE', 410);
+  return { status: 'pending' };
 }

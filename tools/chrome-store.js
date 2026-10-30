@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { checkRelease } from '../server/tools/release-gate.js';
+import { GATEWAY_ORIGIN } from '../src/core/endpoints.js';
 
 export async function uploadChrome({ env = process.env, fetcher = fetch, submit = false, checks, zip } = {}) {
   const missing = checkRelease(checks, true);
@@ -34,7 +35,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === fs.realpathSync(proces
   try {
     const manifest = JSON.parse(fs.readFileSync(new URL('../dist/chrome/manifest.json', import.meta.url)));
     const background = fs.readFileSync(new URL('../dist/chrome/background/index.js', import.meta.url), 'utf8');
-    if (manifest.name.includes('Staging') || background.includes('.workers.dev') || !background.includes('https://api.kareer.itsamro.me')) throw new Error('Only production gateway packages can be submitted.');
+    if (manifest.name.includes('Staging') || background.includes('.workers.dev') || !background.includes(GATEWAY_ORIGIN)) throw new Error('Only production gateway packages can be submitted.');
     const checks = JSON.parse(fs.readFileSync(new URL('../docs/release-checklist.json', import.meta.url)));
     console.log(await uploadChrome({ checks, zip: fs.readFileSync(new URL('../dist/kareer-chrome.zip', import.meta.url)), submit: process.argv.includes('--submit-review') }));
   } catch (error) { console.error(error.message); process.exitCode = 1; }
