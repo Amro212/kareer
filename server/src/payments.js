@@ -230,7 +230,8 @@ export async function selectPurchase(db, env, stripe, id, offer, origin, now = D
     const session = await stripe.checkout.sessions.create({
       mode: monthly ? 'subscription' : 'payment', line_items: [{ price: priceOf(env)[offer], quantity: 1 }],
       client_reference_id: id, metadata: { ...metadata, offer }, automatic_tax: { enabled: true },
-      payment_method_types: ['card', 'link'], adaptive_pricing: { enabled: false },
+      adaptive_pricing: { enabled: false },
+      ...(/^pmc_/.test(env.STRIPE_PAYMENT_METHOD_CONFIGURATION || '') ? { payment_method_configuration: env.STRIPE_PAYMENT_METHOD_CONFIGURATION } : {}),
       expires_at: Math.floor((row.created_at + SESSION_EXPIRY) / 1000),
       success_url: `${SITE_ORIGIN}/setup/?purchase=complete`, cancel_url: `${origin}/plans/${id}`,
       ...(customer ? { customer, customer_update: { address: 'auto', name: 'auto' } } : monthly ? {} : { customer_creation: 'always' }),
@@ -240,6 +241,7 @@ export async function selectPurchase(db, env, stripe, id, offer, origin, now = D
     await q(db, "UPDATE purchases SET session_id=?,status='pending' WHERE id=?", session.id, id).run();
     return url;
   } catch (error) {
+    if (!(error instanceof ApiError)) console.error('Checkout Session creation failed', { type: error?.type, code: error?.code, param: error?.param, message: error?.message });
     await q(db, "UPDATE purchases SET offer=NULL,status='open' WHERE id=? AND status='creating'", id).run();
     throw error;
   }

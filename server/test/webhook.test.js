@@ -17,6 +17,28 @@ async function purchase(db, stripe, offer) {
   const { session_id: session } = db.sql.prepare('SELECT session_id FROM purchases WHERE id=?').get(started.id);
   return { ...started, session };
 }
+test('checkout uses a configured payment method configuration and logs Stripe failures without the request', async () => {
+  const db = database(), stripe = mockStripe();
+  for (const value of ['pmc_123', 'CONFIGURE_PMC']) {
+    const started = await startPurchase(db);
+    await selectPurchase(db, { ...env, STRIPE_PAYMENT_METHOD_CONFIGURATION: value }, stripe, started.id, 'pack', 'https://api.test');
+  }
+  const created = stripe.calls.filter(c => c.create).map(c => c.create.payment_method_configuration);
+  assert.deepEqual(created, ['pmc_123', undefined]);
+
+  const errors = [], original = console.error;
+  stripe.checkout.sessions.create = async () => { throw Object.assign(new Error('The `payment_method_types` parameter is no longer supported'), { type: 'StripeInvalidRequestError', code: 'parameter_unknown', param: 'payment_method_types' }); };
+  console.error = (...args) => errors.push(args);
+  try {
+    const started = await startPurchase(db);
+    await assert.rejects(selectPurchase(db, env, stripe, started.id, 'pack', 'https://api.test'));
+    assert.equal(db.sql.prepare('SELECT status FROM purchases WHERE id=?').get(started.id).status, 'open');
+  } finally { console.error = original; }
+  assert.equal(errors.length, 1);
+  assert.deepEqual(errors[0][1], { type: 'StripeInvalidRequestError', code: 'parameter_unknown', param: 'payment_method_types', message: 'The `payment_method_types` parameter is no longer supported' });
+  assert.doesNotMatch(JSON.stringify(errors), /rk_test|price_pack|kareer_purchase/);
+});
+
 function paidPack(db, stripe, p, extra) {
   stripe.objects[p.session] = packSession(p.session, p.id, extra);
   return deliver(db, stripe, event('checkout.session.completed', { id: p.session, object: 'checkout.session' }));
@@ -48,7 +70,8 @@ test('pack completion grants 300 credits once per payment, deduplicating replaye
   const params = stripe.calls.find(c => c.create).create;
   assert.equal(params.mode, 'payment');
   assert.deepEqual(params.line_items, [{ price: 'price_pack', quantity: 1 }]);
-  assert.deepEqual(params.payment_method_types, ['card', 'link']);
+  assert.equal(params.payment_method_types, undefined);
+  assert.equal(params.payment_method_configuration, undefined);
   assert.equal(params.automatic_tax.enabled, true);
   assert.equal(params.customer_creation, 'always');
   assert.equal(params.client_reference_id, p.id);

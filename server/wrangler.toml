@@ -14,7 +14,7 @@ enabled = false
 name = "kareer-gateway-staging"
 workers_dev = true
 [env.staging.vars]
-SALES_ENABLED = "false"
+SALES_ENABLED = "true"
 STRIPE_PRICE_MONTHLY = "price_1UWMU7RSf0GhgGvmfq5qJRSx"
 STRIPE_PRICE_PACK = "price_1UWMU9RSf0GhgGvmFJ2Pi3ey"
 STRIPE_PORTAL_CONFIGURATION = "bpc_1UWMUNRSf0GhgGvmAezXi5vX"

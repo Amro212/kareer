@@ -23,6 +23,12 @@ there is no automated recovery.
 | Customer portal configuration | `bpc_1UWMUNRSf0GhgGvmAezXi5vX` (cancel at period end, no plan switching, return URL `https://kareer.itsamro.me/`) |
 | Webhook endpoint | `we_1UWMUfRSf0GhgGvmWbzvP1Jp` → `https://kareer-gateway-staging.amromousa8.workers.dev/webhooks/stripe` |
 
+Payment methods are managed in the Dashboard (Settings → Payment methods), not
+in code: API version `2026-09-30.endive` rejects `payment_method_types` on
+Checkout Sessions. To pin a specific payment method configuration, set
+`STRIPE_PAYMENT_METHOD_CONFIGURATION = "pmc_…"` in the environment's vars; when
+unset (or not a `pmc_` ID) Stripe uses the account default.
+
 Staging uses these in `server/wrangler.toml` `[env.staging.vars]`. Production
 values are `CONFIGURE_…` placeholders until live-mode objects exist; the
 production deploy script refuses to run while any remain.
@@ -101,9 +107,10 @@ npm run deploy:staging      # https://kareer-gateway-staging.amromousa8.workers.
 npm run deploy:production   # blocked while production placeholders remain
 ```
 
-Keep `SALES_ENABLED="false"` until the sandbox checklist passes, then set it to
-`"true"` for staging only. Add the staging Chrome extension origin to
-`ALLOWED_ORIGINS`.
+Staging is the sandbox and runs with `SALES_ENABLED="true"`. Production stays
+`"false"` until live mode is ready. Add the staging Chrome extension origin to
+`ALLOWED_ORIGINS`. Checkout Session creation failures are logged with the
+Stripe error type, code, param and message (`npx wrangler tail --env staging`).
 
 Build a staging extension from the repository root (defaults to Kareer AI):
 
