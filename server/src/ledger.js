@@ -1,12 +1,26 @@
 const DAY = 86400000;
 const stmt = (db, sql, ...args) => db.prepare(sql).bind(...args);
 
-export async function grant(db, { id, wallet, credits, kind, expires = null, starts = 0, subscription = null, order = null, now = Date.now() }) {
-  // Payment identity is immutable: replaying an old event cannot reset spent credits or extend expiry.
-  return stmt(db, `INSERT OR IGNORE INTO grants(id,wallet_id,kind,subscription_id,order_id,credits,starts_at,expires_at)
-    SELECT ?,?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM revocations WHERE id=?)
-    AND (? IS NULL OR EXISTS(SELECT 1 FROM payments WHERE order_id=? AND revoked=0))`,
-  id, wallet, kind, subscription, order, credits, starts || now, expires, id, order, order).run();
+// Grants are keyed by payment identity, so replaying an event cannot reset spent credits or extend expiry.
+// A refund or dispute tombstone on the paying PaymentIntent blocks the grant even if that event arrived first.
+export async function grant(db, { id, wallet, credits, kind, payment, expires = null, starts = 0, subscription = null, now = Date.now() }) {
+  return stmt(db, `INSERT OR IGNORE INTO grants(id,wallet_id,kind,subscription_id,payment_ref,credits,starts_at,expires_at)
+    SELECT ?,?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM revocations WHERE payment_ref=?)`,
+  id, wallet, kind, subscription, payment, credits, starts || now, expires, payment).run();
+}
+
+export async function revokePayment(db, payment, reason) {
+  await db.batch([
+    stmt(db, 'INSERT OR IGNORE INTO revocations(payment_ref,reason) VALUES (?,?)', payment, reason),
+    stmt(db, 'UPDATE grants SET revoked=1 WHERE payment_ref=?', payment),
+  ]);
+}
+
+export async function restorePayment(db, payment, reason) {
+  await db.batch([
+    stmt(db, 'DELETE FROM revocations WHERE payment_ref=? AND reason=?', payment, reason),
+    stmt(db, 'UPDATE grants SET revoked=0 WHERE payment_ref=? AND NOT EXISTS(SELECT 1 FROM revocations WHERE payment_ref=?)', payment, payment),
+  ]);
 }
 
 export async function reserve(db, { wallet, credential, id, hash, operation, now = Date.now() }) {
@@ -62,6 +76,7 @@ export async function cleanup(db, now = Date.now()) {
     stmt(db, "UPDATE requests SET status='failed',error_code='EXPIRED',finished_at=? WHERE status='reserved' AND expires_at<=?", now, now),
     stmt(db, 'DELETE FROM requests WHERE created_at<?', now - 30 * DAY),
     stmt(db, 'DELETE FROM attempts WHERE created_at<?', now - 60000),
-    stmt(db, 'DELETE FROM checkouts WHERE expires_at<?', now - 30 * DAY),
+    stmt(db, 'DELETE FROM purchases WHERE expires_at<?', now - 30 * DAY),
+    stmt(db, 'DELETE FROM webhook_events WHERE created_at<?', now - 30 * DAY),
   ]);
 }

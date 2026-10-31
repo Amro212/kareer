@@ -13,7 +13,7 @@ Job seekers applying to multiple positions across major Applicant Tracking Syste
 Kareer is an open-source, local-first browser assistant (Chrome/Firefox extension and Tampermonkey userscript) that matches job application fields to saved profile facts and contextual AI answers. It fills inputs, comboboxes, radios, checkboxes and file uploads. Users review saved, inferred, guessed, verified and unresolved values; AI answers can be wrong.
 
 ## Positioning
-Local profiles, files and application execution, with optional managed Kareer AI in extensions and explicit advanced BYOK. Managed AI uses a Cloudflare Worker/D1 for Lemon Squeezy payments, reusable license credentials, credits and OpenRouter routing. Request accounting metadata is retained; prompt bodies and generated content are not persisted by the gateway. The userscript remains BYOK.
+Local profiles, files and application execution, with optional managed Kareer AI in extensions and explicit advanced BYOK. Managed AI uses a Cloudflare Worker/D1 for Stripe payments, reusable Kareer keys, credits and OpenRouter routing. Kareer is a form-filling assistant: it fills forms for the user to review, and the user submits every application. Request accounting metadata is retained; prompt bodies and generated content are not persisted by the gateway. The userscript remains BYOK.
 
 ## Operating Context
 Operates directly within candidate-facing application pages across Ashby, Greenhouse, Lever, Workday, and generic job boards. The user interacts with the tool while viewing the job application form itself in real-time.

@@ -5,16 +5,26 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { zipDirectory } from './zip.js';
 import { TOKENS, FONT_FILES, fontFaceCSS, VISUAL_NAME } from '../src/core/theme.js';
+import { STAGING_GATEWAY_ORIGIN, PRODUCTION_GATEWAY_ORIGIN } from '../src/core/endpoints.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, '..');
 const srcDir = path.join(rootDir, 'src');
 const staging = process.argv.includes('--staging');
+const production = process.argv.includes('--production');
+if (staging && production) throw new Error('Choose --staging or --production, not both.');
 const gatewayArg = process.argv.find(arg => arg.startsWith('--gateway='))?.slice('--gateway='.length);
-if (Boolean(gatewayArg) !== staging) throw new Error('A staging gateway requires both --staging and --gateway=https://...');
-const gateway = staging ? new URL(gatewayArg) : new URL('https://api.kareer.itsamro.me');
-if (gateway.protocol !== 'https:' || gateway.username || gateway.password || gateway.search || gateway.hash || gateway.pathname !== '/') throw new Error('Gateway must be an HTTPS origin.');
-if (staging && gateway.hostname === 'api.kareer.itsamro.me') throw new Error('Staging cannot use the production gateway.');
+if (gatewayArg && production) throw new Error('Production builds read KAREER_GATEWAY_ORIGIN, not --gateway.');
+const productionGateway = new URL(process.env.KAREER_GATEWAY_ORIGIN || PRODUCTION_GATEWAY_ORIGIN);
+// Release packages use the production gateway; local, watch and staging builds use the staging Worker.
+const gateway = production ? productionGateway : new URL(gatewayArg || STAGING_GATEWAY_ORIGIN);
+// Kareer AI stays opt-in until the managed release gate passes; staging builds test it by default.
+const managedDefault = staging || process.argv.includes('--managed');
+for (const url of [gateway, productionGateway]) {
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Gateway must be an HTTPS origin.');
+}
+if (!production && gateway.origin === productionGateway.origin) throw new Error('Only --production builds may use the production gateway.');
+if (production && gateway.origin === STAGING_GATEWAY_ORIGIN) throw new Error('Production builds cannot use the staging gateway.');
 const distDir = path.join(rootDir, 'dist', ...(staging ? ['staging'] : []));
 const pkgPath = path.join(rootDir, 'package.json');
 const cachePath = path.join(distDir, '.build-cache.json');
@@ -211,6 +221,7 @@ function extensionOptions(pkg, browser) {
       ...shared(pkg).define,
       __TARGET_BROWSER__: JSON.stringify(browser),
       KAREER_GATEWAY_URL: JSON.stringify(gateway.origin),
+      KAREER_MANAGED_DEFAULT: JSON.stringify(managedDefault),
     },
   };
 }
@@ -223,10 +234,11 @@ function writeExtensionStaticFiles(pkg, browser) {
   const base = JSON.parse(fs.readFileSync(path.join(extDir, 'manifest.base.json'), 'utf8'));
   const overlay = JSON.parse(fs.readFileSync(path.join(extDir, `manifest.${browser}.json`), 'utf8'));
   const manifest = { ...base, ...overlay, version: pkg.version };
+  // The gateway origin of this build (see src/core/endpoints.js) is the only one it may call.
+  manifest.host_permissions = [`${gateway.origin}/*`, ...manifest.host_permissions];
+  if (manifest.optional_host_permissions) manifest.optional_host_permissions.unshift(`${gateway.origin}/*`);
   if (staging) {
     manifest.name += ' (Staging)';
-    manifest.host_permissions = [...manifest.host_permissions, `${gateway.origin}/*`];
-    if (manifest.optional_host_permissions) manifest.optional_host_permissions.push(`${gateway.origin}/*`);
     if (manifest.browser_specific_settings?.gecko) {
       manifest.browser_specific_settings.gecko.id = 'kareer-staging@amro212';
       delete manifest.browser_specific_settings.gecko.update_url;

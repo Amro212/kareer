@@ -1,23 +1,13 @@
-import { ApiError, fail, readBody, parseInput, upstreamBody, validateCompletion, digest } from './policy.js';
+import { ApiError, MESSAGES, fail, readBody, parseInput, upstreamBody, validateCompletion, digest, limited } from './policy.js';
 import { reserve, settle, release, cleanup, balances } from './ledger.js';
-import { lemon, activate, authenticate, status, createCheckout, startPurchase, claimCheckout, webhook } from './payments.js';
+import { stripeClient, authenticate, status, billingPortal, startPurchase, selectPurchase, claimPurchase, webhook } from './payments.js';
 import { hostedPurchase } from './purchase-page.js';
+import { OFFERS } from './offers.js';
+import { SITE_ORIGIN } from '../../src/core/endpoints.js';
 
-const messages = {
-  ACTIVATION_NEEDED: 'Activate your Kareer key in Settings.', INVALID_KEY: 'That key could not be verified.',
-  KEY_DISABLED: 'This key is disabled. Check your purchase in the billing portal.',
-  NO_CREDITS: 'Out of credits. Buy a credit pack or renew your plan.',
-  BUSY: 'Two AI requests are already running. Wait for one to finish.', RATE_LIMIT: 'Too many requests. Wait a minute and try again.',
-  INPUT_TOO_LARGE: 'This request is too large. Reduce the supplied text and retry.',
-  INVALID_COMPLETION: 'AI returned an incomplete or invalid result. No credit was charged.',
-  GENERATION_FAILED: 'AI is temporarily unavailable. No credit was charged.',
-  ID_CONFLICT: 'This request ID was already used for different content.',
-  SUBSCRIPTION_EXISTS: 'Your wallet already has a subscription. Manage it in billing.',
-  SALES_DISABLED: 'Purchases are not available yet.',
-};
 function errorData(error) {
   const code = error instanceof ApiError ? error.code : 'TEMPORARILY_UNAVAILABLE';
-  return { code, error: messages[code] || 'The request could not be completed. Please try again later.' };
+  return { code, error: MESSAGES[code] || 'The request could not be completed. Please try again later.' };
 }
 function bearer(request) {
   const value = request.headers.get('Authorization') || '';
@@ -26,12 +16,14 @@ function bearer(request) {
 }
 async function jsonInput(request) {
   if (!request.headers.get('Content-Type')?.startsWith('application/json')) fail('INVALID_REQUEST', 415);
-  try { return JSON.parse(await readBody(request)); } catch (error) {
+  let input;
+  try { input = JSON.parse(await readBody(request)); } catch (error) {
     if (error instanceof ApiError) throw error;
     fail('INVALID_REQUEST');
   }
+  if (!input || typeof input !== 'object' || Array.isArray(input)) fail('INVALID_REQUEST');
+  return input;
 }
-
 async function generation(request, env, auth, input) {
   const started = Date.now();
   const controller = new AbortController();
@@ -45,12 +37,12 @@ async function generation(request, env, auth, input) {
       send({ type: 'processing' });
       const heartbeat = setInterval(() => send({ type: 'processing' }), 10000);
       const totalTimer = setTimeout(abort, 120000);
-      let startTimer = setTimeout(abort, 25000);
+      const startTimer = setTimeout(abort, 25000);
       let usage = {};
       try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST', signal: controller.signal,
-          headers: { Authorization: `Bearer ${env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'X-Title': 'Kareer', 'HTTP-Referer': 'https://kareer.itsamro.me' },
+          headers: { Authorization: `Bearer ${env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'X-Title': 'Kareer', 'HTTP-Referer': SITE_ORIGIN },
           body: JSON.stringify(upstreamBody(input)),
         });
         clearTimeout(startTimer);
@@ -79,45 +71,48 @@ async function generation(request, env, auth, input) {
   return new Response(stream, { headers: { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 }
 
+// Status, activation and AI authentication read D1 only. Stripe is called from webhooks,
+// purchase creation, the claim fallback and explicit billing-portal requests.
 async function route(request, env) {
   const path = new URL(request.url).pathname, method = request.method;
-  const provider = lemon(env);
-  if (method === 'POST' && path === '/webhooks/lemonsqueezy') {
-    await webhook(env.DB, env, provider, await readBody(request), request.headers.get('X-Signature'));
+  if (method === 'POST' && path === '/webhooks/stripe') {
+    await webhook(env.DB, env, stripeClient(env), await readBody(request), request.headers.get('Stripe-Signature'));
     return Response.json({ received: true });
   }
   if (method === 'POST' && path === '/v1/activate') {
     const input = await jsonInput(request);
     if (Object.keys(input).some(k => k !== 'licenseKey')) fail('INVALID_REQUEST');
-    const auth = await activate(env.DB, env, provider, input.licenseKey);
-    return Response.json(await status(env.DB, provider, auth.wallet));
-  }
-  if (method === 'POST' && path === '/v1/checkouts') {
-    if (env.SALES_ENABLED !== 'true') fail('SALES_DISABLED', 503);
-    const input = await jsonInput(request);
-    if (Object.keys(input).some(k => k !== 'offer')) fail('INVALID_REQUEST');
-    const auth = request.headers.has('Authorization') ? await authenticate(env.DB, env, provider, bearer(request), Date.now(), true) : null;
-    return Response.json(await createCheckout(env.DB, env, provider, input.offer, auth?.wallet));
+    const auth = await authenticate(env.DB, input.licenseKey, 'INVALID_KEY');
+    return Response.json(await status(env.DB, auth.wallet));
   }
   if (method === 'POST' && path === '/v1/purchases') {
     if (env.SALES_ENABLED !== 'true') fail('SALES_DISABLED', 503);
     const input = await jsonInput(request);
-    if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).length) fail('INVALID_REQUEST');
-    const auth = request.headers.has('Authorization') ? await authenticate(env.DB, env, provider, bearer(request), Date.now(), true) : null;
+    if (Object.keys(input).some(k => k !== 'offer')) fail('INVALID_REQUEST');
+    if (input.offer !== undefined && !Object.hasOwn(OFFERS, input.offer)) fail('INVALID_OFFER');
+    await limited(request, env);
+    const auth = request.headers.has('Authorization') ? await authenticate(env.DB, bearer(request)) : null;
     const purchase = await startPurchase(env.DB, auth?.wallet);
-    return Response.json({ ...purchase, url: `${new URL(request.url).origin}/plans/${purchase.id}` });
+    const origin = new URL(request.url).origin;
+    // With an offer chosen in the extension, skip the plans page and go straight to Stripe Checkout.
+    const checkoutUrl = input.offer ? await selectPurchase(env.DB, env, stripeClient(env), purchase.id, input.offer, origin) : undefined;
+    return Response.json({ ...purchase, url: `${origin}/plans/${purchase.id}`, ...(checkoutUrl ? { checkoutUrl } : {}) });
   }
-  if (method === 'GET' && /^\/v1\/checkouts\/[a-f0-9-]{36}$/.test(path)) {
-    return Response.json(await claimCheckout(env.DB, env, provider, path.split('/').at(-1), bearer(request)));
+  if (method === 'GET' && /^\/v1\/purchases\/[a-f0-9-]{36}$/.test(path)) {
+    return Response.json(await claimPurchase(env.DB, env, stripeClient(env), path.split('/').at(-1), bearer(request)));
   }
   if (method === 'GET' && path === '/v1/status') {
-    const auth = await authenticate(env.DB, env, provider, bearer(request), Date.now(), true);
-    return Response.json(await status(env.DB, provider, auth.wallet));
+    const auth = await authenticate(env.DB, bearer(request));
+    return Response.json(await status(env.DB, auth.wallet));
+  }
+  if (method === 'POST' && path === '/v1/billing-portal') {
+    const auth = await authenticate(env.DB, bearer(request));
+    return Response.json(await billingPortal(env.DB, env, stripeClient(env), auth.wallet));
   }
   if (method === 'POST' && path === '/v1/ai') {
     const input = parseInput(await jsonInput(request));
-    const auth = await authenticate(env.DB, env, provider, bearer(request));
-    const hash = await digest(JSON.stringify({ operation: input.operation, messages: input.messages, document: input.document }));
+    const auth = await authenticate(env.DB, bearer(request));
+    const hash = await digest(JSON.stringify({ operation: input.operation, input: input.input }));
     const hold = await reserve(env.DB, { wallet: auth.wallet, credential: auth.hash, id: input.id, hash, operation: input.operation });
     if (hold.code) fail(hold.code, hold.code === 'NO_CREDITS' ? 402 : hold.code === 'ID_CONFLICT' ? 409 : 429);
     if (hold.duplicate) return Response.json({ status: hold.status, duplicate: true });

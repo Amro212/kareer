@@ -12,10 +12,11 @@ Local tools are free. Optional managed AI requires payment: US$10/month for 1,00
 credits per paid billing period, or US$5 for 300 non-expiring credits. Taxes may
 apply. One completed AI request costs one credit; runs can make multiple requests,
 including automatic follow-ups, repairs and rewrites. Monthly credits expire at
-period end and are spent first. Cancel through Lemon Squeezy's portal. Paid monthly
-credits remain until expiry; purchased credits remain after cancellation. No
-automatic credit purchases, trial or custom refunds workflow. Purchases are
-non-refundable subject to rights required by law. Advanced BYOK remains available
+period end and are spent first. Cancel through Manage billing (Stripe's customer
+portal); the plan stops at the end of the paid month. Paid monthly credits remain
+until expiry; purchased credits remain after cancellation. Credits are usage units
+with no cash value. No automatic credit purchases or trial. All sales are final,
+except where the law requires a refund. Lost keys: email amromousa8@gmail.com. Advanced BYOK remains available
 with separate provider charges. The userscript remains advanced BYOK only.
 
 ## Data disclosures
@@ -28,11 +29,13 @@ with separate provider charges. The userscript remains advanced BYOK only.
 - Persistent gateway data: billing IDs, hashed keys/claim secrets, grants and
   request accounting metadata (IDs/hashes/status/tokens/cost/latency/error codes).
   Request dedupe lasts 30 days. No persisted prompt bodies, outputs or raw keys.
-- Payment details go to Lemon Squeezy hosted checkout; Kareer stores no card data.
+- Payment details go to Stripe Checkout; Kareer stores no card data. Kareer stores
+  the Stripe customer, subscription and payment IDs needed to grant credits.
 - No advertising, resale of applicant information, or browsing-history analytics.
   Do not claim no backend, no subscription, no remote processing or no metadata.
 - Credentials are privileged, excluded from page/content snapshots and backups.
-  License keys are reusable bearer credentials; no Kareer registration is required.
+  Kareer keys are reusable bearer credentials, shown once in Settings and never
+  emailed; no Kareer registration is required.
 
 Privacy URL: https://kareer.itsamro.me/privacy/ . Public security policy and source
 are in this repository. Map these flows accurately to each store's current data-use

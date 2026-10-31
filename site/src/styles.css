@@ -347,3 +347,13 @@ details p { padding-bottom: 23px; color: var(--muted-ink); font-size: 14px; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; } *,*::before,*::after { scroll-behavior: auto !important; animation-duration: 0s !important; transition-duration: 0s !important; }
 }
+.pricing-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; margin-top: 65px; max-width: 980px; }
+.pricing-card { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; background: #fffefa; box-shadow: 0 14px 40px -16px #353b2826; padding: 36px; border-radius: 12px; }
+.pricing-card h2 { font-size: 30px; }
+.pricing-price strong { font-family: var(--font-mono); font-size: 40px; font-weight: 550; }
+.pricing-price span, .pricing-card > p { color: var(--muted-ink); }
+.pricing-credits { font-weight: 650; color: var(--ink) !important; }
+.pricing-card > p:not(.pricing-price, .pricing-credits) { font-size: 15px; line-height: 1.7; flex: 1; }
+.pricing-notes { margin-top: 65px; }
+.reading-intro > p a { text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 760px) { .pricing-grid { grid-template-columns: 1fr; gap: 24px; } .pricing-card { padding: 26px; } }

@@ -19,7 +19,6 @@
     }
   },
   "optional_host_permissions": [
-    "https://api.kareer.itsamro.me/*",
     "<all_urls>",
     "https://openrouter.ai/*"
   ]

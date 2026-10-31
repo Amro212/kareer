@@ -6,38 +6,52 @@ workers_dev = false
 [observability]
 enabled = false
 
+# Secrets (never in this file): OPENROUTER_API_KEY, STRIPE_SECRET_KEY (restricted rk_ key),
+# STRIPE_WEBHOOK_SECRET. Set them with `wrangler secret put NAME --env staging|production`.
+# See docs/stripe-setup.md.
+
 [env.staging]
 name = "kareer-gateway-staging"
 workers_dev = true
 [env.staging.vars]
-SALES_ENABLED = "false"
-LS_TEST_MODE = "true"
-LS_STORE_ID = "CONFIGURE_SANDBOX_STORE"
-LS_MONTHLY_VARIANT = "CONFIGURE_SANDBOX_MONTHLY"
-LS_PACK_VARIANT = "CONFIGURE_SANDBOX_PACK"
-ALLOWED_ORIGINS = ""
+SALES_ENABLED = "true"
+STRIPE_PRICE_MONTHLY = "price_1UWMU7RSf0GhgGvmfq5qJRSx"
+STRIPE_PRICE_PACK = "price_1UWMU9RSf0GhgGvmFJ2Pi3ey"
+STRIPE_PORTAL_CONFIGURATION = "bpc_1UWMUNRSf0GhgGvmAezXi5vX"
+# Comma-separated chrome-extension://<id> origins of staging builds. Firefox origins are matched by pattern.
+ALLOWED_ORIGINS = "chrome-extension://nmecdngjkldpmeijgaheilejifahniad"
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "kareer-staging"
-database_id = "00000000-0000-0000-0000-000000000001"
+database_id = "7f1f7a5d-3f38-4171-a4c6-5f58a88bf7bb"
 migrations_dir = "migrations"
+[[env.staging.ratelimits]]
+name = "PURCHASE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 10, period = 60 }
 [env.staging.triggers]
 crons = ["*/5 * * * *"]
 
 [env.production]
 name = "kareer-gateway"
+# itsamro.me is not a Cloudflare zone yet, so this custom domain cannot deploy until the zone
+# moves to Cloudflare. Gateway URLs live in src/core/endpoints.js. See docs/stripe-setup.md.
 routes = [{ pattern = "api.kareer.itsamro.me", custom_domain = true }]
 [env.production.vars]
 SALES_ENABLED = "false"
-LS_TEST_MODE = "false"
-LS_STORE_ID = "CONFIGURE_LIVE_STORE"
-LS_MONTHLY_VARIANT = "CONFIGURE_LIVE_MONTHLY"
-LS_PACK_VARIANT = "CONFIGURE_LIVE_PACK"
-ALLOWED_ORIGINS = "https://kareer.itsamro.me"
+STRIPE_PRICE_MONTHLY = "CONFIGURE_LIVE_PRICE_MONTHLY"
+STRIPE_PRICE_PACK = "CONFIGURE_LIVE_PRICE_PACK"
+# Empty uses the live account's default portal configuration.
+STRIPE_PORTAL_CONFIGURATION = ""
+ALLOWED_ORIGINS = "CONFIGURE_CHROME_EXTENSION_ORIGIN"
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "kareer-production"
-database_id = "00000000-0000-0000-0000-000000000002"
+database_id = "7db39b5b-4f18-4c27-9758-6e06389c7d09"
 migrations_dir = "migrations"
+[[env.production.ratelimits]]
+name = "PURCHASE_LIMITER"
+namespace_id = "1002"
+simple = { limit = 10, period = 60 }
 [env.production.triggers]
 crons = ["*/5 * * * *"]

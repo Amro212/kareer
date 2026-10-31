@@ -1,5 +1,7 @@
 import { api, sendMessage } from '../shared/browser.js';
 import { MSG } from '../shared/protocol.js';
+import { SUPPORT_EMAIL } from '../../../core/endpoints.js';
+import OFFERS from '../../../core/offers.json' with { type: 'json' };
 
 const $ = id => document.getElementById(id);
 const labels = { ready: 'Ready', activationNeeded: 'Activation needed', outOfCredits: 'Out of credits', unavailable: 'Temporarily unavailable' };
@@ -18,14 +20,19 @@ function draw(status) {
   $('purchased-balance').textContent = String(status?.purchased || 0);
   $('monthly-expiry').textContent = status?.monthlyExpiresAt ? `Monthly credits expire ${new Date(status.monthlyExpiresAt).toLocaleString()}. Purchased credits never expire.` : 'Purchased credits never expire.';
   const subscriptions = status?.subscriptions || [];
-  $('plan-status').textContent = subscriptions.length ? subscriptions.map(s => {
-    const date = s.periodEnd ? new Date(s.periodEnd).toLocaleDateString() : '';
-    if (s.status === 'active') return `Monthly plan renews ${date || 'on your billing date'}.`;
-    if (s.status === 'cancelled') return `Monthly plan cancelled. Paid allowance remains until ${date || 'the end of its paid period'}.`;
-    if (['past_due', 'unpaid'].includes(s.status)) return 'Monthly payment needs attention. No renewal credits have been added. Open Manage billing.';
-    if (s.status === 'paused') return 'Monthly billing is paused. Existing paid credits remain available until expiry.';
-    return 'Monthly plan ended. Purchased credits remain available.';
-  }).join(' ') : 'No monthly plan. Credit packs work on their own.';
+  $('plan-status').textContent = [status?.flagged ? `A payment on this key is disputed. Its credits are on hold and new purchases are paused. Email ${SUPPORT_EMAIL} with questions.` : '',
+    subscriptions.length ? subscriptions.map(planText).join(' ') : 'No monthly plan. Credit packs work on their own.'].filter(Boolean).join(' ');
+}
+function planText(s) {
+  const date = s.periodEnd ? new Date(s.periodEnd).toLocaleDateString() : '';
+  const until = date || 'the end of the paid period';
+  if (['active', 'trialing'].includes(s.status) && s.cancelAtPeriodEnd) return `Monthly plan cancelled. It stays active and its credits remain until ${until}.`;
+  if (s.status === 'active') return `Monthly plan renews ${date || 'on your billing date'}.`;
+  if (s.status === 'trialing') return `Monthly plan trial. Billing starts ${date || 'at the end of the trial'}.`;
+  if (['past_due', 'unpaid'].includes(s.status)) return 'Monthly payment failed. No renewal credits were added. Open Manage billing to update your card.';
+  if (s.status === 'incomplete') return 'Monthly payment is not finished yet. Open Manage billing to complete it.';
+  if (s.status === 'paused') return 'Monthly billing is paused. Existing credits remain until they expire.';
+  return 'Monthly plan ended. Purchased credits remain available.';
 }
 async function billing(operation, input) {
   const result = await sendMessage({ type: MSG.BILLING, operation, input });
@@ -33,7 +40,7 @@ async function billing(operation, input) {
   return result;
 }
 function openBilling(url) {
-  if (!/^https:\/\/(?:[a-z0-9-]+\.)?lemonsqueezy\.com\//i.test(url || '')) throw new Error('Billing link unavailable. Use your receipt email to open your order.');
+  if (!/^https:\/\/billing\.stripe\.com\//.test(url || '')) throw new Error(`Billing is unavailable right now. Try again later, or email ${SUPPORT_EMAIL}.`);
   return api.tabs.create({ url });
 }
 function action(button, work, feedbackId = 'managed-feedback') {
@@ -60,16 +67,17 @@ async function poll() {
     const result = await billing('claim');
     if (result.status === 'idle') { $('purchase-status').textContent = ''; return; }
     if (result.status === 'complete') {
-      $('purchase-status').textContent = 'Payment verified. Kareer AI is ready.';
+      $('purchase-status').textContent = 'Payment verified. Kareer AI is ready. Use Show key to save your key for another browser.';
       await refresh(); return;
     }
-    if (result.status === 'expired') { $('purchase-status').textContent = 'Purchase checks have ended. If you paid, activate the key from your receipt email below.'; $('license-activation').open = true; return; }
-    $('purchase-status').textContent = result.unavailable ? 'Payment checks are temporarily unavailable. Retrying while this panel stays open. Your receipt key is the fallback.' : 'Waiting for verified payment and your license key. You can also activate the key from your receipt email.';
-    timer = setTimeout(poll, 3000);
+    if (result.status === 'expired') { $('purchase-status').textContent = `Kareer stopped checking for this purchase. If you paid and Kareer did not activate, email ${SUPPORT_EMAIL}.`; return; }
+    $('purchase-status').textContent = result.unavailable ? 'Payment checks are temporarily unavailable. Kareer keeps retrying while Settings is open.'
+      : 'Waiting for payment. Kareer activates on its own once Stripe confirms it, even if you close Settings and open it again later.';
+    timer = setTimeout(poll, 5000);
   } catch (error) { $('purchase-status').textContent = error.message; }
 }
 export function setupBilling(snapshot) {
-  draw(snapshot.aiStatus || { mode: snapshot.hasApiKey ? 'byok' : 'managed', state: snapshot.hasApiKey ? 'ready' : 'activationNeeded' });
+  draw(snapshot.aiStatus || { mode: 'byok', state: snapshot.hasApiKey ? 'ready' : 'activationNeeded' });
   if (bound) return;
   bound = true;
   $('ai-mode').onchange = async () => {
@@ -84,14 +92,35 @@ export function setupBilling(snapshot) {
   }, 'activation-feedback');
   $('license-key').oninput = () => { $('activate-license').disabled = !$('license-key').value.trim(); };
   action('refresh-usage', async () => { await refresh(); $('managed-feedback').textContent = 'Usage refreshed. Connection checks use no credits.'; });
-  action('disconnect-license', async () => { await billing('disconnect'); await refresh(); $('managed-feedback').textContent = 'Key removed from this browser. Your paid entitlement is unchanged.'; });
-  action('manage-billing', async () => { const result = await billing('billing'); await openBilling(result.url || 'https://app.lemonsqueezy.com/my-orders'); $('managed-feedback').textContent = ''; });
-  action('start-checkout', async () => {
-    const result = await billing('purchase');
+  action('reveal-license', async () => {
+    const { licenseKey } = await billing('revealKey');
+    $('license-value').value = licenseKey || '';
+    $('license-reveal').hidden = !licenseKey;
+    $('managed-feedback').textContent = licenseKey ? '' : 'No key is saved in this browser.';
+  });
+  action('disconnect-license', async () => {
+    $('license-reveal').hidden = true; $('license-value').value = ''; await billing('disconnect'); await refresh(); $('managed-feedback').textContent = 'Key removed from this browser. Your paid entitlement is unchanged.'; });
+  action('manage-billing', async () => { const result = await billing('billing'); await openBilling(result.url); $('managed-feedback').textContent = ''; });
+  const checkout = offer => async () => {
+    const result = await billing('purchase', offer ? { offer } : {});
     await api.tabs.create({ url: result.url });
     $('managed-feedback').textContent = '';
     await poll();
-  });
+  };
+  $('ai-plans').replaceChildren(...Object.entries(OFFERS).map(([key, offer]) => {
+    const item = document.createElement('li'), copy = document.createElement('div');
+    const name = document.createElement('strong'), line = document.createElement('span'), button = document.createElement('button');
+    name.textContent = `${offer.name} · ${offer.price} ${offer.cadence}`;
+    line.textContent = offer.summary;
+    button.id = `buy-${key}`;
+    button.textContent = key === 'monthly' ? 'Subscribe' : 'Buy pack';
+    button.setAttribute('aria-label', `${button.textContent}: ${offer.name}, ${offer.price} ${offer.cadence}`);
+    copy.append(name, line);
+    item.append(copy, button);
+    return item;
+  }));
+  for (const key of Object.keys(OFFERS)) action(`buy-${key}`, checkout(key));
+  action('start-checkout', checkout());
   window.addEventListener('pagehide', () => clearTimeout(timer));
   api.runtime.onMessage.addListener(message => { if (message.type === MSG.STORAGE_CHANGED && message.aiStatus) draw(message.aiStatus); });
   void refresh();

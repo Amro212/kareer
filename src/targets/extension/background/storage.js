@@ -90,13 +90,15 @@ export async function clearSecret() {
   await updateStoredRecord('kr:secrets', previous => ({ ...previous, apiKey: '' }));
 }
 
+// Build-time default: Kareer AI (managed) only once it is released; otherwise your own key.
+const DEFAULT_MODE = typeof KAREER_MANAGED_DEFAULT === 'boolean' && KAREER_MANAGED_DEFAULT ? 'managed' : 'byok';
 export function cachedAiStatus(all) {
-  const mode = all['kr:settings']?.aiMode || (all['kr:secrets']?.apiKey ? 'byok' : 'managed');
+  const mode = all['kr:settings']?.aiMode || (all['kr:secrets']?.apiKey ? 'byok' : all['kr:secrets']?.licenseKey ? 'managed' : DEFAULT_MODE);
   if (mode === 'byok') return { mode, state: all['kr:secrets']?.apiKey ? 'ready' : 'activationNeeded' };
   const saved = all['kr:ai-status'] || {};
   return { mode: 'managed', state: all['kr:secrets']?.licenseKey ? saved.state || 'unavailable' : 'activationNeeded',
     monthly: saved.monthly || 0, purchased: saved.purchased || 0, total: saved.total || 0, monthlyExpiresAt: saved.monthlyExpiresAt || null,
-    subscriptions: saved.subscriptions || [] };
+    flagged: saved.flagged === true, subscriptions: saved.subscriptions || [] };
 }
 
 export async function readAiStatus() {

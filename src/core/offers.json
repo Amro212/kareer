@@ -1,0 +1,20 @@
+{
+  "monthly": {
+    "name": "Kareer Monthly",
+    "cents": 1000,
+    "credits": 1000,
+    "price": "US$10",
+    "cadence": "/ month",
+    "summary": "1,000 credits each month. Cancel anytime.",
+    "terms": "Renews every month until you cancel. Adds 1,000 credits each paid month; unused monthly credits expire when that month ends. If you cancel, the plan stops at the end of the month you already paid for."
+  },
+  "pack": {
+    "name": "Kareer Credit Pack",
+    "cents": 500,
+    "credits": 300,
+    "price": "US$5",
+    "cadence": "once",
+    "summary": "300 credits that never expire. No subscription.",
+    "terms": "300 credits that do not expire. No subscription needed; pack credits stay after a plan ends."
+  }
+}

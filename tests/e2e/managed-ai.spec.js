@@ -1,20 +1,23 @@
 import { test, expect } from './support/fixtures.js';
+import { STAGING_GATEWAY_ORIGIN as GATEWAY } from '../../src/core/endpoints.js';
 
 async function mockGateway(kr, credits = 5) {
-  await kr.worker.evaluate(credits => {
+  await kr.worker.evaluate(({ credits, gateway }) => {
     const original = globalThis.fetch;
     globalThis.__managedCalls = [];
     globalThis.__credits = credits;
-    const status = () => ({ state: globalThis.__credits ? 'ready' : 'outOfCredits', monthly: 0, purchased: globalThis.__credits, total: globalThis.__credits, billingUrl: 'https://store.lemonsqueezy.com/billing' });
+    const status = () => ({ state: globalThis.__credits ? 'ready' : 'outOfCredits', monthly: 0, purchased: globalThis.__credits, total: globalThis.__credits });
     globalThis.fetch = async (url, options) => {
-      if (!String(url).startsWith('https://api.kareer.itsamro.me/')) return original(url, options);
+      if (!String(url).startsWith(`${gateway}/`)) return original(url, options);
       const path = new URL(url).pathname;
       const body = options?.body ? JSON.parse(options.body) : null;
       globalThis.__managedCalls.push({ path, body });
       if (path === '/v1/activate' && body?.licenseKey === 'invalid-test-license') return Response.json({ code: 'INVALID_KEY' }, { status: 403 });
       if (path === '/v1/activate' || path === '/v1/status') return Response.json(status());
-      if (path === '/v1/purchases') return Response.json({ id: '11111111-1111-4111-8111-111111111111', claimSecret: 'private-checkout-claim', expiresAt: new Date(Date.now() + 900000).toISOString(), url: 'https://api.kareer.itsamro.me/plans/11111111-1111-4111-8111-111111111111' });
-      if (path.startsWith('/v1/checkouts/')) return Response.json({ status: 'complete', licenseKey: 'private-managed-license', aiStatus: status() });
+      if (path === '/v1/purchases') return Response.json({ id: '11111111-1111-4111-8111-111111111111', claimSecret: 'private-checkout-claim', expiresAt: new Date(Date.now() + 900000).toISOString(), url: `${gateway}/plans/11111111-1111-4111-8111-111111111111`,
+        ...(body?.offer ? { checkoutUrl: `https://checkout.stripe.com/c/pay/cs_test_${body.offer}` } : {}) });
+      if (path.startsWith('/v1/purchases/')) return Response.json({ status: 'complete', licenseKey: 'private-managed-license', aiStatus: status() });
+      if (path === '/v1/billing-portal') return Response.json({ url: 'https://billing.stripe.com/p/session/test_e2e' });
       if (path === '/v1/ai') {
         if (!globalThis.__credits) return Response.json({ code: 'NO_CREDITS' }, { status: 402 });
         globalThis.__credits--;
@@ -22,18 +25,27 @@ async function mockGateway(kr, credits = 5) {
         if (body.operation.startsWith('document')) content = JSON.stringify({ paragraphs: ['Dear Hiring Team,', 'I build useful software.', 'Sincerely, Applicant'] });
         else if (body.operation === 'fieldRewrite') content = 'I build useful software.';
         else {
-          const input = JSON.parse(body.messages.at(-1).content);
-          content = JSON.stringify({ answers: input.fieldsToFill.map(f => ({ fieldId: f.fieldId, value: 'A useful answer', inferred: true })) });
+          if (body.messages || body.model) throw Error('The gateway builds prompts; clients send structured input only');
+          content = JSON.stringify({ answers: body.input.fieldsToFill.map(f => ({ fieldId: f.fieldId, value: 'A useful answer', inferred: true })) });
         }
         return new Response(JSON.stringify({ type: 'processing' }) + '\n' + JSON.stringify({ type: 'result', content, credits: { monthly: 0, purchased: globalThis.__credits, total: globalThis.__credits } }) + '\n', { headers: { 'Content-Type': 'application/x-ndjson' } });
       }
       throw Error('Unexpected mocked route');
     };
-  }, credits);
+  }, { credits, gateway: GATEWAY });
 }
 
-test('new installation activates without showing models or leaking license credentials', async ({ kr }, testInfo) => {
+test('a new installation defaults to your own key until Kareer AI is released', async ({ kr }) => {
   await kr.seed({ apiKey: '', profile: { fullName: 'Test Applicant', email: 'test@example.com' } });
+  const options = await kr.context.newPage();
+  await options.goto(`${kr.optionsUrl()}#connection`);
+  await expect(options.locator('#ai-mode')).toHaveValue('byok');
+  await expect(options.locator('#byok-connection')).toBeVisible();
+  await expect(options.locator('#managed-ai')).toBeHidden();
+});
+
+test('Kareer AI activates without showing models or leaking license credentials', async ({ kr }, testInfo) => {
+  await kr.seed({ apiKey: '', settings: { aiMode: 'managed' }, profile: { fullName: 'Test Applicant', email: 'test@example.com' } });
   await mockGateway(kr);
   const options = await kr.context.newPage();
   await options.goto(`${kr.optionsUrl()}#connection`);
@@ -43,7 +55,10 @@ test('new installation activates without showing models or leaking license crede
   await expect(options.locator('#start-checkout')).toBeVisible();
   await expect(options.locator('#start-checkout')).toHaveText('View plans');
   await expect(options.locator('#purchase-offer')).toHaveCount(0);
-  await expect(options.locator('#connection')).not.toContainText('US$');
+  await expect(options.locator('#ai-plans li')).toHaveCount(2);
+  await expect(options.locator('#ai-plans')).toContainText('Kareer Monthly · US$10 / month');
+  await expect(options.locator('#ai-plans')).toContainText('Kareer Credit Pack · US$5 once');
+  await expect(options.locator('.ai-purchase-note')).toContainText('All sales are final');
   await expect(options.locator('#usage-details')).toBeHidden();
   await expect(options.locator('#byok-connection')).toBeHidden();
   await expect(options.locator('#license-key')).toBeHidden();
@@ -77,6 +92,15 @@ test('new installation activates without showing models or leaking license crede
   const removeBox = await options.locator('#disconnect-license').boundingBox();
   expect(removeBox.height).toBeGreaterThanOrEqual(44);
   await options.screenshot({ path: testInfo.outputPath('billing-ready.png'), fullPage: true });
+  await expect(options.locator('#connection')).not.toContainText(/receipt|Lemon/i);
+  await options.evaluate(() => { window.__opened = []; chrome.tabs.create = async ({ url }) => { window.__opened.push(url); }; });
+  await options.locator('#manage-billing').click();
+  await expect.poll(() => options.evaluate(() => window.__opened)).toEqual(['https://billing.stripe.com/p/session/test_e2e']);
+  expect((await kr.worker.evaluate(() => globalThis.__managedCalls.map(c => c.path))).filter(p => p === '/v1/billing-portal')).toHaveLength(1);
+  await options.locator('#reveal-license').click();
+  await expect(options.locator('#license-value')).toHaveValue('private-managed-license');
+  await options.reload();
+  await expect(options.locator('#license-reveal')).toBeHidden();
   await options.goto(`${kr.optionsUrl()}#models`);
   await expect(options.locator('#byok-model')).toBeHidden();
   await expect(options.locator('#narrative-style')).toBeVisible();
@@ -99,7 +123,7 @@ test('purchase auto-claim is privileged and mode switching preserves the saved p
   await kr.seed();
   await mockGateway(kr);
   const page = await kr.context.newPage();
-  await kr.context.route('https://api.kareer.itsamro.me/plans/**', route => route.fulfill({ body: 'Test plans only' }));
+  await kr.context.route(`${GATEWAY}/plans/**`, route => route.fulfill({ body: 'Test plans only' }));
   await page.goto(`${kr.optionsUrl()}#connection`);
   await expect(page.locator('#ai-mode')).toHaveValue('byok');
   await expect(page.locator('#advanced-ai')).toHaveAttribute('open', '');
@@ -118,8 +142,36 @@ test('purchase auto-claim is privileged and mode switching preserves the saved p
   expect((await kr.readStorage('kr:secrets')).licenseKey).toBe('private-managed-license');
 });
 
+test('choosing a plan in Settings goes straight to Stripe Checkout for that plan', async ({ kr }) => {
+  await kr.seed({ apiKey: '', settings: { aiMode: 'managed' } });
+  await mockGateway(kr);
+  const options = await kr.context.newPage();
+  await options.goto(`${kr.optionsUrl()}#connection`);
+  await options.evaluate(() => { window.__opened = []; chrome.tabs.create = async ({ url }) => { window.__opened.push(url); }; });
+  await options.locator('#buy-pack').click();
+  await expect.poll(() => options.evaluate(() => window.__opened)).toEqual(['https://checkout.stripe.com/c/pay/cs_test_pack']);
+  await options.locator('#buy-monthly').click();
+  await expect.poll(() => options.evaluate(() => window.__opened.length)).toBe(2);
+  expect(await options.evaluate(() => window.__opened[1])).toBe('https://checkout.stripe.com/c/pay/cs_test_monthly');
+  const calls = await kr.worker.evaluate(() => globalThis.__managedCalls.filter(c => c.path === '/v1/purchases').map(c => c.body));
+  expect(calls).toEqual([{ offer: 'pack' }, { offer: 'monthly' }]);
+});
+
+test('an unreachable gateway shows a plain message instead of a raw network error', async ({ kr }) => {
+  await kr.seed({ apiKey: '', settings: { aiMode: 'managed' } });
+  await kr.worker.evaluate(gateway => {
+    const original = globalThis.fetch;
+    globalThis.fetch = async (url, options) => String(url).startsWith(`${gateway}/`) ? Promise.reject(new TypeError('Failed to fetch')) : original(url, options);
+  }, GATEWAY);
+  const options = await kr.context.newPage();
+  await options.goto(`${kr.optionsUrl()}#connection`);
+  await options.locator('#buy-pack').click();
+  await expect(options.locator('#managed-feedback')).toContainText("Can't reach Kareer right now");
+  await expect(options.locator('#connection')).not.toContainText(/Failed to fetch|NetworkError/);
+});
+
 test('local-only autofill links directly to AI setup without blocking saved profile filling', async ({ kr }, testInfo) => {
-  await kr.seed({ apiKey: '', profile: { fullName: 'Test Applicant', email: 'test@example.com' } });
+  await kr.seed({ apiKey: '', settings: { aiMode: 'managed' }, profile: { fullName: 'Test Applicant', email: 'test@example.com' } });
   const page = await kr.context.newPage();
   await page.route('**/local-only-application', route => route.fulfill({ contentType: 'text/html', body: '<h1>Job Application</h1><form id="application_form"><label for="email">Email</label><input type="email" id="email" required><label for="why">Why this role?</label><textarea id="why" required></textarea></form>' }));
   await page.goto(kr.fixtureUrl('local-only-application', 'boards.greenhouse.io'));
@@ -177,7 +229,7 @@ test('managed cover letter generation and document rewrite share the metered gat
   expect(rewritten.error).toBeUndefined();
   const calls = await kr.worker.evaluate(() => globalThis.__managedCalls.filter(c => c.path === '/v1/ai').map(c => c.body));
   expect(calls.map(c => c.operation)).toEqual(['document', 'documentRewrite']);
-  expect(calls.every(c => !c.model && c.document.kind === 'coverLetter')).toBe(true);
+  expect(calls.every(c => !c.model && !c.messages && c.input.kind === 'coverLetter')).toBe(true);
   expect(kr.openrouter.requests).toHaveLength(0);
 });
 

@@ -1,0 +1,47 @@
+[
+  {
+    "id": "about",
+    "title": "What Kareer Is",
+    "html": "<p>Kareer is a form-filling assistant for job applications. It runs in your browser, fills application forms from the profile you save, and can draft answers and documents with AI. You review what it fills and you submit every application yourself. Kareer does not apply to jobs for you, does not submit applications on its own unless you turn on Auto Submit, and does not promise interviews, offers or any hiring outcome.</p><p>These terms are offered by Kareer, an independent project run by an individual based in Ontario, Canada. By installing Kareer or buying Kareer AI credits, you agree to them.</p>"
+  },
+  {
+    "id": "your-responsibility",
+    "title": "Your Responsibility",
+    "html": "<p>You are responsible for everything you submit. Check every answer before you send an application, especially answers marked inferred or guessed, and any résumé or cover letter Kareer drafts. AI can be wrong. Only save facts about yourself that are true, and only use Kareer for your own applications.</p>"
+  },
+  {
+    "id": "acceptable-use",
+    "title": "Acceptable Use",
+    "html": "<p>Do not use Kareer to:</p><ul><li>submit false information, impersonate someone else or apply on another person's behalf without their permission;</li><li>send large numbers of applications you have not reviewed, or otherwise break an employer's or job site's terms;</li><li>try to get around a site's security checks, CAPTCHAs or access limits;</li><li>resell, share or publish your Kareer key, or use Kareer AI for anything other than your own job applications;</li><li>overload, probe or attack the Kareer service.</li></ul><p>Kareer may disable a key that is used this way.</p>"
+  },
+  {
+    "id": "credits",
+    "title": "Kareer AI and Credits",
+    "html": "<p>Filling forms from your saved profile is free. Kareer AI is optional and paid. The monthly plan is US$10 per month and adds 1,000 credits each paid month; unused monthly credits expire when that month ends. The credit pack is US$5 once for 300 credits that do not expire. Taxes may apply. Payment is handled by Stripe.</p><p>Credits are usage units for Kareer AI, not money. They have no cash value and cannot be transferred, exchanged or redeemed for cash. Each completed AI request uses one credit, and one autofill run can make several requests. Failed or invalid results use no credit. Prices and credit amounts can change for future purchases; they never change for a purchase you already made.</p>"
+  },
+  {
+    "id": "subscriptions",
+    "title": "Monthly Plan and Cancellation",
+    "html": "<p>The monthly plan renews automatically every month until you cancel. Cancel any time in Kareer's Settings under Manage billing. When you cancel, the plan stays active until the end of the month you already paid for, and then stops; you are not charged again. Removing the extension or the key does not cancel the plan. If a renewal payment fails, no new credits are added until it succeeds.</p>"
+  },
+  {
+    "id": "refunds",
+    "title": "All Sales Are Final",
+    "html": "<p>All sales are final. Kareer does not offer refunds for purchases, unused credits or partial months, except where the law requires one. If a payment is refunded or disputed, the credits it bought are removed. While a dispute is open, new purchases on that key are paused.</p>"
+  },
+  {
+    "id": "keys",
+    "title": "Your Kareer Key",
+    "html": "<p>Kareer creates a key when your first payment is confirmed and shows it in Settings. Anyone with the key can use its credits, so keep it private. Use Show key in Settings to save it, and activate it in another browser to share the same credits. Kareer does not email keys and has no accounts. If you lose your key, email <a href=\"mailto:amromousa8@gmail.com\">amromousa8@gmail.com</a> from the address you paid with; Kareer will check the purchase in Stripe before helping.</p>"
+  },
+  {
+    "id": "availability",
+    "title": "Availability and Liability",
+    "html": "<p>Kareer is provided as is. Job sites change, and some forms or fields may not work. Kareer AI can be temporarily unavailable. To the extent the law allows, Kareer is not liable for indirect losses, missed opportunities or the content of applications you submit, and its total liability is limited to what you paid for Kareer AI in the three months before the claim. Nothing in these terms limits rights you have under consumer protection law, including in Ontario.</p>"
+  },
+  {
+    "id": "changes",
+    "title": "Changes and Contact",
+    "html": "<p>These terms may be updated; the date above shows the current version, and material changes will be noted on this page. The <a href=\"/privacy/\">privacy policy</a> explains what data Kareer handles. Questions about billing or these terms: <a href=\"mailto:amromousa8@gmail.com\">amromousa8@gmail.com</a>.</p>"
+  }
+]
