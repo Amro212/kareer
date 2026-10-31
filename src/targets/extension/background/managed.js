@@ -1,9 +1,10 @@
 import { api } from '../shared/browser.js';
 import { readSecrets, writeLicense, updateStoredRecord } from './storage.js';
-import { GATEWAY_ORIGIN, SUPPORT_EMAIL } from '../../../core/endpoints.js';
+import { STAGING_GATEWAY_ORIGIN, SUPPORT_EMAIL } from '../../../core/endpoints.js';
 
-// A staging build must explicitly replace this constant; normal packages always use production.
-const GATEWAY = typeof KAREER_GATEWAY_URL === 'string' ? KAREER_GATEWAY_URL : GATEWAY_ORIGIN;
+// tools/build.js sets this per build; only --production packages use the production gateway.
+const GATEWAY = typeof KAREER_GATEWAY_URL === 'string' ? KAREER_GATEWAY_URL : STAGING_GATEWAY_ORIGIN;
+const UNREACHABLE = "Can't reach Kareer right now. Check your internet connection and try again. Filling forms from your saved profile still works.";
 const UNCERTAIN = 'Could not confirm the AI result. It may have used one credit. Refresh usage before explicitly retrying.';
 const safeStates = new Set(['ready', 'activationNeeded', 'outOfCredits', 'unavailable']);
 async function saveStatus(status) {
@@ -17,10 +18,16 @@ async function saveStatus(status) {
   });
 }
 async function call(path, { body, credential, signal } = {}) {
-  const response = await fetch(`${GATEWAY}${path}`, { method: body === undefined ? 'GET' : 'POST', signal,
-    headers: { 'Content-Type': 'application/json', ...(credential ? { Authorization: `Bearer ${credential}` } : {}) },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
-  return response;
+  try {
+    return await fetch(`${GATEWAY}${path}`, { method: body === undefined ? 'GET' : 'POST', signal,
+      headers: { 'Content-Type': 'application/json', ...(credential ? { Authorization: `Bearer ${credential}` } : {}) },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  } catch (cause) {
+    // fetch rejects only for network failures and aborts; never show its raw "Failed to fetch".
+    const error = new Error(UNREACHABLE, { cause });
+    error.code = 'UNREACHABLE';
+    throw error;
+  }
 }
 async function json(response) {
   let body; try { body = await response.json(); } catch { throw new Error('Kareer AI is temporarily unavailable.'); }
@@ -29,7 +36,7 @@ async function json(response) {
     const errors = { NO_CREDITS: 'Out of credits. Buy credits in Settings.', ACTIVATION_NEEDED: 'Activate your Kareer key in Settings.',
       INVALID_KEY: 'That Kareer key could not be verified.', KEY_DISABLED: `This key is disabled. Email ${SUPPORT_EMAIL} for help.`,
       SUBSCRIPTION_EXISTS: 'You already have a monthly plan. Open Manage billing.',
-      SALES_DISABLED: 'Purchases are not available yet.',
+      SALES_DISABLED: 'Purchases are not available yet.', INVALID_OFFER: 'That plan is not available.',
       CLAIM_UNAVAILABLE: `Kareer stopped checking for this purchase. If you paid and Kareer did not activate, email ${SUPPORT_EMAIL}.`,
       WALLET_FLAGGED: `Purchases are paused while a payment issue is reviewed. Email ${SUPPORT_EMAIL}.`,
       NO_BILLING: 'This key has no billing account yet.',
@@ -58,11 +65,13 @@ export async function managedOperation(operation, input = {}) {
     return saveStatus({ state: 'activationNeeded', monthly: 0, purchased: 0, total: 0, monthlyExpiresAt: null, subscriptions: [] });
   }
   if (operation === 'purchase') {
-    const result = await json(await call('/v1/purchases', { body: {}, credential: secrets.licenseKey, signal }));
+    const offer = ['monthly', 'pack'].includes(input.offer) ? input.offer : undefined;
+    const result = await json(await call('/v1/purchases', { body: offer ? { offer } : {}, credential: secrets.licenseKey, signal }));
     if (!/^[a-f0-9-]{36}$/.test(result.id || '') || result.url !== `${GATEWAY}/plans/${result.id}`
+      || (offer && !/^https:\/\/checkout\.stripe\.com\//.test(result.checkoutUrl || ''))
       || !/^[^\s]{8,256}$/.test(result.claimSecret || '') || !(Date.parse(result.expiresAt) > Date.now())) throw new Error('Purchase link unavailable. Please try again later.');
     await updateStoredRecord('kr:secrets', old => ({ ...old, checkout: { id: result.id, claimSecret: result.claimSecret, expiresAt: result.expiresAt } }));
-    return { url: result.url, expiresAt: result.expiresAt };
+    return { url: offer ? result.checkoutUrl : result.url, expiresAt: result.expiresAt };
   }
   if (operation === 'claim') {
     const c = secrets.checkout;

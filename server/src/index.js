@@ -1,7 +1,8 @@
 import { ApiError, MESSAGES, fail, readBody, parseInput, upstreamBody, validateCompletion, digest, limited } from './policy.js';
 import { reserve, settle, release, cleanup, balances } from './ledger.js';
-import { stripeClient, authenticate, status, billingPortal, startPurchase, claimPurchase, webhook } from './payments.js';
+import { stripeClient, authenticate, status, billingPortal, startPurchase, selectPurchase, claimPurchase, webhook } from './payments.js';
 import { hostedPurchase } from './purchase-page.js';
+import { OFFERS } from './offers.js';
 import { SITE_ORIGIN } from '../../src/core/endpoints.js';
 
 function errorData(error) {
@@ -87,11 +88,15 @@ async function route(request, env) {
   if (method === 'POST' && path === '/v1/purchases') {
     if (env.SALES_ENABLED !== 'true') fail('SALES_DISABLED', 503);
     const input = await jsonInput(request);
-    if (Object.keys(input).length) fail('INVALID_REQUEST');
+    if (Object.keys(input).some(k => k !== 'offer')) fail('INVALID_REQUEST');
+    if (input.offer !== undefined && !Object.hasOwn(OFFERS, input.offer)) fail('INVALID_OFFER');
     await limited(request, env);
     const auth = request.headers.has('Authorization') ? await authenticate(env.DB, bearer(request)) : null;
     const purchase = await startPurchase(env.DB, auth?.wallet);
-    return Response.json({ ...purchase, url: `${new URL(request.url).origin}/plans/${purchase.id}` });
+    const origin = new URL(request.url).origin;
+    // With an offer chosen in the extension, skip the plans page and go straight to Stripe Checkout.
+    const checkoutUrl = input.offer ? await selectPurchase(env.DB, env, stripeClient(env), purchase.id, input.offer, origin) : undefined;
+    return Response.json({ ...purchase, url: `${origin}/plans/${purchase.id}`, ...(checkoutUrl ? { checkoutUrl } : {}) });
   }
   if (method === 'GET' && /^\/v1\/purchases\/[a-f0-9-]{36}$/.test(path)) {
     return Response.json(await claimPurchase(env.DB, env, stripeClient(env), path.split('/').at(-1), bearer(request)));

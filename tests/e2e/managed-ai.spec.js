@@ -1,19 +1,21 @@
 import { test, expect } from './support/fixtures.js';
+import { STAGING_GATEWAY_ORIGIN as GATEWAY } from '../../src/core/endpoints.js';
 
 async function mockGateway(kr, credits = 5) {
-  await kr.worker.evaluate(credits => {
+  await kr.worker.evaluate(({ credits, gateway }) => {
     const original = globalThis.fetch;
     globalThis.__managedCalls = [];
     globalThis.__credits = credits;
     const status = () => ({ state: globalThis.__credits ? 'ready' : 'outOfCredits', monthly: 0, purchased: globalThis.__credits, total: globalThis.__credits });
     globalThis.fetch = async (url, options) => {
-      if (!String(url).startsWith('https://api.kareer.itsamro.me/')) return original(url, options);
+      if (!String(url).startsWith(`${gateway}/`)) return original(url, options);
       const path = new URL(url).pathname;
       const body = options?.body ? JSON.parse(options.body) : null;
       globalThis.__managedCalls.push({ path, body });
       if (path === '/v1/activate' && body?.licenseKey === 'invalid-test-license') return Response.json({ code: 'INVALID_KEY' }, { status: 403 });
       if (path === '/v1/activate' || path === '/v1/status') return Response.json(status());
-      if (path === '/v1/purchases') return Response.json({ id: '11111111-1111-4111-8111-111111111111', claimSecret: 'private-checkout-claim', expiresAt: new Date(Date.now() + 900000).toISOString(), url: 'https://api.kareer.itsamro.me/plans/11111111-1111-4111-8111-111111111111' });
+      if (path === '/v1/purchases') return Response.json({ id: '11111111-1111-4111-8111-111111111111', claimSecret: 'private-checkout-claim', expiresAt: new Date(Date.now() + 900000).toISOString(), url: `${gateway}/plans/11111111-1111-4111-8111-111111111111`,
+        ...(body?.offer ? { checkoutUrl: `https://checkout.stripe.com/c/pay/cs_test_${body.offer}` } : {}) });
       if (path.startsWith('/v1/purchases/')) return Response.json({ status: 'complete', licenseKey: 'private-managed-license', aiStatus: status() });
       if (path === '/v1/billing-portal') return Response.json({ url: 'https://billing.stripe.com/p/session/test_e2e' });
       if (path === '/v1/ai') {
@@ -30,7 +32,7 @@ async function mockGateway(kr, credits = 5) {
       }
       throw Error('Unexpected mocked route');
     };
-  }, credits);
+  }, { credits, gateway: GATEWAY });
 }
 
 test('a new installation defaults to your own key until Kareer AI is released', async ({ kr }) => {
@@ -53,7 +55,10 @@ test('Kareer AI activates without showing models or leaking license credentials'
   await expect(options.locator('#start-checkout')).toBeVisible();
   await expect(options.locator('#start-checkout')).toHaveText('View plans');
   await expect(options.locator('#purchase-offer')).toHaveCount(0);
-  await expect(options.locator('#connection')).not.toContainText('US$');
+  await expect(options.locator('#ai-plans li')).toHaveCount(2);
+  await expect(options.locator('#ai-plans')).toContainText('Kareer Monthly · US$10 / month');
+  await expect(options.locator('#ai-plans')).toContainText('Kareer Credit Pack · US$5 once');
+  await expect(options.locator('.ai-purchase-note')).toContainText('All sales are final');
   await expect(options.locator('#usage-details')).toBeHidden();
   await expect(options.locator('#byok-connection')).toBeHidden();
   await expect(options.locator('#license-key')).toBeHidden();
@@ -118,7 +123,7 @@ test('purchase auto-claim is privileged and mode switching preserves the saved p
   await kr.seed();
   await mockGateway(kr);
   const page = await kr.context.newPage();
-  await kr.context.route('https://api.kareer.itsamro.me/plans/**', route => route.fulfill({ body: 'Test plans only' }));
+  await kr.context.route(`${GATEWAY}/plans/**`, route => route.fulfill({ body: 'Test plans only' }));
   await page.goto(`${kr.optionsUrl()}#connection`);
   await expect(page.locator('#ai-mode')).toHaveValue('byok');
   await expect(page.locator('#advanced-ai')).toHaveAttribute('open', '');
@@ -135,6 +140,34 @@ test('purchase auto-claim is privileged and mode switching preserves the saved p
   await page.locator('#ai-mode').selectOption('byok');
   await expect(page.locator('#byok-connection')).toBeVisible();
   expect((await kr.readStorage('kr:secrets')).licenseKey).toBe('private-managed-license');
+});
+
+test('choosing a plan in Settings goes straight to Stripe Checkout for that plan', async ({ kr }) => {
+  await kr.seed({ apiKey: '', settings: { aiMode: 'managed' } });
+  await mockGateway(kr);
+  const options = await kr.context.newPage();
+  await options.goto(`${kr.optionsUrl()}#connection`);
+  await options.evaluate(() => { window.__opened = []; chrome.tabs.create = async ({ url }) => { window.__opened.push(url); }; });
+  await options.locator('#buy-pack').click();
+  await expect.poll(() => options.evaluate(() => window.__opened)).toEqual(['https://checkout.stripe.com/c/pay/cs_test_pack']);
+  await options.locator('#buy-monthly').click();
+  await expect.poll(() => options.evaluate(() => window.__opened.length)).toBe(2);
+  expect(await options.evaluate(() => window.__opened[1])).toBe('https://checkout.stripe.com/c/pay/cs_test_monthly');
+  const calls = await kr.worker.evaluate(() => globalThis.__managedCalls.filter(c => c.path === '/v1/purchases').map(c => c.body));
+  expect(calls).toEqual([{ offer: 'pack' }, { offer: 'monthly' }]);
+});
+
+test('an unreachable gateway shows a plain message instead of a raw network error', async ({ kr }) => {
+  await kr.seed({ apiKey: '', settings: { aiMode: 'managed' } });
+  await kr.worker.evaluate(gateway => {
+    const original = globalThis.fetch;
+    globalThis.fetch = async (url, options) => String(url).startsWith(`${gateway}/`) ? Promise.reject(new TypeError('Failed to fetch')) : original(url, options);
+  }, GATEWAY);
+  const options = await kr.context.newPage();
+  await options.goto(`${kr.optionsUrl()}#connection`);
+  await options.locator('#buy-pack').click();
+  await expect(options.locator('#managed-feedback')).toContainText("Can't reach Kareer right now");
+  await expect(options.locator('#connection')).not.toContainText(/Failed to fetch|NetworkError/);
 });
 
 test('local-only autofill links directly to AI setup without blocking saved profile filling', async ({ kr }, testInfo) => {

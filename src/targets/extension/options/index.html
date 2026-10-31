@@ -36,8 +36,9 @@
             <div class="ai-introduction-heading"><h2>Kareer AI</h2><span class="badge warn" id="managed-state" role="status" aria-live="polite">Activation needed</span></div>
             <h3>Put your experience<br />to work.</h3>
             <p>Spend less time turning the same career facts into new answers. Connect Kareer AI for help with application questions and documents, grounded in your profile and the job.</p>
-            <div class="actions"><button id="start-checkout">View plans <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></button></div>
-            <p class="ai-purchase-note">Choose your plan on Kareer's secure purchase page. No AI provider account or API key to set up.</p>
+            <ul class="ai-plans" id="ai-plans" aria-label="Kareer AI plans"></ul>
+            <p class="ai-purchase-note">Buying opens Stripe's secure checkout. By buying you agree to the <a href="https://kareer.itsamro.me/terms/" target="_blank" rel="noopener noreferrer">Terms of Service</a>. All sales are final. No AI provider account or API key to set up.</p>
+            <div class="actions"><button id="start-checkout" class="secondary">View plans <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></button></div>
             <p id="purchase-status" role="status" aria-live="polite"></p>
           </div>
           <ul class="ai-capabilities" aria-label="What Kareer AI helps with">

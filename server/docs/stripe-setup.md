@@ -108,15 +108,45 @@ npm run deploy:production   # blocked while production placeholders remain
 ```
 
 Staging is the sandbox and runs with `SALES_ENABLED="true"`. Production stays
-`"false"` until live mode is ready. Add the staging Chrome extension origin to
-`ALLOWED_ORIGINS`. Checkout Session creation failures are logged with the
-Stripe error type, code, param and message (`npx wrangler tail --env staging`).
+`"false"` until live mode is ready. `ALLOWED_ORIGINS` lists the Chrome extension
+origins allowed to call staging (currently the unpacked build
+`chrome-extension://nmecdngjkldpmeijgaheilejifahniad`; add more comma-separated).
+Firefox `moz-extension://` origins are always allowed. Checkout Session creation
+failures are logged with the Stripe error type, code, param and message
+(`npx wrangler tail --env staging`).
 
-Build a staging extension from the repository root (defaults to Kareer AI):
+### Extension builds for staging
+
+From the repository root:
 
 ```sh
-node tools/build.js --target=extension --staging --gateway=https://kareer-gateway-staging.amromousa8.workers.dev
+npm run build                                       # dist/chrome, dist/firefox
+node tools/build.js --target=extension --staging    # dist/staging/chrome, dist/staging/firefox
 ```
+
+Both talk to `https://kareer-gateway-staging.amromousa8.workers.dev`. Load
+`dist/chrome` (or `dist/staging/chrome`) with Chrome's Load unpacked, and
+`dist/firefox/manifest.json` from `about:debugging` → This Firefox → Load
+Temporary Add-on. The `--staging` build is named "Kareer (Staging)" and starts in
+Kareer AI mode. The plain build starts in BYOK mode, so choose Kareer AI under
+Settings → AI & billing → Advanced. A new unpacked Chrome folder gets a new
+extension ID, and that ID has to be added to `ALLOWED_ORIGINS`.
+
+Production packages come only from `npm run build -- --production`, which uses
+`KAREER_GATEWAY_ORIGIN` when set and `https://api.kareer.itsamro.me` otherwise.
+
+### Buying from the extension
+
+Settings → AI & billing lists both plans from `src/core/offers.json` (the single
+source of prices and credits, also read by the gateway's payment checks, the
+hosted plans page and the site's `/pricing/`). A plan button calls
+`POST /v1/purchases` with `{ "offer": "monthly" | "pack" }`. The gateway returns
+the Stripe Checkout URL directly, and Checkout's cancel link returns to
+`/plans/<id>`. View plans (`POST /v1/purchases` with `{}`) still opens the hosted
+plans page. The website's pricing page sends buyers to install the extension,
+because the key is claimed by the browser that started the purchase.
+Changing a price means editing `offers.json` and creating matching Stripe
+prices; payment checks reject any amount that doesn't match.
 
 ### Production domain
 
@@ -128,9 +158,10 @@ need the parent zone on Cloudflare, and `itsamro.me` is currently on Namecheap D
    (including `kareer` CNAME → GitHub Pages, DNS only), then switch the Namecheap
    nameservers. The existing `routes` entry then deploys as is; or
 2. Keep Namecheap and serve production from `kareer-gateway.amromousa8.workers.dev`:
-   set `workers_dev = true` and remove `routes` in `[env.production]`, and change
-   `GATEWAY_ORIGIN` in `src/core/endpoints.js`. Builds, the extension's host
-   permission and the store upload check all read that one constant.
+   set `workers_dev = true` and remove `routes` in `[env.production]`, and set the
+   repository variable `KAREER_GATEWAY_ORIGIN=https://kareer-gateway.amromousa8.workers.dev`
+   (or change `PRODUCTION_GATEWAY_ORIGIN` in `src/core/endpoints.js`). Production
+   builds, the extension's host permission and the store upload check all use it.
 
 ## Local webhook forwarding
 

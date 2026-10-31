@@ -263,6 +263,24 @@ npm run bump:minor
 npm run bump:major
 ```
 
+#### Which Kareer AI gateway a build talks to
+
+Gateway origins live in `src/core/endpoints.js`. The build writes the chosen
+origin into the background script and both manifests' host permissions.
+
+| Command | Gateway | Output folder |
+|---|---|---|
+| `npm run build` / `npm run build:extension` / `npm run dev` | staging Worker (`https://kareer-gateway-staging.amromousa8.workers.dev`) | `dist/chrome`, `dist/firefox` (load unpacked / temporary add-on) |
+| `node tools/build.js --target=extension --staging` | staging Worker; named "Kareer (Staging)", Kareer AI on by default, separate Firefox ID, no version bump | `dist/staging/chrome`, `dist/staging/firefox` |
+| `npm run build -- --production` | `KAREER_GATEWAY_ORIGIN` if set, otherwise `https://api.kareer.itsamro.me` | `dist/chrome`, `dist/firefox`, `dist/kareer-chrome.zip`, `dist/kareer-firefox.xpi` |
+
+Only `--production` builds can use the production gateway, and they can't use
+the staging one. The release workflows build with `--production` and read
+`KAREER_GATEWAY_ORIGIN` from the repository variable of the same name.
+`--gateway=https://…` overrides the gateway for non-production builds. Plan
+prices and credits come from `src/core/offers.json`, which the gateway, the
+extension and the website all read.
+
 ### Testing & ATS Fixture Capture
 
 Kareer requires tests to pass on every code change to avoid regressions:

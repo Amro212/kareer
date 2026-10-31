@@ -35,8 +35,11 @@ checks concurrency, settlement and revocation against local workerd/D1.
 | `DB` | D1 binding | `kareer-staging` / `kareer-production`. |
 | `PURCHASE_LIMITER` | rate limit binding | 10 requests per minute per IP for purchase creation and plan selection. |
 
-Public origins (`https://api.kareer.itsamro.me`, `https://kareer.itsamro.me`) and
+Public origins (staging and production gateways, `https://kareer.itsamro.me`) and
 the support email live only in `src/core/endpoints.js` at the repository root.
+Plan prices and credits live only in `src/core/offers.json`. Which gateway an
+extension build uses is covered in the root README ("Which Kareer AI gateway a
+build talks to").
 
 ## Release and production
 

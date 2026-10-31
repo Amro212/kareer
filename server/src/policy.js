@@ -20,6 +20,7 @@ export const MESSAGES = {
   SALES_DISABLED: 'Purchases are not available yet.',
   WALLET_FLAGGED: 'Purchases are paused for this key while a payment issue is reviewed. Contact support.',
   NO_BILLING: 'This key has no billing account yet.',
+  INVALID_OFFER: 'That plan is not available.',
 };
 
 // Optional Cloudflare rate limiting binding for unauthenticated purchase creation.

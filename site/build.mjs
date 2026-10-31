@@ -23,7 +23,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     const { App } = await server.ssrLoadModule('/src/app.tsx');
     const { renderToString } = await import('react-dom/server');
     const { createElement } = await import('react');
-    for (const [name, page] of [['index.html', 'home'], ['privacy/index.html', 'privacy'], ['terms/index.html', 'terms'], ['setup/index.html', 'setup'], ['404.html', '404']]) {
+    for (const [name, page] of [['index.html', 'home'], ['privacy/index.html', 'privacy'], ['terms/index.html', 'terms'], ['pricing/index.html', 'pricing'], ['setup/index.html', 'setup'], ['404.html', '404']]) {
       const destination = path.join(output, name);
       const html = await fs.readFile(destination, 'utf8');
       await fs.writeFile(destination, html.replace('<div id="root"><!--app--></div>', `<div id="root" data-rendered="true">${renderToString(createElement(App, { page }))}</div>`));

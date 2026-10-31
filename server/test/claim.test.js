@@ -166,7 +166,8 @@ test('purchase creation through the worker respects the sales switch and the rat
   assert.equal(created.status, 200);
   assert.equal(body.url, `https://api.test/plans/${body.id}`);
   assert.ok(Date.parse(body.expiresAt) - Date.now() > 23 * 3600000);
-  assert.equal((await call(db, '/v1/purchases', { method: 'POST', body: { offer: 'pack' } })).status, 400);
+  assert.equal((await call(db, '/v1/purchases', { method: 'POST', body: { offer: 'pack', extra: 1 } })).status, 400);
+  assert.equal((await (await call(db, '/v1/purchases', { method: 'POST', body: { offer: 'gold' } })).json()).code, 'INVALID_OFFER');
   const limiter = { limit: async () => ({ success: false }) };
   assert.equal((await call(db, '/v1/purchases', { method: 'POST', body: {}, extra: { PURCHASE_LIMITER: limiter } })).status, 429);
   assert.equal((await call(db, '/v1/checkouts', { method: 'POST', body: {} })).status, 404);

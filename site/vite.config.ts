@@ -16,6 +16,7 @@ export default defineConfig({
       home: fileURLToPath(new URL('./index.html', import.meta.url)),
       privacy: fileURLToPath(new URL('./privacy/index.html', import.meta.url)),
       terms: fileURLToPath(new URL('./terms/index.html', import.meta.url)),
+      pricing: fileURLToPath(new URL('./pricing/index.html', import.meta.url)),
       setup: fileURLToPath(new URL('./setup/index.html', import.meta.url)),
       notFound: fileURLToPath(new URL('./404.html', import.meta.url)),
     }, output: { codeSplitting: { groups: [

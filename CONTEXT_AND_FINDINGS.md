@@ -1,3 +1,18 @@
+## Turn: 2026-10-31 - Gateway per build, inline plans, /pricing page, unreachable-gateway copy (extension + gateway + site)
+
+- Bug (extension, Chrome unpacked `nmecdngjkldpmeijgaheilejifahniad` and Firefox, AI & billing page): "Failed to fetch" / "NetworkError". Root cause: every build used `GATEWAY_ORIGIN = https://api.kareer.itsamro.me`, which has no DNS yet (`itsamro.me` is on Namecheap), and the raw fetch error reached the page.
+- Fix:
+  - `src/core/endpoints.js` now has `STAGING_GATEWAY_ORIGIN` and `PRODUCTION_GATEWAY_ORIGIN`. `tools/build.js`: plain, watch and `--staging` builds use the staging Worker (`--gateway=` override); only `--production` uses `KAREER_GATEWAY_ORIGIN` or the production default, with guards both ways. The host permission is injected into both manifests.
+  - `deploy.yml` and `release-candidate.yml` build release packages with `--production` (reading repo variable `KAREER_GATEWAY_ORIGIN`). `tools/chrome-store.js` checks the package against the production origin and rejects the staging one.
+  - `background/managed.js`: network failures become "Can't reach Kareer right now…" (code `UNREACHABLE`).
+- Staging `ALLOWED_ORIGINS` now includes `chrome-extension://nmecdngjkldpmeijgaheilejifahniad`.
+- Pricing:
+  - New `src/core/offers.json` is the single source of names, amounts, credits and summaries. It's read by `server/src/offers.js` (payment checks, hosted page), the options page and the site.
+  - `POST /v1/purchases` accepts an optional `{ offer }` and returns `checkoutUrl` (Stripe) alongside the `/plans/<id>` fallback; there's a new `INVALID_OFFER` message.
+  - The options AI & billing card lists both plans, each with its own button straight to Stripe Checkout, plus a terms/all-sales-final line. View plans and Activate key are kept.
+  - The site has a new `/pricing/` page (nav, footer and Terms links; the home receipt reads `offers.json`). Its buy buttons point to install/setup because the key is claimed by the browser that started the purchase.
+- Tests: server 48/48 (direct checkout, invalid offer); unit 667/667 (offer purchase, unreachable copy); site 12/12 (pricing); Playwright `managed-ai` (9), `hosted-plans` and `shell` pass; D1 smoke, Wrangler dry-run and web-ext lint pass. Docs: README build table, `server/docs/stripe-setup.md`, `server/README.md`.
+
 ## Turn: 2026-10-31 - Staging checkout 503: `payment_method_types` rejected by Stripe (gateway)
 
 - Bug (gateway, live staging against the Stripe sandbox, API `2026-09-30.endive`): View plans → choosing an offer returned 503. Stripe answered 400 "The `payment_method_types` parameter is no longer supported when creating a Checkout Session. Payment methods are now managed from your Dashboard settings." The catch around session creation rethrew without logging, so the Worker only showed a generic 503.

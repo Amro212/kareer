@@ -9,6 +9,7 @@ globalThis.chrome = { runtime: {}, storage: { local: {
 const storage = await import('../../src/targets/extension/background/storage.js');
 const { proxyAiRequest } = await import('../../src/targets/extension/background/ai.js');
 const { managedOperation } = await import('../../src/targets/extension/background/managed.js');
+const { STAGING_GATEWAY_ORIGIN: GATEWAY } = await import('../../src/core/endpoints.js');
 const PAGE = { applicantProfile: {}, fieldsToFill: [{ fieldId: 'f1' }] };
 beforeEach(() => {
   for (const key of Object.keys(records)) delete records[key];
@@ -46,7 +47,7 @@ test('managed requests strip BYOK policy, use bounded streaming, and never fall 
   globalThis.fetch = async (url, options) => {
     if (url.endsWith('/v1/status')) return Response.json({ state: 'ready', total: 3 });
     calls++;
-    assert.equal(url, 'https://api.kareer.itsamro.me/v1/ai');
+    assert.equal(url, `${GATEWAY}/v1/ai`);
     assert.equal(options.headers.Authorization, 'Bearer private-license');
     const body = JSON.parse(options.body);
     assert.equal(body.operation, 'autofill');
@@ -93,9 +94,9 @@ test('purchase polling stays idle before purchase and retains the deadline throu
 test('hosted purchases keep claim credentials in background storage and reject foreign purchase links', async () => {
   const original = globalThis.fetch;
   const id = '11111111-1111-4111-8111-111111111111';
-  const purchase = { id, url: `https://api.kareer.itsamro.me/plans/${id}`, claimSecret: 'private-purchase-claim', expiresAt: new Date(Date.now() + 900000).toISOString() };
+  const purchase = { id, url: `${GATEWAY}/plans/${id}`, claimSecret: 'private-purchase-claim', expiresAt: new Date(Date.now() + 900000).toISOString() };
   globalThis.fetch = async (url, options) => {
-    assert.equal(url, 'https://api.kareer.itsamro.me/v1/purchases');
+    assert.equal(url, `${GATEWAY}/v1/purchases`);
     assert.deepEqual(JSON.parse(options.body), {});
     assert.equal(options.headers.Authorization, 'Bearer private-license');
     return Response.json(purchase);
@@ -107,6 +108,24 @@ test('hosted purchases keep claim credentials in background storage and reject f
     assert.equal(records['kr:secrets'].checkout.claimSecret, purchase.claimSecret);
     globalThis.fetch = async () => Response.json({ ...purchase, url: 'https://evil.test/plans/' + id });
     await assert.rejects(managedOperation('purchase'), /Purchase link unavailable/);
+  } finally { globalThis.fetch = original; }
+});
+
+test('choosing a plan in Settings opens Stripe Checkout directly and an unreachable gateway reads plainly', async () => {
+  const original = globalThis.fetch;
+  const id = '22222222-2222-4222-8222-222222222222';
+  const purchase = { id, url: `${GATEWAY}/plans/${id}`, checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_test_1', claimSecret: 'private-purchase-claim', expiresAt: new Date(Date.now() + 900000).toISOString() };
+  let sent;
+  globalThis.fetch = async (url, options) => { sent = JSON.parse(options.body); return Response.json(purchase); };
+  try {
+    assert.equal((await managedOperation('purchase', { offer: 'pack' })).url, purchase.checkoutUrl);
+    assert.deepEqual(sent, { offer: 'pack' });
+    assert.equal(records['kr:secrets'].checkout.id, id);
+    globalThis.fetch = async () => Response.json({ ...purchase, checkoutUrl: 'https://evil.test/pay' });
+    await assert.rejects(managedOperation('purchase', { offer: 'monthly' }), /Purchase link unavailable/);
+    globalThis.fetch = async () => { throw new TypeError('Failed to fetch'); };
+    await assert.rejects(managedOperation('status'), error => error.code === 'UNREACHABLE' && /Can't reach Kareer/.test(error.message) && !/Failed to fetch/.test(error.message));
+    assert.equal(records['kr:ai-status'].state, 'unavailable');
   } finally { globalThis.fetch = original; }
 });
 
@@ -131,7 +150,7 @@ test('all managed operations including both document paths use the shared metere
   const realFetch = globalThis.fetch, calls = [];
   globalThis.fetch = async (url, options) => {
     if (url.endsWith('/v1/status')) return Response.json({ state: 'ready', total: 10 });
-    assert.equal(url, 'https://api.kareer.itsamro.me/v1/ai');
+    assert.equal(url, `${GATEWAY}/v1/ai`);
     const body = JSON.parse(options.body); calls.push(body);
     assert.equal(body.model, undefined);
     return new Response(JSON.stringify({ type: 'result', content: body.operation.startsWith('document') ? '{"paragraphs":["Hello"]}' : 'text' }) + '\n', { headers: { 'Content-Type': 'application/x-ndjson' } });
@@ -181,7 +200,7 @@ test('claims use the purchase route, a first claim selects Kareer AI, and new in
   assert.equal((await storage.readAiStatus()).mode, 'byok');
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url, options) => {
-    assert.equal(url, 'https://api.kareer.itsamro.me/v1/purchases/purchase-1');
+    assert.equal(url, `${GATEWAY}/v1/purchases/purchase-1`);
     assert.equal(options.headers.Authorization, 'Bearer claim-secret');
     return Response.json({ status: 'complete', licenseKey: 'kr_new', aiStatus: { state: 'ready', total: 300, purchased: 300, flagged: false, subscriptions: [] } });
   };
@@ -205,7 +224,7 @@ test('Manage billing asks for a Stripe portal session separately and a billing e
     globalThis.fetch = async () => Response.json({ code: 'NO_BILLING', error: 'x' }, { status: 404 });
     await assert.rejects(managedOperation('billing'), /no billing account/);
     assert.equal(records['kr:ai-status'].state, 'ready');
-    assert.deepEqual(urls, ['https://api.kareer.itsamro.me/v1/billing-portal']);
+    assert.deepEqual(urls, [`${GATEWAY}/v1/billing-portal`]);
     await assert.rejects(managedOperation('checkout'), /Unknown billing operation/);
   } finally { globalThis.fetch = realFetch; }
 });

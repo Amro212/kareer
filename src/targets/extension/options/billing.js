@@ -1,6 +1,7 @@
 import { api, sendMessage } from '../shared/browser.js';
 import { MSG } from '../shared/protocol.js';
 import { SUPPORT_EMAIL } from '../../../core/endpoints.js';
+import OFFERS from '../../../core/offers.json' with { type: 'json' };
 
 const $ = id => document.getElementById(id);
 const labels = { ready: 'Ready', activationNeeded: 'Activation needed', outOfCredits: 'Out of credits', unavailable: 'Temporarily unavailable' };
@@ -100,12 +101,26 @@ export function setupBilling(snapshot) {
   action('disconnect-license', async () => {
     $('license-reveal').hidden = true; $('license-value').value = ''; await billing('disconnect'); await refresh(); $('managed-feedback').textContent = 'Key removed from this browser. Your paid entitlement is unchanged.'; });
   action('manage-billing', async () => { const result = await billing('billing'); await openBilling(result.url); $('managed-feedback').textContent = ''; });
-  action('start-checkout', async () => {
-    const result = await billing('purchase');
+  const checkout = offer => async () => {
+    const result = await billing('purchase', offer ? { offer } : {});
     await api.tabs.create({ url: result.url });
     $('managed-feedback').textContent = '';
     await poll();
-  });
+  };
+  $('ai-plans').replaceChildren(...Object.entries(OFFERS).map(([key, offer]) => {
+    const item = document.createElement('li'), copy = document.createElement('div');
+    const name = document.createElement('strong'), line = document.createElement('span'), button = document.createElement('button');
+    name.textContent = `${offer.name} · ${offer.price} ${offer.cadence}`;
+    line.textContent = offer.summary;
+    button.id = `buy-${key}`;
+    button.textContent = key === 'monthly' ? 'Subscribe' : 'Buy pack';
+    button.setAttribute('aria-label', `${button.textContent}: ${offer.name}, ${offer.price} ${offer.cadence}`);
+    copy.append(name, line);
+    item.append(copy, button);
+    return item;
+  }));
+  for (const key of Object.keys(OFFERS)) action(`buy-${key}`, checkout(key));
+  action('start-checkout', checkout());
   window.addEventListener('pagehide', () => clearTimeout(timer));
   api.runtime.onMessage.addListener(message => { if (message.type === MSG.STORAGE_CHANGED && message.aiStatus) draw(message.aiStatus); });
   void refresh();

@@ -98,3 +98,20 @@ test('a Stripe failure shows a plain retry message and leaves the purchase selec
   assert.doesNotMatch(html, /internal secret detail/);
   assert.equal(env.DB.sql.prepare('SELECT status FROM purchases').get().status, 'open');
 });
+
+test('a purchase created with an offer returns the Stripe Checkout URL directly and keeps the plans page as fallback', async t => {
+  const env = environment();
+  const calls = fakeStripe(t);
+  const response = await worker.fetch(request('/v1/purchases', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ offer: 'monthly' }) }), env, {});
+  const purchase = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(purchase.checkoutUrl, 'https://checkout.stripe.com/c/pay/cs_test_1');
+  assert.equal(purchase.url, `https://api.test/plans/${purchase.id}`);
+  const created = calls.find(c => c.url.endsWith('/v1/checkout/sessions'));
+  assert.equal(created.body.get('mode'), 'subscription');
+  assert.equal(created.body.get('client_reference_id'), purchase.id);
+  assert.equal(created.body.get('cancel_url'), `https://api.test/plans/${purchase.id}`);
+  const page = await worker.fetch(request(`/plans/${purchase.id}`), env, {});
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), /Kareer Monthly/);
+});

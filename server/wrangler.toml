@@ -19,7 +19,7 @@ STRIPE_PRICE_MONTHLY = "price_1UWMU7RSf0GhgGvmfq5qJRSx"
 STRIPE_PRICE_PACK = "price_1UWMU9RSf0GhgGvmFJ2Pi3ey"
 STRIPE_PORTAL_CONFIGURATION = "bpc_1UWMUNRSf0GhgGvmAezXi5vX"
 # Comma-separated chrome-extension://<id> origins of staging builds. Firefox origins are matched by pattern.
-ALLOWED_ORIGINS = ""
+ALLOWED_ORIGINS = "chrome-extension://nmecdngjkldpmeijgaheilejifahniad"
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "kareer-staging"

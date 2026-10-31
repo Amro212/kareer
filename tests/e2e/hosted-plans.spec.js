@@ -30,7 +30,7 @@ test('hosted offer selection shows current server terms and redirects through a 
     await page.setViewportSize({ width: 390, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('plans-mobile.png'), fullPage: true });
-    const pack = page.locator('.offer').filter({ has: page.getByRole('heading', { name: 'Credit pack', exact: true }) });
+    const pack = page.locator('.offer').filter({ has: page.getByRole('heading', { name: 'Kareer Credit Pack', exact: true }) });
     await pack.getByRole('button', { name: 'Buy credit pack' }).click();
     await expect(page).toHaveURL(purchase.url);
     await pack.getByRole('checkbox').focus();
