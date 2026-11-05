@@ -1,34 +1,19 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { MotionPresence, MotionSurface } from '@/components/ui/presence';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { TextReveal } from '@/components/ui/text-reveal';
 import { ScrollReveal } from '@/components/scroll-reveal';
-import { useChoreography } from '@/lib/cojeev-motion/choreography';
+import { Icon } from '@/components/site-icon';
+import { AutofillDemo } from '@/components/autofill-demo';
+import { DocumentStudio } from '@/components/document-studio';
 import privacySections from './privacy-content.json';
 import termsSections from './terms-content.json';
 import offers from '../../src/core/offers.json';
 
 const github = 'https://github.com/Amro212/kareer';
 const download = '/downloads/kareer-firefox.xpi';
-
-function Icon({ name = 'arrow', size = 20 }: { name?: string; size?: number }) {
-  const paths: Record<string, React.ReactNode> = {
-    arrow: <><path d="M5 12h14M13 6l6 6-6 6" /></>,
-    diagonal: <><path d="M6 18 18 6M6 6h12v12" /></>,
-    check: <path d="m5 12 4 4L19 6" />,
-    play: <path d="m9 5 10 7-10 7Z" />,
-    reset: <><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6" /></>,
-    file: <><path d="M14 3H5v18h14V8ZM14 3v6h5M8 13h8M8 17h5" /></>,
-    lock: <><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" /></>,
-    menu: <path d="M4 6h16M4 12h16M4 18h16" />,
-    close: <path d="m6 6 12 12M6 18 18 6" />,
-    plus: <path d="M12 5v14M5 12h14" />,
-    code: <><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16" /></>,
-  };
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name] || paths.arrow}</svg>;
-}
 
 function Brand() {
   return <a href="/" className="brand" aria-label="Kareer home"><img src="/assets/kareer-mark.svg" width="31" height="31" alt="" /><span>kareer<span className="brand-period">.</span></span></a>;
@@ -62,71 +47,13 @@ function Footer() {
   </footer>;
 }
 
-const sampleFields = [
-  { label: 'Full name', value: 'Alex Morgan', source: 'Saved', explanation: 'Copied directly from the fictional sample profile.' },
-  { label: 'Email address', value: 'alex@example.com', source: 'Saved', explanation: 'Copied directly from the fictional sample profile.' },
-  { label: 'University', value: 'Northfield University', source: 'Saved', explanation: 'Copied from the sample education record.' },
-  { label: 'Degree', value: 'BSc, Computer Science', source: 'Saved', explanation: 'Copied from the sample education record.' },
-  { label: 'Portfolio', value: 'alex.example.com', source: 'Saved', explanation: 'Copied directly from the fictional sample profile.' },
-  { label: 'Why this role?', value: 'I’d love to turn my experience building student tools into thoughtful products for more people.', source: 'Inferred', explanation: 'Inferred from the sample profile and job description.' },
-];
-
-function ApplicationDemo({ run, onStart }: { run: number; onStart: () => void }) {
-  const [phase, setPhase] = useState<'idle' | 'filling' | 'complete'>('idle');
-  const [filled, setFilled] = useState(0);
-  const [selected, setSelected] = useState<number | null>(null);
-  const { quiet, transition } = useChoreography();
-  const complete = phase === 'complete';
-  useEffect(() => {
-    if (!run) return;
-    setSelected(null);
-    if (quiet) { setFilled(sampleFields.length); setPhase('complete'); return; }
-    setFilled(0);
-    setPhase('filling');
-    const timers = sampleFields.map((_, index) => window.setTimeout(() => setFilled(index + 1), 250 + index * 140));
-    timers.push(window.setTimeout(() => setPhase('complete'), 1250));
-    return () => timers.forEach(window.clearTimeout);
-  }, [run, quiet]);
-  return <div id="demo" className={`demo-desk ${complete ? 'demo-done' : ''}`} aria-label="Interactive fictional application demo">
-    <div className="desk-note" aria-hidden="true">your résumé has<br />already answered this.<svg viewBox="0 0 70 45" width="70" height="45"><path d="M4 5q45-5 53 30m-12-7 13 9 6-15" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg></div>
-    <MotionSurface className="ghost-sheet ghost-back" initial={false} animate={{ rotate: quiet ? 0 : complete ? 0 : -7, x: complete ? 0 : -15, y: complete ? 0 : -12 }} transition={transition} aria-hidden="true"><span>YOUR NEXT APPLICATION</span><b>Full name</b><div /><b>Work experience</b><div /></MotionSurface>
-    <MotionSurface className="ghost-sheet ghost-front" initial={false} animate={{ rotate: quiet ? 0 : complete ? 0 : 5, x: complete ? 0 : 13, y: complete ? 0 : -5 }} transition={transition} aria-hidden="true"><span>AND THE ONE AFTER THAT</span><b>Full name. Again.</b><div /><b>Education. Again.</b><div /></MotionSurface>
-    <MotionSurface className="application-sheet" initial={false} animate={{ rotate: quiet || complete ? 0 : -1.2 }} transition={transition}>
-      <div className="sheet-browser"><span className="browser-dots" aria-hidden="true"><i /><i /><i /></span><span>your next opportunity</span><Icon name="lock" size={12} /></div>
-      <div className="sheet-content">
-        <div className="application-heading"><div><span className="sample-label">FICTIONAL COMPANY · SAMPLE DATA</span><h2>Junior Product Engineer</h2><span className="job-meta">Early career · Full-time · Your next chapter</span></div><div className="mini-mark" aria-hidden="true"><Icon name="file" size={24} /></div></div>
-        <div className="form-caption"><span>Your application</span><span>{filled}/{sampleFields.length} fields</span></div>
-        <div className="sample-form">
-          {sampleFields.map((field, index) => <div key={field.label} className={`sample-field ${index === 5 ? 'wide-field' : ''} ${filled > index ? 'field-filled' : ''}`}>
-            <div className="field-label"><span>{field.label}</span>{filled > index && <Tooltip><TooltipTrigger asChild><button className={`source-tag ${field.source === 'Inferred' ? 'inferred' : ''}`} aria-label={`Explain answer: ${field.label}`} aria-expanded={selected === index} aria-controls="answer-explanation" onClick={() => setSelected(selected === index ? null : index)}>{field.source === 'Saved' && <Icon name="check" size={11} />}{field.source}</button></TooltipTrigger><TooltipContent>Click to inspect this answer’s source</TooltipContent></Tooltip>}</div>
-            <div className={`sample-value ${filled > index ? 'has-value' : ''}`}>{filled > index ? <MotionSurface preset="fade" className="answer-value">{field.value}</MotionSurface> : <span className="blank-rule" aria-hidden="true" />}</div>
-          </div>)}
-        </div>
-        <div id="answer-explanation" className="answer-explanation" aria-live="polite">{selected !== null ? <><strong>{sampleFields[selected].source} answer.</strong> {sampleFields[selected].explanation}</> : complete ? <>Your facts stay yours. <strong>Click a source label to take a closer look.</strong></> : <>One profile. Another form. <strong>You know the drill.</strong></>}</div>
-        <div className="demo-controls"><div className={`demo-status ${complete ? 'status-complete' : ''}`} role="status"><span className="status-dot" />{complete ? 'Ready for your review' : phase === 'filling' ? 'A little less busywork…' : 'Let’s skip the retyping.'}</div><Button size="sm" className="demo-action" disabled={phase === 'filling'} aria-busy={phase === 'filling'} onClick={onStart}>{phase === 'filling' ? 'Filling…' : complete ? <><Icon name="reset" size={14} />Replay demo</> : <>Autofill <Icon name="arrow" size={15} /></>}</Button></div>
-      </div>
-    </MotionSurface>
-    <MotionPresence>{complete && <MotionSurface key="stamp" preset="settle" className="completion-stamp" aria-hidden="true"><Icon name="check" size={20} /> YOUR EVENING,<br />HANDED BACK.</MotionSurface>}</MotionPresence>
-    <div className="demo-footnote"><span>Interactive demo. Fictional data. Nothing submitted.</span><a href="/setup/">Get Kareer <Icon name="arrow" size={14} /></a></div>
-    <p className="demo-cost-note">Local tools are free. Optional Kareer AI credits.<br />Advanced users can bring their own key.</p>
-  </div>;
-}
-
-function DocumentPreview() {
-  return <Tabs defaultValue="resume" variant="notebook" className="document-preview">
-    <TabsList aria-label="Sample tailored document"><TabsTrigger value="resume">Résumé</TabsTrigger><TabsTrigger value="letter">Cover letter</TabsTrigger></TabsList>
-    <TabsContent value="resume"><div className="document-paper"><span className="document-note">ILLUSTRATIVE PREVIEW</span><h3>Alex Morgan</h3><p className="document-contact">alex@example.com · alex.example.com</p><hr /><h4>MADE FOR THIS OPPORTUNITY</h4><p>Computer science graduate who builds practical tools for real people. Bringing hands-on project experience and a thoughtful approach to product engineering.</p><h4>PROJECT EXPERIENCE</h4><strong>Campus Collective</strong><p>Built a student resource directory with accessible search and a responsive interface.</p><div className="document-highlight">Your experience. More relevant framing.</div><h4>EDUCATION</h4><p>BSc, Computer Science<br />Northfield University</p></div></TabsContent>
-    <TabsContent value="letter"><div className="document-paper"><span className="document-note">ILLUSTRATIVE PREVIEW</span><h3>A proper introduction.</h3><p className="document-contact">Alex Morgan · Junior Product Engineer</p><hr /><p>Dear hiring team,</p><p>Building tools for my campus taught me that the best products start with listening. I’d love to bring that same curiosity to your product engineering team.</p><p>For Campus Collective, I built an accessible student resource directory. Working through search, navigation, and feedback helped me connect technical decisions to the people using the product.</p><div className="document-highlight">Less blank-page panic. More your voice.</div><p>I’d welcome the chance to discuss how that experience could contribute to your team.</p><p>Best,<br />Alex Morgan</p></div></TabsContent>
-  </Tabs>;
-}
-
 const faqs = [
   ['What does Kareer cost?', 'Local features are free and open source. Launch pricing for managed AI is US$10/month for 1,000 credits, or US$5 once for 300 credits without a subscription. Each completed AI request costs one credit. Advanced BYOK remains available with separate provider charges. Managed purchases open after launch verification.'],
   ['Do I need an AI account?', 'No. Kareer AI activates with a reusable Kareer key that appears in Settings after you pay. No Kareer registration or AI provider account is needed. Advanced BYOK users can instead connect a personal OpenRouter key in Settings. Never paste credentials into this website or a job application.'],
   ['Which browsers can I use?', 'Firefox has a directly downloadable signed add-on. Chrome, Edge, and Brave can use a locally built unpacked extension; the Chrome Web Store link is not available yet. A userscript build is also available for compatible managers. See the setup guide for the current installation steps.'],
   ['Will it work on every application?', 'Kareer has dedicated adapters for Workday, Greenhouse, Lever, Ashby, and other systems, plus a generic form engine. Application forms vary and change, so some fields may need your attention. Review the result before sending your application.'],
   ['Does my résumé leave my browser?', 'Your profile and materials are stored locally. Managed AI sends relevant context through the Kareer gateway to OpenRouter and its downstream provider. Advanced BYOK sends context directly to your selected provider through OpenRouter. The gateway keeps billing and usage metadata, not prompts or generated content.'],
-  ['Can I review and edit the answers?', 'Yes. Kareer distinguishes saved, inferred, guessed, verified, and unresolved values so you can review the result. You can adjust answers and control Auto Continue and Auto Submit in settings. The website demo shows a simplified saved/inferred example.'],
+  ['Can I review and edit the answers?', 'Yes. Kareer distinguishes saved, inferred, guessed, verified, and unresolved values so you can review the result. You can adjust answers and control Auto Continue and Auto Submit in settings. The website demo shows all five with fictional data.'],
 ];
 
 function Home() {
@@ -145,20 +72,22 @@ function Home() {
     <section className="hero wrap" aria-labelledby="hero-title">
       <div className="hero-copy">
         <TextReveal as="h1" id="hero-title" className="hero-heading" text={'Job hunting\ntakes enough\nout of you.'} split="line" variant="fold" duration={760} stagger={100} onRevealStateChange={setHeadlinePhase} />
-        <ScrollReveal active={headlinePhase === 'done' && demoDone} duration={0.4} onComplete={() => setCopyDone(true)}><div data-hero-stage="copy"><p className="hero-description">The same forms. The same questions.<br />Your résumé, apparently, wasn’t enough.</p><p className="hero-explanation">Kareer fills repetitive applications and helps tailor your documents. Give the busywork less of your day.</p></div></ScrollReveal>
-        <ScrollReveal active={copyDone} duration={0.35}><div data-hero-stage="buttons"><div className="hero-actions"><Button size="lg" className="lime-button" onClick={startDemo}>Try the demo <Icon name="play" size={17} /></Button><a href="/setup/" className="text-link">Get Kareer <Icon name="arrow" size={18} /></a></div><div className="hero-reassurance"><Icon name="code" size={15} /><span>Open source. Local work. AI on your terms.</span></div></div></ScrollReveal>
+        <div className="hero-side">
+          <ScrollReveal active={demoDone} duration={0.22} onComplete={() => setCopyDone(true)}><div data-hero-stage="copy"><p className="hero-description">The same forms. The same questions.<br />Your résumé, apparently, wasn’t enough.</p><p className="hero-explanation">Kareer fills repetitive applications from your saved profile, shows where every answer came from, and helps tailor your documents.</p></div></ScrollReveal>
+          <ScrollReveal active={copyDone} duration={0.2}><div data-hero-stage="buttons"><div className="hero-actions"><Button size="lg" className="lime-button" onClick={startDemo}>Try the demo <Icon name="play" size={17} /></Button><a href="/setup/" className="text-link">Get Kareer <Icon name="arrow" size={18} /></a></div><div className="hero-reassurance"><Icon name="code" size={15} /><span>Open source. Local work. AI on your terms.</span></div></div></ScrollReveal>
+        </div>
       </div>
-      <ScrollReveal active={headlinePhase !== 'waiting'} onComplete={() => setDemoDone(true)}><div className="hero-demo-entrance" data-hero-stage="demo"><ApplicationDemo run={run} onStart={startDemo} /></div></ScrollReveal>
+      <ScrollReveal active={headlinePhase !== 'waiting'} onComplete={() => setDemoDone(true)}><div className="hero-demo-entrance" data-hero-stage="demo"><AutofillDemo run={run} onStart={startDemo} /></div></ScrollReveal>
     </section>
     <section className="compatibility wrap" id="supported-sites" aria-label="Supported application platforms"><p>Same ambition.<br /><strong>Different application portals.</strong></p><div className="ats-list"><span>workday</span><span>Greenhouse</span><span>lever<span className="lime-period">.</span></span><span>ashby</span><span className="ats-more">+ more</span></div></section>
     <section className="benefits-section wrap" id="how-it-works">
       <div className="section-intro"><TextReveal as="h2" text="You bring the ambition. We’ll handle the repetition." variant="rise" split="word" duration={480} stagger={22} /><p>For the fifth application of the evening.<br />And the one you almost didn’t start.</p></div>
-      <div className="benefits-grid" id="features"><ScrollReveal><div className="repetition-graphic" aria-hidden="true"><div className="repeat-slip slip-one"><span>FULL NAME</span><b>Alex Morgan</b><span className="repeat-comment">typed this already.</span></div><div className="repeat-slip slip-two"><span>FULL NAME</span><b>Alex Morgan</b><span className="repeat-comment">and here.</span></div><div className="repeat-slip slip-three"><span>FULL NAME</span><b>Alex Morgan</b><span className="repeat-comment">yep, here too.</span></div><div className="one-profile"><Icon name="check" size={20} /> One saved profile.</div></div></ScrollReveal><div className="benefit-list"><ScrollReveal><article><span className="benefit-symbol"><Icon name="file" /></span><div><h3>Meet the form. Skip the déjà vu.</h3><p>Save your profile once. Kareer matches your details to application fields across supported job sites.</p></div></article></ScrollReveal><ScrollReveal delay={0.08}><article><span className="benefit-symbol"><Icon name="code" /></span><div><h3>A little context goes a long way.</h3><p>For questions your profile can’t answer directly, AI uses your experience and the role’s context to help draft an answer.</p></div></article></ScrollReveal><ScrollReveal delay={0.16}><article><span className="benefit-symbol"><Icon name="check" /></span><div><h3>Your application. Your final say.</h3><p>See where answers came from, edit what needs attention, and choose how Kareer continues and submits.</p></div></article></ScrollReveal></div></div>
+      <div className="benefits-grid" id="features"><ScrollReveal><div className="repetition-graphic" aria-hidden="true"><div className="repeat-slip slip-one"><span>FULL NAME</span><b>Alex Morgan</b><span className="repeat-comment">typed this already.</span></div><div className="repeat-slip slip-two"><span>FULL NAME</span><b>Alex Morgan</b><span className="repeat-comment">and here.</span></div><div className="repeat-slip slip-three"><span>FULL NAME</span><b>Alex Morgan</b><span className="repeat-comment">yep, here too.</span></div><div className="one-profile"><Icon name="check" size={20} /> One saved profile.</div></div></ScrollReveal><div className="benefit-list"><ScrollReveal><article><span className="benefit-symbol"><Icon name="file" /></span><div><h3>Meet the form. Skip the déjà vu.</h3><p>Save your profile once. Kareer matches your details to application fields across supported job sites.</p></div></article></ScrollReveal><ScrollReveal delay={0.08}><article><span className="benefit-symbol"><Icon name="sparkles" /></span><div><h3>A little context goes a long way.</h3><p>For questions your profile can’t answer directly, AI uses your experience and the role’s context to help draft an answer.</p></div></article></ScrollReveal><ScrollReveal delay={0.16}><article><span className="benefit-symbol"><Icon name="shield" /></span><div><h3>Your application. Your final say.</h3><p>See where answers came from, edit what needs attention, and choose how Kareer continues and submits.</p></div></article></ScrollReveal></div></div>
     </section>
-    <section className="documents-section" id="documents"><div className="wrap documents-layout"><ScrollReveal><div className="documents-copy"><h2>The job is different.<br /><span>Your experience<br />is still yours.</span></h2><p>Turn your saved profile into a tailored résumé and cover letter. Keep your real experience, put the relevant parts forward, and edit until it sounds like you.</p><ul className="check-list"><li><Icon name="check" size={17} />Grounded in your saved profile</li><li><Icon name="check" size={17} />Editable drafts, saved locally</li><li><Icon name="check" size={17} />Download as PDF or Word</li></ul><a className="text-link" href="/setup/">Put your profile to work <Icon name="arrow" /></a><span className="margin-note" aria-hidden="true">less staring at<br />a blank document.</span></div></ScrollReveal><ScrollReveal delay={0.12}><div className="document-entrance"><DocumentPreview /></div></ScrollReveal></div></section>
+    <section className="documents-section" id="documents"><div className="wrap documents-layout"><ScrollReveal><div className="documents-copy"><h2>The job is different.<br /><span>Your experience<br />is still yours.</span></h2><p>Turn your saved profile into a tailored résumé and cover letter. Pick a posting to see the same real experience framed for each role, then edit until it sounds like you.</p><ul className="check-list"><li><Icon name="check" size={17} />Grounded in your saved profile</li><li><Icon name="check" size={17} />Editable drafts, saved locally</li><li><Icon name="check" size={17} />Download as PDF or Word</li></ul><a className="text-link" href="/setup/">Put your profile to work <Icon name="arrow" /></a><span className="margin-note" aria-hidden="true">less staring at<br />a blank document.</span></div></ScrollReveal><ScrollReveal delay={0.12}><div className="document-entrance"><DocumentStudio /></div></ScrollReveal></div></section>
     <section className="cost-section wrap" id="install"><div className="cost-copy"><h2>Less setup.<br />Clear spending.</h2><p>Local profile filling stays free. Add Kareer AI when you need answers and tailored documents, or use your own provider key.</p><a href="/pricing/" className="text-link">See pricing <Icon name="arrow" /></a></div><ScrollReveal delay={0.08}><div className="cost-receipt"><div className="receipt-heading"><Brand /><span>LAUNCH PRICING</span></div><div className="receipt-row"><span>{offers.monthly.credits.toLocaleString('en-US')} monthly credits</span><strong>{offers.monthly.price}/month</strong></div><div className="receipt-row"><span>{offers.pack.credits} non-expiring credits</span><strong>{offers.pack.price} once</strong></div><div className="receipt-row"><span>Local features</span><strong>Free</strong></div><p>One completed AI request costs one credit. A run can make multiple requests. Monthly credits expire each paid billing period; packs never expire. No automatic top-ups.</p><p>Managed purchases open after launch verification. Taxes may apply. All sales are final. See the <a href="/terms/">Terms of Service</a> before purchase.</p><div className="receipt-footer"><Icon name="check" size={17} /> No Kareer account. Reusable activation key.</div></div></ScrollReveal></section>
     <section className="privacy-section" id="privacy"><div className="wrap privacy-summary"><div className="privacy-heading"><Icon name="lock" size={35} /><h2>Local-first.<br />Clear about what leaves.</h2></div><div><p>Your profile and files live in your browser. Managed AI sends relevant context through Kareer’s gateway to OpenRouter and its provider; BYOK sends it directly. The gateway retains payment and request accounting metadata, never prompt bodies or generated content.</p><a href="/privacy/" className="text-link">Read the privacy policy <Icon name="arrow" /></a></div></div></section>
-    <section className="faq-section wrap" id="faq"><div><h2>Fair questions.</h2><p>Especially before giving a browser<br />extension your résumé.</p><a href={`${github}/issues`} className="text-link">Ask us on GitHub <Icon name="diagonal" size={16} /></a></div><div className="faq-list">{faqs.map(([question, answer]) => <details key={question}><summary>{question}<Icon name="plus" size={20} /></summary><p>{answer}</p></details>)}</div></section>
+    <section className="faq-section wrap" id="faq"><div><h2>Fair questions.</h2><p>Especially before giving a browser<br />extension your résumé.</p><a href={`${github}/issues`} className="text-link">Ask us on GitHub <Icon name="diagonal" size={16} /></a></div><Accordion type="single" collapsible appearance="faq" className="faq-list">{faqs.map(([question, answer]) => <AccordionItem key={question} value={question}><AccordionTrigger>{question}</AccordionTrigger><AccordionContent><p>{answer}</p></AccordionContent></AccordionItem>)}</Accordion></section>
     <section className="closing-section wrap"><div className="closing-rule" /><ScrollReveal><div><h2>Your next application<br />can be <span>a little less work.</span></h2><Button asChild size="lg" className="lime-button"><a href="/setup/">Get Kareer <Icon name="arrow" /></a></Button><p>Optional Kareer AI credits. Advanced BYOK. Your call.</p></div></ScrollReveal><div className="closing-stamp" aria-hidden="true">LESS BUSYWORK.<br />MORE POSSIBILITY.</div></section>
   </>;
 }
@@ -178,16 +107,43 @@ function Privacy() {
   return <div className="reading-page wrap"><div className="reading-intro"><a href="/" className="back-link">← Back to Kareer</a><h1>Your data.<br />Your business.</h1><p>What stays in your browser. What goes to AI providers.<br />And who has access to what.</p><span className="policy-date">Privacy policy · October 17, 2026 · Version 2.0</span></div><div className="reading-layout"><aside className="reading-toc"><span>THE PRIVACY POLICY</span>{privacySections.map(section => <a href={`#${section.id}`} key={section.id}>{section.title}</a>)}</aside><article className="reading-content policy-content">{privacySections.map(section => <section key={section.id} id={section.id}><h2>{section.title}</h2><div dangerouslySetInnerHTML={{ __html: section.html }} /></section>)}</article></div></div>;
 }
 
+function CreditEstimator() {
+  const [apps, setApps] = useState(40);
+  const low = apps, high = apps * 3;
+  const fit = high <= offers.pack.credits ? `A ${offers.pack.price} Credit Pack covers even the high end, and pack credits never expire.`
+    : high <= offers.monthly.credits ? 'Kareer Monthly covers even the high end.'
+    : 'Kareer Monthly covers the low end. At the high end, add a Credit Pack.';
+  return <section className="estimator" aria-labelledby="estimator-title">
+    <div className="estimator-copy"><h2 id="estimator-title">Estimate your credits.</h2><p>A rough guide, not a quote. Most applications take 1 to 3 AI requests. A form your saved profile fully answers takes none.</p></div>
+    <div className="estimator-card">
+      <label htmlFor="estimator-apps"><span>Applications with AI help each month</span><output htmlFor="estimator-apps">{apps}</output></label>
+      <input id="estimator-apps" type="range" min={5} max={500} step={5} value={apps} onChange={event => setApps(Number(event.target.value))} style={{ '--fill': `${(apps - 5) / 4.95}%` } as React.CSSProperties} />
+      <div className="estimate" aria-live="polite"><strong>{low.toLocaleString('en-US')}–{high.toLocaleString('en-US')}</strong><span>estimated credits a month</span></div>
+      <p className="estimate-fit">{fit}</p>
+      <p className="estimator-note">Each tailored résumé or cover letter is one more request. Automatic follow-ups count separately.</p>
+    </div>
+  </section>;
+}
+
 function Pricing() {
   const plans = [['monthly', offers.monthly], ['pack', offers.pack]] as const;
   return <div className="reading-page wrap"><div className="reading-intro"><a href="/" className="back-link">← Back to Kareer</a><h1>Simple pricing.<br />Pay only for AI.</h1><p>Filling forms from your saved profile is free.<br />Credits cover Kareer AI answers and tailored documents.</p></div>
-    <div className="pricing-grid">{plans.map(([key, offer]) => <section className="pricing-card" key={key} aria-labelledby={`plan-${key}`}>
+    <div className="pricing-grid">
+      <section className="pricing-card pricing-free" aria-labelledby="plan-free">
+        <h2 id="plan-free">Local tools</h2>
+        <p className="pricing-price"><strong>Free</strong> <span>always</span></p>
+        <ul className="pricing-includes">{['Fill fields from your saved profile', 'Reuse your saved answers', 'Add and fill work and education rows', 'See where every answer came from', 'Profile and documents stay in your browser'].map(item => <li key={item}><Icon name="check" size={15} />{item}</li>)}</ul>
+        <Button asChild variant="outline"><a href="/setup/">Install Kareer <Icon name="arrow" size={16} /></a></Button>
+      </section>
+      {plans.map(([key, offer]) => <section className="pricing-card" key={key} aria-labelledby={`plan-${key}`}>
       <h2 id={`plan-${key}`}>{offer.name}</h2>
       <p className="pricing-price"><strong>{offer.price}</strong> <span>{key === 'monthly' ? 'per month' : 'one-time'}</span></p>
       <p className="pricing-credits">{offer.credits.toLocaleString('en-US')} credits{key === 'monthly' ? ' each month' : ''}</p>
+      <p className="pricing-plus"><Icon name="sparkles" size={15} /><span>Everything in Local tools, plus AI answers to open questions and tailored résumés and cover letters.</span></p>
       <p>{offer.terms}</p>
       <Button asChild className="lime-button"><a href="/setup/#browser" aria-describedby="buy-in-extension">Get Kareer to buy <Icon name="arrow" size={16} /></a></Button>
     </section>)}</div>
+    <CreditEstimator />
     <div className="reading-content pricing-notes"><section id="buy-in-extension"><h2>Buying starts in the extension.</h2><ol><li>Install Kareer and open <strong>Settings → AI &amp; billing</strong>.</li><li>Choose a plan. Stripe’s secure checkout opens for that plan.</li><li>Kareer activates on its own once the payment is confirmed. Your key is created for the browser you bought from, which is why purchases start there and not on this website.</li></ol><p>Kareer is a form-filling assistant: it fills job application forms from your profile, and you review and submit each application yourself. One completed AI request uses one credit. Credits are usage units with no cash value. Taxes may apply.</p><p>All sales are final: no refunds, except where the law requires one. Read the <a href="/terms/">Terms of Service</a>. Questions or a lost key: <a href="mailto:amromousa8@gmail.com">amromousa8@gmail.com</a>.</p></section></div>
   </div>;
 }

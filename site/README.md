@@ -30,8 +30,10 @@ regenerating it from the rendered page.
 
 ## Cojeev sources
 
-Button, Tabs, Tooltip, Motion Presence/Surface, Spinner and Text Reveal come from
-the public [Cojeev registry](https://cojeev.com/ui/docs/). Their actual transitive
+Button, Tabs, Tooltip, Motion Presence/Surface, Spinner, Text Reveal, Icon, Badge,
+Switch, Accordion and Progress come from the public [Cojeev registry](https://cojeev.com/ui/docs/).
+Icon's full Lucide pack (`lucide-icon-data.ts`) is a lazy chunk only fetched for names
+outside the authored set; the site uses authored names only. Their actual transitive
 imports are in `src/lib/`, with component styles in `src/styles/cojeev/`.
 `src/lib/cojeev/PROVENANCE.json` records source URLs and upstream content hashes.
 The registry's embedded font data was extracted to local WOFF2 files; the font
@@ -41,9 +43,11 @@ CSS only changes those URLs. MIT notices and the font OFL licenses are retained.
 settings persist only presentation preferences on this public website, independently
 of extension storage. Reduced-motion preferences override animation.
 
-Custom demo code coordinates field state and the two paper-sheet transforms;
-Cojeev provides headline reveal, presence transitions, buttons, tabs, source-label
-tooltips, and their interaction motion. `ScrollReveal` composes its existing
+`src/components/autofill-demo.tsx` scripts the hero run (23 fictional fields, row
+matching and creation, one unresolved field resolved by a second pass) and
+`src/components/document-studio.tsx` swaps tailored documents per fictional posting.
+Cojeev provides headline reveal, presence transitions, buttons, tabs, badges, switches,
+progress, accordion and their interaction motion. `ScrollReveal` composes its existing
 MotionSurface and visibility handling for one-time entrances; hero typography
 uses TextReveal's folded-line preset. No second animation engine is installed.
 

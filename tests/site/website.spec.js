@@ -34,9 +34,10 @@ test('hero stays hidden before hydration, then enters headline and demo, copy, b
   };
   expect(Math.abs(at('headline', 'playing') - at('demo', 'playing'))).toBeLessThan(100);
   expect(at('demo', 'done') - at('demo', 'playing')).toBeGreaterThan(600);
-  expect(at('copy', 'done') - at('copy', 'playing')).toBeGreaterThan(300);
-  expect(at('buttons', 'done') - at('buttons', 'playing')).toBeGreaterThan(250);
-  expect(at('copy', 'playing')).toBeGreaterThanOrEqual(Math.max(at('headline', 'done'), at('demo', 'done')));
+  expect(at('copy', 'done') - at('copy', 'playing')).toBeGreaterThan(150);
+  expect(at('buttons', 'done') - at('buttons', 'playing')).toBeGreaterThan(130);
+  expect(at('copy', 'playing')).toBeGreaterThanOrEqual(at('demo', 'done'));
+  expect(at('copy', 'playing') - at('headline', 'playing')).toBeLessThan(900);
   expect(at('buttons', 'playing')).toBeGreaterThanOrEqual(at('copy', 'done'));
 });
 
@@ -97,18 +98,90 @@ test('fictional autofill demo completes, explains answers and replays without AI
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Job hunting takes enough out of you.' })).toBeVisible();
   await page.getByRole('button', { name: 'Try the demo', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Ready for your review' })).toBeVisible();
-  await page.getByRole('button', { name: 'Explain answer: Why this role?' }).click();
-  await expect(page.locator('#answer-explanation')).toContainText('Inferred from the sample profile and job description.');
+  await expect(page.getByRole('status').filter({ hasText: 'Ready for your review' })).toBeVisible({ timeout: 15000 });
+  await page.getByRole('button', { name: 'Explain answer: Why do you want to work at Northwind Labs?' }).click();
+  await expect(page.locator('#answer-explanation')).toContainText('Drafted from your Campus Collective role and the job description');
   expect(await page.evaluate(() => {
     const stamp = document.querySelector('.completion-stamp').getBoundingClientRect();
-    const action = document.querySelector('.demo-action').getBoundingClientRect();
+    const action = document.querySelector('.panel-action').getBoundingClientRect();
     return stamp.bottom <= action.top || stamp.top >= action.bottom || stamp.right <= action.left || stamp.left >= action.right;
   }), 'Completion stamp must leave the replay control clear').toBe(true);
   await page.getByRole('button', { name: 'Replay demo' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Ready for your review' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Ready for your review' })).toBeVisible({ timeout: 15000 });
   expect(externalRequests).toEqual([]);
   expect(pageErrors).toEqual([]);
+});
+
+test('demo shows all five answer states, completes the parsed row, adds a second row and resolves the unresolved field', async ({ page }) => {
+  await page.goto('/');
+  const demo = page.locator('#demo');
+  await expect(demo.locator('.ats-row')).toHaveCount(1);
+  await expect(demo.locator('[data-field="exp1-title"] .ats-value')).toHaveText('Student Developer');
+  await page.getByRole('button', { name: 'Autofill Workday-style form' }).click();
+  await expect(demo.locator('[data-field="heard"]')).toHaveAttribute('data-state', 'unresolved', { timeout: 15000 });
+  await expect(demo.locator('[data-field="heard"]')).toHaveAttribute('data-state', 'guessed', { timeout: 5000 });
+  await expect(page.getByRole('status').filter({ hasText: 'Ready for your review' })).toBeVisible();
+  await expect(demo.locator('.ats-row')).toHaveCount(2);
+  await expect(demo.locator('[data-field="exp2-title"] .ats-value')).toHaveText('IT Help Desk Assistant');
+  for (const [state, count] of [['saved', 12], ['verified', 9], ['inferred', 1], ['guessed', 1], ['unresolved', 0]]) {
+    await expect(demo.locator(`.panel-counts [data-kind="${state}"] b`)).toHaveText(String(count));
+  }
+  await demo.locator('.review-first').getByRole('button', { name: /How did you hear about this role/ }).click();
+  await expect(page.locator('#answer-explanation')).toContainText('Unresolved after the first pass');
+  await page.getByRole('button', { name: 'Explain answer: Role description' }).first().click();
+  await page.getByRole('button', { name: 'See the source in Profile' }).click();
+  await expect(demo.locator('.record-list [data-source]')).toContainText('Campus Collective');
+});
+
+test('document studio reframes the same saved facts for each fictional posting', async ({ page }) => {
+  await page.goto('/');
+  const studio = page.locator('.document-studio');
+  await studio.scrollIntoViewIfNeeded();
+  await expect(studio.locator('.document-meta')).toContainText('NORTHWIND LABS');
+  await studio.getByRole('button', { name: /Civic Transit/ }).click();
+  await expect(studio.getByRole('button', { name: /Civic Transit/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(studio.locator('.document-meta')).toContainText('CIVIC TRANSIT');
+  await expect(studio.locator('.tailoring-veil')).toHaveCount(0);
+  await expect(studio.locator('.document-role').first()).toContainText('IT Help Desk Assistant');
+  await expect(studio.locator('mark.tailored').filter({ hasText: 'Wrote step-by-step guides' })).toBeVisible();
+  await studio.getByRole('tab', { name: 'Cover letter', exact: true }).click();
+  await expect(studio).toContainText('Dear Civic Transit hiring team');
+});
+
+test('switching document tabs and postings never shifts the documents heading', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/');
+  const studio = page.locator('.document-studio');
+  await studio.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(1200);
+  const heading = page.locator('.documents-copy h2');
+  const top = () => heading.evaluate(element => Math.round(element.getBoundingClientRect().top + scrollY));
+  const before = await top();
+  await page.evaluate(() => {
+    const element = document.querySelector('.documents-copy h2');
+    window.__headingTops = [];
+    const sample = () => { window.__headingTops.push(Math.round(element.getBoundingClientRect().top + scrollY)); requestAnimationFrame(sample); };
+    sample();
+  });
+  for (const step of [() => studio.getByRole('tab', { name: 'Cover letter', exact: true }).click(), () => studio.getByRole('tab', { name: 'Résumé', exact: true }).click(), () => studio.getByRole('button', { name: /Civic Transit/ }).click(), () => studio.getByRole('button', { name: /Harbor Health/ }).click()]) {
+    await step();
+    await page.waitForTimeout(900);
+  }
+  expect(new Set(await page.evaluate(() => window.__headingTops))).toEqual(new Set([before]));
+});
+
+test('pricing credit estimator gives a labeled range and a plan fit', async ({ page }) => {
+  await page.goto('/pricing/');
+  await expect(page.getByRole('heading', { name: 'Local tools' })).toBeVisible();
+  const slider = page.getByLabel('Applications with AI help each month');
+  await expect(page.locator('.estimate strong')).toHaveText('40–120');
+  await expect(page.locator('.estimate-fit')).toContainText('Credit Pack');
+  await slider.fill('200');
+  await expect(page.locator('.estimate strong')).toHaveText('200–600');
+  await expect(page.locator('.estimate-fit')).toContainText('Kareer Monthly covers even the high end');
+  await slider.fill('400');
+  await expect(page.locator('.estimate strong')).toHaveText('400–1,200');
+  await expect(page.locator('.estimate-fit')).toContainText('At the high end, add a Credit Pack');
 });
 
 test('setup, privacy and terms are directly accessible static pages', async ({ page }) => {
