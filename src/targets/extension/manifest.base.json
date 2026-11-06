@@ -1,11 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Kareer",
-  "description": "AI job application autofill with multi-step application support.",
+  "description": "Fill job application forms from your saved profile, review AI-assisted answers, and prepare tailored application documents.",
   "permissions": [
     "storage",
     "unlimitedStorage",
-    "tabs",
     "webNavigation"
   ],
   "host_permissions": [
