@@ -27,8 +27,8 @@ checks concurrency, settlement and revocation against local workerd/D1.
 | `STRIPE_SECRET_KEY` | secret | Restricted `rk_test_…`/`rk_live_…` key. Its prefix decides which `livemode` events are accepted. |
 | `STRIPE_WEBHOOK_SECRET` | secret | `whsec_…` signing secret of the endpoint registered for this environment. |
 | `SALES_ENABLED` | var | `"true"` opens purchases. Everything else returns `SALES_DISABLED`. |
-| `STRIPE_PRICE_MONTHLY` | var | Price ID of the US$10 monthly price (1,000 credits). |
-| `STRIPE_PRICE_PACK` | var | Price ID of the US$5 one-time price (300 credits). |
+| `STRIPE_PRICE_MONTHLY` | var | Price ID of the US$9.99 monthly price (1,000 credits). |
+| `STRIPE_PRICE_PACK` | var | Price ID of the US$4.99 one-time price (300 credits). |
 | `STRIPE_PORTAL_CONFIGURATION` | var | Optional `bpc_…`; empty uses the account default. |
 | `STRIPE_PAYMENT_METHOD_CONFIGURATION` | var | Optional `pmc_…` passed to Checkout; unset uses the Dashboard default payment methods. |
 | `ALLOWED_ORIGINS` | var | Comma-separated `chrome-extension://<id>` origins. Firefox origins match by pattern. |

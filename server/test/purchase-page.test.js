@@ -31,8 +31,8 @@ test('hosted plans preserve a private background claim while validating consent 
   const page = await worker.fetch(request(`/plans/${purchase.id}`), env, {});
   const html = await page.text();
   assert.equal(page.status, 200);
-  assert.match(html, /US\$10/);
-  assert.match(html, /US\$5/);
+  assert.match(html, /US\$9\.99/);
+  assert.match(html, /US\$4\.99/);
   assert.match(html, /All sales are final/);
   assert.match(html, /https:\/\/kareer\.itsamro\.me\/terms\//);
   assert.match(html, /amromousa8@gmail\.com/);

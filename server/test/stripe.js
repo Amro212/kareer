@@ -39,18 +39,18 @@ export const event = (type, object, { created = Math.floor(Date.now() / 1000), l
 
 export const packSession = (id, purchase, extra = {}) => ({
   id, object: 'checkout.session', status: 'complete', payment_status: 'paid', mode: 'payment', livemode: false, currency: 'usd',
-  amount_subtotal: 500, amount_total: 565, total_details: { amount_discount: 0, amount_tax: 65 }, customer: 'cus_pack', payment_intent: 'pi_pack',
+  amount_subtotal: 499, amount_total: 564, total_details: { amount_discount: 0, amount_tax: 65 }, customer: 'cus_pack', payment_intent: 'pi_pack',
   client_reference_id: purchase, metadata: { kareer_purchase: purchase, offer: 'pack' },
-  line_items: { data: [{ price: { id: 'price_pack' }, quantity: 1, amount_subtotal: 500 }] }, ...extra,
+  line_items: { data: [{ price: { id: 'price_pack' }, quantity: 1, amount_subtotal: 499 }] }, ...extra,
 });
 
 const DAY = 86400;
 export const PERIOD = Math.floor(Date.now() / 1000) - 3600;
 export const invoice = (id, { reason = 'subscription_create', start = PERIOD, purchase, customer = 'cus_month', ...extra } = {}) => ({
-  id, object: 'invoice', billing_reason: reason, status: 'paid', livemode: false, currency: 'usd', subtotal: 1000, total: 1130,
+  id, object: 'invoice', billing_reason: reason, status: 'paid', livemode: false, currency: 'usd', subtotal: 999, total: 1129,
   customer, total_discount_amounts: [],
   parent: { type: 'subscription_details', subscription_details: { subscription: 'sub_1', metadata: purchase ? { kareer_purchase: purchase } : {} } },
-  lines: { data: [{ amount: 1000, quantity: 1, pricing: { type: 'price_details', price_details: { price: 'price_monthly', product: 'prod_monthly' } }, period: { start, end: start + 30 * DAY } }] },
+  lines: { data: [{ amount: 999, quantity: 1, pricing: { type: 'price_details', price_details: { price: 'price_monthly', product: 'prod_monthly' } }, period: { start, end: start + 30 * DAY } }] },
   ...extra,
 });
 export const subscription = ({ status = 'active', purchase, customer = 'cus_month', end = PERIOD + 30 * DAY, ...extra } = {}) => ({
@@ -59,7 +59,7 @@ export const subscription = ({ status = 'active', purchase, customer = 'cus_mont
   items: { data: [{ price: { id: 'price_monthly' }, quantity: 1, current_period_start: end - 30 * DAY, current_period_end: end }] }, ...extra,
 });
 export const monthlySession = (id, purchase, extra = {}) => ({
-  ...packSession(id, purchase), mode: 'subscription', payment_intent: null, customer: 'cus_month', amount_subtotal: 1000, amount_total: 1130,
+  ...packSession(id, purchase), mode: 'subscription', payment_intent: null, customer: 'cus_month', amount_subtotal: 999, amount_total: 1129,
   metadata: { kareer_purchase: purchase, offer: 'monthly' }, subscription: subscription({ purchase }), invoice: invoice('in_1', { purchase }),
-  line_items: { data: [{ price: { id: 'price_monthly' }, quantity: 1, amount_subtotal: 1000 }] }, ...extra,
+  line_items: { data: [{ price: { id: 'price_monthly' }, quantity: 1, amount_subtotal: 999 }] }, ...extra,
 });

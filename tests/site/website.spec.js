@@ -210,10 +210,10 @@ test('pricing lists both plans from the shared offers and explains that purchase
   await expect(page).toHaveURL(/\/pricing\/$/);
   await expect(page.getByRole('heading', { name: 'Simple pricing. Pay only for AI.' })).toBeVisible();
   const monthly = page.locator('.pricing-card').filter({ has: page.getByRole('heading', { name: 'Kareer Monthly' }) });
-  await expect(monthly).toContainText('US$10');
+  await expect(monthly).toContainText('US$9.99');
   await expect(monthly).toContainText('1,000 credits each month');
   const pack = page.locator('.pricing-card').filter({ has: page.getByRole('heading', { name: 'Kareer Credit Pack' }) });
-  await expect(pack).toContainText('US$5');
+  await expect(pack).toContainText('US$4.99');
   await expect(pack).toContainText('300 credits');
   await expect(pack.getByRole('link', { name: /Get Kareer to buy/ })).toHaveAttribute('href', '/setup/#browser');
   await expect(page.locator('#buy-in-extension')).toContainText('All sales are final');
@@ -258,7 +258,7 @@ test('document tabs, FAQ disclosures and keyboard activation work', async ({ pag
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'A proper introduction.' })).toBeVisible();
   await page.getByText('What does Kareer cost?', { exact: true }).click();
-  await expect(page.getByText('US$10/month for 1,000 credits', { exact: false }).last()).toBeVisible();
+  await expect(page.getByText('US$9.99/month for 1,000 credits', { exact: false }).last()).toBeVisible();
 });
 
 test('hero typography and scroll entrances animate once without shifting section layout', async ({ page }) => {

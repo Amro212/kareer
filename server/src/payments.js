@@ -46,12 +46,17 @@ async function boundWallet(db, customer, purchaseId) {
   fail('UNBOUND_PURCHASE', 409);
 }
 
+function expectedSubtotal(env, offer) {
+  const sandboxCents = offer === 'monthly' ? env.STRIPE_MONTHLY_CENTS : env.STRIPE_PACK_CENTS;
+  return !live(env) && sandboxCents ? Number(sandboxCents) : OFFERS[offer].cents;
+}
+
 function verifySession(env, s) {
   const items = s.line_items?.data || [];
   const offer = offerForPrice(env, idOf(items[0]?.price));
   if (!offer || items.length !== 1 || s.livemode !== live(env) || s.currency !== 'usd' || s.metadata?.offer !== offer
     || s.mode !== (offer === 'monthly' ? 'subscription' : 'payment') || items[0].quantity !== 1
-    || items[0].amount_subtotal !== OFFERS[offer].cents || s.amount_subtotal !== OFFERS[offer].cents || s.total_details?.amount_discount) invalid();
+    || items[0].amount_subtotal !== s.amount_subtotal || s.amount_subtotal !== expectedSubtotal(env, offer) || s.total_details?.amount_discount) invalid();
   return offer;
 }
 function verifyInvoice(env, invoice) {
@@ -59,7 +64,7 @@ function verifyInvoice(env, invoice) {
   const line = lines[0];
   const price = idOf(line?.pricing?.price_details?.price) || idOf(line?.price);
   if (lines.length !== 1 || invoice.livemode !== live(env) || invoice.currency !== 'usd' || offerForPrice(env, price) !== 'monthly'
-    || line.quantity !== 1 || line.amount !== OFFERS.monthly.cents || invoice.subtotal !== OFFERS.monthly.cents
+    || line.quantity !== 1 || line.amount !== invoice.subtotal || invoice.subtotal !== expectedSubtotal(env, 'monthly')
     || (invoice.total_discount_amounts || []).some(d => d.amount > 0) || !line.period?.end) invalid();
   return line;
 }

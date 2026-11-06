@@ -17,6 +17,9 @@ workers_dev = true
 SALES_ENABLED = "true"
 STRIPE_PRICE_MONTHLY = "price_1UWMU7RSf0GhgGvmfq5qJRSx"
 STRIPE_PRICE_PACK = "price_1UWMU9RSf0GhgGvmFJ2Pi3ey"
+# Keep the existing sandbox prices usable while production uses the public offers.
+STRIPE_MONTHLY_CENTS = "1000"
+STRIPE_PACK_CENTS = "500"
 STRIPE_PORTAL_CONFIGURATION = "bpc_1UWMUNRSf0GhgGvmAezXi5vX"
 # Comma-separated chrome-extension://<id> origins of staging builds. Firefox origins are matched by pattern.
 ALLOWED_ORIGINS = "chrome-extension://nmecdngjkldpmeijgaheilejifahniad"
@@ -34,16 +37,15 @@ crons = ["*/5 * * * *"]
 
 [env.production]
 name = "kareer-gateway"
-# itsamro.me is not a Cloudflare zone yet, so this custom domain cannot deploy until the zone
-# moves to Cloudflare. Gateway URLs live in src/core/endpoints.js. See docs/stripe-setup.md.
+# Production custom domain on the itsamro.me Cloudflare zone.
 routes = [{ pattern = "api.kareer.itsamro.me", custom_domain = true }]
 [env.production.vars]
 SALES_ENABLED = "false"
-STRIPE_PRICE_MONTHLY = "CONFIGURE_LIVE_PRICE_MONTHLY"
-STRIPE_PRICE_PACK = "CONFIGURE_LIVE_PRICE_PACK"
+STRIPE_PRICE_MONTHLY = "price_1UWPR5EtOcLz9YXYE5UGvPSf"
+STRIPE_PRICE_PACK = "price_1UWPR5EtOcLz9YXYKqbmTJJB"
 # Empty uses the live account's default portal configuration.
 STRIPE_PORTAL_CONFIGURATION = ""
-ALLOWED_ORIGINS = "CONFIGURE_CHROME_EXTENSION_ORIGIN"
+ALLOWED_ORIGINS = "chrome-extension://gnbkbdbpajlpclicmapjghpodogkgblf"
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "kareer-production"

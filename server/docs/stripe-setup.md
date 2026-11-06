@@ -2,12 +2,12 @@
 
 How to configure, run and verify Kareer's Stripe billing. Kareer is a form-filling
 assistant: the extension fills job application forms that the user reviews and
-submits. Stripe sells two offers, both in USD:
+submits. Stripe sells two production offers, both in USD:
 
 | Offer | Price | Credits | Stripe price |
 |---|---|---|---|
-| Monthly plan | US$10 / month | 1,000 per paid month, expire at period end | recurring, `lookup_key=kareer_monthly_usd`, `metadata.offer=monthly`, `metadata.credits=1000` |
-| Credit pack | US$5 once | 300, never expire | one-time, `lookup_key=kareer_pack_usd`, `metadata.offer=pack`, `metadata.credits=300` |
+| Monthly plan | US$9.99 / month | 1,000 per paid month, expire at period end | recurring, `lookup_key=kareer_monthly_usd`, `metadata.offer=monthly`, `metadata.credits=1000` |
+| Credit pack | US$4.99 once | 300, never expire | one-time, `lookup_key=kareer_pack_usd`, `metadata.offer=pack`, `metadata.credits=300` |
 
 All sales are final. Lost keys are recovered by email to amromousa8@gmail.com;
 there is no automated recovery.
@@ -29,9 +29,21 @@ Checkout Sessions. To pin a specific payment method configuration, set
 `STRIPE_PAYMENT_METHOD_CONFIGURATION = "pmc_…"` in the environment's vars; when
 unset (or not a `pmc_` ID) Stripe uses the account default.
 
-Staging uses these in `server/wrangler.toml` `[env.staging.vars]`. Production
-values are `CONFIGURE_…` placeholders until live-mode objects exist; the
-production deploy script refuses to run while any remain.
+Staging uses these in `server/wrangler.toml` `[env.staging.vars]`. The existing
+sandbox prices are US$10 and US$5. Staging explicitly validates those amounts
+while production validates the public prices in `src/core/offers.json`.
+
+## Production Stripe objects
+
+| What | ID |
+|---|---|
+| Monthly price | `price_1UWPR5EtOcLz9YXYE5UGvPSf` |
+| Credit pack price | `price_1UWPR5EtOcLz9YXYKqbmTJJB` |
+| Webhook destination | `we_1UYcLPEtOcLz9YXYep38mQSL` → `https://api.kareer.itsamro.me/webhooks/stripe` |
+
+The live webhook uses snapshot events and API version `2026-09-30.endive`.
+Install its signing secret and the other production secrets before verifying
+delivery and opening sales.
 
 ## Webhook events
 
@@ -104,7 +116,7 @@ npx wrangler d1 migrations apply DB --env production --remote
 
 ```sh
 npm run deploy:staging      # https://kareer-gateway-staging.amromousa8.workers.dev
-npm run deploy:production   # blocked while production placeholders remain
+npm run deploy:production   # validates production config before deploying
 ```
 
 Staging is the sandbox and runs with `SALES_ENABLED="true"`. Production stays
@@ -150,18 +162,10 @@ prices; payment checks reject any amount that doesn't match.
 
 ### Production domain
 
-Production uses the custom domain `api.kareer.itsamro.me`. Workers custom domains
-need the parent zone on Cloudflare, and `itsamro.me` is currently on Namecheap DNS
-(`kareer.itsamro.me` is a CNAME to GitHub Pages). Either:
-
-1. Move `itsamro.me` to Cloudflare: add the zone, recreate every Namecheap record
-   (including `kareer` CNAME → GitHub Pages, DNS only), then switch the Namecheap
-   nameservers. The existing `routes` entry then deploys as is; or
-2. Keep Namecheap and serve production from `kareer-gateway.amromousa8.workers.dev`:
-   set `workers_dev = true` and remove `routes` in `[env.production]`, and set the
-   repository variable `KAREER_GATEWAY_ORIGIN=https://kareer-gateway.amromousa8.workers.dev`
-   (or change `PRODUCTION_GATEWAY_ORIGIN` in `src/core/endpoints.js`). Production
-   builds, the extension's host permission and the store upload check all use it.
+Production uses the Worker custom domain `api.kareer.itsamro.me` in the active
+Cloudflare zone `itsamro.me`. The public site remains on GitHub Pages via the
+DNS-only `kareer` CNAME. The API hostname has a scoped CAA record allowing
+`pki.goog`, the issuer of its Worker custom-domain certificate.
 
 ## Local webhook forwarding
 

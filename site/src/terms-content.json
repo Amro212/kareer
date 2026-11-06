@@ -17,7 +17,7 @@
   {
     "id": "credits",
     "title": "Kareer AI and Credits",
-    "html": "<p>Filling forms from your saved profile is free. Kareer AI is optional and paid. The monthly plan is US$10 per month and adds 1,000 credits each paid month; unused monthly credits expire when that month ends. The credit pack is US$5 once for 300 credits that do not expire. Taxes may apply. Payment is handled by Stripe.</p><p>Credits are usage units for Kareer AI, not money. They have no cash value and cannot be transferred, exchanged or redeemed for cash. Each completed AI request uses one credit, and one autofill run can make several requests. Failed or invalid results use no credit. Prices and credit amounts can change for future purchases; they never change for a purchase you already made.</p>"
+    "html": "<p>Filling forms from your saved profile is free. Kareer AI is optional and paid. The monthly plan is US$9.99 per month and adds 1,000 credits each paid month; unused monthly credits expire when that month ends. The credit pack is US$4.99 once for 300 credits that do not expire. Taxes may apply. Payment is handled by Stripe.</p><p>Credits are usage units for Kareer AI, not money. They have no cash value and cannot be transferred, exchanged or redeemed for cash. Each completed AI request uses one credit, and one autofill run can make several requests. Failed or invalid results use no credit. Prices and credit amounts can change for future purchases; they never change for a purchase you already made.</p>"
   },
   {
     "id": "subscriptions",
