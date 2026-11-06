@@ -6,7 +6,7 @@ const site = fileURLToPath(new URL('.', import.meta.url));
 
 export async function stagePublicFiles(source, output) {
   for (const entry of await fs.readdir(source, { withFileTypes: true })) {
-    if (['assets', 'downloads', 'CNAME', 'version.json', 'firefox-updates.json'].includes(entry.name)
+    if (['assets', 'downloads', 'purchase', 'CNAME', 'version.json', 'firefox-updates.json'].includes(entry.name)
       || /^google[a-f0-9]+\.html$/.test(entry.name)) {
       await fs.cp(path.join(source, entry.name), path.join(output, entry.name), { recursive: true });
     }
