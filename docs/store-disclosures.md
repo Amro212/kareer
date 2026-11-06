@@ -2,14 +2,15 @@
 
 ## Listing
 
-Kareer fills job applications from a local profile, saved answers and optional AI.
+Kareer helps users fill the job application they choose from a local profile,
+saved answers and optional AI. Users start Autofill and review the results.
 It supports repeatable career history, editable answers and local résumé/cover
 letter documents. Review saved, inferred, guessed and unresolved answers. Auto
 Submit is off by default. Supported workflows should be demonstrated with test
 data; do not promise every ATS, guaranteed accuracy or automatic hiring outcomes.
 
-Local tools are free. Optional managed AI requires payment: US$10/month for 1,000
-credits per paid billing period, or US$5 for 300 non-expiring credits. Taxes may
+Local tools are free. Optional managed AI requires payment: US$9.99/month for 1,000
+credits per paid billing period, or US$4.99 for 300 non-expiring credits. Taxes may
 apply. One completed AI request costs one credit; runs can make multiple requests,
 including automatic follow-ups, repairs and rewrites. Monthly credits expire at
 period end and are spent first. Cancel through Manage billing (Stripe's customer
@@ -24,6 +25,11 @@ with separate provider charges. The userscript remains advanced BYOK only.
 - Local: applicant profile, résumé files, generated documents, answers, notes,
   settings and sessions in extension-controlled storage.
 - Transmitted for AI: relevant profile/notes/job context and application questions.
+  This can include saved contact/location/salary/demographic/disability information
+  and the current application URL. Extension AI requires the unchecked-by-default
+  data-sharing agreement in Settings; withdrawing it stops new AI requests while
+  preserving local filling. All OpenRouter generation paths request provider data
+  collection denied; this does not promise zero retention by every service.
   Managed: background → Kareer Cloudflare gateway → OpenRouter/provider. BYOK:
   privileged host → OpenRouter/selected provider. External provider terms apply.
 - Persistent gateway data: billing IDs, hashed keys/claim secrets, grants and
@@ -47,8 +53,16 @@ content; don't mark all collection as absent because storage is mostly local.
 Chrome: use `dist/kareer-chrome.zip`, developer contact/2FA, real screenshots with
 fictional data and the disclosure above. After approval record the real listing URL
 in website installation instructions and the checklist; never invent a store ID.
-Firefox: keep `kareer@amro212` signed unlisted distribution and the current update
-URL. Run the signed artifact on real Firefox and verify host permissions and AI.
+Firefox: preserve the existing `kareer@amro212` self-hosted/unlisted update channel
+until a public AMO package/channel is deliberately prepared. A listed submission
+needs the appropriate update configuration, source archive and real Firefox host
+permission/AI verification; the current unsigned self-hosted XPI is not a public
+AMO release.
+
+Current Chrome copy, permission explanations, category mapping, reviewer
+instructions and graphic paths: `docs/chrome-web-store.md`. Current blockers and
+policy evidence: `docs/store-policy-review.md`. The candidate is not cleared for
+submission; do not replace missing live evidence with mock tests or wording.
 
 No submission has been performed by generating this file. Complete
 `docs/release-checklist.json` before distributing managed clients or enabling sales.
