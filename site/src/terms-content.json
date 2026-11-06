@@ -2,7 +2,7 @@
   {
     "id": "about",
     "title": "What Kareer Is",
-    "html": "<p>Kareer is a form-filling assistant for job applications. It runs in your browser, fills application forms from the profile you save, and can draft answers and documents with AI. You review what it fills and you submit every application yourself. Kareer does not apply to jobs for you, does not submit applications on its own unless you turn on Auto Submit, and does not promise interviews, offers or any hiring outcome.</p><p>These terms are offered by Kareer, an independent project run by an individual based in Ontario, Canada. By installing Kareer or buying Kareer AI credits, you agree to them.</p>"
+    "html": "<p>Kareer is a form-filling assistant for job applications. You choose an application, run Autofill and review the answers and documents it helps prepare from your saved profile. You control whether to continue or submit. Auto Submit is off by default; if you enable it, Kareer can submit the current application as part of the run you started. Kareer does not find and apply to jobs in the background, and does not promise interviews, offers or any hiring outcome.</p><p>These terms are offered by Kareer, an independent project run by an individual based in Ontario, Canada. By installing Kareer or buying Kareer AI credits, you agree to them.</p>"
   },
   {
     "id": "your-responsibility",

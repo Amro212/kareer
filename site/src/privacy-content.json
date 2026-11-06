@@ -12,7 +12,12 @@
   {
     "id": "ai-transmission",
     "title": "Information Transmitted When AI Features Are Used",
-    "html": "<p>Autofill, option discovery, repairs, rewrites and document writing send relevant profile facts, resume context, notes, job descriptions, questions and choices over HTTPS. Automatic follow-ups can make additional requests.</p><p>Managed AI travels from the privileged extension background through https://api.kareer.itsamro.me (Cloudflare Worker) to OpenRouter and its downstream provider. The gateway holds prompts and outputs in memory during the bounded request and does not persist them. Advanced BYOK travels directly from the privileged background or userscript host to OpenRouter and your selected provider.</p><p>External providers have their own terms and retention practices; Kareer does not promise zero external retention. Avoid unnecessary sensitive information. Local features remain available without paid AI.</p>"
+    "html": "<p>Autofill, option discovery, repairs, rewrites and document writing send relevant profile facts, resume context, notes, job descriptions, questions and choices over HTTPS. Page-answer requests include the current application page URL and hostname. Profile context can include contact details, location, salary expectations and optional demographic or disability answers you have saved. These are used to answer application questions, not for advertising or general browsing-history analytics. Automatic follow-ups can make additional requests.</p><p>Managed AI travels from the privileged extension background through https://api.kareer.itsamro.me (Cloudflare Worker) to OpenRouter and its downstream provider. The gateway holds prompts and outputs in memory during the bounded request and does not persist them. Advanced BYOK travels directly from the privileged background or userscript host to OpenRouter and your selected provider.</p><p>External providers have their own terms and retention practices; Kareer does not promise zero external retention. Avoid unnecessary sensitive information. Local features remain available without paid AI.</p>"
+  },
+  {
+    "id": "limited-use",
+    "title": "Chrome Web Store Limited Use",
+    "html": "<p>Kareer's use and transfer of user data adheres to the Chrome Web Store User Data Policy, including the Limited Use requirements. Data is used only to provide and support the disclosed job-application features, including their security and reliability. Kareer does not use or transfer applicant data for advertising, data brokerage, creditworthiness or lending. Human access is limited to your explicit consent for specific data, security investigations, legal obligations, or aggregated and anonymized internal operations as permitted by that policy.</p>"
   },
   {
     "id": "api-keys",
@@ -27,7 +32,7 @@
   {
     "id": "credits",
     "title": "Credits, Cancellation and Charging",
-    "html": "<p>Launch pricing is US$10/month for 1,000 credits per paid billing period, or US$5 once for 300 non-expiring credits. Taxes may apply. Monthly credits expire at period end and are spent first. Cancel in Manage billing; the paid allowance remains until expiry. Packs need no subscription and remain after cancellation. Failed renewals grant nothing new.</p><p>Each completed AI request costs one credit, including automatic follow-ups, repairs and rewrites. A run may use multiple credits. Oversized inputs, provider errors, timeouts, truncated or invalid completions are not charged. A validated, settled completion remains charged if delivery fails or an application rejects it. Server outputs cannot be recovered because they are not stored. Explicit retry is a new request and may spend another credit. No trial or automatic top-ups. Credits are usage units with no cash value. All sales are final, except where the law requires a refund. A refunded or disputed payment loses the credits it bought; a disputed payment also pauses new purchases until the dispute is resolved. See the <a href=\"/terms/\">Terms of Service</a>.</p>"
+    "html": "<p>Launch pricing is US$9.99/month for 1,000 credits per paid billing period, or US$4.99 once for 300 non-expiring credits. Taxes may apply. Monthly credits expire at period end and are spent first. Cancel in Manage billing; the paid allowance remains until expiry. Packs need no subscription and remain after cancellation. Failed renewals grant nothing new.</p><p>Each completed AI request costs one credit, including automatic follow-ups, repairs and rewrites. A run may use multiple credits. Oversized inputs, provider errors, timeouts, truncated or invalid completions are not charged. A validated, settled completion remains charged if delivery fails or an application rejects it. Server outputs cannot be recovered because they are not stored. Explicit retry is a new request and may spend another credit. No trial or automatic top-ups. Credits are usage units with no cash value. All sales are final, except where the law requires a refund. A refunded or disputed payment loses the credits it bought; a disputed payment also pauses new purchases until the dispute is resolved. See the <a href=\"/terms/\">Terms of Service</a>.</p>"
   },
   {
     "id": "retention",
@@ -37,7 +42,7 @@
   {
     "id": "permissions",
     "title": "Browser Permissions",
-    "html": "<p>storage and unlimitedStorage save local profiles, files, settings and privileged credentials. tabs and webNavigation coordinate sessions, navigation and embedded form agents. Website access scans and fills applications including frames. Host permissions permit HTTPS to the gateway and OpenRouter; Firefox requests website access at setup. No debugger, stealth logic, spoofing, external browser controller or CAPTCHA solving is used.</p>"
+    "html": "<p>storage and unlimitedStorage save local profiles, files, settings and privileged credentials. webNavigation coordinates sessions, navigation and embedded form agents. Website access scans and fills applications including frames; it also supplies the tab information needed to open the correct application panel, without a separate tabs permission. Host permissions permit HTTPS to the gateway and OpenRouter; Firefox requests website access at setup. No debugger, stealth logic, spoofing, external browser controller or CAPTCHA solving is used.</p>"
   },
   {
     "id": "telemetry",
@@ -47,7 +52,7 @@
   {
     "id": "control",
     "title": "Your Controls",
-    "html": "<p>Edit or delete local profiles and files in the extension. Save your Kareer key (Settings → Show key) and activate it after reinstalling to regain your credits; this does not restore files. Lost your key? Email <a href=\"mailto:amromousa8@gmail.com\">amromousa8@gmail.com</a> from the address you paid with. Uninstalling or removing a key does not cancel billing. Use Manage billing to cancel or update payment details. Never post personal information or keys in bug reports.</p>"
+    "html": "<p>Before using extension AI features, review the data-sharing disclosure in Settings and select the agreement checkbox. It starts unchecked, including for existing saved credentials. You can turn it off to stop new AI requests without deleting your profile, files or credentials; this cannot recall data already sent. Kareer requests OpenRouter provider routing with data collection denied. This is a provider-routing restriction, not a promise of zero retention by every service.</p><p>Edit or delete local profiles and files in the extension. Save your Kareer key (Settings → Show key) and activate it after reinstalling to regain your credits; this does not restore files. Lost your key? Email <a href=\"mailto:amromousa8@gmail.com\">amromousa8@gmail.com</a> from the address you paid with. Uninstalling or removing a key does not cancel billing. Use Manage billing to cancel or update payment details. Never post personal information or keys in bug reports.</p>"
   },
   {
     "id": "third-parties",
