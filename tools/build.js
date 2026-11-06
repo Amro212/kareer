@@ -244,6 +244,8 @@ function writeExtensionStaticFiles(pkg, browser) {
       delete manifest.browser_specific_settings.gecko.update_url;
     }
   }
+  // AMO rejects listed (Mozilla-hosted) uploads that declare update_url.
+  if (process.argv.includes('--amo')) delete manifest.browser_specific_settings?.gecko?.update_url;
   fs.mkdirSync(outDir, { recursive: true });
   fs.copyFileSync(path.join(rootDir, 'LICENSE'), path.join(outDir, 'LICENSE'));
   fs.writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8');
