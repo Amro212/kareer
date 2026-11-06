@@ -1,6 +1,6 @@
 import { api } from '../shared/browser.js';
 import { readApiKey, updateStoredRecord, readAiStatus } from './storage.js';
-import { proxyAiRequest } from './ai.js';
+import { proxyAiRequest, AI_CONSENT_MESSAGE } from './ai.js';
 import { readStored, writeStored, removeStored, listStored } from './documents.js';
 import { buildMaterialSource, validateMaterial, materialJobKey, mergeMaterialRewrite, MATERIAL_KINDS } from '../../../core/materials-model.js';
 import { DEFAULT_SETTINGS } from '../../../core/constants.js';
@@ -34,7 +34,9 @@ export { materialWritingInstructions };
 
 export async function writingRequest(input, system, signal) {
   const instructions = `Write in English. ${system}`;
-  if ((await readAiStatus()).mode === 'managed') {
+  const status = await readAiStatus();
+  if (!status.dataConsent) throw new Error(AI_CONSENT_MESSAGE);
+  if (status.mode === 'managed') {
     // The gateway rebuilds these instructions from the document kind; only the structured input is sent.
     const result = await proxyAiRequest({ operation: input.rewrite ? 'documentRewrite' : 'document', input }, signal.signal);
     if (result.error) throw new Error(result.error);
@@ -50,6 +52,7 @@ export async function writingRequest(input, system, signal) {
     response = await fetch('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', signal: signal.signal,
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify({ model, stream: true, temperature: 0.25, max_tokens: 7000,
+        provider: { data_collection: 'deny' },
         response_format: { type: 'json_object' },
         messages: [{ role: 'system', content: instructions }, { role: 'user', content: JSON.stringify(input) }] }) });
   } finally { clearTimeout(timer); }

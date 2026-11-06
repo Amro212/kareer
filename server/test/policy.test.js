@@ -23,6 +23,7 @@ test('only structured Kareer operations are accepted; client messages, policy an
   assert.equal(body.model, 'google/gemini-2.5-flash-lite');
   assert.equal(body.max_tokens, 4096);
   assert.deepEqual(body.provider.max_price, { prompt: 0.1, completion: 0.4 });
+  assert.equal(body.provider.data_collection, 'deny');
   assert.equal(body.reasoning.enabled, false);
   assert.deepEqual(body.messages.map(m => m.role), ['system', 'user']);
   assert.deepEqual(JSON.parse(body.messages[1].content).fieldsToFill.map(f => f.fieldId), ['f1']);

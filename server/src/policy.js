@@ -98,7 +98,7 @@ export function upstreamBody(request) {
     model: 'google/gemini-2.5-flash-lite', messages: buildAiMessages(request.operation, request.input),
     max_tokens: limits[request.operation], temperature: request.operation === 'fieldRewrite' ? 0.6 : 0.2,
     reasoning: { enabled: false }, plugins: [],
-    provider: { max_price: { prompt: 0.1, completion: 0.4 }, require_parameters: true, allow_fallbacks: true },
+    provider: { max_price: { prompt: 0.1, completion: 0.4 }, require_parameters: true, allow_fallbacks: true, data_collection: 'deny' },
     ...(request.operation === 'fieldRewrite' ? {} : { response_format: { type: 'json_object' } }),
     stream: false,
   };

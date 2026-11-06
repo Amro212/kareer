@@ -1,6 +1,6 @@
 import { api, isFirefox } from '../shared/browser.js';
 import { MSG, BROADCAST_KEYS } from '../shared/protocol.js';
-import { buildSnapshot, applySet, applyDelete, applyProfilePatch, writeSecret, clearSecret, hasApiKey, readAiStatus } from './storage.js';
+import { buildSnapshot, applySet, applyDelete, applyProfilePatch, writeSecret, clearSecret, hasApiKey, readAiStatus, writeAiDataConsent } from './storage.js';
 import { managedOperation } from './managed.js';
 import { proxyAiRequest } from './ai.js';
 import { bindTabSession, getTabSession, watchTabLifecycle } from './tabs.js';
@@ -9,6 +9,9 @@ import { recordNavigation, readNavigation, clearNavigation } from './navigation.
 import { putDocument, getDocument, documentMeta, deleteDocument } from './documents.js';
 import { handleMaterials } from './materials.js';
 import { encodeDocument, decodeDocument } from '../shared/binary.js';
+
+// Chrome otherwise exposes storage.local, including credentials, to content scripts.
+const storageAccess = api.storage.local.setAccessLevel?.({ accessLevel: 'TRUSTED_CONTEXTS' }) || Promise.resolve();
 
 /**
  * MV3 workers are terminated when idle, so this file holds no durable state.
@@ -50,6 +53,10 @@ const handlers = {
   },
 
   [MSG.AI_REQUEST]: ({ options }) => proxyAiRequest(options),
+  [MSG.AI_DATA_CONSENT]: async ({ accepted }) => {
+    await writeAiDataConsent(accepted);
+    return readAiStatus();
+  },
   [MSG.AI_STATUS]: async () => {
     if ((await readAiStatus()).mode === 'managed') {
       // A purchase paid while Settings was closed activates on the next status check.
@@ -147,13 +154,13 @@ function forwardToFrame(tabId, { frameId, command }) {
 api.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handler = handlers[message?.type];
   if (!handler) return false;
-  const privileged = [MSG.SECRET_WRITE, MSG.SECRET_CLEAR, MSG.BILLING];
+  const privileged = [MSG.SECRET_WRITE, MSG.SECRET_CLEAR, MSG.BILLING, MSG.AI_DATA_CONSENT];
   if (privileged.includes(message.type) && !sender?.url?.startsWith(api.runtime.getURL(''))) {
     sendResponse({ error: 'Open Kareer Settings to manage credentials and purchases.' });
     return false;
   }
 
-  Promise.resolve(handler(message, sender))
+  storageAccess.then(() => handler(message, sender))
     .then(sendResponse)
     .catch((err) => sendResponse({ error: err?.message || String(err) }));
 

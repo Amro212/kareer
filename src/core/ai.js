@@ -53,6 +53,7 @@ async function requestAiJson({ model, input, temperature = 0.2, timeout = AUTOFI
   const payload = JSON.stringify({
     model,
     messages: buildAiMessages(operation, input),
+    provider: { data_collection: 'deny' },
     response_format: { type: 'json_object' },
     temperature,
   });
@@ -135,6 +136,7 @@ export async function testConnection() {
         { role: 'user', content: "Ping test. Respond with the single word 'OK'." },
       ],
       max_tokens: 10,
+      provider: { data_collection: 'deny' },
     });
 
     const response = await sendAiRequest({
@@ -310,6 +312,7 @@ export async function rewriteNarrativeField({ fieldLabel, currentValue, feedback
   const payload = JSON.stringify({
     model,
     messages: buildAiMessages('fieldRewrite', input),
+    provider: { data_collection: 'deny' },
     temperature: 0.6,
   });
 

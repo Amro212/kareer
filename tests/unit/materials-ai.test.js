@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 globalThis.chrome = { runtime: {}, storage: { local: { async get(key) {
-  if (key === null) return { 'kr:secrets': { apiKey: 'test-key' }, 'kr:settings': { model: 'google/gemini-2.5-flash-lite' } };
-  return { [key]: key === 'kr:secrets' ? { apiKey: 'test-key' } : { model: 'google/gemini-2.5-flash-lite' } };
+  if (key === null) return { 'kr:secrets': { apiKey: 'test-key', aiDataConsent: 1 }, 'kr:settings': { model: 'google/gemini-2.5-flash-lite' } };
+  return { [key]: key === 'kr:secrets' ? { apiKey: 'test-key', aiDataConsent: 1 } : { model: 'google/gemini-2.5-flash-lite' } };
 } } } };
 const { writingRequest, materialWritingInstructions } = await import('../../src/targets/extension/background/materials.js');
 const realFetch = globalThis.fetch;
@@ -13,6 +13,7 @@ test('materials request structured JSON for resumes and cover letters', async ()
   globalThis.fetch = async (_url, options) => {
     const body = JSON.parse(options.body);
     assert.equal(body.response_format?.type, 'json_object');
+    assert.equal(body.provider.data_collection, 'deny');
     return Response.json({ choices: [{ message: { content: '{}' } }] });
   };
   try {

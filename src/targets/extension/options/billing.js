@@ -4,9 +4,10 @@ import { SUPPORT_EMAIL } from '../../../core/endpoints.js';
 import OFFERS from '../../../core/offers.json' with { type: 'json' };
 
 const $ = id => document.getElementById(id);
-const labels = { ready: 'Ready', activationNeeded: 'Activation needed', outOfCredits: 'Out of credits', unavailable: 'Temporarily unavailable' };
+const labels = { ready: 'Ready', consentNeeded: 'AI sharing off', activationNeeded: 'Activation needed', outOfCredits: 'Out of credits', unavailable: 'Temporarily unavailable' };
 let bound = false, timer;
 function draw(status) {
+  if (!$('ai-data-consent').disabled) $('ai-data-consent').checked = status?.dataConsent === true;
   const managed = status?.mode !== 'byok';
   $('ai-mode').value = managed ? 'managed' : 'byok';
   $('managed-ai').hidden = !managed;
@@ -80,6 +81,18 @@ export function setupBilling(snapshot) {
   draw(snapshot.aiStatus || { mode: 'byok', state: snapshot.hasApiKey ? 'ready' : 'activationNeeded' });
   if (bound) return;
   bound = true;
+  $('ai-data-consent').onchange = async () => {
+    const checkbox = $('ai-data-consent');
+    checkbox.disabled = true;
+    try {
+      const result = await sendMessage({ type: MSG.AI_DATA_CONSENT, accepted: checkbox.checked });
+      if (result?.error) throw new Error(result.error);
+      $('ai-consent-feedback').textContent = checkbox.checked ? 'AI data sharing enabled.' : 'AI data sharing off. Saved profile filling still works.';
+    } catch (error) {
+      checkbox.checked = !checkbox.checked;
+      $('ai-consent-feedback').textContent = error.message;
+    } finally { checkbox.disabled = false; }
+  };
   $('ai-mode').onchange = async () => {
     const snapshot = await sendMessage({ type: MSG.SNAPSHOT });
     await sendMessage({ type: MSG.STORAGE_SET, key: 'kr:settings', value: { ...snapshot.data['kr:settings'], aiMode: $('ai-mode').value } });

@@ -1,5 +1,4 @@
 import { test, expect } from './support/fixtures.js';
-import { STAGING_GATEWAY_ORIGIN as GATEWAY } from '../../src/core/endpoints.js';
 
 async function mockGateway(kr, credits = 5) {
   await kr.worker.evaluate(({ credits, gateway }) => {
@@ -32,7 +31,7 @@ async function mockGateway(kr, credits = 5) {
       }
       throw Error('Unexpected mocked route');
     };
-  }, { credits, gateway: GATEWAY });
+  }, { credits, gateway: kr.gatewayOrigin });
 }
 
 test('a new installation defaults to your own key until Kareer AI is released', async ({ kr }) => {
@@ -123,7 +122,7 @@ test('purchase auto-claim is privileged and mode switching preserves the saved p
   await kr.seed();
   await mockGateway(kr);
   const page = await kr.context.newPage();
-  await kr.context.route(`${GATEWAY}/plans/**`, route => route.fulfill({ body: 'Test plans only' }));
+  await kr.context.route(`${kr.gatewayOrigin}/plans/**`, route => route.fulfill({ body: 'Test plans only' }));
   await page.goto(`${kr.optionsUrl()}#connection`);
   await expect(page.locator('#ai-mode')).toHaveValue('byok');
   await expect(page.locator('#advanced-ai')).toHaveAttribute('open', '');
@@ -162,7 +161,7 @@ test('an unreachable gateway shows a plain message instead of a raw network erro
   await kr.worker.evaluate(gateway => {
     const original = globalThis.fetch;
     globalThis.fetch = async (url, options) => String(url).startsWith(`${gateway}/`) ? Promise.reject(new TypeError('Failed to fetch')) : original(url, options);
-  }, GATEWAY);
+  }, kr.gatewayOrigin);
   const options = await kr.context.newPage();
   await options.goto(`${kr.optionsUrl()}#connection`);
   await options.locator('#buy-pack').click();
@@ -213,7 +212,7 @@ test('exhausted managed mode keeps local filling and does not spend the personal
 test('managed cover letter generation and document rewrite share the metered gateway', async ({ kr }) => {
   await kr.seed({ apiKey: '', settings: { aiMode: 'managed' }, profile: { fullName: 'Test Applicant', email: 'test@example.com',
     workExperiences: [{ id: 'work1', title: 'Engineer', company: 'Example', description: 'Built useful software.' }] } });
-  await kr.worker.evaluate(() => chrome.storage.local.set({ 'kr:secrets': { licenseKey: 'private-managed-license' }, 'kr:ai-status': { state: 'ready', total: 5, purchased: 5 } }));
+  await kr.worker.evaluate(() => chrome.storage.local.set({ 'kr:secrets': { licenseKey: 'private-managed-license', aiDataConsent: 1 }, 'kr:ai-status': { state: 'ready', total: 5, purchased: 5 } }));
   await mockGateway(kr);
   const page = await kr.context.newPage();
   await page.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=coverLetter`);
@@ -236,7 +235,7 @@ test('managed cover letter generation and document rewrite share the metered gat
 test('popup controls stay usable while a free managed usage refresh is pending', async ({ kr }) => {
   await kr.seed({ apiKey: '', settings: { aiMode: 'managed' } });
   await kr.worker.evaluate(async () => {
-    await chrome.storage.local.set({ 'kr:secrets': { licenseKey: 'private-managed-license' }, 'kr:ai-status': { state: 'ready', total: 5, purchased: 5 } });
+    await chrome.storage.local.set({ 'kr:secrets': { licenseKey: 'private-managed-license', aiDataConsent: 1 }, 'kr:ai-status': { state: 'ready', total: 5, purchased: 5 } });
     const original = globalThis.fetch;
     globalThis.__usageWaiters = [];
     globalThis.fetch = (url, options) => String(url).endsWith('/v1/status')

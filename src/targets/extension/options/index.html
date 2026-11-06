@@ -30,6 +30,13 @@
 <header class="page-heading" id="options-heading" hidden><h1 id="options-title">Settings</h1><p class="hint">Manage the settings for your application workspace.</p></header>
 
     <section id="connection" hidden>
+      <section class="ai-usage" aria-labelledby="ai-data-heading">
+        <h2 id="ai-data-heading">Choose whether to share data with AI</h2>
+        <p id="ai-data-details">AI features send your saved profile context, work history, notes, application questions, job description and current application URL to OpenRouter and its AI providers. Profile context can include contact details, location, salary expectations and optional demographic or disability answers you have saved. Kareer AI sends this through Kareer's gateway; your own OpenRouter key sends it directly. Providers process the data under their own retention policies.</p>
+        <p>Use AI only with information you want processed this way. Saved profile filling and local files remain available with AI sharing off. Turning sharing off stops new AI requests; it cannot recall data already sent. <a href="https://kareer.itsamro.me/privacy/" target="_blank" rel="noopener noreferrer">Read the privacy policy</a>.</p>
+        <label class="checkbox-row"><input type="checkbox" id="ai-data-consent" aria-describedby="ai-data-details ai-consent-feedback"> I agree to this data sharing for AI features.</label>
+        <p id="ai-consent-feedback" class="feedback" role="status" aria-live="polite"></p>
+      </section>
       <div id="managed-ai">
         <div class="ai-introduction">
           <div class="ai-introduction-copy">
