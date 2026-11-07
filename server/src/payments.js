@@ -238,7 +238,7 @@ export async function selectPurchase(db, env, stripe, id, offer, origin, now = D
       adaptive_pricing: { enabled: false },
       ...(/^pmc_/.test(env.STRIPE_PAYMENT_METHOD_CONFIGURATION || '') ? { payment_method_configuration: env.STRIPE_PAYMENT_METHOD_CONFIGURATION } : {}),
       expires_at: Math.floor((row.created_at + SESSION_EXPIRY) / 1000),
-      success_url: `${SITE_ORIGIN}/setup/?purchase=complete`, cancel_url: `${origin}/plans/${id}`,
+      success_url: `${SITE_ORIGIN}/purchase/complete/`, cancel_url: `${origin}/plans/${id}`,
       ...(customer ? { customer, customer_update: { address: 'auto', name: 'auto' } } : monthly ? {} : { customer_creation: 'always' }),
       ...(monthly ? { subscription_data: { metadata } } : { payment_intent_data: { metadata } }),
     }, { idempotencyKey: `kareer-purchase:${id}:${offer}` });

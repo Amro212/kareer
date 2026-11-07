@@ -799,6 +799,13 @@ const STYLES = `
   white-space: nowrap;
 }
 
+.kr-model-chip.kr-credit-chip {
+  color: var(--kr-text-1);
+  font-size: 12px;
+  font-weight: 650;
+  flex: none;
+}
+
 .kr-header-actions {
   display: flex;
   align-items: center;
@@ -1999,6 +2006,8 @@ async function executeAutofillFlow() {
   pauseFormObserver();
 
   try {
+    if (isManagedAi() && !hasAi()) await platform.ai.refresh().catch(() => {});
+    if (token !== autofillGeneration) return;
     refreshDetectedFields();
     deduplicateFields(detectedFieldsCache);
     const settings = getSettings();
@@ -2098,21 +2107,22 @@ async function executeAutofillFlow() {
     if (currentJob?.pendingHydration) {
       await currentJob.pendingHydration;
     }
-    let aiResponse = { answers: [] };
+    let aiResponse = { answers: [] }, aiFailure;
+    const onAiFailure = error => { aiFailure = error; };
     if (normalized.length) {
       autofillProgress.statusText = detectAdapter().resolveAnswer || remoteFields.some(field => field.ats?.adapter) ? 'Resolving application answers...' : `Generating answers with AI (${aiLabel()})...`;
       updatePanelDOM();
-      aiResponse = await generateAutofillAnswers(normalized, { jobContext: currentJob });
+      aiResponse = await generateAutofillAnswers(normalized, { jobContext: currentJob, onAiFailure });
     }
     if (token !== autofillGeneration) return;
     if (window.location.href !== runUrl) throw new Error('Page changed during autofill. Inspect the current step before retrying.');
     if (['captcha', 'confirmation'].includes(classifyPage().type)) throw new Error(classifyPage().reason);
-    if (aiResponse.answers.some(answer => answer.searchQuery)) {
+    if (!aiFailure && aiResponse.answers.some(answer => answer.searchQuery)) {
       autofillProgress.statusText = 'Searching for missing combobox options...';
       updatePanelDOM();
-      aiResponse = await resolveComboboxSearchAnswers(aiTargetFields, aiResponse, {jobContext:currentJob,isCurrent:()=>token===autofillGeneration && window.location.href===runUrl});
+      aiResponse = await resolveComboboxSearchAnswers(aiTargetFields, aiResponse, {jobContext:currentJob,isCurrent:()=>token===autofillGeneration && window.location.href===runUrl,onAiFailure});
       if (token !== autofillGeneration) return;
-      aiResponse = await resolveRemoteSearchAnswers(aiResponse, {jobContext:currentJob,isCurrent:()=>token===autofillGeneration && window.location.href===runUrl});
+      if (!aiFailure) aiResponse = await resolveRemoteSearchAnswers(aiResponse, {jobContext:currentJob,isCurrent:()=>token===autofillGeneration && window.location.href===runUrl,onAiFailure});
       if (token !== autofillGeneration) return;
     }
     const answersMap = new Map(aiResponse.answers.map((a) => [a.fieldId, a]));
@@ -2247,6 +2257,7 @@ async function executeAutofillFlow() {
     }
 
 
+    if (aiFailure) throw aiFailure;
     refreshDetectedFields();
     const report = summarizeFieldResults(getAllDetectedFields(), fieldResultsCache);
     autofillProgress.current = report.total;
@@ -2828,13 +2839,19 @@ function renderProfileTab() {
   `;
 }
 
-function aiLabel() { return isManagedAi() ? `Kareer AI · ${platform.ai.status().total || 0} credits` : gmGet(STORAGE_KEYS.SETTINGS, {})?.model || 'OpenRouter'; }
+function aiLabel() { return isManagedAi() ? 'Kareer AI' : gmGet(STORAGE_KEYS.SETTINGS, {})?.model || 'OpenRouter'; }
+function headerAiLabel() {
+  if (!isManagedAi()) return aiLabel();
+  const { total, balanceState } = platform.ai.status();
+  if (total != null) return `${total.toLocaleString()} credits`;
+  return balanceState === 'loading' ? 'Checking…' : balanceState === 'unavailable' ? 'Unavailable' : 'Kareer AI';
+}
 
 function renderApiKeyGroup() {
   if (isManagedAi()) {
     const status = platform.ai.status();
     return `<div class="kr-card"><span class="kr-card-title">Kareer AI · ${escapeHtml(getStatusInfo().label)}</span>
-      <p>Monthly: ${status.monthly || 0} · Purchased: ${status.purchased || 0}</p>
+      <p><strong>${escapeHtml(headerAiLabel())}</strong>${status.total != null ? ` · Purchased: ${status.purchased} · Monthly: ${status.monthly}` : ''}</p>
       ${status.monthlyExpiresAt ? `<p>Monthly credits expire ${escapeHtml(new Date(status.monthlyExpiresAt).toLocaleDateString())}.</p>` : ''}
       <p>Each completed AI request costs one credit. A run can make multiple requests.</p>
       <button type="button" class="kr-btn kr-btn-secondary" id="kr-open-options">${status.state === 'ready' ? 'Manage Kareer AI' : 'Set up Kareer AI'}</button></div>`;
@@ -2990,8 +3007,9 @@ function updatePanelDOM() {
 
     const modelChip = existingPanel.querySelector('.kr-model-chip');
     if (modelChip) {
-      modelChip.textContent = aiLabel();
-      modelChip.title = aiLabel();
+      modelChip.textContent = headerAiLabel();
+      modelChip.title = isManagedAi() ? `Kareer AI balance: ${headerAiLabel()}` : aiLabel();
+      modelChip.classList.toggle('kr-credit-chip', isManagedAi());
     }
 
     const contentEl = existingPanel.querySelector('.kr-content');
@@ -3023,7 +3041,7 @@ function updatePanelDOM() {
             <span class="kr-version-tag">v${APP_VERSION}</span>
           </div>
           <div class="kr-header-actions">
-            <span class="kr-model-chip" title="${escapeHtml(aiLabel())}">${escapeHtml(aiLabel())}</span>
+            <span class="kr-model-chip${isManagedAi() ? ' kr-credit-chip' : ''}" title="${escapeHtml(isManagedAi() ? `Kareer AI balance: ${headerAiLabel()}` : aiLabel())}">${escapeHtml(headerAiLabel())}</span>
             <button class="kr-close-btn" id="kr-close-panel-btn" title="Minimize panel">${ICONS.x}</button>
           </div>
         </div>

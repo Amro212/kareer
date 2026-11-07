@@ -39,27 +39,41 @@ async function generation(request, env, auth, input) {
       const totalTimer = setTimeout(abort, 120000);
       const startTimer = setTimeout(abort, 25000);
       let usage = {};
+      let upstreamStatus = null, category = 'upstream_fetch';
       try {
+        if (!env.OPENROUTER_API_KEY) {
+          category = 'upstream_not_configured';
+          fail('GENERATION_FAILED', 502);
+        }
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST', signal: controller.signal,
           headers: { Authorization: `Bearer ${env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'X-Title': 'Kareer', 'HTTP-Referer': SITE_ORIGIN },
           body: JSON.stringify(upstreamBody(input)),
         });
         clearTimeout(startTimer);
+        upstreamStatus = response.status;
+        category = 'upstream_http';
         if (!response.ok) fail('GENERATION_FAILED', 502);
+        category = 'invalid_completion';
         let body; try { body = JSON.parse(await readBody(response, 1024 * 1024)); } catch { fail('INVALID_COMPLETION', 502); }
         const number = v => typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null;
-        usage = { inputTokens: number(body.usage?.prompt_tokens), outputTokens: number(body.usage?.completion_tokens),
-          cost: number(body.usage?.cost), latency: Date.now() - started };
+        usage = { inputTokens: number(body?.usage?.prompt_tokens), outputTokens: number(body?.usage?.completion_tokens),
+          cost: number(body?.usage?.cost), latency: Date.now() - started };
         const content = validateCompletion(input, body);
+        category = 'settlement';
         if (!await settle(env.DB, auth.wallet, input.id, usage)) fail('GENERATION_FAILED', 502);
         const credits = await balances(env.DB, auth.wallet).catch(() => undefined);
         send({ type: 'result', id: input.id, content, ...(credits ? { credits } : {}) });
       } catch (error) {
         const safe = error instanceof ApiError ? error : new ApiError('GENERATION_FAILED', 502);
-        await release(env.DB, auth.wallet, input.id, safe.code, Date.now(), { ...usage, latency: Date.now() - started }).catch(() => {});
+        const elapsedMs = Date.now() - started;
+        if (env.AI_DIAGNOSTICS === 'true') console.warn('Managed AI generation failed', {
+          requestId: input.id, operation: input.operation, upstreamStatus, elapsedMs,
+          category: controller.signal.aborted && category !== 'settlement' ? 'upstream_aborted' : category,
+        });
+        const released = await release(env.DB, auth.wallet, input.id, safe.code, Date.now(), { ...usage, latency: elapsedMs }).catch(() => false);
         const credits = await balances(env.DB, auth.wallet).catch(() => undefined);
-        send({ type: 'error', id: input.id, ...errorData(safe), ...(credits ? { credits } : {}) });
+        send({ type: 'error', id: input.id, ...errorData(safe), ...(released ? { charged: false } : {}), ...(credits ? { credits } : {}) });
       } finally {
         clearInterval(heartbeat); clearTimeout(totalTimer); clearTimeout(startTimer);
         request.signal.removeEventListener('abort', abort);

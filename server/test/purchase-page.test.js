@@ -61,7 +61,7 @@ test('hosted plans preserve a private background claim while validating consent 
   assert.equal(call.body.get('metadata[kareer_purchase]'), purchase.id);
   assert.equal(call.body.get('automatic_tax[enabled]'), 'true');
   assert.equal(call.body.get('customer_creation'), 'always');
-  assert.equal(call.body.get('success_url'), 'https://kareer.itsamro.me/setup/?purchase=complete');
+  assert.equal(call.body.get('success_url'), 'https://kareer.itsamro.me/purchase/complete/');
   assert.equal(env.DB.sql.prepare('SELECT offer,status,session_id FROM purchases').get().session_id, 'cs_test_1');
 
   const pending = await worker.fetch(request(`/v1/purchases/${purchase.id}`, { headers: { Authorization: `Bearer ${purchase.claimSecret}` } }), env, {});
@@ -109,6 +109,7 @@ test('a purchase created with an offer returns the Stripe Checkout URL directly 
   assert.equal(purchase.url, `https://api.test/plans/${purchase.id}`);
   const created = calls.find(c => c.url.endsWith('/v1/checkout/sessions'));
   assert.equal(created.body.get('mode'), 'subscription');
+  assert.equal(created.body.get('success_url'), 'https://kareer.itsamro.me/purchase/complete/');
   assert.equal(created.body.get('client_reference_id'), purchase.id);
   assert.equal(created.body.get('cancel_url'), `https://api.test/plans/${purchase.id}`);
   const page = await worker.fetch(request(`/plans/${purchase.id}`), env, {});

@@ -102,8 +102,11 @@ export function cachedAiStatus(all) {
   const consentState = !dataConsent && (mode === 'byok' ? all['kr:secrets']?.apiKey : all['kr:secrets']?.licenseKey) ? 'consentNeeded' : null;
   if (mode === 'byok') return { mode, dataConsent, state: consentState || (all['kr:secrets']?.apiKey ? 'ready' : 'activationNeeded') };
   const saved = all['kr:ai-status'] || {};
-  return { mode: 'managed', dataConsent, state: consentState || (all['kr:secrets']?.licenseKey ? saved.state || 'unavailable' : 'activationNeeded'),
-    monthly: saved.monthly || 0, purchased: saved.purchased || 0, total: saved.total || 0, monthlyExpiresAt: saved.monthlyExpiresAt || null,
+  const state = all['kr:secrets']?.licenseKey ? saved.state || 'loading' : 'activationNeeded';
+  const hasBalance = ['ready', 'outOfCredits'].includes(state) && Number.isSafeInteger(saved.total);
+  return { mode: 'managed', dataConsent, state: consentState || state, balanceState: hasBalance ? 'known' : state,
+    monthly: hasBalance ? saved.monthly ?? 0 : null, purchased: hasBalance ? saved.purchased ?? 0 : null, total: hasBalance ? saved.total : null,
+    monthlyExpiresAt: hasBalance ? saved.monthlyExpiresAt || null : null,
     flagged: saved.flagged === true, subscriptions: saved.subscriptions || [] };
 }
 

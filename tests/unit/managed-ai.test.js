@@ -108,6 +108,21 @@ test('managed status checks are free and malformed streams do not retry', async 
   } finally { globalThis.fetch = realFetch; }
 });
 
+test('managed stream failures report whether the credit release was confirmed', async () => {
+  const realFetch = globalThis.fetch;
+  try {
+    for (const charged of [false, undefined]) {
+      const event = { type: 'error', code: 'INVALID_COMPLETION', charged, error: 'private details', credits: { total: 300, monthly: 0, purchased: 300 } };
+      globalThis.fetch = async () => new Response(JSON.stringify(event), { headers: { 'Content-Type': 'application/x-ndjson' } });
+      const { error } = await proxyAiRequest({ operation: 'autofill', input: PAGE });
+      assert.match(error, /incomplete or invalid/);
+      assert.match(error, charged === false ? /No credit was charged/ : /could not confirm whether a credit was used/i);
+      assert.doesNotMatch(error, /private details/);
+      assert.equal((await storage.readAiStatus()).total, charged === false ? 300 : null);
+    }
+  } finally { globalThis.fetch = realFetch; }
+});
+
 test('purchase polling stays idle before purchase and retains the deadline through an outage', async () => {
   assert.deepEqual(await managedOperation('claim'), { status: 'idle' });
   records['kr:secrets'].checkout = { id: 'purchase', claimSecret: 'claim-secret', expiresAt: new Date(Date.now() + 60000).toISOString() };
@@ -119,6 +134,16 @@ test('purchase polling stays idle before purchase and retains the deadline throu
     assert.equal(result.unavailable, true);
     assert.equal(result.expiresAt, records['kr:secrets'].checkout.expiresAt);
   } finally { globalThis.fetch = realFetch; }
+});
+
+test('simultaneous status and Settings claims share the one-time Stripe purchase claim', async t => {
+  records['kr:secrets'].checkout = { id: 'purchase', claimSecret: 'claim-secret', expiresAt: new Date(Date.now() + 60000).toISOString() };
+  const fetch = t.mock.method(globalThis, 'fetch', async () => Response.json({ status: 'complete', licenseKey: 'purchased-license', aiStatus: { state: 'ready', purchased: 300, monthly: 0, total: 300 } }));
+  const [first, second] = await Promise.all([managedOperation('claim'), managedOperation('claim')]);
+  assert.deepEqual(first, second);
+  assert.equal(first.aiStatus.total, 300);
+  assert.equal(fetch.mock.callCount(), 1);
+  assert.equal(records['kr:secrets'].checkout, null);
 });
 
 test('hosted purchases keep claim credentials in background storage and reject foreign purchase links', async () => {
@@ -216,7 +241,7 @@ test('settled balance updates do not call the payment provider status path after
 test('released credit restores readiness after another concurrent request reported zero available', async () => {
   records['kr:ai-status'] = { state: 'outOfCredits', total: 0, monthly: 0, purchased: 0 };
   const realFetch = globalThis.fetch;
-  globalThis.fetch = async () => new Response(JSON.stringify({ type: 'error', code: 'INVALID_COMPLETION', credits: { monthly: 0, purchased: 1, total: 1 } }) + '\n', { headers: { 'Content-Type': 'application/x-ndjson' } });
+  globalThis.fetch = async () => new Response(JSON.stringify({ type: 'error', code: 'INVALID_COMPLETION', charged: false, credits: { monthly: 0, purchased: 1, total: 1 } }) + '\n', { headers: { 'Content-Type': 'application/x-ndjson' } });
   try {
     assert.match((await proxyAiRequest({ operation: 'autofill', input: PAGE })).error, /No credit was charged/);
     assert.equal(records['kr:ai-status'].state, 'ready');

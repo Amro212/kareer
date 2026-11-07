@@ -1,5 +1,15 @@
 import { test, expect } from '@playwright/test';
 
+test('purchase return and legacy link direct buyers to verification in the extension', async ({ page }) => {
+  for (const route of ['/purchase/complete/', '/setup/?purchase=complete']) {
+    await page.goto(route);
+    await expect(page).toHaveURL(/\/purchase\/complete\/$/);
+    await expect(page.getByRole('heading', { name: 'Back from checkout' })).toBeVisible();
+    await expect(page.getByText('Kareer → Settings → AI & billing', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Kareer verifies your purchase there/)).toBeVisible();
+  }
+});
+
 test('hero stays hidden before hydration, then enters headline and demo, copy, buttons', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   let release;

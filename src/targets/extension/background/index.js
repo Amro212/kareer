@@ -60,8 +60,8 @@ const handlers = {
   [MSG.AI_STATUS]: async () => {
     if ((await readAiStatus()).mode === 'managed') {
       // A purchase paid while Settings was closed activates on the next status check.
-      await managedOperation('claim').catch(() => {});
-      await managedOperation('status').catch(() => {});
+      const purchase = await managedOperation('claim').catch(() => {});
+      if (purchase?.status !== 'complete') await managedOperation('status').catch(() => {});
     }
     return readAiStatus();
   },

@@ -13,8 +13,12 @@ enabled = false
 [env.staging]
 name = "kareer-gateway-staging"
 workers_dev = true
+[env.staging.observability.logs]
+enabled = true
+invocation_logs = false
 [env.staging.vars]
 SALES_ENABLED = "true"
+AI_DIAGNOSTICS = "true"
 STRIPE_PRICE_MONTHLY = "price_1UWMU7RSf0GhgGvmfq5qJRSx"
 STRIPE_PRICE_PACK = "price_1UWMU9RSf0GhgGvmFJ2Pi3ey"
 # Keep the existing sandbox prices usable while production uses the public offers.

@@ -4,7 +4,7 @@ import { SUPPORT_EMAIL } from '../../../core/endpoints.js';
 import OFFERS from '../../../core/offers.json' with { type: 'json' };
 
 const $ = id => document.getElementById(id);
-const labels = { ready: 'Ready', consentNeeded: 'AI sharing off', activationNeeded: 'Activation needed', outOfCredits: 'Out of credits', unavailable: 'Temporarily unavailable' };
+const labels = { ready: 'Ready', consentNeeded: 'AI sharing off', activationNeeded: 'Activation needed', outOfCredits: 'Out of credits', loading: 'Checking balance…', unavailable: 'Temporarily unavailable' };
 let bound = false, timer;
 function draw(status) {
   if (!$('ai-data-consent').disabled) $('ai-data-consent').checked = status?.dataConsent === true;
@@ -17,8 +17,9 @@ function draw(status) {
   $('managed-state').textContent = labels[status?.state] || labels.unavailable;
   $('managed-state').className = `badge ${status?.state === 'ready' ? 'ok' : 'warn'}`;
   $('usage-details').hidden = status?.state === 'activationNeeded';
-  $('monthly-balance').textContent = String(status?.monthly || 0);
-  $('purchased-balance').textContent = String(status?.purchased || 0);
+  $('total-balance').textContent = status?.total != null ? `${status.total.toLocaleString()} credits` : status?.balanceState === 'loading' ? 'Checking balance…' : 'Balance unavailable';
+  $('monthly-balance').textContent = status?.monthly?.toLocaleString() ?? '—';
+  $('purchased-balance').textContent = status?.purchased?.toLocaleString() ?? '—';
   $('monthly-expiry').textContent = status?.monthlyExpiresAt ? `Monthly credits expire ${new Date(status.monthlyExpiresAt).toLocaleString()}. Purchased credits never expire.` : 'Purchased credits never expire.';
   const subscriptions = status?.subscriptions || [];
   $('plan-status').textContent = [status?.flagged ? `A payment on this key is disputed. Its credits are on hold and new purchases are paused. Email ${SUPPORT_EMAIL} with questions.` : '',

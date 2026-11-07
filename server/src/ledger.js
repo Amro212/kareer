@@ -57,8 +57,9 @@ export async function settle(db, wallet, id, usage = {}, now = Date.now()) {
 }
 
 export async function release(db, wallet, id, code, now = Date.now(), usage = {}) {
-  await stmt(db, `UPDATE requests SET status='failed',error_code=?,finished_at=?,input_tokens=?,output_tokens=?,provider_cost=?,latency_ms=?
-    WHERE wallet_id=? AND id=? AND status='reserved'`, code, now, usage.inputTokens ?? null, usage.outputTokens ?? null, usage.cost ?? null, usage.latency ?? null, wallet, id).run();
+  const result = await stmt(db, `UPDATE requests SET status='failed',error_code=?,finished_at=?,input_tokens=?,output_tokens=?,provider_cost=?,latency_ms=?
+    WHERE wallet_id=? AND id=? AND status='reserved' RETURNING id`, code, now, usage.inputTokens ?? null, usage.outputTokens ?? null, usage.cost ?? null, usage.latency ?? null, wallet, id).first();
+  return Boolean(result);
 }
 
 export async function balances(db, wallet, now = Date.now()) {

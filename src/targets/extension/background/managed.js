@@ -7,6 +7,7 @@ const GATEWAY = typeof KAREER_GATEWAY_URL === 'string' ? KAREER_GATEWAY_URL : ST
 const UNREACHABLE = "Can't reach Kareer right now. Check your internet connection and try again. Filling forms from your saved profile still works.";
 const UNCERTAIN = 'Could not confirm the AI result. It may have used one credit. Refresh usage before explicitly retrying.';
 const safeStates = new Set(['ready', 'activationNeeded', 'outOfCredits', 'unavailable']);
+let pendingClaim;
 async function saveStatus(status) {
   return updateStoredRecord('kr:ai-status', previous => {
     const next = { ...previous, ...status };
@@ -73,24 +74,7 @@ export async function managedOperation(operation, input = {}) {
     await updateStoredRecord('kr:secrets', old => ({ ...old, checkout: { id: result.id, claimSecret: result.claimSecret, expiresAt: result.expiresAt } }));
     return { url: offer ? result.checkoutUrl : result.url, expiresAt: result.expiresAt };
   }
-  if (operation === 'claim') {
-    const c = secrets.checkout;
-    if (!c) return { status: 'idle' };
-    if (Date.parse(c.expiresAt) <= Date.now()) return { status: 'expired' };
-    let result;
-    try { result = await json(await call(`/v1/purchases/${encodeURIComponent(c.id)}`, { credential: c.claimSecret, signal })); }
-    catch (error) {
-      if (error.code === 'CLAIM_UNAVAILABLE') return { status: 'expired' };
-      return { status: 'pending', expiresAt: c.expiresAt, unavailable: true };
-    }
-    if (result.status === 'complete') {
-      await writeLicense(result.licenseKey);
-      await updateStoredRecord('kr:secrets', old => ({ ...old, checkout: null }));
-      await updateStoredRecord('kr:settings', settings => ({ ...settings, aiMode: settings?.aiMode || 'managed' }));
-      return { status: 'complete', aiStatus: await saveStatus(result.aiStatus) };
-    }
-    return { status: 'pending', expiresAt: c.expiresAt };
-  }
+  if (operation === 'claim') return pendingClaim ||= claim(secrets.checkout, signal).finally(() => { pendingClaim = null; });
   if (!['status', 'billing'].includes(operation)) throw new Error('Unknown billing operation.');
   if (!secrets.licenseKey) return saveStatus({ state: 'activationNeeded', total: 0, monthly: 0, purchased: 0, monthlyExpiresAt: null, subscriptions: [] });
   try {
@@ -104,6 +88,23 @@ export async function managedOperation(operation, input = {}) {
     if (operation === 'status' || signedOut) await saveStatus({ state: signedOut ? 'activationNeeded' : 'unavailable' });
     throw error;
   }
+}
+
+async function claim(c, signal) {
+  if (!c) return { status: 'idle' };
+  if (Date.parse(c.expiresAt) <= Date.now()) return { status: 'expired' };
+  let result;
+  try { result = await json(await call(`/v1/purchases/${encodeURIComponent(c.id)}`, { credential: c.claimSecret, signal })); }
+  catch (error) {
+    if (error.code === 'CLAIM_UNAVAILABLE') return { status: 'expired' };
+    return { status: 'pending', expiresAt: c.expiresAt, unavailable: true };
+  }
+  if (result.status === 'complete') {
+    await updateStoredRecord('kr:secrets', old => ({ ...old, licenseKey: result.licenseKey, checkout: old.checkout?.id === c.id ? null : old.checkout }));
+    await updateStoredRecord('kr:settings', settings => ({ ...settings, aiMode: settings?.aiMode || 'managed' }));
+    return { status: 'complete', aiStatus: await saveStatus(result.aiStatus) };
+  }
+  return { status: 'pending', expiresAt: c.expiresAt };
 }
 
 export async function managedRequest(options, signal) {
@@ -124,7 +125,7 @@ export async function managedRequest(options, signal) {
     throw new Error('Kareer AI is temporarily unavailable.');
   }
   const reader = response.body.getReader(), decoder = new TextDecoder();
-  let pending = '', result, credits, size = 0;
+  let pending = '', result, credits, terminalError, size = 0;
   try {
     for (;;) {
       const { done, value } = await reader.read();
@@ -136,8 +137,12 @@ export async function managedRequest(options, signal) {
       for (const line of lines.filter(Boolean)) {
         const event = JSON.parse(line);
         if (event.type === 'error') {
-          if (event.credits) await saveStatus({ ...event.credits, state: event.credits.total > 0 ? 'ready' : 'outOfCredits' }).catch(() => {});
-          throw new Error('Kareer AI could not complete this request. No credit was charged.');
+          const reason = event.code === 'INVALID_COMPLETION' ? 'Kareer AI returned an incomplete or invalid answer.' : 'Kareer AI could not complete this request.';
+          const released = event.charged === false;
+          if (released && event.credits) await saveStatus({ ...event.credits, state: event.credits.total > 0 ? 'ready' : 'outOfCredits' }).catch(() => {});
+          else await saveStatus({ state: 'unavailable' }).catch(() => {});
+          terminalError = new Error(`${reason} ${released ? 'No credit was charged.' : 'Kareer could not confirm whether a credit was used. Refresh usage before retrying.'}`);
+          throw terminalError;
         }
         if (event.type === 'result' && typeof event.content === 'string') { result = event.content; credits = event.credits; }
       }
@@ -148,7 +153,7 @@ export async function managedRequest(options, signal) {
     if (credits) await saveStatus({ ...credits, state: credits.total > 0 ? 'ready' : 'outOfCredits' }).catch(() => {});
     return { status: 200, responseText: JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: result } }] }), responseHeaders: '' };
   } catch (error) {
-    if (error.message.includes('No credit was charged')) throw error;
+    if (error === terminalError) throw error;
     throw new Error(UNCERTAIN);
   } finally { await reader.cancel().catch(() => {}); }
 }

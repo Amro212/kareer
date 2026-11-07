@@ -209,16 +209,16 @@ export async function testConnection() {
 }
 
 /** Resolve saved values first, then use one primary request for the page. */
-export async function generateAutofillAnswers(normalizedFields, { allowSearch = true, jobContext = null, repairErrors = [] } = {}) {
+export async function generateAutofillAnswers(normalizedFields, { allowSearch = true, jobContext = null, repairErrors = [], onAiFailure } = {}) {
   const settings = getSettings();
   const profile = getProfile();
   const resolvedJob = jobContext || gmGet(STORAGE_KEYS.JOB) || null;
-  return generatePageAnswers(normalizedFields, { settings, profile, allowSearch, jobContext: resolvedJob, repairErrors });
+  return generatePageAnswers(normalizedFields, { settings, profile, allowSearch, jobContext: resolvedJob, repairErrors, onAiFailure });
 }
 
 // Adapters with resolveAnswer send only unresolved questions in one page request.
 // Known record values and owned option labels never need a model or a voice-edit pass.
-async function generatePageAnswers(fields, { settings, profile, allowSearch, jobContext, repairErrors }) {
+async function generatePageAnswers(fields, { settings, profile, allowSearch, jobContext, repairErrors, onAiFailure }) {
   const answers = [], unresolved = [];
   for (const field of fields) {
     const resolver = (field.ats?.adapter ? adapterById(field.ats.adapter) : detectAdapter()).resolveAnswer;
@@ -257,7 +257,11 @@ async function generatePageAnswers(fields, { settings, profile, allowSearch, job
     allowSearch, applicantProfile: profileForAI(profile), resumeContext: formatStructuredBackground(profile) || profile.resumeContext || '',
     applicantNotes: profile.applicantNotes || '', pageContext: { url: window.location.href.slice(0, 4096), host: window.location.hostname },
     jobContext: jobContext || null, repairErrors: repairErrors || [], fieldsToFill: unresolved, style: aiStyle(profile, settings),
-  } });
+  } }).catch(error => {
+    if (!isManagedAi() || !onAiFailure) throw error;
+    onAiFailure(error);
+    return { answers: [], latencyMs: 0 };
+  });
   const byId = new Map(unresolved.map(field => [field.fieldId, field]));
   const seen = new Set();
   for (const answer of result.answers) {

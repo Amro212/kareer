@@ -1,4 +1,4 @@
-import { test, expect } from './support/fixtures.js';
+import { test, expect, ASHBY_HOST, GREENHOUSE_HOST } from './support/fixtures.js';
 
 async function mockGateway(kr, credits = 5) {
   await kr.worker.evaluate(({ credits, gateway }) => {
@@ -18,6 +18,10 @@ async function mockGateway(kr, credits = 5) {
       if (path.startsWith('/v1/purchases/')) return Response.json({ status: 'complete', licenseKey: 'private-managed-license', aiStatus: status() });
       if (path === '/v1/billing-portal') return Response.json({ url: 'https://billing.stripe.com/p/session/test_e2e' });
       if (path === '/v1/ai') {
+        if (globalThis.__failManagedOnce) {
+          globalThis.__failManagedOnce = false;
+          return new Response(JSON.stringify({ type: 'error', code: 'GENERATION_FAILED', charged: false, credits: status() }) + '\n', { headers: { 'Content-Type': 'application/x-ndjson' } });
+        }
         if (!globalThis.__credits) return Response.json({ code: 'NO_CREDITS' }, { status: 402 });
         globalThis.__credits--;
         let content;
@@ -33,6 +37,68 @@ async function mockGateway(kr, credits = 5) {
     };
   }, { credits, gateway: kr.gatewayOrigin });
 }
+
+async function managedFixture(kr, ashby) {
+  const page = await kr.context.newPage();
+  await page.route('**/managed-fixture', route => route.fulfill({ contentType: 'text/html', body: `<title>Test Engineer Application</title><h1>Job Application</h1><form ${ashby ? 'class="ashby-application-form" data-ashby-root' : 'id="application_form"'}><label for="email">Email</label><input type="email" id="email" required><label for="reference">Reference note</label><textarea id="reference"></textarea><label for="why">Why do you want to work as a test engineer?</label><textarea id="why" required></textarea><button type="submit">Submit application</button></form>` }));
+  await page.goto(kr.fixtureUrl('managed-fixture', ashby ? ASHBY_HOST : GREENHOUSE_HOST));
+  await kr.openPanel(page);
+  return page;
+}
+
+for (const ats of ['Greenhouse', 'Ashby']) test(`${ats}: first run refreshes a funded wallet, keeps saved answers on failure, and resumes`, async ({ kr }) => {
+  await kr.seed({ apiKey: '', settings: { aiMode: 'managed' }, profile: { fullName: 'Jordan Example', email: 'kareer-test@example.com', savedAnswers: { 'Reference note': 'Saved reference' } } });
+  await mockGateway(kr, 300);
+  await kr.worker.evaluate(async () => {
+    const { 'kr:secrets': secrets } = await chrome.storage.local.get('kr:secrets');
+    await chrome.storage.local.set({ 'kr:secrets': { ...secrets, licenseKey: 'private-managed-license' }, 'kr:ai-status': { state: 'outOfCredits', total: 0 } });
+    globalThis.__failManagedOnce = true;
+  });
+  const page = await managedFixture(kr, ats === 'Ashby');
+  await expect(page.locator('.kr-model-chip')).toHaveText('0 credits');
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.locator('#kr-autofill-btn').click();
+  await expect(page.locator('#kr-main-panel')).toContainText('No credit was charged.');
+  await expect(page.locator('#email')).toHaveValue('kareer-test@example.com');
+  await expect(page.locator('#reference')).toHaveValue('Saved reference');
+  await expect(page.locator('#why')).toHaveValue('');
+  await expect(page.locator('.kr-model-chip')).toHaveText('300 credits');
+  expect(await page.locator('.kr-model-chip').evaluate(el => el.scrollWidth <= el.clientWidth && el.getBoundingClientRect().right <= innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.locator('#kr-autofill-btn').click();
+  await expect(page.locator('#why')).toHaveValue('A useful answer');
+  await expect(page.locator('.kr-model-chip')).toHaveText('299 credits');
+  expect(kr.openrouter.requests).toHaveLength(0);
+});
+
+test('staging sandbox pack claim and real managed autofill', async ({ kr }) => {
+  test.skip(!process.env.KR_TEST_CHECKOUT, 'Requires a completed staging Stripe sandbox purchase');
+  await kr.seed({ apiKey: '', settings: { aiMode: 'managed' }, profile: { fullName: 'Jordan Example', email: 'kareer-test@example.com', savedAnswers: { 'Reference note': 'Saved reference' } } });
+  await kr.worker.evaluate(async checkout => {
+    const { 'kr:secrets': secrets } = await chrome.storage.local.get('kr:secrets');
+    await chrome.storage.local.set({ 'kr:secrets': { ...secrets, checkout } });
+  }, JSON.parse(process.env.KR_TEST_CHECKOUT));
+  const settings = await kr.context.newPage();
+  await settings.goto(`${kr.optionsUrl()}#connection`);
+  await expect(settings.locator('#total-balance')).toHaveText('300 credits');
+  const greenhouse = await managedFixture(kr, false);
+  await expect(greenhouse.locator('.kr-model-chip')).toHaveText('300 credits');
+  await greenhouse.locator('#kr-autofill-btn').click();
+  await expect(greenhouse.locator('#why')).not.toHaveValue('');
+  await expect(greenhouse.locator('.kr-model-chip')).toHaveText('299 credits');
+  await expect(settings.locator('#total-balance')).toHaveText('299 credits');
+  await settings.locator('#ai-data-consent').uncheck();
+  await expect(settings.locator('#managed-state')).toHaveText('AI sharing off');
+  const ashby = await managedFixture(kr, true);
+  await ashby.locator('#kr-autofill-btn').click();
+  await expect(ashby.locator('#reference')).toHaveValue('Saved reference');
+  await expect(ashby.locator('#why')).toHaveValue('');
+  await settings.locator('#ai-data-consent').check();
+  await expect(settings.locator('#managed-state')).toHaveText('Ready');
+  await ashby.locator('#kr-autofill-btn').click();
+  await expect(ashby.locator('#why')).not.toHaveValue('');
+  await expect(ashby.locator('.kr-model-chip')).toHaveText('298 credits');
+});
 
 test('a new installation defaults to your own key until Kareer AI is released', async ({ kr }) => {
   await kr.seed({ apiKey: '', profile: { fullName: 'Test Applicant', email: 'test@example.com' } });
@@ -107,7 +173,7 @@ test('Kareer AI activates without showing models or leaking license credentials'
   await page.route('**/managed-application', route => route.fulfill({ contentType: 'text/html', body: '<title>Job Application</title><h1>Job Application</h1><form><label for="email">Email</label><input type="email" id="email"><label for="why">Why this role?</label><textarea id="why"></textarea></form>' }));
   await page.goto(kr.fixtureUrl('managed-application'));
   await kr.openPanel(page);
-  await expect(page.locator('.kr-model-chip')).toContainText('Kareer AI');
+  await expect(page.locator('.kr-model-chip')).toHaveText('5 credits');
   await expect(page.locator('[data-tab=debug]')).toHaveCount(0);
   await page.locator('#kr-autofill-btn').click();
   await expect(page.locator('#why')).toHaveValue('A useful answer');
