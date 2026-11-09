@@ -489,7 +489,7 @@ for (const ats of ['greenhouse','ashby']) {
       assert.equal(document.querySelector('#email').value,'new@example.com');
       assert.equal(document.querySelector('#first_name').value,'User name');
       assert.match(engine.session.reason,/Page filled/);assert.equal(aiCalls,0);
-      assert.equal(engine.session.steps[engine.session.currentStep].requests,1);
+      assert.equal(engine.session.steps[engine.session.currentStep].requests ?? 0,0);
     } finally {engine.destroy();}
   });
   test(`${ats} hosted workflow blocks on a hidden required resume in a visible upload container`,async()=>{

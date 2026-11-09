@@ -67,7 +67,6 @@ export function DocumentStudio() {
     setTailoring(true);
   };
   const roles = { campus: { title: 'Student Developer', org: 'Campus Collective · 2024–2026' }, helpdesk: { title: 'IT Help Desk Assistant', org: 'Northfield University · 2023–2024' } };
-  const experience = (chosen.first === 'campus' ? ['campus', 'helpdesk'] : ['helpdesk', 'campus']) as ('campus' | 'helpdesk')[];
 
   return <div className="document-studio">
     <div className="posting-picker" role="group" aria-label="Choose a fictional job posting">
@@ -82,23 +81,30 @@ export function DocumentStudio() {
         <div className="document-meta"><span>ILLUSTRATIVE PREVIEW · TAILORED FOR {chosen.company.toUpperCase()}</span><span className="tailored-key"><mark className="tailored">Highlighted</mark> = chosen or reframed for this role</span></div>
         <MotionPresence>{tailoring && <MotionSurface key="tailoring" preset="fade" className="tailoring-veil" role="status"><Spinner aria-hidden="true" role="presentation" /><span>Tailoring for {chosen.company}…</span></MotionSurface>}</MotionPresence>
         <div className="document-pages"><TabsContent value="resume" forceMount>
-          <MotionSurface key={chosen.id} preset="soften" className="document-body">
-            <h3>Alex Morgan</h3><p className="document-contact">alex.morgan@example.com · Toronto · alex.example.com</p><hr />
-            <h4>SUMMARY</h4><p><Marked text={chosen.summary} /></p>
-            <h4>EXPERIENCE</h4>
-            {experience.map(key => <div className="document-role" key={key}><strong>{roles[key].title}</strong><span>{roles[key].org}</span><ul>{chosen[key].map(line => <li key={line}><Marked text={line} /></li>)}</ul></div>)}
-            <h4>SKILLS</h4><p><Marked text={chosen.skills} /></p>
-            <h4>EDUCATION</h4><p>BSc, Computer Science · Northfield University · 2026</p>
+          <MotionSurface key={chosen.id} preset="soften" className="document-versions">
+            {postings.map(posting => {
+              const experience = (posting.first === 'campus' ? ['campus', 'helpdesk'] : ['helpdesk', 'campus']) as ('campus' | 'helpdesk')[];
+              return <div key={posting.id} className="document-body" aria-hidden={posting.id !== chosen.id}>
+                <h3>Alex Morgan</h3><p className="document-contact">alex.morgan@example.com · Toronto · alex.example.com</p><hr />
+                <h4>SUMMARY</h4><p><Marked text={posting.summary} /></p>
+                <h4>EXPERIENCE</h4>
+                {experience.map(key => <div className="document-role" key={key}><strong>{roles[key].title}</strong><span>{roles[key].org}</span><ul>{posting[key].map(line => <li key={line}><Marked text={line} /></li>)}</ul></div>)}
+                <h4>SKILLS</h4><p><Marked text={posting.skills} /></p>
+                <h4>EDUCATION</h4><p>BSc, Computer Science · Northfield University · 2026</p>
+              </div>;
+            })}
           </MotionSurface>
         </TabsContent>
         <TabsContent value="letter" forceMount>
-          <MotionSurface key={chosen.id} preset="soften" className="document-body">
-            <h3>A proper introduction.</h3><p className="document-contact">Alex Morgan · {chosen.role}, {chosen.company}</p><hr />
-            <p>Dear {chosen.company} hiring team,</p>
-            <p><Marked text={chosen.opening} /></p>
-            <p><Marked text={chosen.middle} /></p>
-            <p>I’d welcome the chance to discuss how that experience could help your team.</p>
-            <p>Best,<br />Alex Morgan</p>
+          <MotionSurface key={chosen.id} preset="soften" className="document-versions">
+            {postings.map(posting => <div key={posting.id} className="document-body" aria-hidden={posting.id !== chosen.id}>
+              <h3>A proper introduction.</h3><p className="document-contact">Alex Morgan · {posting.role}, {posting.company}</p><hr />
+              <p>Dear {posting.company} hiring team,</p>
+              <p><Marked text={posting.opening} /></p>
+              <p><Marked text={posting.middle} /></p>
+              <p>I’d welcome the chance to discuss how that experience could help your team.</p>
+              <p>Best,<br />Alex Morgan</p>
+            </div>)}
           </MotionSurface>
         </TabsContent></div>
         <p className="document-ground">Same saved facts in every version. Only the selection and emphasis change.</p>

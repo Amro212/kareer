@@ -152,32 +152,45 @@ test('document studio reframes the same saved facts for each fictional posting',
   await expect(studio.getByRole('button', { name: /Civic Transit/ })).toHaveAttribute('aria-pressed', 'true');
   await expect(studio.locator('.document-meta')).toContainText('CIVIC TRANSIT');
   await expect(studio.locator('.tailoring-veil')).toHaveCount(0);
-  await expect(studio.locator('.document-role').first()).toContainText('IT Help Desk Assistant');
+  await expect(studio.locator('[data-state="active"] .document-body[aria-hidden="false"] .document-role').first()).toContainText('IT Help Desk Assistant');
   await expect(studio.locator('mark.tailored').filter({ hasText: 'Wrote step-by-step guides' })).toBeVisible();
   await studio.getByRole('tab', { name: 'Cover letter', exact: true }).click();
-  await expect(studio).toContainText('Dear Civic Transit hiring team');
+  await expect(studio.locator('[data-state="active"] .document-body[aria-hidden="false"]')).toContainText('Dear Civic Transit hiring team');
 });
 
-test('switching document tabs and postings never shifts the documents heading', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+for (const width of [1440, 600, 390]) test(`switching document tabs and postings keeps the document layout fixed at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 1000 });
   await page.goto('/');
+  await page.evaluate(() => document.fonts.ready);
   const studio = page.locator('.document-studio');
+  await page.locator('.documents-copy').scrollIntoViewIfNeeded();
+  await expect(page.locator('.documents-copy')).toHaveAttribute('data-scroll-reveal', 'done');
   await studio.scrollIntoViewIfNeeded();
-  await page.waitForTimeout(1200);
+  await expect(page.locator('.document-entrance')).toHaveAttribute('data-scroll-reveal', 'done');
   const heading = page.locator('.documents-copy h2');
   const top = () => heading.evaluate(element => Math.round(element.getBoundingClientRect().top + scrollY));
   const before = await top();
+  const height = await studio.evaluate(element => element.offsetHeight);
   await page.evaluate(() => {
     const element = document.querySelector('.documents-copy h2');
+    const studio = document.querySelector('.document-studio');
     window.__headingTops = [];
-    const sample = () => { window.__headingTops.push(Math.round(element.getBoundingClientRect().top + scrollY)); requestAnimationFrame(sample); };
+    window.__studioHeights = [];
+    const sample = () => {
+      window.__headingTops.push(Math.round(element.getBoundingClientRect().top + scrollY));
+      window.__studioHeights.push(studio.offsetHeight);
+      window.__documentSampleFrame = requestAnimationFrame(sample);
+    };
     sample();
   });
-  for (const step of [() => studio.getByRole('tab', { name: 'Cover letter', exact: true }).click(), () => studio.getByRole('tab', { name: 'Résumé', exact: true }).click(), () => studio.getByRole('button', { name: /Civic Transit/ }).click(), () => studio.getByRole('button', { name: /Harbor Health/ }).click()]) {
+  for (const step of [() => studio.getByRole('tab', { name: 'Cover letter', exact: true }).click(), () => studio.getByRole('tab', { name: 'Résumé', exact: true }).click(), () => studio.getByRole('button', { name: /Civic Transit/ }).click(), () => studio.getByRole('button', { name: /Harbor Health/ }).click(), () => studio.getByRole('button', { name: /Northwind Labs/ }).click()]) {
     await step();
-    await page.waitForTimeout(900);
+    await expect(studio.locator('.tailoring-veil')).toHaveCount(0);
+    await expect.poll(() => studio.locator('[data-motion-surface="soften"]').evaluateAll(elements => elements.every(element => element.style.getPropertyValue('--presence-y') === '0px'))).toBe(true);
   }
+  await page.evaluate(() => cancelAnimationFrame(window.__documentSampleFrame));
   expect(new Set(await page.evaluate(() => window.__headingTops))).toEqual(new Set([before]));
+  expect(new Set(await page.evaluate(() => window.__studioHeights))).toEqual(new Set([height]));
 });
 
 test('pricing credit estimator gives a labeled range and a plan fit', async ({ page }) => {
