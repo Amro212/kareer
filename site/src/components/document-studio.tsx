@@ -78,7 +78,7 @@ export function DocumentStudio() {
     <Tabs defaultValue="resume" variant="notebook" className="document-preview">
       <TabsList aria-label="Sample tailored document"><TabsTrigger value="resume">Résumé</TabsTrigger><TabsTrigger value="letter">Cover letter</TabsTrigger></TabsList>
       <div className="document-paper" aria-busy={tailoring}>
-        <div className="document-meta"><span>ILLUSTRATIVE PREVIEW · TAILORED FOR {chosen.company.toUpperCase()}</span><span className="tailored-key"><mark className="tailored">Highlighted</mark> = chosen or reframed for this role</span></div>
+        <div className="document-meta"><span className="document-meta-label">{postings.map(posting => <span key={posting.id} aria-hidden={posting.id !== chosen.id}>ILLUSTRATIVE PREVIEW · TAILORED FOR {posting.company.toUpperCase()}</span>)}</span><span className="tailored-key"><mark className="tailored">Highlighted</mark> = chosen or reframed for this role</span></div>
         <MotionPresence>{tailoring && <MotionSurface key="tailoring" preset="fade" className="tailoring-veil" role="status"><Spinner aria-hidden="true" role="presentation" /><span>Tailoring for {chosen.company}…</span></MotionSurface>}</MotionPresence>
         <div className="document-pages"><TabsContent value="resume" forceMount>
           <MotionSurface key={chosen.id} preset="soften" className="document-versions">

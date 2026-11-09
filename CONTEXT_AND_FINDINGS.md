@@ -1,3 +1,10 @@
+## Turn: 2026-11-09 - PR #14 CI: site document-layout test (site)
+
+- Failure (CI run 42686040086, step `npx playwright test --config tests/site/playwright.config.js`): `switching document tabs and postings keeps the document layout fixed at 1440px` saw the documents heading at 2387 as well as 2396. Reproduced locally every time.
+- Root cause: `.document-meta` ("Illustrative preview · Tailored for {company}" plus the Highlighted key) is a wrapping flex row. Longer company names push the key onto a second line (39px vs 21px), so the studio's height changes by 18px, and the vertically centred `.documents-layout` grid moves the heading 9px.
+- Fix: `site/src/components/document-studio.tsx` renders every posting's label in one grid cell (`.document-meta-label`, inactive ones `visibility: hidden`, as `.document-body` already does), so the line keeps the longest label's width. `tests/site/website.spec.js` checks the visible label.
+- Verification: site suite 19/19 locally; layout test 15/15 across 1440/600/390 with 5 repeats; `materials-editor.spec.js` (the e2e failure in run 42680263531) 36/36 over 3 repeats.
+
 ## Turn: 2026-11-06 - Stripe sandbox checkout and managed AI verification
 
 - Managed AI, staging Worker: the October 31 deployed version `a3fbf56d-879c-448a-adef-71d45e9400c6` had an OpenRouter secret binding. D1 confirmed failed `autofill` (450 ms and 57 ms) and `optionDiscovery` (366 ms), all `GENERATION_FAILED` and with no provider usage. The corresponding October 31 source collapsed provider HTTP, transport and settlement failures into one code; the current source also includes `data_collection: deny`. The old version preview answered unauthenticated status, but no funded comparison was run there. Current staging, using the same upstream secret and the current privacy, price and output policy, succeeded with a fictional, temporary funded wallet and with a purchased pack. No provider-routing change was justified; exact historical upstream failure remains unknown.

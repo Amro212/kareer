@@ -147,10 +147,10 @@ test('document studio reframes the same saved facts for each fictional posting',
   await page.goto('/');
   const studio = page.locator('.document-studio');
   await studio.scrollIntoViewIfNeeded();
-  await expect(studio.locator('.document-meta')).toContainText('NORTHWIND LABS');
+  await expect(studio.locator('.document-meta-label [aria-hidden="false"]')).toContainText('NORTHWIND LABS');
   await studio.getByRole('button', { name: /Civic Transit/ }).click();
   await expect(studio.getByRole('button', { name: /Civic Transit/ })).toHaveAttribute('aria-pressed', 'true');
-  await expect(studio.locator('.document-meta')).toContainText('CIVIC TRANSIT');
+  await expect(studio.locator('.document-meta-label [aria-hidden="false"]')).toContainText('CIVIC TRANSIT');
   await expect(studio.locator('.tailoring-veil')).toHaveCount(0);
   await expect(studio.locator('[data-state="active"] .document-body[aria-hidden="false"] .document-role').first()).toContainText('IT Help Desk Assistant');
   await expect(studio.locator('mark.tailored').filter({ hasText: 'Wrote step-by-step guides' })).toBeVisible();

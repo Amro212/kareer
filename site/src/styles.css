@@ -254,6 +254,10 @@ p { line-height: 1.65; }
 .document-preview [data-slot=tabs-trigger] { padding-inline: 22px; font-size: 13px; }
 .document-paper { position: relative; background: #fffefa; padding: 28px 36px; box-shadow: 0 17px 40px -22px #38442835; border-radius: 2px 10px 10px 10px; font-size: 12px; }
 .document-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; font: 8.5px var(--font-mono); color: var(--muted-ink); }
+/* Every company's label shares one cell so the meta line wraps the same for all postings. */
+.document-meta-label { display: grid; }
+.document-meta-label > span { grid-area: 1 / 1; }
+.document-meta-label > [aria-hidden="true"] { visibility: hidden; }
 mark.tailored { background: linear-gradient(transparent 10%, #dcf5a3 10%, #dcf5a3 90%, transparent 90%); color: inherit; padding-inline: 1px; border-radius: 2px; }
 .tailoring-veil { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #fffefad9; backdrop-filter: blur(2px); border-radius: inherit; font: 11px var(--font-mono); color: var(--muted-ink); }
 .document-pages { display: grid; min-height: 480px; }
