@@ -9,7 +9,7 @@ export function workflowLabel(field) {
   const el = field.element;
   const label = el.id && el.ownerDocument.querySelector(`label[for="${CSS.escape(el.id)}"]`);
   if (label) return cleanText(visibleText(label));
-  const references = (el.getAttribute('aria-labelledby') || '').split(/\s+/)
+  const references = (el.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean)
     .map(id => el.ownerDocument.getElementById(id))
     .filter(node => node && node !== el && !el.contains(node));
   const text = references.map(node => {

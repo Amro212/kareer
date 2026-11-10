@@ -1,4 +1,4 @@
-// Investigation only: TODO assertions intentionally describe unfixed behavior.
+// Captured QA regressions; remaining TODOs identify pending repairs.
 import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -43,15 +43,32 @@ test('captured DoorDash contains distinct entry and native submit buttons', () =
   const buttons = [...document.querySelectorAll('button')];
   assert.equal(buttons.find(button => button.textContent.trim() === 'Apply').type, 'button');
   assert.equal(buttons.find(button => button.textContent.trim() === 'Submit application').type, 'submit');
-  assert.equal(inspectSubmit().count, 2, 'characterization of the recorded defect');
+  assert.equal(inspectSubmit().control, buttons.find(button => button.type === 'submit'));
 });
 
-test('QA-160-02 entry Apply must not compete with actual submission', {todo:'Unfixed; reproduced on captured DoorDash DOM'}, () => {
+test('QA-160-02 entry Apply must not compete with actual submission', () => {
   boot(fixture('greenhouse-doordash'), 'https://job-boards.greenhouse.io/doordashcanada/jobs/8176003');
   assert.equal(inspectSubmit().count, 1);
 });
 
-test('QA-160-04 unlabeled controls must not look up an empty ID', {todo:'Unfixed Firefox warning source'}, () => {
+test('ambiguous Apply needs application form evidence; external localized submits retain native ownership', () => {
+  boot('<h1>Job description</h1><button type="button">Apply now</button>');
+  assert.equal(classifyPage().type, 'listing');
+  assert.equal(inspectSubmit().count, 0);
+  document.body.innerHTML = '<form id="application"><label>Full name<input name="fullName"></label></form><button form="application" type="submit">Envoyer</button>';
+  assert.equal(inspectSubmit().count, 1);
+  document.querySelector('button').textContent = 'Apply';
+  assert.equal(inspectSubmit().count, 1);
+});
+
+test('hidden unrelated uploads do not create application evidence', () => {
+  boot('<h1>Job description</h1><button type="button">Apply</button><div><input type="file" style="display:none"></div>');
+  assert.equal(classifyPage().type, 'listing');
+  document.body.innerHTML = '<div hidden data-automation-id="resumeUpload"><input type="file"></div><h1>Job description</h1>';
+  assert.equal(classifyPage().type, 'listing');
+});
+
+test('QA-160-04 unlabeled controls must not look up an empty ID', () => {
   boot('<button>Next</button><input aria-label="Question">');
   const calls = [], original = document.getElementById.bind(document);
   document.getElementById = id => { calls.push(id); return original(id); };
@@ -60,7 +77,7 @@ test('QA-160-04 unlabeled controls must not look up an empty ID', {todo:'Unfixed
   assert.deepEqual(calls, []);
 });
 
-test('QA-160-05 unsupported Workday source must remain available for contextual fallback', {todo:'Unfixed hardcoded LinkedIn/empty deterministic answer'}, () => {
+test('QA-160-05 unsupported Workday source must remain available for contextual fallback', () => {
   boot(fixture('workday-clio-source'), 'https://clio.wd3.myworkdayjobs.com/en-US/ClioCareerSite/job/Toronto/Software-Developer--Toronto-_REQ-4630/apply/applyManually');
   const field = scanFormFields().find(field => field.ats?.canonicalKey === 'source');
   assert.ok(field, 'captured source question must be detected');
@@ -68,7 +85,7 @@ test('QA-160-05 unsupported Workday source must remain available for contextual 
   assert.equal(workdayAnswer(field, {}), null, 'no supported deterministic answer should suppress fallback');
 });
 
-test('QA-160-06 Workday upload-only step must classify as application', {todo:'Unfixed hidden upload visibility mismatch'}, () => {
+test('QA-160-06 Workday upload-only step must classify as application', () => {
   boot(fixture('workday-clio-upload'), 'https://clio.wd3.myworkdayjobs.com/en-US/ClioCareerSite/job/Toronto/Software-Developer--Toronto-_REQ-4630/apply/applyManually');
   // Save Page did not retain Workday's runtime CSS; restore the observed hidden native input.
   document.querySelector('input[type=file]').style.display = 'none';

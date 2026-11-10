@@ -170,7 +170,6 @@ export function workdayValue(field, profile) {
     return value.split('-')[{ year: 0, month: 1, day: 2 }[date[2]]];
   }
   if (record && Object.hasOwn(record, canonical)) return record[canonical];
-  if (canonical === 'source') return 'LinkedIn';
   if (canonical === 'over18' || canonical === 'under18') {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(profile.birthDate || '')) return '';
     const now = new Date(), [year, month, day] = profile.birthDate.split('-').map(Number);
@@ -215,7 +214,7 @@ export function workdayAnswer(field, profile) {
   if (value === undefined || Array.isArray(value) && !value.length) return null;
   const answer = { fieldId: field.fieldId || field.id, value, inferred: false, provenance: 'saved', source: 'profile' };
   if (['first_name', 'last_name'].includes(field.ats?.canonicalKey) && !profile[profileKeys[field.ats.canonicalKey]]) Object.assign(answer, { inferred: true, provenance: 'guessed' });
-  if (field.ats?.canonicalKey === 'source' || field.ats?.canonicalKey?.startsWith('current_date')) answer.provenance = 'inferred';
+  if (field.ats?.canonicalKey?.startsWith('current_date')) answer.provenance = 'inferred';
   if (field.ats?.canonicalKey?.match(/_(?:month|day)$/) && /^\d+$/.test(String(value)) && ['number', 'text'].includes(field.type)) answer.value = String(Number(value));
   const choice = field.widget || ['combobox', 'select', 'radio'].includes(field.type) || field.type === 'checkbox' && field.ats?.multiple;
   if (!choice || value === '' || field.type === 'checkbox' && !field.widget && !field.ats?.multiple) return answer;
