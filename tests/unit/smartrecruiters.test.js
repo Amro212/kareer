@@ -9,6 +9,7 @@ import { verifyField } from '../../src/core/fields/verify.js';
 import { waitForResumeParsing } from '../../src/core/resume.js';
 import { setPlatform } from '../../src/core/platform.js';
 import { createGmHost } from '../../src/core/hosts/gm.js';
+import { isResumeField } from '../../src/core/resume.js';
 
 let dom;
 function hydrate(root) {
@@ -62,6 +63,28 @@ test('accepted upload metadata belongs to each native shadow file input', async 
   }
   document.querySelector('[data-test="resume-upload"]').setAttribute('files', '{bad JSON');
   assert.equal((await verifyField(files.find(field => field.id === 'resume-upload'), 'QA-Resume.pdf')).verified, false);
+});
+
+test('native parser upload retains its prefill-only ownership boundary', () => {
+  boot();
+  const parser = document.querySelector('[data-test="apply-with-resume-container"]');
+  const prefill = document.createElement('oc-easy-apply');
+  parser.replaceWith(prefill); prefill.append(parser);
+  const files = scanFormFields().filter(field => field.type === 'file');
+  const field = files.find(field => parser.shadowRoot.contains(field.element));
+  assert.equal(isResumeField(field, files), false);
+});
+
+test('missing Transcript cannot borrow an accepted resume or become a resume target', async () => {
+  boot();
+  document.querySelector('main').insertAdjacentHTML('beforeend', '<spl-dropzone data-test="transcript-upload" label="Transcript" files="[]"><template shadowrootmode="open"><input type="file" id="transcript"></template></spl-dropzone>');
+  hydrate(document);
+  const files = scanFormFields().filter(field => field.type === 'file');
+  const transcript = files.find(field => field.id === 'transcript');
+  assert.ok(transcript);
+  assert.equal(transcript.currentValue, '');
+  assert.equal(isResumeField(transcript, files), false);
+  assert.equal((await verifyField(transcript, 'QA-Resume.pdf')).verified, false);
 });
 
 test('waits for parser-disabled state and shadow editor replacement before choosing targets', async () => {

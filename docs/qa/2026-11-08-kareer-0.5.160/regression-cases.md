@@ -1,9 +1,11 @@
 # Kareer 0.5.160 — focused regression specifications
 
-Investigation only. Product fixes are deferred by explicit user instruction. Run with Auto Submit **off**, using an isolated synthetic profile for automated work. Never run these against a live final-submit control. Live actions below refer to the authorized, unsent QA session, not permission for future submissions.
+**November 9 status:** repairs are implemented on `fix/qa-160-application-reliability`. All eleven assertions in `production-0.5.160.test.js` are ordinary passing tests. Eight native-shadow/parser/upload cases in `smartrecruiters.test.js` and three rendered cases in `review-state.test.js` replace the previous placeholders and engine-only limits. See [diagnosis and verification](diagnosis-follow-up.md) and [recorded output](repair-tests.tap).
+
+The specifications and “Current result” descriptions below preserve the original pre-repair observations. Run with Auto Submit **off**, using an isolated synthetic profile for automated work. Never run these against a live final-submit control. Live actions below refer to the authorized, unsent QA session, not permission for future submissions.
 
 Automated entry point: `node --test tests/unit/production-0.5.160.test.js`.
-Seven executable TODO assertions document known failures. Two additional TODO entries track native cases that the static capture cannot replay. A TODO is **not a passing regression test**; remove its TODO marker when implementing the corresponding fix, and prove it passes. The ordinary characterization assertion verifies that the Greenhouse capture contains the relevant controls.
+The original version had seven failing executable TODO assertions and two native-only placeholders. Those markers are removed; the characterization now asserts the actual submit control rather than enshrining two candidates. Native shadow internals are replayed by the reduced follow-up fixture rather than the original static Save Page capture.
 
 ## QA-160-02 — application-entry control versus submit
 

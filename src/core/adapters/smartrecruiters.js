@@ -18,7 +18,7 @@ export const smartrecruitersAdapter = {
   fieldMetadata(element) {
     const owner = uploadOwner(element);
     const id = owner?.getAttribute('data-test');
-    if (!['resume-upload', 'apply-with-resume-container'].includes(id) || element.closest('oc-easy-apply,[data-test*="prefill"]')) return null;
+    if (!['resume-upload', 'apply-with-resume-container'].includes(id) || owner.closest('oc-easy-apply,[data-test*="prefill"]')) return null;
     return { id, label: id === 'resume-upload' ? 'Resume' : 'Autofill with resume',
       ats: { adapter: 'smartrecruiters', canonicalKey: 'resume' } };
   },

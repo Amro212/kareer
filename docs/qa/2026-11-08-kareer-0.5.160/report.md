@@ -1,5 +1,7 @@
 # Kareer v0.5.160 — production application QA report
 
+**November 9 repair update:** the investigation below is historical. Diagnosis is now established for the education replacement race and phone corruption; focused repairs and ordinary passing regressions are recorded in [the follow-up](diagnosis-follow-up.md). No post-repair live release sign-off or submission was performed.
+
 **Test date:** November 8, 2026, America/Toronto. Resumed evidence session: 21:51:52–22:29:46 EST (02:51:52–03:29:46 UTC November 9), plus the earlier DoorDash fill.
 
 **Disposition:** investigation complete for the five selected postings; product fixes deliberately deferred. Nine findings are recorded below, including one first-run phone-loss observation whose precise cause remains unconfirmed. Seven have executable failing regression assertions; two have detailed native regression specifications pending faithful automated replay. This is not a clean release sign-off.

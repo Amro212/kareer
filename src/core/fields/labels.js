@@ -54,7 +54,7 @@ export function extractLabel(element) {
   // 2. Check aria-labelledby
   const ariaLabelledBy = element.getAttribute('aria-labelledby');
   if (ariaLabelledBy) {
-    const ids = ariaLabelledBy.split(/\s+/);
+    const ids = ariaLabelledBy.split(/\s+/).filter(Boolean);
     const textParts = ids
       .map((id) => document.getElementById(id))
       // Some button dropdowns reference both the question and themselves (or
@@ -201,7 +201,7 @@ export function extractGroupLabel(elements = [], groupName = '') {
     // Check aria-label on container
     const ariaLabel = container.getAttribute('aria-label');
     if (ariaLabel && ariaLabel.trim()) return cleanText(ariaLabel);
-    const labelledBy = (container.getAttribute('aria-labelledby') || '').split(/\s+/).map(id => container.getRootNode().getElementById?.(id)?.textContent || '').join(' ').trim();
+    const labelledBy = (container.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean).map(id => container.getRootNode().getElementById?.(id)?.textContent || '').join(' ').trim();
     if (labelledBy) return cleanText(labelledBy);
 
     // Look for heading or label that is NOT wrapping one of the radio inputs
@@ -302,7 +302,7 @@ export function extractDescription(element) {
 
   const describedBy = element.getAttribute('aria-describedby');
   if (describedBy) {
-    const textParts = describedBy.split(/\s+/)
+    const textParts = describedBy.split(/\s+/).filter(Boolean)
       .map((id) => document.getElementById(id))
       .map(describedByText)
       .filter(Boolean)

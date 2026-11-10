@@ -68,12 +68,19 @@ test('hidden unrelated uploads do not create application evidence', () => {
   assert.equal(classifyPage().type, 'listing');
 });
 
+test('adapter-owned Apply remains a final action without a native form', () => {
+  boot('<h1>Job description</h1><button type="button" class="ashby-application-form-submit-button">Apply</button>', 'https://jobs.ashbyhq.com/qa/application');
+  assert.equal(inspectSubmit().count, 1);
+  assert.equal(classifyPage().type, 'review');
+});
+
 test('QA-160-04 unlabeled controls must not look up an empty ID', () => {
-  boot('<button>Next</button><input aria-label="Question">');
+  boot('<button>Next</button><input aria-label="Question"><div class="form-group"><input type="radio" name="choice" value="yes"><input type="radio" name="choice" value="no"></div><textarea aria-labelledby=" " aria-describedby=" "></textarea>');
   const calls = [], original = document.getElementById.bind(document);
   document.getElementById = id => { calls.push(id); return original(id); };
   controlLabel(document.querySelector('button'));
   workflowLabel({element:document.querySelector('input'),type:'text',label:'Question'});
+  scanFormFields();
   assert.deepEqual(calls, []);
 });
 

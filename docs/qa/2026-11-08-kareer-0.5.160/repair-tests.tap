@@ -1,0 +1,305 @@
+TAP version 13
+# Subtest: captured DoorDash contains distinct entry and native submit buttons
+ok 1 - captured DoorDash contains distinct entry and native submit buttons
+  ---
+  duration_ms: 428.4836
+  type: 'test'
+  ...
+# Subtest: QA-160-02 entry Apply must not compete with actual submission
+ok 2 - QA-160-02 entry Apply must not compete with actual submission
+  ---
+  duration_ms: 276.3248
+  type: 'test'
+  ...
+# Subtest: ambiguous Apply needs application form evidence; external localized submits retain native ownership
+ok 3 - ambiguous Apply needs application form evidence; external localized submits retain native ownership
+  ---
+  duration_ms: 63.9159
+  type: 'test'
+  ...
+# Subtest: hidden unrelated uploads do not create application evidence
+ok 4 - hidden unrelated uploads do not create application evidence
+  ---
+  duration_ms: 62.1603
+  type: 'test'
+  ...
+# Subtest: adapter-owned Apply remains a final action without a native form
+ok 5 - adapter-owned Apply remains a final action without a native form
+  ---
+  duration_ms: 63.3959
+  type: 'test'
+  ...
+# [Kareer:INFO] Scan[source--source]: 0 owned options, committed=false
+# [Kareer:INFO] Scan[country--country]: 0 owned options, committed=true
+# [Kareer:INFO] Scan[address--countryRegion]: 0 owned options, committed=true
+# [Kareer:INFO] Scan[phoneNumber--phoneType]: 0 owned options, committed=true
+# [Kareer:INFO] Scan[phoneNumber--countryPhoneCode]: 0 owned options, committed=true
+# Subtest: QA-160-04 unlabeled controls must not look up an empty ID
+ok 6 - QA-160-04 unlabeled controls must not look up an empty ID
+  ---
+  duration_ms: 77.2764
+  type: 'test'
+  ...
+# Subtest: QA-160-05 unsupported Workday source must remain available for contextual fallback
+ok 7 - QA-160-05 unsupported Workday source must remain available for contextual fallback
+  ---
+  duration_ms: 234.5672
+  type: 'test'
+  ...
+# Subtest: QA-160-06 Workday upload-only step must classify as application
+ok 8 - QA-160-06 Workday upload-only step must classify as application
+  ---
+  duration_ms: 124.9144
+  type: 'test'
+  ...
+# Subtest: QA-160-03 clearing required Lever answer must invalidate review state
+ok 9 - QA-160-03 clearing required Lever answer must invalidate review state
+  ---
+  duration_ms: 515.672
+  type: 'test'
+  ...
+# Subtest: QA-160-07 manual Back from Workday final review must invalidate submission state
+ok 10 - QA-160-07 manual Back from Workday final review must invalidate submission state
+  ---
+  duration_ms: 533.0804
+  type: 'test'
+  ...
+# Subtest: QA-160-09 accepted SmartRecruiters resume must verify after native FileList clears
+ok 11 - QA-160-09 accepted SmartRecruiters resume must verify after native FileList clears
+  ---
+  duration_ms: 78.926
+  type: 'test'
+  ...
+# [Kareer:INFO] Page detection { eligible: true, reasons: [ 'ats-adapter' ] }
+# [Kareer:INFO] Kareer Shadow DOM UI mounted successfully.
+# [Kareer:INFO] Kareer v0.3.0 initialized on jobs.lever.co
+# [Kareer:INFO] Field action [Profile]: id=email, label="Email"
+# [Kareer:INFO] Field action: id=email, type=email, tag=INPUT, path=/qa/apply
+# [Kareer:INFO] Timing[email]: fill=2ms, settle=205ms, verify=1ms
+# [Kareer:INFO] Page detection { eligible: true, reasons: [ 'ats-adapter' ] }
+# [Kareer:INFO] Kareer Shadow DOM UI mounted successfully.
+# [Kareer:INFO] Kareer v0.3.0 initialized on jobs.lever.co
+# Subtest: rendered review card clears old answer and readiness after manual deletion
+ok 12 - rendered review card clears old answer and readiness after manual deletion
+  ---
+  duration_ms: 2362.751
+  type: 'test'
+  ...
+# [Kareer:INFO] Page detection { eligible: true, reasons: [ 'ats-adapter' ] }
+# [Kareer:INFO] Kareer Shadow DOM UI mounted successfully.
+# [Kareer:INFO] Kareer v0.3.0 initialized on acme.myworkdayjobs.com
+# Subtest: rendered failed card becomes verified after manual correction without AI or execution
+ok 13 - rendered failed card becomes verified after manual correction without AI or execution
+  ---
+  duration_ms: 1557.6935
+  type: 'test'
+  ...
+# Subtest: rendered Workday Back restores Autofill without continuing the earlier step
+ok 14 - rendered Workday Back restores Autofill without continuing the earlier step
+  ---
+  duration_ms: 615.9239
+  type: 'test'
+  ...
+# [Kareer:INFO] Scan[city]: 0 owned options, committed=false
+# [Kareer:INFO] Scan[institution-before]: 0 owned options, committed=false
+# [Kareer:INFO] Scan[city]: 0 owned options, committed=false
+# [Kareer:INFO] Scan[institution-before]: 0 owned options, committed=false
+# [Kareer:INFO] Scan[city]: 0 owned options, committed=false
+# [Kareer:INFO] Scan[institution-before]: 0 owned options, committed=false
+# [Kareer:INFO] Scan[city]: 0 owned options, committed=false
+# [Kareer:INFO] Scan[institution-before]: 0 owned options, committed=false
+# [Kareer:INFO] Scan[city]: 0 owned options, committed=false
+# [Kareer:INFO] Scan[institution-before]: 0 owned options, committed=false
+# [Kareer:INFO] Scan[city]: 0 owned options, committed=false
+# [Kareer:INFO] Scan[institution-before]: 0 owned options, committed=false
+# [Kareer:INFO] Waiting for resume parsing and stable application fields.
+# Subtest: SmartRecruiters scans one native descriptor per nested logical control
+ok 15 - SmartRecruiters scans one native descriptor per nested logical control
+  ---
+  duration_ms: 234.6871
+  type: 'test'
+  ...
+# Subtest: overwrite-off filling preserves an existing compound phone value
+ok 16 - overwrite-off filling preserves an existing compound phone value
+  ---
+  duration_ms: 60.3309
+  type: 'test'
+  ...
+# Subtest: accepted upload metadata belongs to each native shadow file input
+ok 17 - accepted upload metadata belongs to each native shadow file input
+  ---
+  duration_ms: 57.196
+  type: 'test'
+  ...
+# Subtest: native parser upload retains its prefill-only ownership boundary
+ok 18 - native parser upload retains its prefill-only ownership boundary
+  ---
+  duration_ms: 61.2794
+  type: 'test'
+  ...
+# Subtest: missing Transcript cannot borrow an accepted resume or become a resume target
+ok 19 - missing Transcript cannot borrow an accepted resume or become a resume target
+  ---
+  duration_ms: 50.8118
+  type: 'test'
+  ...
+# [Kareer:INFO] Resume processing settled; rescanning application fields.
+# [Kareer:INFO] Waiting for resume parsing and stable application fields.
+# Subtest: waits for parser-disabled state and shadow editor replacement before choosing targets
+ok 20 - waits for parser-disabled state and shadow editor replacement before choosing targets
+  ---
+  duration_ms: 181.3393
+  type: 'test'
+  ...
+# [Kareer:INFO] Resume processing settled; rescanning application fields.
+# Subtest: parser wait observes late shadow property changes through the quiet window
+ok 21 - parser wait observes late shadow property changes through the quiet window
+  ---
+  duration_ms: 121.6953
+  type: 'test'
+  ...
+# [Kareer:INFO] Page detection { eligible: true, reasons: [ 'ats-adapter' ] }
+# [Kareer:INFO] Kareer Shadow DOM UI mounted successfully.
+# [Kareer:INFO] Kareer v0.3.0 initialized on jobs.smartrecruiters.com
+# [Kareer:INFO] Field action: id=resume-upload, type=file, tag=INPUT, path=/oneclick-ui/company/qa/publication/qa
+# [Kareer:INFO] Waiting for resume parsing and stable application fields.
+# [Kareer:INFO] Resume processing settled; rescanning application fields.
+# [Kareer:INFO] Starting progressive fill of 0 local, 2 upload and 0 embedded fields...
+# [Kareer:INFO] Autofill finished: 2 filled, 0 failed and 0 untouched out of 2 current fields.
+# [Kareer:INFO] All fields are already filled. Enable "Overwrite Existing Values" in Settings to overwrite.
+# Subtest: panel preserves both accepted widgets after parsing and on retry
+ok 22 - panel preserves both accepted widgets after parsing and on retry
+  ---
+  duration_ms: 3733.1588
+  type: 'test'
+  ...
+# [Kareer:INFO] Field action: id=jc_field_1, type=file, tag=INPUT, path=/job/apply
+# [Kareer:INFO] Waiting for resume parsing and stable application fields.
+# Subtest: canonical Workday resume routing accepts a generic upload label after other fields
+ok 23 - canonical Workday resume routing accepts a generic upload label after other fields
+  ---
+  duration_ms: 83.4373
+  type: 'test'
+  ...
+# [Kareer:INFO] Resume processing settled; rescanning application fields.
+# [Kareer:INFO] Waiting for resume parsing and stable application fields.
+# Subtest: Workday waits for asynchronous acceptance after clearing the delivered FileList
+ok 24 - Workday waits for asynchronous acceptance after clearing the delivered FileList
+  ---
+  duration_ms: 289.5428
+  type: 'test'
+  ...
+# Subtest: Ashby accepted resume survives a cleared input and stays scoped to its upload widget
+ok 25 - Ashby accepted resume survives a cleared input and stays scoped to its upload widget
+  ---
+  duration_ms: 31.8561
+  type: 'test'
+  ...
+# Subtest: Ashby synchronous acceptance is an upload success even when React clears files
+ok 26 - Ashby synchronous acceptance is an upload success even when React clears files
+  ---
+  duration_ms: 11.6957
+  type: 'test'
+  ...
+# Subtest: scanner includes file inputs instead of skipping them
+ok 27 - scanner includes file inputs instead of skipping them
+  ---
+  duration_ms: 15.3055
+  type: 'test'
+  ...
+# Subtest: file fields are omitted from the AI payload
+ok 28 - file fields are omitted from the AI payload
+  ---
+  duration_ms: 11.7232
+  type: 'test'
+  ...
+# [Kareer:INFO] Resume processing settled; rescanning application fields.
+# [Kareer:INFO] Waiting for resume parsing and stable application fields.
+# Subtest: parser wait observes value properties and replacement nodes before settling
+ok 29 - parser wait observes value properties and replacement nodes before settling
+  ---
+  duration_ms: 130.9074
+  type: 'test'
+  ...
+# [Kareer:INFO] Waiting for resume parsing and stable application fields.
+# Subtest: a stuck parser stops the run instead of authorizing fills
+ok 30 - a stuck parser stops the run instead of authorizing fills
+  ---
+  duration_ms: 76.3657
+  type: 'test'
+  ...
+# [Kareer:INFO] Resume processing settled; rescanning application fields.
+# [Kareer:INFO] Waiting for resume parsing and stable application fields.
+# [Kareer:INFO] Waiting for resume parsing and stable application fields.
+# [Kareer:INFO] Resume processing settled; rescanning application fields.
+# [Kareer:INFO] Waiting for resume parsing and stable application fields.
+# [Kareer:INFO] Resume processing settled; rescanning application fields.
+# Subtest: Lever analyzing-resume indicator blocks fills until it disappears
+ok 31 - Lever analyzing-resume indicator blocks fills until it disappears
+  ---
+  duration_ms: 94.7234
+  type: 'test'
+  ...
+# Subtest: parser wait honors cancellation and does not delay other ATS hosts
+ok 32 - parser wait honors cancellation and does not delay other ATS hosts
+  ---
+  duration_ms: 11.4511
+  type: 'test'
+  ...
+# Subtest: fillFileInput attaches the stored resume and verify checks the filename
+ok 33 - fillFileInput attaches the stored resume and verify checks the filename
+  ---
+  duration_ms: 10.3696
+  type: 'test'
+  ...
+# Subtest: isResumeField identifies resume inputs and excludes cover letters and portfolios
+ok 34 - isResumeField identifies resume inputs and excludes cover letters and portfolios
+  ---
+  duration_ms: 5.8196
+  type: 'test'
+  ...
+# Subtest: deduplicateFields renames duplicate IDs instead of throwing
+ok 35 - deduplicateFields renames duplicate IDs instead of throwing
+  ---
+  duration_ms: 7.9401
+  type: 'test'
+  ...
+# Subtest: completed Ashby parser uploader does not require a filename on the parser-only widget
+ok 36 - completed Ashby parser uploader does not require a filename on the parser-only widget
+  ---
+  duration_ms: 25.2004
+  type: 'test'
+  ...
+# Subtest: resume parser does not mistake an unrelated page spinner for upload activity
+ok 37 - resume parser does not mistake an unrelated page spinner for upload activity
+  ---
+  duration_ms: 13.5058
+  type: 'test'
+  ...
+# Subtest: Ashby parser completion cannot borrow acceptance from a cover letter
+ok 38 - Ashby parser completion cannot borrow acceptance from a cover letter
+  ---
+  duration_ms: 10.5267
+  type: 'test'
+  ...
+# Subtest: deduplicateFields reserves actual suffixed IDs and stays idempotent
+ok 39 - deduplicateFields reserves actual suffixed IDs and stays idempotent
+  ---
+  duration_ms: 9.9704
+  type: 'test'
+  ...
+# Subtest: Ashby actual file-item markup verifies resume and parser after FileList clears
+ok 40 - Ashby actual file-item markup verifies resume and parser after FileList clears
+  ---
+  duration_ms: 81.4376
+  type: 'test'
+  ...
+1..40
+# tests 40
+# suites 0
+# pass 40
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 22155.2968

@@ -94,7 +94,8 @@ export function classifyPage(doc = document) {
     (el.form && isApplicationForm(el.form) || adapter.id === 'workday' && adapter.fieldMetadata(el)?.ats?.canonicalKey === 'resume')) &&
     (!el.matches('button,input[type=search]') || !el.closest('header,nav,footer') && (el.matches('button[aria-haspopup=listbox]') || adapter.isCombobox?.(el))));
   if (fields) return { type: 'application', reason: 'Application fields detected.' };
-  const final = actionControls(doc).some(isSubmitControl);
+  const adapterSubmit = adapter.submitControl?.(doc);
+  const final = actionControls(doc).some(isSubmitControl) || adapterSubmit && isVisible(adapterSubmit);
   if (final) return { type: 'review', reason: 'Ready for review. Final submission is manual.' };
   if (doc.querySelector('script[type="application/ld+json"]') && /JobPosting/.test(doc.querySelector('script[type="application/ld+json"]')?.textContent || '') || /job description|about (?:the|this) (?:role|job)/i.test(text)) return { type: 'listing', reason: 'Job listing detected.' };
   return { type: 'unrelated', reason: 'No application step detected.' };

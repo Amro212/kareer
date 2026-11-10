@@ -6,6 +6,11 @@
 - [Focused regression specifications](regression-cases.md)
 - [Targeted test output](evidence/targeted-tests.tap)
 - [Executable regression assertions](../../../tests/unit/production-0.5.160.test.js)
+- [November 9 diagnosis, repairs and verification](diagnosis-follow-up.md)
+- [Post-repair targeted output: 40 passing, zero TODOs](repair-tests.tap)
+- [Reduced UHN shadow fixture](../../../fixtures/smartrecruiters-uhn-shadow-fixture.html)
+- [Native ownership/parser/retry regressions](../../../tests/unit/smartrecruiters.test.js)
+- [Rendered review reconciliation regressions](../../../tests/unit/review-state.test.js)
 
 ## Screenshots
 
@@ -29,6 +34,8 @@ Screenshots contain some professional context/public links. Redact before sharin
 | [UHN / SmartRecruiters](../../../fixtures/smartrecruiters-uhn-2026-11-08-captured.html) | Custom element attributes, dynamic editor shell, accepted upload metadata | Save Page omitted shadow internals; two native-only cases remain pending |
 
 ## Targeted verification result
+
+This section records the original failing investigation. The November 9 follow-up above supersedes its pending status; historical evidence and output remain intact.
 
 Command: `node --test tests/unit/production-0.5.160.test.js`.
 
