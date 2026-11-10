@@ -1,0 +1,26 @@
+<!doctype html>
+<!-- Reduced open-shadow structure inspected on the authorized UHN form on 2026-11-09.
+     IDs and all values are synthetic. Templates preserve the observed shadow boundaries.
+     The parser's disabled dropzone and editor replacement are exercised by the targeted test. -->
+<main>
+  <oc-apply-with-resume><spl-dropzone data-test="apply-with-resume-container" files='[{"fileName":"QA-Resume.pdf"}]'>
+    <template shadowrootmode="open"><div><label>Choose a file or drop it here</label><input id="parser-file" type="file"></div></template>
+  </spl-dropzone></oc-apply-with-resume>
+  <spl-autocomplete id="city" label="City"><template shadowrootmode="open">
+    <spl-input id="city" label="City"><template shadowrootmode="open"><input id="city" role="combobox" aria-controls="city-menu"></template></spl-input>
+    <div id="city-menu" role="listbox" hidden></div>
+  </template></spl-autocomplete>
+  <spl-phone-field id="phone" label="Phone number" required value='{"country":"CA","value":"4165550123"}'>
+    <template shadowrootmode="open"><spl-input id="phone" type="tel" required><template shadowrootmode="open"><input id="phone" type="tel" aria-label="Phone number" aria-required="true"></template></spl-input></template>
+  </spl-phone-field>
+  <oc-education-edit-form data-test="education-edit-form">
+    <spl-input id="edu-degree-before" label="Degree"><template shadowrootmode="open"><input id="edu-degree-before" type="text"></template></spl-input>
+    <spl-textarea id="edu-desc-before" label="Description"><template shadowrootmode="open"><textarea id="edu-desc-before"></textarea></template></spl-textarea>
+    <spl-autocomplete id="institution-before" label="Institution" allowcustomvalues><template shadowrootmode="open">
+      <spl-input id="institution-before" label="Institution" required><template shadowrootmode="open"><input id="institution-before" role="combobox" aria-required="true"></template></spl-input>
+    </template></spl-autocomplete>
+  </oc-education-edit-form>
+  <section><h3>Resume</h3><spl-dropzone data-test="resume-upload" files='[{"fileName":"QA-Resume.pdf"}]'>
+    <template shadowrootmode="open"><div><label>Choose a file or drop it here</label><input id="resume-file" type="file"></div></template>
+  </spl-dropzone></section>
+</main>

@@ -201,13 +201,12 @@ function resolveLiveElement(field) {
 }
 
 function resolveLiveFileElement(field, root = document) {
-  if (field.element?.isConnected) return field.element;
   const fields = scanFormFields(root);
   deduplicateFields(fields);
   const fresh = fields.find(candidate => candidate.id === field.id && candidate.type === "file")
     || fields.find(candidate => candidate.type === "file");
   if (fresh) {
-    field.element = fresh.element;
+    Object.assign(field, fresh);
     return fresh.element;
   }
   return field.element;

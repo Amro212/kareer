@@ -108,12 +108,12 @@ test('QA-160-07 manual Back from Workday final review must invalidate submission
   assert.notEqual(engine.session.status, 'review');
 });
 
-test('QA-160-09 accepted SmartRecruiters resume must verify after native FileList clears', {todo:'Unfixed; captured files attribute, no ATS scripts executed'}, async () => {
+test('QA-160-09 accepted SmartRecruiters resume must verify after native FileList clears', async () => {
   boot(fixture('smartrecruiters-uhn'), 'https://jobs.smartrecruiters.com/oneclick-ui/company/UniversityHealthNetwork/publication/qa');
   const upload = document.querySelector('spl-dropzone[data-test="resume-upload"]');
   assert.equal(JSON.parse(upload.getAttribute('files'))[0].fileName,'QA-Resume.pdf');
   assert.equal((await verifyField({type:'file',element:upload}, 'QA-Resume.pdf')).verified, true);
 });
 
-test.todo('QA-160-08 SmartRecruiters duplicate shadow controls and field identity errors: native reproduction in regression-cases.md; saved HTML excludes open shadow internals');
-test.todo('QA-160-10 SmartRecruiters first-run phone clearing: native reproduction in regression-cases.md; first-run occurrence, corrected phone survived retry');
+// QA-160-08/10: native shadow ownership, parser replacement, phone state and retry
+// regressions are executable in smartrecruiters.test.js.
