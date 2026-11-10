@@ -39,7 +39,6 @@ export const workdayAdapter = {
     continueReadyTimeoutMs: 15000,
     comboboxEscapeRollback: true,
     placesLocation: false,
-    stepReviewPause: true,
   },
   isSectionHeading() {
     return false;

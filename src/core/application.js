@@ -15,6 +15,7 @@ import { resolveComboboxSearchAnswers, resolveDiscoveredAnswers } from './autofi
 import { platform } from './platform.js';
 import { snapshotMaterials, applyGeneratedMaterials, materialKind } from './materials.js';
 import { detectAdapter } from './adapters/index.js';
+import { isKareerElement } from './domRoots.js';
 import { logger } from './debug.js';
 import { applyRemoteResumeUploads, embeddedApplicationStates, remoteFieldId, collectRemoteValidation } from './remote.js';
 
@@ -38,6 +39,38 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
   let pendingJob = null;
   let lastEmission = '';
   let lastObservationLog = '';
+  let inactivePage = null, unsubscribeEdits = null;
+  function inactiveSnapshot() {
+    const fields = scanPageFields();
+    return { sessionId: session.id, observation: observePage(fields),
+      fields, errors: inspectValidation(fields) };
+  }
+  function reconcileInactivePage() {
+    if (!session || session.active || session.frameOwner || disposed) return;
+    const current = inactiveSnapshot();
+    const previous = inactivePage;
+    inactivePage = current;
+    if (!previous || previous.sessionId !== session.id) return;
+    const pageChanged = JSON.stringify(previous.observation) !== JSON.stringify(current.observation);
+    let edited = false;
+    for (const field of current.fields) {
+      const old = previous.fields.find(old => old.id === field.id);
+      if (!old) continue;
+      const valueChanged = JSON.stringify(old.currentValue) !== JSON.stringify(field.currentValue);
+      const errors = current.errors.filter(error => error.fieldId === field.id);
+      const oldErrors = previous.errors.filter(error => error.fieldId === field.id);
+      if (!valueChanged && JSON.stringify(errors) === JSON.stringify(oldErrors)) continue;
+      edited = true;
+      const missing = unfilled(field);
+      results.set(field.id, { status: errors.length ? 'failed' : missing ? 'untouched' : 'verified',
+        value: field.currentValue, error: errors.map(error => error.message).join(' '),
+        inferred: false, provenance: errors.length || missing ? 'unresolved' : 'verified', source: 'manual' });
+    }
+    if ((pageChanged || edited) && session.status === 'review') {
+      session.stepReview = false;
+      status('idle', 'Application changed. Review the current page or run Autofill again.');
+    } else if (edited || pageChanged) emit();
+  }
   function updateJob(job) {
       if (disposed) return;
       pendingJob = job;
@@ -168,6 +201,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     const stayActive = runnable.has(value) || (value === 'review' && getSettings().autoSubmit);
     if (!stayActive) {
       session.active = false;
+      inactivePage = inactiveSnapshot();
       if (session.materialRunRef && platform.capabilities.materials) void platform.materials.request('endRun', { sessionId: session.id, runRef: session.materialRunRef }).catch(() => {});
     }
     saveSession(session);
@@ -597,7 +631,8 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     return true;
   }
   async function tick() {
-    if (busy || !session?.active) return;
+    if (busy) return;
+    if (!session?.active) { reconcileInactivePage(); return; }
     if (session.status === 'review' && getSettings().autoSubmit) {
       if (!compatibleSession()) return;
       busy = true;
@@ -777,12 +812,6 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         step.forceContinue = false;
         if (wasForced) {
           step.reviewed = true;
-        } else if (detectAdapter().quirks?.stepReviewPause && !step.reviewed) {
-          step.reviewed = true;
-          session.stepReview = true;
-          saveSession(session);
-          status('paused', 'Workday step filled. Ready for your review.');
-          return;
         }
         control = findContinue();
         if (control && isDisabled(control)) {
@@ -874,6 +903,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         } catch { /* Ignore early DOM access */ }
       }
       if (pendingJob) updateJob(pendingJob);
+      if (session && !session.active) inactivePage = inactiveSnapshot();
       emit();
       const checkNativeStepAdvance = () => {
         if (!session || !session.stepReview) return;
@@ -898,6 +928,13 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         if (mutations.some(m => !m.target.closest?.('#kareer-root,#kareer-inline-rewrite'))) schedule();
       });
       observer.observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
+      const edited = event => { if (!isKareerElement(event.target)) schedule(); };
+      document.addEventListener('input', edited, true);
+      document.addEventListener('change', edited, true);
+      unsubscribeEdits = () => {
+        document.removeEventListener('input', edited, true);
+        document.removeEventListener('change', edited, true);
+      };
       // A single-page step change may mutate little; the navigation event is the
       // reliable trigger. The interval stays as a safety net.
       unsubscribeNavigation = platform.navigation.onChange(marker => {
@@ -1015,7 +1052,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     destroy() {
       disposed = true; pendingJob = null; generation++;
       if (session?.frameOwner) void platform.frames.command(session.frameOwner.frameId,{action:'cancel'}).catch(()=>{});
-      clearTimeout(timer); cancelDelay?.(); clearInterval(interval); observer?.disconnect(); unsubscribeNavigation?.();
+      clearTimeout(timer); cancelDelay?.(); clearInterval(interval); observer?.disconnect(); unsubscribeNavigation?.(); unsubscribeEdits?.();
     },
   };
 }

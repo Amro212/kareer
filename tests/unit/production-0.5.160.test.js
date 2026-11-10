@@ -1,4 +1,4 @@
-// Captured QA regressions; remaining TODOs identify pending repairs.
+// Captured QA regressions; native shadow cases live in smartrecruiters.test.js.
 import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -93,7 +93,7 @@ test('QA-160-06 Workday upload-only step must classify as application', () => {
   assert.equal(classifyPage().type, 'application');
 });
 
-test('QA-160-03 clearing required Lever answer must invalidate review state', {todo:'Unfixed; engine-level reproduction; live panel evidence in action log'}, async () => {
+test('QA-160-03 clearing required Lever answer must invalidate review state', async () => {
   boot(fixture('lever-shyftlabs'), 'https://jobs.lever.co/qa');
   // Retain the captured required text control and submit semantics; isolate other questions.
   const input = [...document.querySelectorAll('input')].find(input => /How soon can you join/.test(input.closest('li')?.textContent || ''));
@@ -112,7 +112,7 @@ test('QA-160-03 clearing required Lever answer must invalidate review state', {t
   assert.notEqual(engine.session.status, 'review');
 });
 
-test('QA-160-07 manual Back from Workday final review must invalidate submission state', {todo:'Unfixed; captures real earlier-step upload DOM'}, async () => {
+test('QA-160-07 manual Back from Workday final review must invalidate submission state', async () => {
   boot('<h2>Review your application</h2><button>Submit</button>', 'https://clio.wd3.myworkdayjobs.com/en-US/ClioCareerSite/job/Toronto/Software-Developer--Toronto-_REQ-4630/apply/applyManually');
   engine = createApplicationEngine({settleMs:0});
   await engine.initialize();

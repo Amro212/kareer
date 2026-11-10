@@ -2341,7 +2341,7 @@ export function summarizeFieldResults(fields, results) {
     if (res && res.status !== FILL_STATUS.UNTOUCHED && (res.value !== '' && res.value != null)) {
       if (res.source === 'ai' || (res.inferred && res.source !== 'profile' && res.source !== 'saved')) {
         aiCount++;
-      } else {
+      } else if (res.source !== 'manual') {
         profileCount++;
       }
     }
@@ -2385,6 +2385,8 @@ function renderFieldReviewSection() {
         sourceBadge = '<span class="kr-badge kr-badge-ai" title="Filled using an AI call">AI</span>';
       } else if (src === 'saved') {
         sourceBadge = '<span class="kr-badge kr-badge-saved" title="Reused exact saved answer">SAVED</span>';
+      } else if (src === 'manual') {
+        sourceBadge = '<span class="kr-badge" title="Edited on the application page">MANUAL</span>';
       } else {
         sourceBadge = '<span class="kr-badge kr-badge-profile" title="Deterministically filled from profile">PROFILE</span>';
       }
