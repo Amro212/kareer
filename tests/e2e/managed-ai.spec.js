@@ -1,39 +1,116 @@
-import { test, expect } from './support/fixtures.js';
+import { test, expect, ASHBY_HOST, GREENHOUSE_HOST } from './support/fixtures.js';
 
 async function mockGateway(kr, credits = 5) {
-  await kr.worker.evaluate(credits => {
+  await kr.worker.evaluate(({ credits, gateway }) => {
     const original = globalThis.fetch;
     globalThis.__managedCalls = [];
     globalThis.__credits = credits;
-    const status = () => ({ state: globalThis.__credits ? 'ready' : 'outOfCredits', monthly: 0, purchased: globalThis.__credits, total: globalThis.__credits, billingUrl: 'https://store.lemonsqueezy.com/billing' });
+    const status = () => ({ state: globalThis.__credits ? 'ready' : 'outOfCredits', monthly: 0, purchased: globalThis.__credits, total: globalThis.__credits });
     globalThis.fetch = async (url, options) => {
-      if (!String(url).startsWith('https://api.kareer.itsamro.me/')) return original(url, options);
+      if (!String(url).startsWith(`${gateway}/`)) return original(url, options);
       const path = new URL(url).pathname;
       const body = options?.body ? JSON.parse(options.body) : null;
       globalThis.__managedCalls.push({ path, body });
       if (path === '/v1/activate' && body?.licenseKey === 'invalid-test-license') return Response.json({ code: 'INVALID_KEY' }, { status: 403 });
       if (path === '/v1/activate' || path === '/v1/status') return Response.json(status());
-      if (path === '/v1/purchases') return Response.json({ id: '11111111-1111-4111-8111-111111111111', claimSecret: 'private-checkout-claim', expiresAt: new Date(Date.now() + 900000).toISOString(), url: 'https://api.kareer.itsamro.me/plans/11111111-1111-4111-8111-111111111111' });
-      if (path.startsWith('/v1/checkouts/')) return Response.json({ status: 'complete', licenseKey: 'private-managed-license', aiStatus: status() });
+      if (path === '/v1/purchases') return Response.json({ id: '11111111-1111-4111-8111-111111111111', claimSecret: 'private-checkout-claim', expiresAt: new Date(Date.now() + 900000).toISOString(), url: `${gateway}/plans/11111111-1111-4111-8111-111111111111`,
+        ...(body?.offer ? { checkoutUrl: `https://checkout.stripe.com/c/pay/cs_test_${body.offer}` } : {}) });
+      if (path.startsWith('/v1/purchases/')) return Response.json({ status: 'complete', licenseKey: 'private-managed-license', aiStatus: status() });
+      if (path === '/v1/billing-portal') return Response.json({ url: 'https://billing.stripe.com/p/session/test_e2e' });
       if (path === '/v1/ai') {
+        if (globalThis.__failManagedOnce) {
+          globalThis.__failManagedOnce = false;
+          return new Response(JSON.stringify({ type: 'error', code: 'GENERATION_FAILED', charged: false, credits: status() }) + '\n', { headers: { 'Content-Type': 'application/x-ndjson' } });
+        }
         if (!globalThis.__credits) return Response.json({ code: 'NO_CREDITS' }, { status: 402 });
         globalThis.__credits--;
         let content;
         if (body.operation.startsWith('document')) content = JSON.stringify({ paragraphs: ['Dear Hiring Team,', 'I build useful software.', 'Sincerely, Applicant'] });
         else if (body.operation === 'fieldRewrite') content = 'I build useful software.';
         else {
-          const input = JSON.parse(body.messages.at(-1).content);
-          content = JSON.stringify({ answers: input.fieldsToFill.map(f => ({ fieldId: f.fieldId, value: 'A useful answer', inferred: true })) });
+          if (body.messages || body.model) throw Error('The gateway builds prompts; clients send structured input only');
+          content = JSON.stringify({ answers: body.input.fieldsToFill.map(f => ({ fieldId: f.fieldId, value: 'A useful answer', inferred: true })) });
         }
         return new Response(JSON.stringify({ type: 'processing' }) + '\n' + JSON.stringify({ type: 'result', content, credits: { monthly: 0, purchased: globalThis.__credits, total: globalThis.__credits } }) + '\n', { headers: { 'Content-Type': 'application/x-ndjson' } });
       }
       throw Error('Unexpected mocked route');
     };
-  }, credits);
+  }, { credits, gateway: kr.gatewayOrigin });
 }
 
-test('new installation activates without showing models or leaking license credentials', async ({ kr }, testInfo) => {
+async function managedFixture(kr, ashby) {
+  const page = await kr.context.newPage();
+  await page.route('**/managed-fixture', route => route.fulfill({ contentType: 'text/html', body: `<title>Test Engineer Application</title><h1>Job Application</h1><form ${ashby ? 'class="ashby-application-form" data-ashby-root' : 'id="application_form"'}><label for="email">Email</label><input type="email" id="email" required><label for="reference">Reference note</label><textarea id="reference"></textarea><label for="why">Why do you want to work as a test engineer?</label><textarea id="why" required></textarea><button type="submit">Submit application</button></form>` }));
+  await page.goto(kr.fixtureUrl('managed-fixture', ashby ? ASHBY_HOST : GREENHOUSE_HOST));
+  await kr.openPanel(page);
+  return page;
+}
+
+for (const ats of ['Greenhouse', 'Ashby']) test(`${ats}: first run refreshes a funded wallet, keeps saved answers on failure, and resumes`, async ({ kr }) => {
+  await kr.seed({ apiKey: '', settings: { aiMode: 'managed' }, profile: { fullName: 'Jordan Example', email: 'kareer-test@example.com', savedAnswers: { 'Reference note': 'Saved reference' } } });
+  await mockGateway(kr, 300);
+  await kr.worker.evaluate(async () => {
+    const { 'kr:secrets': secrets } = await chrome.storage.local.get('kr:secrets');
+    await chrome.storage.local.set({ 'kr:secrets': { ...secrets, licenseKey: 'private-managed-license' }, 'kr:ai-status': { state: 'outOfCredits', total: 0 } });
+    globalThis.__failManagedOnce = true;
+  });
+  const page = await managedFixture(kr, ats === 'Ashby');
+  await expect(page.locator('.kr-model-chip')).toHaveText('0 credits');
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.locator('#kr-autofill-btn').click();
+  await expect(page.locator('#kr-main-panel')).toContainText('No credit was charged.');
+  await expect(page.locator('#email')).toHaveValue('kareer-test@example.com');
+  await expect(page.locator('#reference')).toHaveValue('Saved reference');
+  await expect(page.locator('#why')).toHaveValue('');
+  await expect(page.locator('.kr-model-chip')).toHaveText('300 credits');
+  expect(await page.locator('.kr-model-chip').evaluate(el => el.scrollWidth <= el.clientWidth && el.getBoundingClientRect().right <= innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.locator('#kr-autofill-btn').click();
+  await expect(page.locator('#why')).toHaveValue('A useful answer');
+  await expect(page.locator('.kr-model-chip')).toHaveText('299 credits');
+  expect(kr.openrouter.requests).toHaveLength(0);
+});
+
+test('staging sandbox pack claim and real managed autofill', async ({ kr }) => {
+  test.skip(!process.env.KR_TEST_CHECKOUT, 'Requires a completed staging Stripe sandbox purchase');
+  await kr.seed({ apiKey: '', settings: { aiMode: 'managed' }, profile: { fullName: 'Jordan Example', email: 'kareer-test@example.com', savedAnswers: { 'Reference note': 'Saved reference' } } });
+  await kr.worker.evaluate(async checkout => {
+    const { 'kr:secrets': secrets } = await chrome.storage.local.get('kr:secrets');
+    await chrome.storage.local.set({ 'kr:secrets': { ...secrets, checkout } });
+  }, JSON.parse(process.env.KR_TEST_CHECKOUT));
+  const settings = await kr.context.newPage();
+  await settings.goto(`${kr.optionsUrl()}#connection`);
+  await expect(settings.locator('#total-balance')).toHaveText('300 credits');
+  const greenhouse = await managedFixture(kr, false);
+  await expect(greenhouse.locator('.kr-model-chip')).toHaveText('300 credits');
+  await greenhouse.locator('#kr-autofill-btn').click();
+  await expect(greenhouse.locator('#why')).not.toHaveValue('');
+  await expect(greenhouse.locator('.kr-model-chip')).toHaveText('299 credits');
+  await expect(settings.locator('#total-balance')).toHaveText('299 credits');
+  await settings.locator('#ai-data-consent').uncheck();
+  await expect(settings.locator('#managed-state')).toHaveText('AI sharing off');
+  const ashby = await managedFixture(kr, true);
+  await ashby.locator('#kr-autofill-btn').click();
+  await expect(ashby.locator('#reference')).toHaveValue('Saved reference');
+  await expect(ashby.locator('#why')).toHaveValue('');
+  await settings.locator('#ai-data-consent').check();
+  await expect(settings.locator('#managed-state')).toHaveText('Ready');
+  await ashby.locator('#kr-autofill-btn').click();
+  await expect(ashby.locator('#why')).not.toHaveValue('');
+  await expect(ashby.locator('.kr-model-chip')).toHaveText('298 credits');
+});
+
+test('a new installation defaults to your own key until Kareer AI is released', async ({ kr }) => {
   await kr.seed({ apiKey: '', profile: { fullName: 'Test Applicant', email: 'test@example.com' } });
+  const options = await kr.context.newPage();
+  await options.goto(`${kr.optionsUrl()}#connection`);
+  await expect(options.locator('#ai-mode')).toHaveValue('byok');
+  await expect(options.locator('#byok-connection')).toBeVisible();
+  await expect(options.locator('#managed-ai')).toBeHidden();
+});
+
+test('Kareer AI activates without showing models or leaking license credentials', async ({ kr }, testInfo) => {
+  await kr.seed({ apiKey: '', settings: { aiMode: 'managed' }, profile: { fullName: 'Test Applicant', email: 'test@example.com' } });
   await mockGateway(kr);
   const options = await kr.context.newPage();
   await options.goto(`${kr.optionsUrl()}#connection`);
@@ -43,7 +120,10 @@ test('new installation activates without showing models or leaking license crede
   await expect(options.locator('#start-checkout')).toBeVisible();
   await expect(options.locator('#start-checkout')).toHaveText('View plans');
   await expect(options.locator('#purchase-offer')).toHaveCount(0);
-  await expect(options.locator('#connection')).not.toContainText('US$');
+  await expect(options.locator('#ai-plans li')).toHaveCount(2);
+  await expect(options.locator('#ai-plans')).toContainText('Kareer Monthly · US$9.99 / month');
+  await expect(options.locator('#ai-plans')).toContainText('Kareer Credit Pack · US$4.99 once');
+  await expect(options.locator('.ai-purchase-note')).toContainText('All sales are final');
   await expect(options.locator('#usage-details')).toBeHidden();
   await expect(options.locator('#byok-connection')).toBeHidden();
   await expect(options.locator('#license-key')).toBeHidden();
@@ -77,6 +157,15 @@ test('new installation activates without showing models or leaking license crede
   const removeBox = await options.locator('#disconnect-license').boundingBox();
   expect(removeBox.height).toBeGreaterThanOrEqual(44);
   await options.screenshot({ path: testInfo.outputPath('billing-ready.png'), fullPage: true });
+  await expect(options.locator('#connection')).not.toContainText(/receipt|Lemon/i);
+  await options.evaluate(() => { window.__opened = []; chrome.tabs.create = async ({ url }) => { window.__opened.push(url); }; });
+  await options.locator('#manage-billing').click();
+  await expect.poll(() => options.evaluate(() => window.__opened)).toEqual(['https://billing.stripe.com/p/session/test_e2e']);
+  expect((await kr.worker.evaluate(() => globalThis.__managedCalls.map(c => c.path))).filter(p => p === '/v1/billing-portal')).toHaveLength(1);
+  await options.locator('#reveal-license').click();
+  await expect(options.locator('#license-value')).toHaveValue('private-managed-license');
+  await options.reload();
+  await expect(options.locator('#license-reveal')).toBeHidden();
   await options.goto(`${kr.optionsUrl()}#models`);
   await expect(options.locator('#byok-model')).toBeHidden();
   await expect(options.locator('#narrative-style')).toBeVisible();
@@ -84,7 +173,7 @@ test('new installation activates without showing models or leaking license crede
   await page.route('**/managed-application', route => route.fulfill({ contentType: 'text/html', body: '<title>Job Application</title><h1>Job Application</h1><form><label for="email">Email</label><input type="email" id="email"><label for="why">Why this role?</label><textarea id="why"></textarea></form>' }));
   await page.goto(kr.fixtureUrl('managed-application'));
   await kr.openPanel(page);
-  await expect(page.locator('.kr-model-chip')).toContainText('Kareer AI');
+  await expect(page.locator('.kr-model-chip')).toHaveText('5 credits');
   await expect(page.locator('[data-tab=debug]')).toHaveCount(0);
   await page.locator('#kr-autofill-btn').click();
   await expect(page.locator('#why')).toHaveValue('A useful answer');
@@ -99,7 +188,7 @@ test('purchase auto-claim is privileged and mode switching preserves the saved p
   await kr.seed();
   await mockGateway(kr);
   const page = await kr.context.newPage();
-  await kr.context.route('https://api.kareer.itsamro.me/plans/**', route => route.fulfill({ body: 'Test plans only' }));
+  await kr.context.route(`${kr.gatewayOrigin}/plans/**`, route => route.fulfill({ body: 'Test plans only' }));
   await page.goto(`${kr.optionsUrl()}#connection`);
   await expect(page.locator('#ai-mode')).toHaveValue('byok');
   await expect(page.locator('#advanced-ai')).toHaveAttribute('open', '');
@@ -118,8 +207,36 @@ test('purchase auto-claim is privileged and mode switching preserves the saved p
   expect((await kr.readStorage('kr:secrets')).licenseKey).toBe('private-managed-license');
 });
 
+test('choosing a plan in Settings goes straight to Stripe Checkout for that plan', async ({ kr }) => {
+  await kr.seed({ apiKey: '', settings: { aiMode: 'managed' } });
+  await mockGateway(kr);
+  const options = await kr.context.newPage();
+  await options.goto(`${kr.optionsUrl()}#connection`);
+  await options.evaluate(() => { window.__opened = []; chrome.tabs.create = async ({ url }) => { window.__opened.push(url); }; });
+  await options.locator('#buy-pack').click();
+  await expect.poll(() => options.evaluate(() => window.__opened)).toEqual(['https://checkout.stripe.com/c/pay/cs_test_pack']);
+  await options.locator('#buy-monthly').click();
+  await expect.poll(() => options.evaluate(() => window.__opened.length)).toBe(2);
+  expect(await options.evaluate(() => window.__opened[1])).toBe('https://checkout.stripe.com/c/pay/cs_test_monthly');
+  const calls = await kr.worker.evaluate(() => globalThis.__managedCalls.filter(c => c.path === '/v1/purchases').map(c => c.body));
+  expect(calls).toEqual([{ offer: 'pack' }, { offer: 'monthly' }]);
+});
+
+test('an unreachable gateway shows a plain message instead of a raw network error', async ({ kr }) => {
+  await kr.seed({ apiKey: '', settings: { aiMode: 'managed' } });
+  await kr.worker.evaluate(gateway => {
+    const original = globalThis.fetch;
+    globalThis.fetch = async (url, options) => String(url).startsWith(`${gateway}/`) ? Promise.reject(new TypeError('Failed to fetch')) : original(url, options);
+  }, kr.gatewayOrigin);
+  const options = await kr.context.newPage();
+  await options.goto(`${kr.optionsUrl()}#connection`);
+  await options.locator('#buy-pack').click();
+  await expect(options.locator('#managed-feedback')).toContainText("Can't reach Kareer right now");
+  await expect(options.locator('#connection')).not.toContainText(/Failed to fetch|NetworkError/);
+});
+
 test('local-only autofill links directly to AI setup without blocking saved profile filling', async ({ kr }, testInfo) => {
-  await kr.seed({ apiKey: '', profile: { fullName: 'Test Applicant', email: 'test@example.com' } });
+  await kr.seed({ apiKey: '', settings: { aiMode: 'managed' }, profile: { fullName: 'Test Applicant', email: 'test@example.com' } });
   const page = await kr.context.newPage();
   await page.route('**/local-only-application', route => route.fulfill({ contentType: 'text/html', body: '<h1>Job Application</h1><form id="application_form"><label for="email">Email</label><input type="email" id="email" required><label for="why">Why this role?</label><textarea id="why" required></textarea></form>' }));
   await page.goto(kr.fixtureUrl('local-only-application', 'boards.greenhouse.io'));
@@ -161,7 +278,7 @@ test('exhausted managed mode keeps local filling and does not spend the personal
 test('managed cover letter generation and document rewrite share the metered gateway', async ({ kr }) => {
   await kr.seed({ apiKey: '', settings: { aiMode: 'managed' }, profile: { fullName: 'Test Applicant', email: 'test@example.com',
     workExperiences: [{ id: 'work1', title: 'Engineer', company: 'Example', description: 'Built useful software.' }] } });
-  await kr.worker.evaluate(() => chrome.storage.local.set({ 'kr:secrets': { licenseKey: 'private-managed-license' }, 'kr:ai-status': { state: 'ready', total: 5, purchased: 5 } }));
+  await kr.worker.evaluate(() => chrome.storage.local.set({ 'kr:secrets': { licenseKey: 'private-managed-license', aiDataConsent: 1 }, 'kr:ai-status': { state: 'ready', total: 5, purchased: 5 } }));
   await mockGateway(kr);
   const page = await kr.context.newPage();
   await page.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=coverLetter`);
@@ -177,14 +294,14 @@ test('managed cover letter generation and document rewrite share the metered gat
   expect(rewritten.error).toBeUndefined();
   const calls = await kr.worker.evaluate(() => globalThis.__managedCalls.filter(c => c.path === '/v1/ai').map(c => c.body));
   expect(calls.map(c => c.operation)).toEqual(['document', 'documentRewrite']);
-  expect(calls.every(c => !c.model && c.document.kind === 'coverLetter')).toBe(true);
+  expect(calls.every(c => !c.model && !c.messages && c.input.kind === 'coverLetter')).toBe(true);
   expect(kr.openrouter.requests).toHaveLength(0);
 });
 
 test('popup controls stay usable while a free managed usage refresh is pending', async ({ kr }) => {
   await kr.seed({ apiKey: '', settings: { aiMode: 'managed' } });
   await kr.worker.evaluate(async () => {
-    await chrome.storage.local.set({ 'kr:secrets': { licenseKey: 'private-managed-license' }, 'kr:ai-status': { state: 'ready', total: 5, purchased: 5 } });
+    await chrome.storage.local.set({ 'kr:secrets': { licenseKey: 'private-managed-license', aiDataConsent: 1 }, 'kr:ai-status': { state: 'ready', total: 5, purchased: 5 } });
     const original = globalThis.fetch;
     globalThis.__usageWaiters = [];
     globalThis.fetch = (url, options) => String(url).endsWith('/v1/status')

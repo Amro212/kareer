@@ -9,8 +9,17 @@
     "dev": "wrangler dev --env staging",
     "check": "wrangler deploy --env staging --dry-run",
     "deploy:staging": "wrangler deploy --env staging",
-    "deploy:production": "node tools/release-gate.js && wrangler deploy --env production"
+    "deploy:production": "node tools/release-gate.js --config && wrangler deploy --env production"
   },
-  "devDependencies": { "wrangler": "4.151.1", "miniflare": "5.20261012.1-beta", "esbuild": "0.28.2" },
-  "engines": { "node": ">=22.15" }
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "miniflare": "5.20261012.1-beta",
+    "wrangler": "4.151.1"
+  },
+  "engines": {
+    "node": ">=22.15"
+  },
+  "dependencies": {
+    "stripe": "23.1.0"
+  }
 }

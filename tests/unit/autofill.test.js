@@ -570,6 +570,7 @@ test('workflow requests include job and validation context without putting the A
   const content = JSON.parse(payload.messages[1].content);
   assert.equal(content.jobContext.company, 'Example');
   assert.equal(content.repairErrors[0].fieldId, 'essay');
+  assert.equal(payload.provider.data_collection, 'deny');
   assert.equal(JSON.stringify(payload).includes('fixture-private-key'), false);
 });
 

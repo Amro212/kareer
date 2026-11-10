@@ -42,7 +42,7 @@ async function init() {
     $('model').textContent = managed ? 'Kareer AI' : settings.model || 'OpenRouter';
     $('credits').textContent = managed ? String(status?.total || 0) : 'Personal API key';
     const badge = $('key-status');
-    badge.textContent = managed ? ({ ready: 'Ready', activationNeeded: 'Activation needed', outOfCredits: 'Out of credits', unavailable: 'Temporarily unavailable' }[status?.state] || 'Temporarily unavailable') : snapshot?.hasApiKey ? 'Key saved' : 'No key';
+    badge.textContent = status?.state === 'consentNeeded' ? 'AI sharing off' : managed ? ({ ready: 'Ready', activationNeeded: 'Activation needed', outOfCredits: 'Out of credits', unavailable: 'Temporarily unavailable' }[status?.state] || 'Temporarily unavailable') : snapshot?.hasApiKey ? 'Key saved' : 'No key';
     badge.className = `badge ${status?.state === 'ready' ? 'ok' : 'warn'}`;
   }
   showStatus(snapshot?.aiStatus);

@@ -42,5 +42,5 @@ jobs:
       - run: npm run typecheck --prefix site
       - run: npm run build --prefix site
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
       - run: npx playwright test --config tests/site/playwright.config.js
+      - run: npm run test:e2e -- --max-failures=1

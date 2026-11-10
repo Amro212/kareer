@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Software Engineer — Northstar Labs demo application</title>
+  <script type="application/ld+json">{"@type":"JobPosting","title":"Software Engineer","hiringOrganization":{"name":"Northstar Labs"},"description":"Build reliable web applications and APIs with JavaScript, Python and SQL.","jobLocation":{"address":{"addressCountry":"CA"}}}</script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f0f3f7; color: #25334a; font: 15px/1.5 system-ui, sans-serif; }
+    header { padding: 20px 44px; background: white; border-bottom: 1px solid #dfe5ed; font-weight: 700; }
+    header span { margin-left: 24px; color: #65738a; font-size: 12px; font-weight: 400; }
+    main { width: 700px; margin: 24px 0 32px 38px; padding: 26px 32px; background: white; border: 1px solid #dfe5ed; border-radius: 10px; }
+    h1 { margin: 0 0 6px; font-size: 27px; letter-spacing: -.6px; }
+    p { margin: 0 0 22px; color: #65738a; }
+    h2 { margin: 22px 0 14px; font-size: 16px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    label { display: block; margin-bottom: 12px; font-size: 13px; font-weight: 600; }
+    input, textarea { display: block; width: 100%; margin-top: 6px; padding: 10px 12px; border: 1px solid #c6cfdb; border-radius: 6px; background: white; color: #25334a; font: 14px/1.45 system-ui, sans-serif; }
+    textarea { height: 106px; resize: vertical; }
+    button { padding: 11px 20px; border: 0; border-radius: 6px; background: #344f78; color: white; font-weight: 600; }
+    .note { margin-top: 14px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <header>Northstar Labs <span>Demo application · Fictional company and applicant</span></header>
+  <main>
+    <h1>Software Engineer</h1>
+    <p>Toronto, Canada · Engineering · Full-time</p>
+    <form id="application" onsubmit="event.preventDefault()">
+      <h2>Contact information</h2>
+      <div class="row"><label>First name<input id="first-name" name="firstName" autocomplete="given-name" required></label><label>Last name<input id="last-name" name="lastName" autocomplete="family-name" required></label></div>
+      <label>Email address<input id="email" type="email" name="email" autocomplete="email" required></label>
+      <div class="row"><label>Phone number<input id="phone" type="tel" name="phone" autocomplete="tel"></label><label>Current location<input id="location" name="location"></label></div>
+      <h2>A little about your experience</h2>
+      <label>Why are you interested in this role?<textarea id="motivation" name="motivation" required></textarea></label>
+      <button type="submit">Submit application</button>
+      <p class="note">Local demonstration. This form never sends an application.</p>
+    </form>
+  </main>
+</body>
+</html>

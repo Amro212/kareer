@@ -30,14 +30,22 @@
 <header class="page-heading" id="options-heading" hidden><h1 id="options-title">Settings</h1><p class="hint">Manage the settings for your application workspace.</p></header>
 
     <section id="connection" hidden>
+      <section class="ai-usage" aria-labelledby="ai-data-heading">
+        <h2 id="ai-data-heading">Choose whether to share data with AI</h2>
+        <p id="ai-data-details">AI features send your saved profile context, work history, notes, application questions, job description and current application URL to OpenRouter and its AI providers. Profile context can include contact details, location, salary expectations and optional demographic or disability answers you have saved. Kareer AI sends this through Kareer's gateway; your own OpenRouter key sends it directly. Providers process the data under their own retention policies.</p>
+        <p>Use AI only with information you want processed this way. Saved profile filling and local files remain available with AI sharing off. Turning sharing off stops new AI requests; it cannot recall data already sent. <a href="https://kareer.itsamro.me/privacy/" target="_blank" rel="noopener noreferrer">Read the privacy policy</a>.</p>
+        <label class="checkbox-row"><input type="checkbox" id="ai-data-consent" aria-describedby="ai-data-details ai-consent-feedback"> I agree to this data sharing for AI features.</label>
+        <p id="ai-consent-feedback" class="feedback" role="status" aria-live="polite"></p>
+      </section>
       <div id="managed-ai">
         <div class="ai-introduction">
           <div class="ai-introduction-copy">
             <div class="ai-introduction-heading"><h2>Kareer AI</h2><span class="badge warn" id="managed-state" role="status" aria-live="polite">Activation needed</span></div>
             <h3>Put your experience<br />to work.</h3>
             <p>Spend less time turning the same career facts into new answers. Connect Kareer AI for help with application questions and documents, grounded in your profile and the job.</p>
-            <div class="actions"><button id="start-checkout">View plans <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></button></div>
-            <p class="ai-purchase-note">Choose your plan on Kareer's secure purchase page. No AI provider account or API key to set up.</p>
+            <ul class="ai-plans" id="ai-plans" aria-label="Kareer AI plans"></ul>
+            <p class="ai-purchase-note">Buying opens Stripe's secure checkout. By buying you agree to the <a href="https://kareer.itsamro.me/terms/" target="_blank" rel="noopener noreferrer">Terms of Service</a>. All sales are final. No AI provider account or API key to set up.</p>
+            <div class="actions"><button id="start-checkout" class="secondary">View plans <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></button></div>
             <p id="purchase-status" role="status" aria-live="polite"></p>
           </div>
           <ul class="ai-capabilities" aria-label="What Kareer AI helps with">
@@ -47,20 +55,23 @@
           </ul>
         </div>
         <details id="license-activation" class="ai-disclosure">
-          <summary><span>Already purchased?<small>Activate the key from your receipt email</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></summary>
+          <summary><span>Already purchased?<small>Activate your Kareer key</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></summary>
           <div class="ai-disclosure-body">
-            <div class="group"><label for="license-key">Kareer license key</label><input id="license-key" type="password" autocomplete="off" spellcheck="false" aria-describedby="license-help activation-feedback" placeholder="Paste your license key" /></div>
-            <p class="hint" id="license-help">Bought on another installation? Reuse the same key to access your balance here.</p>
-            <div class="actions"><button id="activate-license" class="secondary" disabled>Activate key</button><a href="https://app.lemonsqueezy.com/my-orders" target="_blank" rel="noopener noreferrer">Find my receipt</a></div>
+            <div class="group"><label for="license-key">Kareer key</label><input id="license-key" type="password" autocomplete="off" spellcheck="false" aria-describedby="license-help activation-feedback" placeholder="kr_…" /></div>
+            <p class="hint" id="license-help">Bought on another browser? Open Show key there, then paste it here to use the same credits.</p>
+            <div class="actions"><button id="activate-license" class="secondary" disabled>Activate key</button></div>
+            <p class="hint">Lost your key? Email <a href="mailto:amromousa8@gmail.com">amromousa8@gmail.com</a>.</p>
             <p class="feedback" id="activation-feedback" role="status" aria-live="polite"></p>
           </div>
         </details>
         <section id="usage-details" class="ai-usage" aria-labelledby="usage-heading" hidden>
           <div class="ai-usage-heading"><h2 id="usage-heading">Your AI usage</h2><button class="secondary" id="refresh-usage">Refresh usage</button></div>
-          <dl><div><dt>Monthly credits</dt><dd id="monthly-balance">0</dd></div><div><dt>Purchased credits</dt><dd id="purchased-balance">0</dd></div></dl>
+          <h3 id="total-balance" role="status">Checking balance…</h3>
+          <dl><div><dt>Purchased credits</dt><dd id="purchased-balance">—</dd></div><div><dt>Monthly credits</dt><dd id="monthly-balance">—</dd></div></dl>
           <p class="hint" id="monthly-expiry"></p><p class="hint" id="plan-status"></p>
-          <div class="actions"><button class="secondary" id="manage-billing">Manage billing</button><button class="secondary danger" id="disconnect-license">Remove key from this browser</button></div>
-          <p class="hint">Removing a key does not cancel a subscription. Manage or cancel it through billing.</p>
+          <div class="actions"><button class="secondary" id="manage-billing">Manage billing</button><button class="secondary" id="reveal-license">Show key</button><button class="secondary danger" id="disconnect-license">Remove key from this browser</button></div>
+          <div class="group" id="license-reveal" hidden><label for="license-value">Your Kareer key</label><input id="license-value" type="text" readonly spellcheck="false" aria-describedby="license-reveal-help" /><p class="hint" id="license-reveal-help">Keep this key somewhere safe to use your credits on another browser. Kareer does not email it.</p></div>
+          <p class="hint">Removing a key does not cancel a subscription. Manage or cancel it through Manage billing.</p>
         </section>
         <p class="feedback" id="managed-feedback" role="status" aria-live="polite"></p>
       </div>

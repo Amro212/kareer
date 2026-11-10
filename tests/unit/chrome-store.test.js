@@ -4,7 +4,7 @@ import { uploadChrome } from '../../tools/chrome-store.js';
 
 test('store upload is gated and submission uses staged review without public publication', async () => {
   await assert.rejects(uploadChrome({ checks: {} }), /blocked/);
-  const checks = Object.fromEntries(['gatewayStaging', 'lemonSandbox', 'chromeStagingPurchaseAi', 'firefoxStagingPurchaseAi', 'releaseVerification', 'multiUserCosts', 'productionGateway'].map(k => [k, { passed: true, evidence: 'verified' }]));
+  const checks = Object.fromEntries(['gatewayStaging', 'stripeSandbox', 'chromeStagingPurchaseAi', 'firefoxStagingPurchaseAi', 'releaseVerification', 'multiUserCosts', 'productionGateway'].map(k => [k, { passed: true, evidence: 'verified' }]));
   const env = { CWS_PUBLISHER_ID: 'publisher', CWS_EXTENSION_ID: 'a'.repeat(32), CWS_CLIENT_ID: 'id', CWS_CLIENT_SECRET: 'secret', CWS_REFRESH_TOKEN: 'refresh' };
   const calls = [];
   const fetcher = async (url, options) => { calls.push({ url, options }); return Response.json(url.includes('oauth2') ? { access_token: 'private' } : url.endsWith(':upload') ? { uploadState: 'SUCCEEDED' } : {}); };

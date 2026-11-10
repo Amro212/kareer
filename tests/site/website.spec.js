@@ -1,5 +1,15 @@
 import { test, expect } from '@playwright/test';
 
+test('purchase return and legacy link direct buyers to verification in the extension', async ({ page }) => {
+  for (const route of ['/purchase/complete/', '/setup/?purchase=complete']) {
+    await page.goto(route);
+    await expect(page).toHaveURL(/\/purchase\/complete\/$/);
+    await expect(page.getByRole('heading', { name: 'Back from checkout' })).toBeVisible();
+    await expect(page.getByText('Kareer → Settings → AI & billing', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Kareer verifies your purchase there/)).toBeVisible();
+  }
+});
+
 test('hero stays hidden before hydration, then enters headline and demo, copy, buttons', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   let release;
@@ -34,9 +44,10 @@ test('hero stays hidden before hydration, then enters headline and demo, copy, b
   };
   expect(Math.abs(at('headline', 'playing') - at('demo', 'playing'))).toBeLessThan(100);
   expect(at('demo', 'done') - at('demo', 'playing')).toBeGreaterThan(600);
-  expect(at('copy', 'done') - at('copy', 'playing')).toBeGreaterThan(300);
-  expect(at('buttons', 'done') - at('buttons', 'playing')).toBeGreaterThan(250);
-  expect(at('copy', 'playing')).toBeGreaterThanOrEqual(Math.max(at('headline', 'done'), at('demo', 'done')));
+  expect(at('copy', 'done') - at('copy', 'playing')).toBeGreaterThan(150);
+  expect(at('buttons', 'done') - at('buttons', 'playing')).toBeGreaterThan(130);
+  expect(at('copy', 'playing')).toBeGreaterThanOrEqual(at('demo', 'done'));
+  expect(at('copy', 'playing') - at('headline', 'playing')).toBeLessThan(900);
   expect(at('buttons', 'playing')).toBeGreaterThanOrEqual(at('copy', 'done'));
 });
 
@@ -97,21 +108,106 @@ test('fictional autofill demo completes, explains answers and replays without AI
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Job hunting takes enough out of you.' })).toBeVisible();
   await page.getByRole('button', { name: 'Try the demo', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Ready for your review' })).toBeVisible();
-  await page.getByRole('button', { name: 'Explain answer: Why this role?' }).click();
-  await expect(page.locator('#answer-explanation')).toContainText('Inferred from the sample profile and job description.');
+  await expect(page.getByRole('status').filter({ hasText: 'Ready for your review' })).toBeVisible({ timeout: 15000 });
+  await page.getByRole('button', { name: 'Explain answer: Why do you want to work at Northwind Labs?' }).click();
+  await expect(page.locator('#answer-explanation')).toContainText('Drafted from your Campus Collective role and the job description');
   expect(await page.evaluate(() => {
     const stamp = document.querySelector('.completion-stamp').getBoundingClientRect();
-    const action = document.querySelector('.demo-action').getBoundingClientRect();
+    const action = document.querySelector('.panel-action').getBoundingClientRect();
     return stamp.bottom <= action.top || stamp.top >= action.bottom || stamp.right <= action.left || stamp.left >= action.right;
   }), 'Completion stamp must leave the replay control clear').toBe(true);
   await page.getByRole('button', { name: 'Replay demo' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Ready for your review' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Ready for your review' })).toBeVisible({ timeout: 15000 });
   expect(externalRequests).toEqual([]);
   expect(pageErrors).toEqual([]);
 });
 
-test('setup and privacy are directly accessible static pages', async ({ page }) => {
+test('demo shows all five answer states, completes the parsed row, adds a second row and resolves the unresolved field', async ({ page }) => {
+  await page.goto('/');
+  const demo = page.locator('#demo');
+  await expect(demo.locator('.ats-row')).toHaveCount(1);
+  await expect(demo.locator('[data-field="exp1-title"] .ats-value')).toHaveText('Student Developer');
+  await page.getByRole('button', { name: 'Autofill Workday-style form' }).click();
+  await expect(demo.locator('[data-field="heard"]')).toHaveAttribute('data-state', 'unresolved', { timeout: 15000 });
+  await expect(demo.locator('[data-field="heard"]')).toHaveAttribute('data-state', 'guessed', { timeout: 5000 });
+  await expect(page.getByRole('status').filter({ hasText: 'Ready for your review' })).toBeVisible();
+  await expect(demo.locator('.ats-row')).toHaveCount(2);
+  await expect(demo.locator('[data-field="exp2-title"] .ats-value')).toHaveText('IT Help Desk Assistant');
+  for (const [state, count] of [['saved', 12], ['verified', 9], ['inferred', 1], ['guessed', 1], ['unresolved', 0]]) {
+    await expect(demo.locator(`.panel-counts [data-kind="${state}"] b`)).toHaveText(String(count));
+  }
+  await demo.locator('.review-first').getByRole('button', { name: /How did you hear about this role/ }).click();
+  await expect(page.locator('#answer-explanation')).toContainText('Unresolved after the first pass');
+  await page.getByRole('button', { name: 'Explain answer: Role description' }).first().click();
+  await page.getByRole('button', { name: 'See the source in Profile' }).click();
+  await expect(demo.locator('.record-list [data-source]')).toContainText('Campus Collective');
+});
+
+test('document studio reframes the same saved facts for each fictional posting', async ({ page }) => {
+  await page.goto('/');
+  const studio = page.locator('.document-studio');
+  await studio.scrollIntoViewIfNeeded();
+  await expect(studio.locator('.document-meta-label [aria-hidden="false"]')).toContainText('NORTHWIND LABS');
+  await studio.getByRole('button', { name: /Civic Transit/ }).click();
+  await expect(studio.getByRole('button', { name: /Civic Transit/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(studio.locator('.document-meta-label [aria-hidden="false"]')).toContainText('CIVIC TRANSIT');
+  await expect(studio.locator('.tailoring-veil')).toHaveCount(0);
+  await expect(studio.locator('[data-state="active"] .document-body[aria-hidden="false"] .document-role').first()).toContainText('IT Help Desk Assistant');
+  await expect(studio.locator('mark.tailored').filter({ hasText: 'Wrote step-by-step guides' })).toBeVisible();
+  await studio.getByRole('tab', { name: 'Cover letter', exact: true }).click();
+  await expect(studio.locator('[data-state="active"] .document-body[aria-hidden="false"]')).toContainText('Dear Civic Transit hiring team');
+});
+
+for (const width of [1440, 600, 390]) test(`switching document tabs and postings keeps the document layout fixed at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 1000 });
+  await page.goto('/');
+  await page.evaluate(() => document.fonts.ready);
+  const studio = page.locator('.document-studio');
+  await page.locator('.documents-copy').scrollIntoViewIfNeeded();
+  await expect(page.locator('.documents-copy')).toHaveAttribute('data-scroll-reveal', 'done');
+  await studio.scrollIntoViewIfNeeded();
+  await expect(page.locator('.document-entrance')).toHaveAttribute('data-scroll-reveal', 'done');
+  const heading = page.locator('.documents-copy h2');
+  const top = () => heading.evaluate(element => Math.round(element.getBoundingClientRect().top + scrollY));
+  const before = await top();
+  const height = await studio.evaluate(element => element.offsetHeight);
+  await page.evaluate(() => {
+    const element = document.querySelector('.documents-copy h2');
+    const studio = document.querySelector('.document-studio');
+    window.__headingTops = [];
+    window.__studioHeights = [];
+    const sample = () => {
+      window.__headingTops.push(Math.round(element.getBoundingClientRect().top + scrollY));
+      window.__studioHeights.push(studio.offsetHeight);
+      window.__documentSampleFrame = requestAnimationFrame(sample);
+    };
+    sample();
+  });
+  for (const step of [() => studio.getByRole('tab', { name: 'Cover letter', exact: true }).click(), () => studio.getByRole('tab', { name: 'Résumé', exact: true }).click(), () => studio.getByRole('button', { name: /Civic Transit/ }).click(), () => studio.getByRole('button', { name: /Harbor Health/ }).click(), () => studio.getByRole('button', { name: /Northwind Labs/ }).click()]) {
+    await step();
+    await expect(studio.locator('.tailoring-veil')).toHaveCount(0);
+    await expect.poll(() => studio.locator('[data-motion-surface="soften"]').evaluateAll(elements => elements.every(element => element.style.getPropertyValue('--presence-y') === '0px'))).toBe(true);
+  }
+  await page.evaluate(() => cancelAnimationFrame(window.__documentSampleFrame));
+  expect(new Set(await page.evaluate(() => window.__headingTops))).toEqual(new Set([before]));
+  expect(new Set(await page.evaluate(() => window.__studioHeights))).toEqual(new Set([height]));
+});
+
+test('pricing credit estimator gives a labeled range and a plan fit', async ({ page }) => {
+  await page.goto('/pricing/');
+  await expect(page.getByRole('heading', { name: 'Local tools' })).toBeVisible();
+  const slider = page.getByLabel('Applications with AI help each month');
+  await expect(page.locator('.estimate strong')).toHaveText('40–120');
+  await expect(page.locator('.estimate-fit')).toContainText('Credit Pack');
+  await slider.fill('200');
+  await expect(page.locator('.estimate strong')).toHaveText('200–600');
+  await expect(page.locator('.estimate-fit')).toContainText('Kareer Monthly covers even the high end');
+  await slider.fill('400');
+  await expect(page.locator('.estimate strong')).toHaveText('400–1,200');
+  await expect(page.locator('.estimate-fit')).toContainText('At the high end, add a Credit Pack');
+});
+
+test('setup, privacy and terms are directly accessible static pages', async ({ page }) => {
   await page.goto('/setup/');
   await expect(page.getByRole('heading', { name: 'A little setup. A lot less repetition.' })).toBeVisible();
   await page.getByRole('tab', { name: 'Chrome & Edge' }).click();
@@ -120,12 +216,41 @@ test('setup and privacy are directly accessible static pages', async ({ page }) 
   await expect(page.getByRole('heading', { name: 'Your data. Your business.' })).toBeVisible();
   await expect(page.locator('#ai-transmission')).toContainText('OpenRouter');
   await expect(page.locator('#retention')).toBeVisible();
+  await expect(page.locator('#billing')).toContainText('Stripe');
+  await expect(page.locator('main')).not.toContainText(/Lemon Squeezy|receipt email/);
+  await page.getByRole('contentinfo').getByRole('link', { name: 'Terms', exact: true }).click();
+  await expect(page).toHaveURL(/\/terms\/$/);
+  await expect(page.getByRole('heading', { name: 'Plain terms. No surprises.' })).toBeVisible();
+  await expect(page.locator('#about')).toContainText('form-filling assistant');
+  await expect(page.locator('#refunds')).toContainText('All sales are final');
+  await expect(page.locator('#keys')).toContainText('amromousa8@gmail.com');
+  await expect(page.locator('#about')).toContainText('Ontario, Canada');
+});
+
+test('pricing lists both plans from the shared offers and explains that purchases start in the extension', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Pricing', exact: true }).click();
+  await expect(page).toHaveURL(/\/pricing\/$/);
+  await expect(page.getByRole('heading', { name: 'Simple pricing. Pay only for AI.' })).toBeVisible();
+  const monthly = page.locator('.pricing-card').filter({ has: page.getByRole('heading', { name: 'Kareer Monthly' }) });
+  await expect(monthly).toContainText('US$9.99');
+  await expect(monthly).toContainText('1,000 credits each month');
+  const pack = page.locator('.pricing-card').filter({ has: page.getByRole('heading', { name: 'Kareer Credit Pack' }) });
+  await expect(pack).toContainText('US$4.99');
+  await expect(pack).toContainText('300 credits');
+  await expect(pack.getByRole('link', { name: /Get Kareer to buy/ })).toHaveAttribute('href', '/setup/#browser');
+  await expect(page.locator('#buy-in-extension')).toContainText('All sales are final');
+  await expect(page.locator('#buy-in-extension')).toContainText('amromousa8@gmail.com');
+  await expect(page.locator('main')).not.toContainText(/\bbot\b|auto-apply|OpenRouter/i);
+  await page.goto('/terms/');
+  await page.locator('.reading-intro').getByRole('link', { name: 'current pricing' }).click();
+  await expect(page).toHaveURL(/\/pricing\/$/);
 });
 
 test('mobile navigation, reduced-motion demo and pages fit a narrow viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  for (const route of ['/', '/setup/', '/privacy/']) {
+  for (const route of ['/', '/setup/', '/privacy/', '/terms/', '/pricing/']) {
     await page.goto(route);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `No overflow on ${route}`).toBe(true);
   }
@@ -140,10 +265,11 @@ test('mobile navigation, reduced-motion demo and pages fit a narrow viewport', a
 test('content and installation links are available without JavaScript', async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
-  for (const [route, heading] of [['/', 'Job hunting takes enough out of you.'], ['/setup/', 'A little setup. A lot less repetition.'], ['/privacy/', 'Your data. Your business.']]) {
+  for (const [route, heading] of [['/', 'Job hunting takes enough out of you.'], ['/setup/', 'A little setup. A lot less repetition.'], ['/privacy/', 'Your data. Your business.'], ['/terms/', 'Plain terms. No surprises.'], ['/pricing/', 'Simple pricing. Pay only for AI.']]) {
     await page.goto(`http://127.0.0.1:4177${route}`);
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Privacy', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Terms', exact: true })).toBeVisible();
   }
   await context.close();
 });
@@ -155,7 +281,7 @@ test('document tabs, FAQ disclosures and keyboard activation work', async ({ pag
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'A proper introduction.' })).toBeVisible();
   await page.getByText('What does Kareer cost?', { exact: true }).click();
-  await expect(page.getByText('US$10/month for 1,000 credits', { exact: false }).last()).toBeVisible();
+  await expect(page.getByText('US$9.99/month for 1,000 credits', { exact: false }).last()).toBeVisible();
 });
 
 test('hero typography and scroll entrances animate once without shifting section layout', async ({ page }) => {

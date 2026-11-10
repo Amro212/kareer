@@ -48,12 +48,12 @@ test.describe('extension shell', () => {
     await expect(page.locator('#kr-main-panel')).toContainText('detected');
   });
 
-  test('a new installation asks for activation without collecting credentials in the page', async ({ kr }) => {
+  test('a new installation asks for a key without collecting credentials in the page', async ({ kr }) => {
     const page = await kr.context.newPage();
     await page.goto(kr.fixtureUrl('phase2-form-fixture.html'));
     await kr.openPanel(page);
 
-    await expect(page.locator('#kr-main-panel')).toContainText('Activation needed');
+    await expect(page.locator('#kr-main-panel')).toContainText('No API Key');
 
     // The panel offers the options page instead of collecting the key in-page.
     await page.locator('[data-tab=settings]').click();
@@ -88,8 +88,8 @@ test.describe('extension shell', () => {
     await page.goto(kr.optionsUrl());
 
     await page.locator('.app-configuration > .nav-item').click();
-    await page.locator('#advanced-ai summary').click();
-    await page.locator('#ai-mode').selectOption('byok');
+    await expect(page.locator('#advanced-ai')).toHaveJSProperty('open', true);
+    await expect(page.locator('#ai-mode')).toHaveValue('byok');
     await page.locator('#api-key').fill('sk-or-v1-from-options-page');
     await page.locator('#save-key').click();
     await expect(page.locator('#key-status')).toHaveText('Key saved');

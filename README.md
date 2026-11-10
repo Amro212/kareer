@@ -22,7 +22,7 @@
     <a href="./SECURITY.md"><img src="https://img.shields.io/badge/security-BYOK%20%7C%20Zero%20Telemetry-purple.svg" alt="Security: BYOK & Isolated" /></a>
   </p>
 
-  <p><em>Apply to jobs in seconds without copy-pasting your resume 50 times a day.<br />Private, local-first, and powered by the LLM of your choice.</em></p>
+  <p><em>Fill job application forms from your saved profile, then review the answers.<br />Local profile tools with optional AI-assisted writing.</em></p>
 
   <p>
     <a href="https://kareer.itsamro.me/"><strong>Website &amp; Downloads</strong></a> &bull;
@@ -78,7 +78,7 @@ Unlike proprietary autofill extensions that store your sensitive resume data on 
   3. *Contextual AI fallback* using a single batched request per page.
   Every field carries visual provenance: **verified (green)**, **saved**, **inferred**, **guessed (yellow)**, or **unresolved**.
 - 🤖 **Truthful Context-Grounded Grounding**: Inferences are strictly grounded in your resume, profile, applicant notes, work country, and captured job context. Built-in prompts forbid inventing credentials, dates, tools, or companies.
-- 🚀 **Unblocked Application Filling (Zero Deadlocks)**: Never freezes, deadlocks, or halts on legal disclaimers, certifications ("I certify"), attestations, or demographic disclosures. Fills the entire page unblocked to the best of its ability while honoring your Auto Continue and Auto Submit preferences.
+- **Application review controls**: Review filled answers, including certifications and disclosures, and correct anything that needs attention. Auto Continue and Auto Submit follow your settings; Auto Submit is off by default.
 - 🔄 **Automated Job Capture & Multi-Step Continuity**: Automatically captures job titles, companies, and requirements on navigation. Tracks multi-page workflows, reconciles parsed resume rows without duplicating records, and provides instant rescan/engine reset to prevent request-limit stalls.
 - ✍️ **Inline Narrative Rewrite**: Easily tweak open-ended essay questions ("Why do you want to work here?") directly inside the form with an inline AI rewrite tool tailored to specific job requirements.
 - 🔒 **Ironclad Key Isolation**: Your OpenRouter API key is stored in sandboxed extension storage and used only by background workers. It is never exposed to page scripts or web DOM.
@@ -262,6 +262,24 @@ npm run bump:patch
 npm run bump:minor
 npm run bump:major
 ```
+
+#### Which Kareer AI gateway a build talks to
+
+Gateway origins live in `src/core/endpoints.js`. The build writes the chosen
+origin into the background script and both manifests' host permissions.
+
+| Command | Gateway | Output folder |
+|---|---|---|
+| `npm run build` / `npm run build:extension` / `npm run dev` | staging Worker (`https://kareer-gateway-staging.amromousa8.workers.dev`) | `dist/chrome`, `dist/firefox` (load unpacked / temporary add-on) |
+| `node tools/build.js --target=extension --staging` | staging Worker; named "Kareer (Staging)", Kareer AI on by default, separate Firefox ID, no version bump | `dist/staging/chrome`, `dist/staging/firefox` |
+| `npm run build -- --production` | `KAREER_GATEWAY_ORIGIN` if set, otherwise `https://api.kareer.itsamro.me` | `dist/chrome`, `dist/firefox`, `dist/kareer-chrome.zip`, `dist/kareer-firefox.xpi` |
+
+Only `--production` builds can use the production gateway, and they can't use
+the staging one. The release workflows build with `--production` and read
+`KAREER_GATEWAY_ORIGIN` from the repository variable of the same name.
+`--gateway=https://…` overrides the gateway for non-production builds. Plan
+prices and credits come from `src/core/offers.json`, which the gateway, the
+extension and the website all read.
 
 ### Testing & ATS Fixture Capture
 

@@ -401,10 +401,16 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     if (session?.job?.pendingHydration) await session.job.pendingHydration;
     await harvestComboboxOptions(fields);
     if (!await settleFields(signature, token, 'option harvesting')) return [];
-    let response = await answer(normalizeFieldsForAI(fields), { jobContext: session.job, ...context });
+    let failure;
+    const onAiFailure = error => { failure = error; };
+    let response = await answer(normalizeFieldsForAI(fields), { jobContext: session.job, ...context, onAiFailure });
     if (!await settleFields(signature, token, 'AI response')) return [];
-    if (response.answers.some(a => a.searchQuery)) response = await resolveComboboxSearchAnswers(fields, response, {jobContext:session.job,isCurrent:()=>guard(token)});
+    if (!failure && response.answers.some(a => a.searchQuery)) response = await resolveComboboxSearchAnswers(fields, response, {jobContext:session.job,isCurrent:()=>guard(token),onAiFailure});
     if (!await settleFields(signature, token, 'option search')) return [];
+    if (failure) {
+      if (await applyAnswers(fields, response.answers, token, signature)) throw failure;
+      return [];
+    }
     return response.answers;
   }
   async function repair(errors, step, token, signature) {
@@ -502,6 +508,8 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         const retry=step.retryRequested;
         step.retryRequested=false;
         const missing=fields.filter(field=>!Object.hasOwn(step.questions,key(field)) || retry && (!step.answers[field.fieldId]?.value || results.get(field.fieldId)?.status==='failed'));
+        let failure;
+        const onAiFailure = error => { failure = error; };
         if (missing.length) {
           if (step.primary && retry) {
             step.repairs=(step.repairs || 0)+1;
@@ -509,17 +517,17 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
           } else if (step.primary && step.lateRequests++ >= 2) throw new Error('Embedded dynamic field limit reached. Review manually.');
           status('running',`Resolving ${missing.length} embedded fields.`);
           for (const field of missing) step.questions[key(field)]=questionIdentity(field);
-          const response=await answer(missing,{jobContext:session.job,...(retry?{repairErrors:state.errors,allowSearch:false}:{})});
+          const response=await answer(missing,{jobContext:session.job,onAiFailure,...(retry?{repairErrors:state.errors,allowSearch:false}:{})});
           if (!current()) return true;
           await refresh();
           for (const entry of response.answers) step.answers[entry.fieldId]=entry;
           const searches=response.answers.filter(entry=>entry.searchQuery).map(entry=>({...entry,fieldId:entry.fieldId.replace(/^jcf\d+::/, '')}));
-          if (searches.length) {
+          if (!failure && searches.length) {
             const discovered=await command('searchOptions',{queries:searches});
             if (!current()) return true;
             await refresh();
             if (!current()) return true;
-            const resolved = await resolveDiscoveredAnswers((discovered.fields || []).map(field=>({...field,fieldId:remoteFieldId(state.frameId,field.fieldId)})), response.answers, {jobContext:session.job,isCurrent:current});
+            const resolved = await resolveDiscoveredAnswers((discovered.fields || []).map(field=>({...field,fieldId:remoteFieldId(state.frameId,field.fieldId)})), response.answers, {jobContext:session.job,isCurrent:current,onAiFailure});
             if (!current()) return true;
             await refresh();
             if (!current()) return true;
@@ -535,12 +543,14 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
           for (const entry of filled.results || []) results.set(remoteFieldId(state.frameId,entry.fieldId),entry);
           await refresh();
           emit();
+          if (failure) throw failure;
           // Conditional questions revealed by filling get their bounded late pass.
           const next=await command('scan');
           if (!current()) return true;
           await refresh();
           if (next.fields?.some(field=>!Object.hasOwn(step.questions,field.fieldId))) continue;
         }
+        if (failure) throw failure;
       }
       if (state.errors.length || [...results.values()].some(entry=>entry.status==='failed')) {
         status('paused',`Embedded application needs review: ${state.errors.map(error=>error.message).join(' ').slice(0,250) || 'A value or upload was rejected.'}`);return true;
@@ -660,19 +670,20 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
             if (cached) step.answers[field.id] = { fieldId: field.id, ...cached }; else missing.push(field);
           }
           if (missing.length) {
-            if ((step.requests || 0) >= 2) {
+            const localOnly = answer === generateAutofillAnswers && !hasAi();
+            if (!localOnly && (step.requests || 0) >= 2) {
               step.primary = true;
               saveSession(session);
               if (targets.length) await applyAnswers(targets, Object.values(step.answers), token, signature);
               status('paused', 'Primary request limit reached (2/2). Fill remaining fields manually.');
               return;
             }
-            step.requests = (step.requests || 0) + 1;
+            if (!localOnly) step.requests = (step.requests || 0) + 1;
             saveSession(session);
             status('running', `Generating answers for ${missing.length} fields.`);
             const answers = await request(missing, {}, token, signature);
             if (!checkPage(signature, token, 'primary response')) return;
-            if (!answers.length) throw new Error('AI returned no usable answers. Resume to retry.');
+            if (!answers.length && !localOnly) throw new Error('AI returned no usable answers. Resume to retry.');
             for (const entry of answers) step.answers[entry.fieldId] = entry;
           }
           step.primary = true;
@@ -909,6 +920,7 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
         emit();
       }
       if (!compatibleSession()) return;
+      if (answer === generateAutofillAnswers && platform.ai.status().mode === 'managed' && !hasAi()) await platform.ai.refresh().catch(() => {});
       if (platform.capabilities.materials) runMaterials = await snapshotMaterials(session, { persistRun: true });
       if (disposed || startGeneration !== generation) return;
       session.stepReview = false;

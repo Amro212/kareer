@@ -64,19 +64,27 @@ test('continuous document edits autosave, survive reload, retain history, and ex
   expect(errors).toEqual([]);
 });
 
-test('paragraph split, merge, and rich paste use library editing without unsupported formatting', async ({ kr }) => {
+for (const width of [1280, 600]) test(`paragraph split, merge, and rich paste use library editing without unsupported formatting at ${width}px`, async ({ kr }) => {
   const page = await setup(kr, 'coverLetter');
+  await page.setViewportSize({ width, height: 900 });
+  const caret = (paragraph, end = true) => paragraph.evaluate((element, end) => {
+    element.closest('[contenteditable="true"]').focus();
+    const range = document.createRange(); range.selectNodeContents(element); range.collapse(!end);
+    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+  }, end);
   const body = page.locator('.paper-letter p').nth(1);
-  await body.click(); await page.keyboard.press('End'); await page.keyboard.press('Enter'); await page.keyboard.type('A new paragraph with plain text.');
+  await caret(body); await page.keyboard.press('Enter'); await page.keyboard.type('A new paragraph with plain text.');
   await expect(page.locator('.paper-letter p')).toHaveCount(5);
-  await expect(page.locator('.paper-letter')).toContainText('A new paragraph with plain text.');
-  await page.keyboard.press('Home'); await page.keyboard.press('Backspace');
+  await expect(page.locator('.paper-letter p').nth(2)).toHaveText('A new paragraph with plain text.');
+  await caret(page.locator('.paper-letter p').nth(2), false); await page.keyboard.press('Backspace');
   await expect(page.locator('.paper-letter p')).toHaveCount(4);
-  await page.locator('.paper-letter p').nth(1).click(); await page.keyboard.press('End');
+  await expect(body).toContainText('A new paragraph with plain text.');
+  await caret(body);
   await page.keyboard.press('Shift+Enter'); await page.keyboard.type('A soft line break survives.');
-  await expect(page.locator('.paper-letter p').nth(1)).toContainText('A soft line break survives.');
+  await expect(body).toContainText('A soft line break survives.');
+  await expect(body.locator('br')).toHaveCount(1);
   // Use the public paste command through the DOM clipboard event for actual browser parsing.
-  await page.locator('.paper-letter p').nth(1).click();
+  await caret(body);
   await page.evaluate(() => { const data = new DataTransfer(); data.setData('text/html', '<p><b>Clipboard content.</b></p>'); data.setData('text/plain', 'Clipboard content.'); document.querySelector('.document-content').dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })); });
   await expect(page.locator('.paper-letter')).toContainText('Clipboard content.');
   await expect(page.locator('.paper-letter b, .paper-letter strong')).toHaveCount(0);
@@ -100,7 +108,15 @@ test('late contextual rewrites keep newer typing and apply safely with undo', as
 
 test('empty letter drafts persist after failed exports and switching keeps them recoverable', async ({ kr }) => {
   const page = await setup(kr, 'coverLetter');
-  await page.locator('.paper-letter').fill('');
+  await page.locator('.paper-letter').evaluate(element => {
+    element.closest('[contenteditable="true"]').focus();
+    const range = document.createRange();
+    range.setStart(element.firstElementChild, 0);
+    range.setEnd(element.lastElementChild, element.lastElementChild.childNodes.length);
+    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+  });
+  await page.keyboard.press('Backspace');
+  await expect(page.locator('.paper-letter')).toHaveText('');
   await expect(page.locator('#document-status')).toContainText('Save needs attention');
   const [record] = await message(page, 'list'); const draft = await message(page, 'getDraft', { id: record.id });
   expect(draft.model.paragraphs).toEqual([]);

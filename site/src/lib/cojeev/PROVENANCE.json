@@ -214,6 +214,91 @@
       "target": "styles/cojeev/text-reveal.css",
       "source": "https://cojeev.com/ui/r/text-reveal.json",
       "sha256": "f17808cfee5a70b2265a8f2a1502ce8e802de8c0d47c5961f22613e27e1c29c3"
+    },
+    {
+      "target": "components/ui/icon.tsx",
+      "source": "https://cojeev.com/ui/r/icon.json",
+      "sha256": "1037a5ddb9389d62456ffd165bcefa1291bad78193a5a170a5938e73c0c7b50c"
+    },
+    {
+      "target": "lib/cojeev/icon-data.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "f31f161b687a8fd76113e560c79286f8e063baf8e5d27b29364cd9343987fb55"
+    },
+    {
+      "target": "lib/cojeev/lucide-icon-names.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "ab9f733a6a3665b95d850b4c693c4b06999ffa4b6c8b31df46e72e0701fe4c4b"
+    },
+    {
+      "target": "styles/cojeev/icon.css",
+      "source": "https://cojeev.com/ui/r/icon.json",
+      "sha256": "feb272e81bcf3d81e3b589721d732dd7b025cbfed52febf39538f80b118f52a8"
+    },
+    {
+      "target": "components/ui/badge.tsx",
+      "source": "https://cojeev.com/ui/r/badge.json",
+      "sha256": "e91ec4fb19f207ce92f5b4eff740306672dfe96a53075219827e9ce49f32b955"
+    },
+    {
+      "target": "styles/cojeev/badge.css",
+      "source": "https://cojeev.com/ui/r/badge.json",
+      "sha256": "c682906d23bc379cc670731c8f0b3da420ae7573b0edede9ee40cb5cfa38fa4b"
+    },
+    {
+      "target": "components/ui/switch.tsx",
+      "source": "https://cojeev.com/ui/r/switch.json",
+      "sha256": "03ef37a847d7813b1c896f1e65050e71d9c8cfa9e81beb00518c27ee100963d4"
+    },
+    {
+      "target": "styles/cojeev/switch.css",
+      "source": "https://cojeev.com/ui/r/switch.json",
+      "sha256": "9b54cbf22be2c389c733eeeb6706034353ee269d8cd012fdb9f56c8ae5838b8f"
+    },
+    {
+      "target": "styles/cojeev/choice-foundations.css",
+      "source": "https://cojeev.com/ui/r/switch.json",
+      "sha256": "32218432f4f553f98375f792ea385bab0b7bfa5640a79b5a35d362ac92a01c39"
+    },
+    {
+      "target": "components/ui/accordion.tsx",
+      "source": "https://cojeev.com/ui/r/accordion.json",
+      "sha256": "a32c82c5d3fa6cabe4b8b712f9c226ee730cfe24ecab3797f96926236fc1961d"
+    },
+    {
+      "target": "lib/cojeev-motion/use-disclosure-height.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "39429e29fb1f68ff8244031f38210bc685109e876466677eb50124657eebd471"
+    },
+    {
+      "target": "styles/cojeev/accordion.css",
+      "source": "https://cojeev.com/ui/r/accordion.json",
+      "sha256": "97f822e0d1a1e86e7a218b8d68398cf4f5872e1dd9c3bd8c93bc589935d87f3b"
+    },
+    {
+      "target": "components/ui/progress.tsx",
+      "source": "https://cojeev.com/ui/r/progress.json",
+      "sha256": "1ae86073a7c5690060a4adcce08ab10c145a3e832f9dbfe5664e109830b5a128"
+    },
+    {
+      "target": "lib/cojeev-motion/use-organic-value.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "b6850e89336f5445cdb627ecc500eeb4e412fc10634ce22a53c2efcdbd9db1c3"
+    },
+    {
+      "target": "lib/cojeev-motion/progress-geometry.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "01ee484744aba5de191014976cd4d2d0302832425a47e60f7e19f4ac94228a4a"
+    },
+    {
+      "target": "styles/cojeev/progress.css",
+      "source": "https://cojeev.com/ui/r/progress.json",
+      "sha256": "66d16e1cc654b5d708596847abdfc61d8e1329db62c814239a9a64b436dc87c7"
+    },
+    {
+      "target": "lib/cojeev/lucide-icon-data.ts",
+      "source": "https://cojeev.com/ui/r/cojeev.json",
+      "sha256": "988291dec3bfb10b943c73d13afb167dd3633232ec825ac4e3cda5e85a611361"
     }
   ]
 }

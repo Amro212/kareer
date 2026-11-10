@@ -1,6 +1,7 @@
 const api = typeof browser !== 'undefined' && browser.runtime ? browser : chrome;
 
-const ORIGINS = ['<all_urls>', 'https://openrouter.ai/*', 'https://api.kareer.itsamro.me/*'];
+// The manifest lists the right gateway for this build, including staging builds.
+const ORIGINS = api.runtime.getManifest().optional_host_permissions || ['<all_urls>'];
 
 const status = document.getElementById('status');
 const button = document.getElementById('grant');

@@ -25,3 +25,17 @@ test('Firefox first-run page exists and requests host permission', () => {
   assert.match(js, /permissions\.request/);
   assert.match(js, /<all_urls>/);
 });
+
+test('Firefox declares the personal data transmitted by optional AI and billing', () => {
+  const manifest = JSON.parse(fs.readFileSync(new URL('../../src/targets/extension/manifest.firefox.json', import.meta.url), 'utf8'));
+  const types = manifest.browser_specific_settings.gecko.data_collection_permissions.required;
+  for (const type of ['authenticationInfo', 'personallyIdentifyingInfo', 'healthInfo', 'financialAndPaymentInfo', 'locationInfo', 'browsingActivity', 'websiteContent']) {
+    assert.ok(types.includes(type), `Missing Firefox data disclosure: ${type}`);
+  }
+});
+
+test('Chrome uses host access instead of a redundant tabs permission', () => {
+  const base = JSON.parse(fs.readFileSync(new URL('../../src/targets/extension/manifest.base.json', import.meta.url), 'utf8'));
+  assert.ok(!base.permissions.includes('tabs'));
+  assert.ok(base.host_permissions.includes('<all_urls>'));
+});

@@ -40,6 +40,12 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - run: npx playwright test --config tests/site/playwright.config.js
+      - name: Build production packages
+        env:
+          KAREER_GATEWAY_ORIGIN: ${{ vars.KAREER_GATEWAY_ORIGIN }}
+        run: |
+          npm run build -- --production
+          npx web-ext lint --source-dir=dist/firefox --self-hosted
       - name: Sign Firefox candidate
         if: inputs.sign_firefox
         env:

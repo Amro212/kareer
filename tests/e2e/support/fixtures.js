@@ -73,6 +73,8 @@ export const test = base.extend({
       context,
       worker,
       extensionId,
+      gatewayOrigin: new URL((await worker.evaluate(() => chrome.runtime.getManifest().host_permissions))
+        .find(origin => origin !== '<all_urls>' && !origin.startsWith('https://openrouter.ai/'))).origin,
       openrouter: openrouter.state,
       fixtureUrl: (file, host = ATS_HOST, query = '') => `http://${host}/${file}${query}`,
       optionsUrl: () => `chrome-extension://${extensionId}/options/index.html`,
@@ -81,7 +83,8 @@ export const test = base.extend({
       /** Writes directly through the background worker, bypassing the UI. */
       async seed({ apiKey = 'sk-or-v1-e2e-test-key', settings, profile, resume } = {}) {
         await worker.evaluate(async ({ apiKey, settings, profile }) => {
-          if (apiKey) await chrome.storage.local.set({ 'kr:secrets': { apiKey } });
+          const secrets = (await chrome.storage.local.get('kr:secrets'))['kr:secrets'] || {};
+          await chrome.storage.local.set({ 'kr:secrets': { ...secrets, ...(apiKey ? { apiKey } : {}), aiDataConsent: 1 } });
           if (settings) {
             const cur = (await chrome.storage.local.get('kr:settings'))['kr:settings'] || {};
             await chrome.storage.local.set({ 'kr:settings': { ...cur, ...settings } });

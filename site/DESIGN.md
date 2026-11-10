@@ -71,9 +71,13 @@ Controls have softly squared corners. Sheet corners are gently curved. The tilte
 
 ## Components
 
-Use actual Cojeev Button, Tabs, Tooltip, TextReveal, MotionPresence and MotionSurface before creating new equivalents. The user chose subtle/comet with speed 0.85, intensity 1.75, hover enabled and hover strength 0.75. The hero's bounded field sequence is custom state coordination over those primitives. Reduced motion skips playback and shows the complete result immediately.
+Use actual Cojeev Button, Tabs, Tooltip, TextReveal, MotionPresence, MotionSurface, Icon, Badge, Switch, Accordion, Progress and Spinner before creating new equivalents. The user chose subtle/comet with speed 0.85, intensity 1.75, hover enabled and hover strength 0.75. The hero's bounded field sequence is custom state coordination over those primitives. Reduced motion skips playback and shows the complete result immediately.
 
-The demo uses only labeled fictional data. Source labels are keyboard/click accessible. Native details provide FAQ disclosure. Privacy and setup inherit the same tokens with quieter typography and an article layout.
+The hero demo is a browser window holding an unbranded "Workday-style" application (its own slate-blue accent, so the page reads as someone else's site) and a rebuilt Kareer panel in the site's paper theme. Below 800px the panel docks as a bottom sheet. It shows the product's five value states with fixed colors: saved (soft green), verified (lime), inferred (amber), guessed (yellow), unresolved (dashed). Unresolved is transient: a second pass turns it into guessed. Badges are buttons that explain their source; the Profile tab highlights the record behind the selected answer.
+
+The document studio picks from one fixed set of saved facts per posting. Highlights mark what was chosen or reframed, never new facts. The pricing estimator shows a range (1 to 3 requests per application) and is labeled an estimate.
+
+The demo uses only labeled fictional data. The Cojeev Accordion (faq appearance, lime when open) provides the homepage FAQ. Privacy and setup inherit the same tokens with quieter typography and an article layout.
 
 Landing-page motion uses a folded, line-staggered TextReveal hero (760ms, 100ms stagger) and an eased lime underline draw. ScrollReveal reuses MotionSurface, Cojeev visibility handling and its enter easing: 700ms demo arrival, snappier 400ms copy and 350ms buttons arrivals, 22px translation and a bounded 2px softening. Headline and demo enter together, followed by copy, then buttons; actual completion advances each group. A small extension to Cojeev TextReveal exposes playback state. Normal-motion entrances are concealed before hydration and while waiting, preserving layout space. A head-script opt-in keeps no-JavaScript content readable and falls back to visible content if startup fails. Benefit and document entrances use the original short stagger; receipt and closing groups play once on entry. Reduced motion shows resting content immediately. Native scrolling remains in control.
 

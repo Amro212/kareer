@@ -1,0 +1,84 @@
+{
+  "date": "2026-11-05",
+  "version": "0.5.160",
+  "branchAtIntake": "cursor/stripe-billing-b72d",
+  "baseCommit": "cb0ad2606900e63ab7c28847905ed7ca7c5db80e",
+  "candidateOnly": true,
+  "submitted": false,
+  "graphicGeneration": "built-in image_gen; prompts.md",
+  "packages": [
+    {
+      "file": "dist/kareer-chrome.zip",
+      "bytes": 8957176,
+      "sha256": "f902d796bea99001a2f3bbbcfd317c290b7f67eac9f04c68a0717494212c203c"
+    },
+    {
+      "file": "dist/kareer-firefox.xpi",
+      "bytes": 8957354,
+      "sha256": "ac749ad65f0600b300b0c4b0614a1b81085427b20a02fbcd263c9bd7e0e94d46"
+    },
+    {
+      "file": "dist/kareer-source.zip",
+      "bytes": 5897736,
+      "sha256": "4f7b85b22492be003a800ec3dc4eee3a622906c773d9857933b96148b5262442"
+    }
+  ],
+  "assets": [
+    {
+      "file": "docs/store-assets/chrome/promo-marquee-master.png",
+      "width": 1983,
+      "height": 793,
+      "pngColorType": 2,
+      "sha256": "36a5e43c4ed4eb56dc8fff5ee7c5825c68b7b9842899efbd73e57f0a118e7dfa"
+    },
+    {
+      "file": "docs/store-assets/chrome/promo-marquee.png",
+      "width": 1400,
+      "height": 560,
+      "pngColorType": 2,
+      "sha256": "91436a32cbfcd67672716c1d46017a1c77e6859678b6ec51526e2248ac11a359"
+    },
+    {
+      "file": "docs/store-assets/chrome/promo-small-master.png",
+      "width": 1572,
+      "height": 1001,
+      "pngColorType": 2,
+      "sha256": "c3132f943e904721c73a3de34d2167091ea3260b34aa36d621e11fc39bba8ff8"
+    },
+    {
+      "file": "docs/store-assets/chrome/promo-small.png",
+      "width": 440,
+      "height": 280,
+      "pngColorType": 2,
+      "sha256": "b955048c04fdfaa6226fa2cf44e2a39c31c4fd9fecd105d21dffeaa488f38cf4"
+    },
+    {
+      "file": "docs/store-assets/chrome/screenshot-01-autofill.png",
+      "width": 1280,
+      "height": 800,
+      "pngColorType": 2,
+      "sha256": "6984dd16598a9327fa42a54de1bb02f2f42ffdbc96a7a381ed011a10e7e2b4ad"
+    },
+    {
+      "file": "docs/store-assets/chrome/screenshot-02-profile.png",
+      "width": 1280,
+      "height": 800,
+      "pngColorType": 2,
+      "sha256": "a12358d2862a2176e0f7fba05926825180fdc274889b8e8151720cb2d010d53e"
+    },
+    {
+      "file": "docs/store-assets/chrome/screenshot-03-documents.png",
+      "width": 1280,
+      "height": 800,
+      "pngColorType": 2,
+      "sha256": "d43848308f02d630786c82cd46b5c2a3c4a31ff40311fa4de88e63da30d51048"
+    },
+    {
+      "file": "docs/store-assets/chrome/store-icon.png",
+      "width": 128,
+      "height": 128,
+      "pngColorType": 6,
+      "sha256": "71333028e44bcdbb17f1fa0836c1e349a74251c24ffc10a5a56926207d129f14"
+    }
+  ]
+}

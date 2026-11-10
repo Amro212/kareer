@@ -52,7 +52,7 @@ The architecture, implementation roadmap, and engineering patterns follow two di
    Subframes run field agents with no UI.
 6. **Runtime boundary**: browser + page DOM + extension APIs. Advanced BYOK calls
    OpenRouter directly. Managed extension AI uses the isolated `server/` Cloudflare
-   Worker + D1 gateway for Lemon Squeezy billing, license authentication, credits,
+   Worker + D1 gateway for Stripe billing, Kareer key authentication, credits,
    and fixed-policy OpenRouter requests. Profiles, files and application execution
    remain local. No external browser controller. Playwright is for tests only.
 7. **Action execution & event strategy**: Actuators and ATS action executors use
