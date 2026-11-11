@@ -7,7 +7,7 @@
  */
 import { genericAdapter } from './generic.js';
 import { applicationAnswer, applicationProfileValue, applicationOptionMatches, applicationNeedsFill, canonicalField, DISCLOSURES } from './application-fields.js';
-import { owningWidget, entryRecords, ROW_FIELDS, prepareSmartRecruitersSections } from './smartrecruiters-sections.js';
+import { owningWidget, entryRecords, ROW_FIELDS, prepareSmartRecruitersSections, reviewFields } from './smartrecruiters-sections.js';
 
 const PERSONAL = { 'first-name-input': 'first_name', 'last-name-input': 'last_name', 'email-input': 'email', 'confirm-email-input': 'email' };
 const LINKS = { linkedin: 'linkedin', website: 'portfolio', twitter: 'twitter' };
@@ -60,6 +60,7 @@ export const smartrecruitersAdapter = {
     return key === 'location' ? value.split(',')[0].trim() : value;
   },
   prepareSections: (doc, profile, options) => prepareSmartRecruitersSections(doc, profile, options),
+  reviewFields,
   applyControl: doc => doc.querySelector('a.js-oneclick[href*="/oneclick-ui/"]'),
   continueControl: doc => footerButton(doc, 'footer-next'),
   submitControl: doc => footerButton(doc, 'footer-submit'),

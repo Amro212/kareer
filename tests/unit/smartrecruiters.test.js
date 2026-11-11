@@ -13,6 +13,7 @@ import { isResumeField } from '../../src/core/resume.js';
 import {getComboboxMenus,discoverComboboxOptions,readComboboxSelection,optionData} from '../../src/core/fields/combobox.js';
 import {smartrecruitersAdapter} from '../../src/core/adapters/smartrecruiters.js';
 import {entryRecords,prepareSmartRecruitersSections} from '../../src/core/adapters/smartrecruiters-sections.js';
+import { summarizeFieldResults, getAllDetectedFields } from '../../src/core/ui.js';
 
 let dom;
 function hydrate(root) {
@@ -346,6 +347,10 @@ test('rows are created from the saved profile in order, saved, and never duplica
   await prepareSmartRecruitersSections(document, profile);
   assert.deepEqual(adds, { experience: 2, education: 0 }, 'saved cards match their records on retry');
   assert.equal(cards('experience').length, 2);
+  const review = summarizeFieldResults(getAllDetectedFields(), new Map());
+  assert.deepEqual(review.verified.filter(item => item.field.type === 'section').map(item => `${item.field.label}: ${item.result.value}`),
+    ['Experience: Software Developer · Acme Robotics', 'Experience: IT Technician · County of Dufferin', 'Education: University of Guelph · Bachelor of Computing'],
+    'saved rows stay reviewable after their editors close');
 });
 
 test('existing matching cards are preserved and only missing records are added', async () => {
@@ -361,6 +366,7 @@ test('a rejected Save leaves the editor open and bound for review without a seco
   const profile = { workExperiences: [{ id: 'w1', title: 'Software Developer', company: 'Acme Robotics' }] };
   await prepareSmartRecruitersSections(document, profile);
   assert.deepEqual(cards('experience'), ['EDITOR'], 'From is required, so Save is rejected');
+  assert.deepEqual(summarizeFieldResults(getAllDetectedFields(), new Map()).failed.filter(item => item.field.type === 'section').map(item => item.result.value), ['Software Developer · Acme Robotics']);
   const title = scanFormFields().find(field => field.label === 'Title');
   assert.equal(title.ats.record, profile.workExperiences[0]);
   await prepareSmartRecruitersSections(document, profile);

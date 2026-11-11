@@ -4,13 +4,26 @@
  * it into a summary card. Existing cards and parsed editors are matched by
  * identity and never deleted or edited.
  */
-import { scanFormFields, harvestComboboxOptions } from '../fields/scanner.js';
+import { scanFormFields } from '../fields/scanner.js';
 import { fillField } from '../fields/fillers.js';
-import { clickFieldControl, findExactOption, optionKey } from '../fields/combobox.js';
+import { clickFieldControl, optionKey } from '../fields/combobox.js';
 import { getSettings } from '../storage.js';
 import { logger } from '../debug.js';
 
 export const entryRecords = new WeakMap();
+// Saved rows become cards without inputs, so the panel reviews them here.
+const reviewed = new Map();
+export const reviewFields = () => [...reviewed.values()].filter(item => item.element.isConnected)
+  .sort((a, b) => a.element.compareDocumentPosition(b.element) & 4 ? -1 : 1);
+function review(recipe, record, element, status) {
+  const id = `smartrecruiters:${recipe.label}:${record.id || recipe.identity.map(key => record[key]).join('|')}`;
+  const previous = reviewed.get(id);
+  if (status === 'matched' && previous?.element === element && previous.result.status !== 'failed') return;
+  const value = recipe.identity.map(key => record[key]).filter(Boolean).join(' · ');
+  const label = recipe.label[0].toUpperCase() + recipe.label.slice(1);
+  reviewed.set(id, { id, fieldId: id, label, type: 'section', currentValue: value, element,
+    result: { fieldId: id, label, value, source: 'profile', status: status === 'failed' ? 'failed' : 'verified' } });
+}
 // Owning oc-* host data-test -> canonical row key.
 export const ROW_FIELDS = {
   'job-title-autocomplete': 'title', 'company-autocomplete': 'company', 'experience-form-location': 'location',
@@ -37,7 +50,7 @@ const innerButton = host => host?.querySelector('spl-button')?.shadowRoot?.query
 const ownText = node => node ? [...node.childNodes].filter(child => child.nodeType === 3).map(child => child.textContent).join(' ').replace(/\s+/g, ' ').trim() : '';
 
 function rowFields(doc, row) {
-  return scanFormFields(doc).filter(field => field.ats?.canonicalKey && within(field.element, row));
+  return scanFormFields(row).filter(field => field.ats?.canonicalKey && within(field.element, row));
 }
 function identity(doc, row, recipe) {
   if (!row.querySelector(recipe.form)) return Object.fromEntries(Object.entries(recipe.card).map(([key, test]) => [key, ownText(row.querySelector(`[data-test="${test}"]`))]));
@@ -67,13 +80,8 @@ async function fillRow(doc, row, record, overwrite, isCurrent) {
       const key = field.ats.canonicalKey, value = rowValue(record, key);
       if (done.has(key) || value === '' || field.currentValue && field.currentValue !== 'false' && !overwrite) { done.add(key); continue; }
       done.add(key);
-      let target = value;
-      if (field.type === 'combobox') {
-        await harvestComboboxOptions([field], new Map([[field.id, String(value)]]));
-        target = findExactOption(field.options || [], String(value), field)?.label;
-        if (!target) { logger.warn(`SmartRecruiters ${key}: no matching option for the saved value.`); continue; }
-      }
-      if (!await fillField(field, target)) logger.warn(`SmartRecruiters ${key}: the editor did not accept the saved value.`);
+      // fillCombobox searches with the value and commits only an exact owned option.
+      if (!await fillField(field, field.type === 'combobox' ? String(value) : value)) logger.warn(`SmartRecruiters ${key}: the editor did not accept the saved value.`);
       if (key === 'current') break;
     }
   }
@@ -119,6 +127,7 @@ export async function prepareSmartRecruitersSections(doc, profile, { isCurrent =
       if (row) claimed.add(row);
       // A saved card is complete; only a matching open editor still needs work.
       if (!row || row.querySelector(recipe.form)) work.push({ record, row });
+      else review(recipe, record, row, 'matched');
     }
     // Add prepends, so creating in reverse keeps the saved profile order.
     for (const item of work.reverse()) {
@@ -129,7 +138,9 @@ export async function prepareSmartRecruitersSections(doc, profile, { isCurrent =
       entryRecords.set(row, item.record);
       await fillRow(doc, row, item.record, overwrite, isCurrent);
       // A rejected Save leaves the editor open and bound for review.
-      if (!await saveRow(row, recipe)) logger.warn(`SmartRecruiters ${recipe.label}: Save was not accepted. Review the open entry.`);
+      const saved = await saveRow(row, recipe);
+      if (!saved) logger.warn(`SmartRecruiters ${recipe.label}: Save was not accepted. Review the open entry.`);
+      review(recipe, item.record, row, saved ? 'saved' : 'failed');
     }
   }
 }

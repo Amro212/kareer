@@ -254,6 +254,7 @@ export function getAllDetectedFields() {
       });
     }
   }
+  for (const f of detectAdapter().reviewFields?.() || []) if (!map.has(f.id)) map.set(f.id, f);
   return Array.from(map.values());
 }
 
@@ -2330,7 +2331,7 @@ export function summarizeFieldResults(fields, results) {
 
   for (const f of fields) {
     const id = f.id || f.fieldId;
-    const res = results.get(id);
+    const res = results.get(id) ?? f.result;
     if (res?.status === FILL_STATUS.VERIFIED) {
       verifiedFields.push({ field: f, result: res });
     } else if (res?.status === FILL_STATUS.FAILED) {
@@ -3268,7 +3269,7 @@ function attachEventHandlers() {
         if (targetIframe) targetIframe.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
       }
-      const target = detectedFieldsCache.find((f) => (f.id || f.fieldId) === fieldId);
+      const target = getAllDetectedFields().find((f) => f.id === fieldId);
       if (target?.element) {
         scrollToField(target.element);
         highlightActiveField(target.element);
