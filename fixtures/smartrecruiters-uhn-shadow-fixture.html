@@ -1,26 +1,48 @@
 <!doctype html>
 <!-- Reduced open-shadow structure inspected on the authorized UHN form on 2026-11-09.
      IDs and all values are synthetic. Templates preserve the observed shadow boundaries.
+     Extended 2026-11-10 from live City/Institution option and native selection inspection.
+     Restructured 2026-11-10 from a fresh live form: personal-information wrapper, Experience/
+     Education sections whose Add prepends an oc-*-entry editor with Save, and the footer Next.
      The parser's disabled dropzone and editor replacement are exercised by the targeted test. -->
 <main>
-  <oc-apply-with-resume><spl-dropzone data-test="apply-with-resume-container" files='[{"fileName":"QA-Resume.pdf"}]'>
+  <oc-easy-apply><oc-apply-with-resume><spl-dropzone data-test="apply-with-resume-container" files='[{"fileName":"QA-Resume.pdf"}]'>
     <template shadowrootmode="open"><div><label>Choose a file or drop it here</label><input id="parser-file" type="file"></div></template>
-  </spl-dropzone></oc-apply-with-resume>
-  <spl-autocomplete id="city" label="City"><template shadowrootmode="open">
-    <spl-input id="city" label="City"><template shadowrootmode="open"><input id="city" role="combobox" aria-controls="city-menu"></template></spl-input>
-    <div id="city-menu" role="listbox" hidden></div>
-  </template></spl-autocomplete>
-  <spl-phone-field id="phone" label="Phone number" required value='{"country":"CA","value":"4165550123"}'>
-    <template shadowrootmode="open"><spl-input id="phone" type="tel" required><template shadowrootmode="open"><input id="phone" type="tel" aria-label="Phone number" aria-required="true"></template></spl-input></template>
-  </spl-phone-field>
-  <oc-education-edit-form data-test="education-edit-form">
-    <spl-input id="edu-degree-before" label="Degree"><template shadowrootmode="open"><input id="edu-degree-before" type="text"></template></spl-input>
-    <spl-textarea id="edu-desc-before" label="Description"><template shadowrootmode="open"><textarea id="edu-desc-before"></textarea></template></spl-textarea>
-    <spl-autocomplete id="institution-before" label="Institution" allowcustomvalues><template shadowrootmode="open">
-      <spl-input id="institution-before" label="Institution" required><template shadowrootmode="open"><input id="institution-before" role="combobox" aria-required="true"></template></spl-input>
+  </spl-dropzone></oc-apply-with-resume></oc-easy-apply>
+  <oc-personal-information>
+    <oc-input data-test="personal-info-first-name-input"><spl-input id="first-name-input" label="First name"><template shadowrootmode="open"><input id="first-name-input" type="text" aria-label="First name"></template></spl-input></oc-input>
+    <oc-input data-test="personal-info-email-confirm-input"><spl-input id="confirm-email-input" label="Confirm your email"><template shadowrootmode="open"><input id="confirm-email-input" type="email" aria-label="Confirm your email"></template></spl-input></oc-input>
+    <spl-autocomplete id="city" label="City" data-test="location-autocomplete"><template shadowrootmode="open">
+      <spl-input id="city" label="City"><template shadowrootmode="open"><input id="city" role="combobox" aria-controls="city-menu"></template></spl-input>
+      <div id="city-menu" role="listbox" hidden><spl-select-option value="CA_ON_CITY_milton">Milton, Ontario, Canada<template shadowrootmode="open"><spl-dropdown-item><template shadowrootmode="open"><div role="option"><slot></slot></div></template><spl-truncate title="Milton, Ontario, Canada"></spl-truncate></spl-dropdown-item></template></spl-select-option></div>
     </template></spl-autocomplete>
-  </oc-education-edit-form>
-  <section><h3>Resume</h3><spl-dropzone data-test="resume-upload" files='[{"fileName":"QA-Resume.pdf"}]'>
+    <spl-phone-field id="phone" label="Phone number" required value='{"country":"CA","value":"4165550123"}'>
+      <template shadowrootmode="open"><spl-input id="phone" type="tel" required><template shadowrootmode="open"><input id="phone" type="tel" aria-label="Phone number" aria-required="true"></template></spl-input></template>
+    </spl-phone-field>
+  </oc-personal-information>
+  <oc-experience><div data-test="experience">
+    <oc-button data-test="add-experience"><spl-button aria-label="Add experience entry"><template shadowrootmode="open"><button type="button"><slot></slot></button></template><span>Add</span></spl-button></oc-button>
+    <div class="entries"></div>
+  </div></oc-experience>
+  <oc-education><div data-test="education">
+    <oc-button data-test="add-education"><spl-button aria-label="Add education entry"><template shadowrootmode="open"><button type="button"><slot></slot></button></template><span>Add</span></spl-button></oc-button>
+    <div class="entries">
+      <oc-education-entry data-test="experience-entry"><div data-test="education-entry"><oc-education-edit-form><div data-test="education-edit-form">
+        <oc-input data-test="education-degree"><spl-input id="edu-degree-before" label="Degree"><template shadowrootmode="open"><input id="edu-degree-before" type="text"></template></spl-input></oc-input>
+        <oc-textarea data-test="education-description"><spl-textarea id="edu-desc-before" label="Description"><template shadowrootmode="open"><textarea id="edu-desc-before"></textarea></template></spl-textarea></oc-textarea>
+        <spl-autocomplete id="institution-before" label="Institution" data-test="institution-autocomplete" allowcustomvalues><template shadowrootmode="open">
+          <spl-input id="institution-before" label="Institution" required><template shadowrootmode="open"><input id="institution-before" role="combobox" aria-required="true" aria-controls="institution-menu"></template></spl-input>
+          <div id="institution-menu" role="listbox" hidden>
+            <spl-select-option value="#spl-custom-option">University of Guelph<template shadowrootmode="open"><spl-dropdown-item><template shadowrootmode="open"><div role="option"></div></template><spl-truncate title="University of Guelph"></spl-truncate></spl-dropdown-item></template></spl-select-option>
+            <spl-select-option value="University of Guelph">University of Guelph <span>CA</span><template shadowrootmode="open"><spl-dropdown-item><template shadowrootmode="open"><div role="option"></div></template><spl-truncate title="University of Guelph"></spl-truncate></spl-dropdown-item></template></spl-select-option>
+          </div>
+        </template></spl-autocomplete>
+        <oc-button data-test="education-save"><spl-button aria-label="Save education entry"><template shadowrootmode="open"><button type="button"><slot></slot></button></template><span>Save</span></spl-button></oc-button>
+      </div></oc-education-edit-form></div></oc-education-entry>
+    </div>
+  </div></oc-education>
+  <oc-resume-upload><section><h3>Resume</h3><spl-dropzone data-test="resume-upload" files='[{"fileName":"QA-Resume.pdf"}]'>
     <template shadowrootmode="open"><div><label>Choose a file or drop it here</label><input id="resume-file" type="file"></div></template>
-  </spl-dropzone></section>
+  </spl-dropzone></section></oc-resume-upload>
+  <div data-test="footer"><oc-button data-test="footer-next"><spl-button><template shadowrootmode="open"><button type="button"><slot></slot></button></template><span>Next</span></spl-button></oc-button></div>
 </main>

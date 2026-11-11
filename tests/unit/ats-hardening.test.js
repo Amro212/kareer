@@ -332,20 +332,18 @@ test('captured SmartRecruiters fixture resolves custom elements, ignores avatar 
   const html = readFileSync('./fixtures/jobs.smartrecruiters.com-2026-10-07-21-49.html', 'utf8');
   attachDom(html, 'https://jobs.smartrecruiters.com/oneclick-ui/company/HextomInc/publication/5dfa4b27-4c3b-4e6d-8586-6210e032a9ae');
   const fields = scanFormFields(dom.window.document);
-  assert.equal(fields.length, 15);
+  assert.equal(fields.length, 14);
   const allFiles = fields.filter(f => f.type === 'file');
 
   const avatarField = fields.find(f => f.label.includes('Upload profile image'));
   assert.ok(avatarField);
   assert.equal(isResumeField(avatarField, allFiles), false);
 
-  const prefillDropzone = fields.find(f => f.id === 'apply-with-resume-container');
-  assert.ok(prefillDropzone);
-  assert.equal(isResumeField(prefillDropzone, allFiles), false);
+  assert.equal(fields.some(f => f.id === 'apply-with-resume-container'), false, 'the resume parser is never scanned');
 
   const resumeField = fields.find(f => f.id === 'resume-upload');
   assert.ok(resumeField);
-  assert.equal(isResumeField(resumeField, allFiles), true);
+  assert.equal(isResumeField(resumeField, allFiles), true, 'the Resume widget is the resume target');
 
   const consentField = fields.find(f => f.id === 'noPolicy');
   assert.ok(consentField);

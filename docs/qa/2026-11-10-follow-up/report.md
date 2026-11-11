@@ -19,11 +19,20 @@ Fixture: `fixtures/workday-clio-websites-fixture.html`, reduced from the live Cl
 - Country-code text is assigned to the trigger's slot. Read that selected text so an already-selected code is preserved without opening its dropdown unnecessarily.
 - Personal City and education Institution need grounded search terms. Reuse the existing application resolver for personal location and the single unambiguous saved education record; multiple saved education records remain contextual rather than choosing the first.
 - Institution suggestions decorate a school name with a country/location. The component's fallback `spl-truncate[title]` is the actual logical label and matches the committed value. Use this label consistently for harvesting, matching, searching and verification; country decoration must not become part of the school name.
-- User explicitly approved automatic top-parser use on fresh applications only. When work/education entries or editors already exist, preserve them and use only the attachment widget. A fresh run uses the parser first; accepted attachments and parser-created records survive retries.
+- User initially approved automatic top-parser use on fresh applications only. Superseded later the same day: see "Rebuild from Simplify's recipe" below.
 - The inactive review observer treated standalone autofill/parser changes as manual edits. Reproduced in the rendered panel. Suspend manual reconciliation for the external fill, then reset its observation baseline; actual subsequent manual edits remain covered.
 - The live empty-ID warning stack identified two remaining paths in validation and job detection. Filter empty reference IDs there, with an expanded failing-then-passing QA-160-04 assertion.
 
 The fresh parser produced four work entries, one saved education card and an open education editor. The identity errors did not recur. Parser content remains imperfect (including the existing school/degree/date interpretation); no parsed records were deleted or manually saved. The next retry preserved these rows, filled City and retained phone/country. Institution's native catalog selection worked manually; the logical-label mismatch was captured and reproduced before its repair. Final live verification is recorded below when completed.
+
+## Rebuild from Simplify's recipe
+
+The user chose to follow Simplify: the top resume parser is never used, the resume goes only to the Resume widget, and work/education rows are created from the saved profile. Coverage of all 25 Simplify entries: [SmartRecruiters coverage](../../plans/2026-11-10-smartrecruiters-coverage.md).
+
+- Adapter: stable-id mapping, parser excluded from scanning, footer Next/Submit and success heading.
+- Rows: match saved records to existing cards, reuse open editors, otherwise Add (prepends), fill, Save. No edits to matched cards, no deletions, no second Add after a rejected Save.
+- Targeted tests: SmartRecruiters 18/18; ATS hardening, QA-160, Workday websites, generic detection 64/64; Greenhouse/Ashby 64/64.
+- Live: `tools/verify-smartrecruiters-live.js` is ready, but SmartRecruiters serves a slider CAPTCHA to automated and embedded browsers on this network (`smartrecruiters-live-error.png`). Kareer does not solve CAPTCHAs; the run needs the user to clear the slider.
 
 ## Automated verification
 

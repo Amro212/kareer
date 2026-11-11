@@ -289,7 +289,7 @@ export async function fillCombobox(element, targetValue, knownOptions) {
     if (!ownsSearch()) return false;
     input = resolveComboboxParts(element).input;
     const location = isLeverLocation(element) || isPlacesLocation(element) || known && isResidenceLabel(extractLabel(element));
-    ownsSearch = setComboboxSearch(input, location ? target.split(',')[0].trim() : detectAdapter().id === 'workday' && input ? (detectAdapter().searchQuery?.(element, target) || target) : '');
+    ownsSearch = setComboboxSearch(input, location ? target.split(',')[0].trim() : ['workday', 'smartrecruiters'].includes(detectAdapter().id) && input ? (detectAdapter().searchQuery?.(element, target) || target) : '');
     let options = await waitForComboboxOptions(element, undefined, location || detectAdapter().id === 'workday' ? target : undefined);
     if (!ownsSearch()) return false;
     let match = findExactOption(options.map(option => ({ ...optionData(option), element: option })), target, element);
