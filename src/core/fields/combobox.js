@@ -89,7 +89,14 @@ export function getComboboxMenus(element) {
     `${node.getAttribute('aria-controls') || ''} ${node.getAttribute('aria-owns') || ''}`.trim().split(/\s+/).filter(Boolean)));
   const root = element.getRootNode();
   // An explicit but absent/empty menu is authoritative. Never borrow another menu.
-  if (ids.size) return [...ids].map(id => root.getElementById?.(id) || element.ownerDocument.getElementById(id)).filter(Boolean);
+  if (ids.size) return [...ids].map(id => {
+    // Nested web components can reference a menu in an ancestor shadow root.
+    for (let scope = root; scope; scope = scope.host?.getRootNode()) {
+      const menu = scope.getElementById?.(id);
+      if (menu) return menu;
+    }
+    return null;
+  }).filter(Boolean);
   const adapterMenus = detectAdapter().comboboxMenus(element);
   if (adapterMenus) return adapterMenus;
   return Array.from(container.querySelectorAll(MENU));
@@ -101,7 +108,7 @@ export function discoverComboboxOptions(element) {
     const optionSelector = detectAdapter().comboboxOptionSelector(element)
       || (isLeverLocation(element) ? '.dropdown-results > .dropdown-location' : isPlacesLocation(element) ? '.pac-item' : OPTION);
     return Array.from(menu.querySelectorAll(optionSelector)).filter(option =>
-      option.textContent?.trim() && !option.hidden && option.style.display !== 'none' &&
+      optionData(option).label?.trim() && !option.hidden && option.style.display !== 'none' &&
       option.ownerDocument.defaultView.getComputedStyle(option).visibility !== 'hidden' &&
       !option.hasAttribute('disabled') && option.getAttribute('aria-disabled') !== 'true');
   }))];
@@ -116,7 +123,8 @@ export function discoverComboboxOptions(element) {
 }
 
 export function optionData(option) {
-  const label = detectAdapter().id === 'workday' ? option.getAttribute('data-automation-label') || option.querySelector('[data-automation-label]')?.getAttribute('data-automation-label') || option.textContent.trim() : option.textContent.trim();
+  const adapter = detectAdapter();
+  const label = adapter.optionLabel?.(option) || (adapter.id === 'workday' ? option.getAttribute('data-automation-label') || option.querySelector('[data-automation-label]')?.getAttribute('data-automation-label') || option.textContent.trim() : option.textContent.trim());
   return { value: option.getAttribute('data-value') || option.getAttribute('value') || label, label };
 }
 
@@ -224,7 +232,7 @@ export function closeCombobox(element) {
   const adapter = detectAdapter();
   // These ATS menus need Escape even if the control was never focused. Keep
   // it away from generic page navigation and Workday's selection rollback.
-  if (['greenhouse','lever','ashby'].includes(adapter.id)) {
+  if (['greenhouse','lever','ashby','smartrecruiters'].includes(adapter.id)) {
     target.dispatchEvent(new target.ownerDocument.defaultView.KeyboardEvent('keydown', {key:'Escape',code:'Escape',bubbles:true,composed:true,cancelable:true}));
   }
   target.blur?.();
@@ -284,7 +292,7 @@ export async function waitForComboboxOptions(element, timeoutMs, locationQuery) 
     const location = isLeverLocation(element) || isPlacesLocation(element) || isResidenceLabel(extractLabel(element));
     const options = discoverComboboxOptions(element).filter(option => {
       if (isLeverLocation(element) && search && (Date.now() - search.started < 500 || search.priorOptions.has(option))) return false;
-      const text = optionKey(option.textContent);
+      const text = optionKey(optionData(option).label);
       const adapter = detectAdapter();
       const meta = adapter.fieldMetadata?.(element);
       return location && query

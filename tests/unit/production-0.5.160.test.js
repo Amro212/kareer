@@ -12,6 +12,8 @@ import { createApplicationEngine } from '../../src/core/application.js';
 import { setPlatform } from '../../src/core/platform.js';
 import { createGmHost } from '../../src/core/hosts/gm.js';
 import { saveProfile, saveSettings } from '../../src/core/storage.js';
+import {inspectValidation} from '../../src/core/validation.js';
+import {jobPageEvidence} from '../../src/core/jobDetection.js';
 
 let dom, engine;
 const fixture = name => readFileSync(`fixtures/${name}-2026-11-08-captured.html`, 'utf8');
@@ -80,8 +82,10 @@ test('QA-160-04 unlabeled controls must not look up an empty ID', () => {
   document.getElementById = id => { calls.push(id); return original(id); };
   controlLabel(document.querySelector('button'));
   workflowLabel({element:document.querySelector('input'),type:'text',label:'Question'});
-  scanFormFields();
-  assert.deepEqual(calls, []);
+  inspectValidation(scanFormFields());
+  dom.reconfigure({url:'https://example.test/careers/qa'});
+  jobPageEvidence(document);
+  assert.deepEqual(calls.filter(id=>!id), []);
 });
 
 test('QA-160-05 unsupported Workday source must remain available for contextual fallback', () => {

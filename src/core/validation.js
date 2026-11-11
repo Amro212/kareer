@@ -19,7 +19,7 @@ export function inspectValidation(fields, control = null, doc = document) {
     const el = field.element;
     if ((!isVisible(el) && !(field.type === 'file' && isVisible(el.parentElement))) || el.disabled) continue;
     const controls = field.widget === 'ats-choice' ? [el,...field.elements] : [el];
-    const ids = [...new Set(controls.flatMap(node => `${node.getAttribute('aria-errormessage') || ''} ${node.getAttribute('aria-describedby') || ''}`.trim().split(/\s+/)))];
+    const ids = [...new Set(controls.flatMap(node => `${node.getAttribute('aria-errormessage') || ''} ${node.getAttribute('aria-describedby') || ''}`.trim().split(/\s+/).filter(Boolean)))];
     const nodes = ids.map(id => doc.getElementById(id)).filter(node => node && isVisible(node));
     // ATS widgets can persist an attachment then clear the required native input.
     // Acceptance replaces valueMissing only; explicit rejection still wins.

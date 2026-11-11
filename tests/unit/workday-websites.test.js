@@ -47,6 +47,9 @@ test('Workday revisit ignores legacy flat URL memory and retains three distinct 
   rememberAnswer(session,{label:'URL',type:'text',description:''},{value:profile.portfolio});
   await engine.start();
   assert.deepEqual([...document.querySelectorAll('input')].map(input=>input.value),[profile.linkedin,profile.github,profile.portfolio]);
+  const step=engine.session.steps[engine.session.currentStep];
+  for(const answer of Object.values(step.answers)) answer.value=profile.portfolio;
+  for(const input of document.querySelectorAll('input')) input.value='';
   await engine.start();
   assert.deepEqual([...document.querySelectorAll('input')].map(input=>input.value),[profile.linkedin,profile.github,profile.portfolio]);
   assert.equal(document.querySelectorAll('input').length,3);

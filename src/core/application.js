@@ -39,14 +39,14 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
   let pendingJob = null;
   let lastEmission = '';
   let lastObservationLog = '';
-  let inactivePage = null, unsubscribeEdits = null;
+  let inactivePage = null, unsubscribeEdits = null, externalFillActive = false;
   function inactiveSnapshot() {
     const fields = scanPageFields();
     return { sessionId: session.id, observation: observePage(fields),
       fields, errors: inspectValidation(fields) };
   }
   function reconcileInactivePage() {
-    if (!session || session.active || session.frameOwner || disposed) return;
+    if (!session || session.active || session.frameOwner || disposed || externalFillActive) return;
     const current = inactiveSnapshot();
     const previous = inactivePage;
     inactivePage = current;
@@ -374,7 +374,12 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
       if (!checkPage(signature, token, 'before field action', original.id)) return false;
       const currentFields = scanFormFields();
       const field = currentFields.find(f => f.id === original.id && f.label === original.label && f.type === original.type);
-      const entry = byId.get(original.id);
+      let entry = byId.get(original.id);
+      if (field?.ats?.record) {
+        // A stale step cache cannot override the saved record bound to this row.
+        const saved = detectAdapter().resolveAnswer?.(field,getProfile(),{allowSearch:false,jobContext:session.job});
+        if (saved?.value != null && saved.value !== '') entry = saved;
+      }
       if (!entry || entry.value === '' || entry.value == null) {
         if (original.required && entry && entry.value === '') {
           results.set(original.id, {
@@ -865,6 +870,10 @@ export function createApplicationEngine({ answer = generateAutofillAnswers, onCh
     } finally { busy = false; if (!disposed) { if (pendingJob) updateJob(pendingJob); emit(); } }
   }
   return {
+    setExternalFillActive(active) {
+      externalFillActive = active;
+      inactivePage = active || !session ? null : inactiveSnapshot();
+    },
     get session() { return session; },
     ensureSession(job) { if (!session) { session = createSession(job || captureJob()); emit(); } return session; },
     get busy() { return busy; },

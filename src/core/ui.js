@@ -1899,6 +1899,7 @@ function stopAutofillFlow(reason = 'Autofill stopped.') {
   autofillGeneration++;
   cancelAutofillDelay?.();
   isAutofilling = false;
+  applicationEngine?.setExternalFillActive(false);
   autofillProgress.statusText = reason;
   logger.info(`Single-page autofill stopped: ${reason}`);
   resumeFormObserver();
@@ -2000,6 +2001,7 @@ async function executeAutofillFlow() {
   }
 
   isAutofilling = true;
+  applicationEngine?.setExternalFillActive(true);
   autofillProgress = { current: 0, total: 0, statusText: 'Scanning page fields...' };
   updatePanelDOM();
   pauseFormObserver();
@@ -2272,6 +2274,7 @@ async function executeAutofillFlow() {
   } finally {
     if (token === autofillGeneration) {
       isAutofilling = false;
+      applicationEngine?.setExternalFillActive(false);
       resumeFormObserver();
       refreshDetectedFields();
       updatePanelDOM();
