@@ -1,6 +1,6 @@
 import { api } from '../shared/browser.js';
 import { readApiKey, updateStoredRecord, readAiStatus } from './storage.js';
-import { proxyAiRequest, AI_CONSENT_MESSAGE } from './ai.js';
+import { proxyAiRequest } from './ai.js';
 import { readStored, writeStored, removeStored, listStored } from './documents.js';
 import { buildMaterialSource, validateMaterial, materialJobKey, mergeMaterialRewrite, MATERIAL_KINDS } from '../../../core/materials-model.js';
 import { DEFAULT_SETTINGS } from '../../../core/constants.js';
@@ -35,7 +35,6 @@ export { materialWritingInstructions };
 export async function writingRequest(input, system, signal) {
   const instructions = `Write in English. ${system}`;
   const status = await readAiStatus();
-  if (!status.dataConsent) throw new Error(AI_CONSENT_MESSAGE);
   if (status.mode === 'managed') {
     // The gateway rebuilds these instructions from the document kind; only the structured input is sent.
     const result = await proxyAiRequest({ operation: input.rewrite ? 'documentRewrite' : 'document', input }, signal.signal);

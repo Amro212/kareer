@@ -7,11 +7,10 @@ import CREDITS from '../../../core/credits.json' with { type: 'json' };
 const COST_NOTE = `Autofill requests use 1 credit; a résumé or cover letter uses ${CREDITS.costs.document} and rewriting part of one uses ${CREDITS.costs.documentRewrite}.`;
 
 const $ = id => document.getElementById(id);
-const labels = { ready: 'Ready', consentNeeded: 'AI sharing off', activationNeeded: 'Activation needed', outOfCredits: 'Out of credits', loading: 'Checking balance…', unavailable: 'Temporarily unavailable' };
+const labels = { ready: 'Ready', activationNeeded: 'Activation needed', outOfCredits: 'Out of credits', loading: 'Checking balance…', unavailable: 'Temporarily unavailable' };
 const BYOK = typeof KAREER_BYOK !== 'boolean' || KAREER_BYOK;
 let bound = false, timer;
 function draw(status) {
-  if (!$('ai-data-consent').disabled) $('ai-data-consent').checked = status?.dataConsent === true;
   const managed = !BYOK || status?.mode !== 'byok';
   $('advanced-ai').hidden = !BYOK;
   $('ai-mode').value = managed ? 'managed' : 'byok';
@@ -93,18 +92,6 @@ export function setupBilling(snapshot) {
   draw(snapshot.aiStatus || { mode: 'byok', state: snapshot.hasApiKey ? 'ready' : 'activationNeeded' });
   if (bound) return;
   bound = true;
-  $('ai-data-consent').onchange = async () => {
-    const checkbox = $('ai-data-consent');
-    checkbox.disabled = true;
-    try {
-      const result = await sendMessage({ type: MSG.AI_DATA_CONSENT, accepted: checkbox.checked });
-      if (result?.error) throw new Error(result.error);
-      $('ai-consent-feedback').textContent = checkbox.checked ? 'AI data sharing enabled.' : 'AI data sharing off. Saved profile filling still works.';
-    } catch (error) {
-      checkbox.checked = !checkbox.checked;
-      $('ai-consent-feedback').textContent = error.message;
-    } finally { checkbox.disabled = false; }
-  };
   $('ai-mode').onchange = async () => {
     const snapshot = await sendMessage({ type: MSG.SNAPSHOT });
     await sendMessage({ type: MSG.STORAGE_SET, key: 'kr:settings', value: { ...snapshot.data['kr:settings'], aiMode: $('ai-mode').value } });

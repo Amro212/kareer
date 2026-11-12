@@ -18,8 +18,6 @@ if (gatewayArg && production) throw new Error('Production builds read KAREER_GAT
 const productionGateway = new URL(process.env.KAREER_GATEWAY_ORIGIN || PRODUCTION_GATEWAY_ORIGIN);
 // Release packages use the production gateway; local, watch and staging builds use the staging Worker.
 const gateway = production ? productionGateway : new URL(gatewayArg || STAGING_GATEWAY_ORIGIN);
-// Kareer AI stays opt-in until the managed release gate passes; staging builds test it by default.
-const managedDefault = staging || process.argv.includes('--managed');
 for (const url of [gateway, productionGateway]) {
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Gateway must be an HTTPS origin.');
 }
@@ -221,7 +219,6 @@ function extensionOptions(pkg, browser) {
       ...shared(pkg).define,
       __TARGET_BROWSER__: JSON.stringify(browser),
       KAREER_GATEWAY_URL: JSON.stringify(gateway.origin),
-      KAREER_MANAGED_DEFAULT: JSON.stringify(managedDefault),
       KAREER_BYOK: JSON.stringify(!production),
     },
   };

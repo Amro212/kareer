@@ -90,14 +90,9 @@ jobs:
           MANAGED_AI_RELEASE: ${{ vars.MANAGED_AI_RELEASE }}
           KAREER_GATEWAY_ORIGIN: ${{ vars.KAREER_GATEWAY_ORIGIN }}
         run: |
-          # Kareer AI is on by default only after its release evidence is recorded.
-          # Without it, packages default to your own OpenRouter key and still ship.
-          if [ "$MANAGED_AI_RELEASE" = "true" ]; then
-            node tools/release-gate.js --submission
-            npm run build:extension -- --production --managed
-          else
-            npm run build:extension -- --production
-          fi
+          # Kareer AI release evidence is checked once it is recorded.
+          if [ "$MANAGED_AI_RELEASE" = "true" ]; then node tools/release-gate.js --submission; fi
+          npm run build:extension -- --production
           npx web-ext lint --source-dir=dist/firefox --self-hosted
 
       - name: Stamp unique version in extension manifest

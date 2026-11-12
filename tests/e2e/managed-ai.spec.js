@@ -95,26 +95,20 @@ test('staging sandbox pack claim and real managed autofill', async ({ kr }) => {
   await expect(greenhouse.locator('#why')).not.toHaveValue('');
   await expect(greenhouse.locator('.kr-model-chip')).toHaveText('299 credits');
   await expect(settings.locator('#total-balance')).toHaveText('299 credits');
-  await settings.locator('#ai-data-consent').uncheck();
-  await expect(settings.locator('#managed-state')).toHaveText('AI sharing off');
   const ashby = await managedFixture(kr, true);
-  await ashby.locator('#kr-autofill-btn').click();
-  await expect(ashby.locator('#reference')).toHaveValue('Saved reference');
-  await expect(ashby.locator('#why')).toHaveValue('');
-  await settings.locator('#ai-data-consent').check();
-  await expect(settings.locator('#managed-state')).toHaveText('Ready');
   await ashby.locator('#kr-autofill-btn').click();
   await expect(ashby.locator('#why')).not.toHaveValue('');
   await expect(ashby.locator('.kr-model-chip')).toHaveText('298 credits');
 });
 
-test('a new installation defaults to your own key until Kareer AI is released', async ({ kr }) => {
+test('a new installation without a key defaults to Kareer AI with the trial offer', async ({ kr }) => {
   await kr.seed({ apiKey: '', profile: { fullName: 'Test Applicant', email: 'test@example.com' } });
   const options = await kr.context.newPage();
   await options.goto(`${kr.optionsUrl()}#connection`);
-  await expect(options.locator('#ai-mode')).toHaveValue('byok');
-  await expect(options.locator('#byok-connection')).toBeVisible();
-  await expect(options.locator('#managed-ai')).toBeHidden();
+  await expect(options.locator('#ai-mode')).toHaveValue('managed');
+  await expect(options.locator('#managed-ai')).toBeVisible();
+  await expect(options.locator('#start-trial')).toBeVisible();
+  await expect(options.locator('#byok-connection')).toBeHidden();
 });
 
 test('Kareer AI activates without showing models or leaking license credentials', async ({ kr }, testInfo) => {
@@ -286,7 +280,7 @@ test('exhausted managed mode keeps local filling and does not spend the personal
 test('managed cover letter generation and document rewrite share the metered gateway', async ({ kr }) => {
   await kr.seed({ apiKey: '', settings: { aiMode: 'managed' }, profile: { fullName: 'Test Applicant', email: 'test@example.com',
     workExperiences: [{ id: 'work1', title: 'Engineer', company: 'Example', description: 'Built useful software.' }] } });
-  await kr.worker.evaluate(() => chrome.storage.local.set({ 'kr:secrets': { licenseKey: 'private-managed-license', aiDataConsent: 1 }, 'kr:ai-status': { state: 'ready', total: 5, purchased: 5 } }));
+  await kr.worker.evaluate(() => chrome.storage.local.set({ 'kr:secrets': { licenseKey: 'private-managed-license' }, 'kr:ai-status': { state: 'ready', total: 5, purchased: 5 } }));
   await mockGateway(kr);
   const page = await kr.context.newPage();
   await page.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=coverLetter`);
@@ -309,7 +303,6 @@ test('managed cover letter generation and document rewrite share the metered gat
 test('a new browser claims the 10-credit trial once and a cover letter uses 3 credits', async ({ kr }, testInfo) => {
   await kr.seed({ apiKey: '', settings: { aiMode: 'managed' }, profile: { fullName: 'Test Applicant', email: 'test@example.com',
     workExperiences: [{ id: 'work1', title: 'Engineer', company: 'Example', description: 'Built useful software.' }] } });
-  await kr.worker.evaluate(() => chrome.storage.local.set({ 'kr:secrets': { aiDataConsent: 1 } }));
   await mockGateway(kr, 0);
   const options = await kr.context.newPage();
   await options.goto(`${kr.optionsUrl()}#connection`);
@@ -336,7 +329,7 @@ test('a new browser claims the 10-credit trial once and a cover letter uses 3 cr
   await options.reload();
   await expect(options.locator('#trial-balance')).toHaveText('7');
   await expect(options.locator('#trial-offer')).toBeHidden();
-  await kr.worker.evaluate(() => chrome.storage.local.set({ 'kr:secrets': { aiDataConsent: 1, trialUsed: 1 } }));
+  await kr.worker.evaluate(() => chrome.storage.local.set({ 'kr:secrets': { trialUsed: 1 } }));
   await options.reload();
   await expect(options.locator('#trial-offer')).toBeHidden();
   expect((await kr.worker.evaluate(() => globalThis.__managedCalls.map(c => c.path))).filter(p => p === '/v1/trial')).toHaveLength(1);
@@ -347,7 +340,6 @@ test('staging: a real trial pays for a 3-credit cover letter and can start a pac
   test.setTimeout(180000);
   await kr.seed({ apiKey: '', settings: { aiMode: 'managed' }, profile: { fullName: 'Test Applicant', email: 'kareer-test@example.com',
     workExperiences: [{ id: 'work1', title: 'Engineer', company: 'Example', description: 'Built useful software.' }] } });
-  await kr.worker.evaluate(() => chrome.storage.local.set({ 'kr:secrets': { aiDataConsent: 1 } }));
   const options = await kr.context.newPage();
   await options.goto(`${kr.optionsUrl()}#connection`);
   await options.locator('#start-trial').click();
@@ -390,7 +382,7 @@ test('official production builds offer Kareer AI only and ignore a saved OpenRou
 test('popup controls stay usable while a free managed usage refresh is pending', async ({ kr }) => {
   await kr.seed({ apiKey: '', settings: { aiMode: 'managed' } });
   await kr.worker.evaluate(async () => {
-    await chrome.storage.local.set({ 'kr:secrets': { licenseKey: 'private-managed-license', aiDataConsent: 1 }, 'kr:ai-status': { state: 'ready', total: 5, purchased: 5 } });
+    await chrome.storage.local.set({ 'kr:secrets': { licenseKey: 'private-managed-license' }, 'kr:ai-status': { state: 'ready', total: 5, purchased: 5 } });
     const original = globalThis.fetch;
     globalThis.__usageWaiters = [];
     globalThis.fetch = (url, options) => String(url).endsWith('/v1/status')

@@ -3,8 +3,6 @@ import { readApiKey, readAiStatus } from './storage.js';
 import { managedRequest } from './managed.js';
 
 const ALLOWED_ORIGIN = 'https://openrouter.ai';
-export const AI_CONSENT_MESSAGE = 'Review and allow AI data sharing in Kareer Settings before using AI. Saved profile filling still works.';
-
 /**
  * Performs the OpenRouter call on behalf of a page context and attaches the
  * Authorization header here so the key never leaves the worker. Returns a plain
@@ -13,7 +11,6 @@ export const AI_CONSENT_MESSAGE = 'Review and allow AI data sharing in Kareer Se
 export async function proxyAiRequest(options, externalSignal) {
   const { method = 'POST', url, headers = {}, data, timeout = 60000 } = options || {};
   const status = await readAiStatus();
-  if (!status.dataConsent) return { error: AI_CONSENT_MESSAGE, kind: 'CONSENT_REQUIRED' };
   if (status.mode === 'managed') {
     const controller = new AbortController();
     const abort = () => controller.abort();

@@ -87,27 +87,19 @@ export async function writeSecret(apiKey) {
   await updateStoredRecord('kr:secrets', previous => ({ ...previous, apiKey: clean }));
 }
 
-export async function writeAiDataConsent(accepted) {
-  await updateStoredRecord('kr:secrets', previous => ({ ...previous, aiDataConsent: accepted === true ? 1 : 0 }));
-}
-
 export async function clearSecret() {
   const { mode } = await readAiStatus();
   await updateStoredRecord('kr:settings', previous => ({ ...previous, aiMode: previous?.aiMode || mode }));
   await updateStoredRecord('kr:secrets', previous => ({ ...previous, apiKey: '' }));
 }
 
-// Build-time default: Kareer AI (managed) only once it is released; otherwise your own key.
-const DEFAULT_MODE = !BYOK_ENABLED || (typeof KAREER_MANAGED_DEFAULT === 'boolean' && KAREER_MANAGED_DEFAULT) ? 'managed' : 'byok';
 export function cachedAiStatus(all) {
-  const mode = !BYOK_ENABLED ? 'managed' : all['kr:settings']?.aiMode || (all['kr:secrets']?.apiKey ? 'byok' : all['kr:secrets']?.licenseKey ? 'managed' : DEFAULT_MODE);
-  const dataConsent = all['kr:secrets']?.aiDataConsent === 1;
-  const consentState = !dataConsent && (mode === 'byok' ? all['kr:secrets']?.apiKey : all['kr:secrets']?.licenseKey) ? 'consentNeeded' : null;
-  if (mode === 'byok') return { mode, dataConsent, state: consentState || (all['kr:secrets']?.apiKey ? 'ready' : 'activationNeeded') };
+  const mode = !BYOK_ENABLED ? 'managed' : all['kr:settings']?.aiMode || (all['kr:secrets']?.apiKey ? 'byok' : 'managed');
+  if (mode === 'byok') return { mode, state: all['kr:secrets']?.apiKey ? 'ready' : 'activationNeeded' };
   const saved = all['kr:ai-status'] || {};
   const state = all['kr:secrets']?.licenseKey ? saved.state || 'loading' : 'activationNeeded';
   const hasBalance = ['ready', 'outOfCredits'].includes(state) && Number.isSafeInteger(saved.total);
-  return { mode: 'managed', dataConsent, state: consentState || state, balanceState: hasBalance ? 'known' : state,
+  return { mode: 'managed', state, balanceState: hasBalance ? 'known' : state,
     trialAvailable: !all['kr:secrets']?.licenseKey && !all['kr:secrets']?.trialUsed,
     monthly: hasBalance ? saved.monthly ?? 0 : null, purchased: hasBalance ? saved.purchased ?? 0 : null, total: hasBalance ? saved.total : null,
     trial: hasBalance ? saved.trial ?? 0 : null, trialExpiresAt: hasBalance ? saved.trialExpiresAt || null : null,

@@ -55,7 +55,7 @@ Kareer helps a job applicant prepare and complete the application they choose us
 
 ### storage
 
-Stores the applicant profile, saved answers, preferences, local application sessions and extension configuration so users can reuse information across applications. Credentials and the AI-sharing choice stay in privileged background storage and are excluded from page/content snapshots and backups. Applicant data is not stored in website localStorage or sessionStorage.
+Stores the applicant profile, saved answers, preferences, local application sessions and extension configuration so users can reuse information across applications. Credentials stay in privileged background storage and are excluded from page/content snapshots and backups. Applicant data is not stored in website localStorage or sessionStorage.
 
 ### unlimitedStorage
 
@@ -84,7 +84,7 @@ These draft selections describe the data paths in the v0.5.160 candidate. Rechec
 | Select | Reason |
 | --- | --- |
 | Personally identifiable information | Profile identity, contact and demographic information |
-| Health information | The optional Profile → Demographics & disclosures section includes a current or past disability answer. If supplied, it can be included in the profile sent with an AI request after consent. |
+| Health information | The optional Profile → Demographics & disclosures section includes a current or past disability answer. If supplied, it can be included in the profile sent with an AI request once the user starts a trial, buys credits or activates a key next to the disclosure. |
 | Financial and payment information | The managed billing service processes Stripe transaction and subscription data. Users enter card details in Stripe-hosted Checkout. |
 | Authentication information | OpenRouter/Kareer credentials and activation |
 | Location | Optional user-entered address, city, region and country can be included in AI profile context. The extension does not request device geolocation. The purchase gateway uses the request IP to rate-limit checkout creation. |
@@ -97,9 +97,9 @@ The three Limited Use certifications remain for action-time approval in the dash
 
 ## Reviewer access and instructions
 
-No Kareer account is needed for local tools. Open Profile, save fictional contact/work records, open an application and run Autofill. Review the result/source labels. Check that Auto Submit starts off and that local filling works with AI sharing off.
+No Kareer account is needed for local tools. Open Profile, save fictional contact/work records, open an application and run Autofill. Review the result/source labels. Check that Auto Submit starts off and that local filling works without a Kareer key.
 
-For AI review, supply a dedicated funded test Kareer credential through the dashboard's private test-instructions field after the production service is working. Do not require a reviewer to buy credits or provide a personal OpenRouter key, and do not put a credential in this file, screenshots or the public listing. In Settings, reviewers first agree to the visible AI-data disclosure, then activate the supplied key and run the answer/document workflows. Test withdrawal of consent and local filling too.
+For AI review, supply a dedicated funded test Kareer credential through the dashboard's private test-instructions field after the production service is working. Do not require a reviewer to buy credits or provide a personal OpenRouter key, and do not put a credential in this file, screenshots or the public listing. In Settings → AI & billing, the AI-data notice sits next to the trial, plan and activation buttons; activating the supplied key is the reviewer's agreement. Then run the answer/document workflows, and check that removing the key stops AI while local filling keeps working.
 
 Reviewer credential: **not provisioned**. These instructions are incomplete until that is available.
 

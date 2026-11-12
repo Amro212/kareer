@@ -1753,7 +1753,6 @@ function setSafeHTML(element, htmlString) {
 }
 
 function getStatusInfo() {
-  if (platform.ai.status().state === 'consentNeeded') return { label: 'AI sharing off', dotClass: 'no-key', badgeClass: 'kr-badge-amber', text: 'Review and allow AI data sharing in Settings. Saved profile filling remains available.' };
   if (isManagedAi()) {
     const status = platform.ai.status();
     const label = { ready: 'Ready', activationNeeded: 'Activation needed', outOfCredits: 'Out of credits', unavailable: 'Temporarily unavailable' }[status.state] || 'Temporarily unavailable';
