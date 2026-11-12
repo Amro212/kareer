@@ -7,7 +7,7 @@ async function mockGateway(kr, credits = 5) {
     globalThis.__credits = credits;
     const status = () => ({ state: globalThis.__credits ? 'ready' : 'outOfCredits', monthly: 0,
       purchased: globalThis.__trial ? 0 : globalThis.__credits, trial: globalThis.__trial ? globalThis.__credits : 0, total: globalThis.__credits,
-      trialExpiresAt: globalThis.__trial ? new Date(Date.now() + 30 * 86400000).toISOString() : null });
+      trialExpiresAt: globalThis.__trial ? new Date(Date.now() + 30 * 86400000).toISOString() : null, billing: !globalThis.__trial });
     globalThis.fetch = async (url, options) => {
       if (!String(url).startsWith(`${gateway}/`)) return original(url, options);
       const path = new URL(url).pathname;
@@ -319,6 +319,8 @@ test('a new browser claims the 10-credit trial once and a cover letter uses 3 cr
   await expect(options.locator('#trial-offer')).toBeHidden();
   await expect(options.locator('#trial-balance')).toHaveText('10');
   await expect(options.locator('#total-balance')).toHaveText('10 credits');
+  await expect(options.locator('#manage-billing')).toBeHidden();
+  await expect(options.locator('#reveal-license')).toBeVisible();
   await expect(options.locator('#monthly-expiry')).toContainText('Trial credits expire');
   await expect(options.locator('#monthly-expiry')).toContainText('a résumé or cover letter uses 3');
   await options.screenshot({ path: testInfo.outputPath('trial-claimed.png'), fullPage: true });

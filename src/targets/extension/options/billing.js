@@ -26,6 +26,7 @@ function draw(status) {
   $('monthly-balance').textContent = status?.monthly?.toLocaleString() ?? '—';
   $('purchased-balance').textContent = status?.purchased?.toLocaleString() ?? '—';
   $('trial-offer').hidden = status?.trialAvailable !== true;
+  $('manage-billing').hidden = status?.billing === false;
   $('trial-balance-row').hidden = !status?.trial;
   $('trial-balance').textContent = status?.trial?.toLocaleString() ?? '—';
   $('monthly-expiry').textContent = [status?.monthlyExpiresAt ? `Monthly credits expire ${new Date(status.monthlyExpiresAt).toLocaleString()}.` : '',

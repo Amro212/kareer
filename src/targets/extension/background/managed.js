@@ -14,7 +14,7 @@ async function saveStatus(status) {
     const count = value => Number.isSafeInteger(value) && value >= 0 ? value : 0;
     return { state: safeStates.has(next.state) ? next.state : 'unavailable', monthly: count(next.monthly), purchased: count(next.purchased),
       trial: count(next.trial), total: count(next.total), monthlyExpiresAt: next.monthlyExpiresAt || null,
-      trialExpiresAt: next.trialExpiresAt || null, flagged: next.flagged === true,
+      trialExpiresAt: next.trialExpiresAt || null, flagged: next.flagged === true, billing: next.billing !== false,
       subscriptions: (Array.isArray(next.subscriptions) ? next.subscriptions : [])
         .map(s => ({ status: String(s.status), cancelAtPeriodEnd: s.cancelAtPeriodEnd === true, periodEnd: s.periodEnd || null })) };
   });

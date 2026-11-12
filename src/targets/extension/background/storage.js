@@ -112,7 +112,7 @@ export function cachedAiStatus(all) {
     monthly: hasBalance ? saved.monthly ?? 0 : null, purchased: hasBalance ? saved.purchased ?? 0 : null, total: hasBalance ? saved.total : null,
     trial: hasBalance ? saved.trial ?? 0 : null, trialExpiresAt: hasBalance ? saved.trialExpiresAt || null : null,
     monthlyExpiresAt: hasBalance ? saved.monthlyExpiresAt || null : null,
-    flagged: saved.flagged === true, subscriptions: saved.subscriptions || [] };
+    flagged: saved.flagged === true, billing: saved.billing !== false, subscriptions: saved.subscriptions || [] };
 }
 
 export async function readAiStatus() {
