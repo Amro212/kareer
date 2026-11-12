@@ -259,3 +259,20 @@ export function buildAiMessages(operation, input) {
   if (operation === 'document' || operation === 'documentRewrite') return buildDocumentMessages(input);
   return buildPageMessages(input, { allowSearch: operation !== 'optionDiscovery' && input.allowSearch !== false });
 }
+
+// Gemini in JSON mode sometimes repeats the tail of a complete answer ('...}\nName"]}'); keep the first JSON value.
+export function parseModelJson(text) {
+  const source = String(text ?? '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  try { return JSON.parse(source); } catch (error) {
+    const start = source.search(/[[{]/);
+    let depth = 0, quoted = false;
+    for (let i = start; start >= 0 && i < source.length; i++) {
+      const c = source[i];
+      if (quoted) { if (c === '\\') i++; else if (c === '"') quoted = false; }
+      else if (c === '"') quoted = true;
+      else if (c === '{' || c === '[') depth++;
+      else if ((c === '}' || c === ']') && --depth === 0) return JSON.parse(source.slice(start, i + 1));
+    }
+    throw error;
+  }
+}

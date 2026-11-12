@@ -4,7 +4,7 @@ import { proxyAiRequest, AI_CONSENT_MESSAGE } from './ai.js';
 import { readStored, writeStored, removeStored, listStored } from './documents.js';
 import { buildMaterialSource, validateMaterial, materialJobKey, mergeMaterialRewrite, MATERIAL_KINDS } from '../../../core/materials-model.js';
 import { DEFAULT_SETTINGS } from '../../../core/constants.js';
-import { materialWritingInstructions } from '../../../core/ai-prompts.js';
+import { materialWritingInstructions, parseModelJson } from '../../../core/ai-prompts.js';
 import { exportMaterial, MATERIAL_TEMPLATE_VERSION } from '../materials/export.js';
 import { encodeMaterial, encodeDocument } from '../shared/binary.js';
 import { editableModel } from '../materials/editor-model.js';
@@ -94,7 +94,7 @@ export async function writingRequest(input, system, signal) {
     }
   }
   if (finishReason === 'length') throw new Error('The model reached its output limit and returned an incomplete document. Shorten the writing instructions or source, then retry.');
-  try { return JSON.parse(content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')); }
+  try { return parseModelJson(content); }
   catch { throw new Error('AI returned malformed document data. Retry or choose another model.'); }
 }
 

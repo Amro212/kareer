@@ -27,6 +27,12 @@ test('complete JSON fallback and fenced JSON remain supported', async () => {
   finally { globalThis.fetch = realFetch; }
 });
 
+test('a complete answer followed by a repeated tail keeps the complete answer', async () => {
+  globalThis.fetch = async () => Response.json({ choices: [{ message: { content: '{"paragraphs":["Sincerely,\\nTest \\"A\\" ]}"]}\nTest \\"A\\" ]}"]}' }, finish_reason: 'stop' }] });
+  try { assert.deepEqual(await writingRequest(input, materialWritingInstructions(input.kind), new AbortController()), { paragraphs: ['Sincerely,\nTest "A" ]}'] }); }
+  finally { globalThis.fetch = realFetch; }
+});
+
 test('HTTP rejection reports the model and provider reason without exposing the key', async () => {
   globalThis.fetch = async () => Response.json({ error: { message: 'Provider returned error', metadata: {
     raw: JSON.stringify({ error: { message: 'Invalid max_tokens for test-key' } }),
