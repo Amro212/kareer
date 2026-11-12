@@ -342,6 +342,32 @@ test('a new browser claims the 10-credit trial once and a cover letter uses 3 cr
   expect((await kr.worker.evaluate(() => globalThis.__managedCalls.map(c => c.path))).filter(p => p === '/v1/trial')).toHaveLength(1);
 });
 
+test('staging: a real trial pays for a 3-credit cover letter and can start a pack checkout', async ({ kr }, testInfo) => {
+  test.skip(!process.env.KR_STAGING_TRIAL, 'Uses the real staging gateway, OpenRouter and the Stripe sandbox');
+  test.setTimeout(180000);
+  await kr.seed({ apiKey: '', settings: { aiMode: 'managed' }, profile: { fullName: 'Test Applicant', email: 'kareer-test@example.com',
+    workExperiences: [{ id: 'work1', title: 'Engineer', company: 'Example', description: 'Built useful software.' }] } });
+  await kr.worker.evaluate(() => chrome.storage.local.set({ 'kr:secrets': { aiDataConsent: 1 } }));
+  const options = await kr.context.newPage();
+  await options.goto(`${kr.optionsUrl()}#connection`);
+  await options.locator('#start-trial').click();
+  await expect(options.locator('#managed-state')).toHaveText('Ready', { timeout: 30000 });
+  await expect(options.locator('#trial-balance')).toHaveText('10');
+  await expect(options.locator('#manage-billing')).toBeHidden();
+  const materials = await kr.context.newPage();
+  await materials.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=coverLetter`);
+  await materials.locator('#job-description').fill('Build useful software for customers.');
+  await materials.locator('#generate').click();
+  await expect(materials.locator('#feedback')).toContainText('Ready', { timeout: 120000 });
+  await options.reload();
+  await expect(options.locator('#trial-balance')).toHaveText('7');
+  await options.evaluate(() => { window.__opened = []; chrome.tabs.create = async ({ url }) => { window.__opened.push(url); }; });
+  await options.locator('#buy-pack').click();
+  // Paying stops here: Stripe Checkout challenges automated browsers with hCaptcha, which tests never solve.
+  await expect.poll(() => options.evaluate(() => window.__opened[0] || ''), { timeout: 30000 }).toMatch(/^https:\/\/checkout\.stripe\.com\//);
+  await options.screenshot({ path: testInfo.outputPath('staging-trial.png'), fullPage: true });
+});
+
 test('official production builds offer Kareer AI only and ignore a saved OpenRouter key', async ({ kr }) => {
   test.skip(!process.env.KR_PRODUCTION_BUILD, 'Requires dist/chrome built with --production');
   await kr.seed({ settings: { aiMode: 'byok' }, profile: { fullName: 'Test Applicant', email: 'test@example.com' } });
