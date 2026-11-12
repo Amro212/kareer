@@ -9,6 +9,7 @@ import { editorSections, rewriteText } from './editor-model.js';
 import { MaterialAutosave } from './autosave.js';
 import { formatContactRuns } from './document-format.js';
 import { renderApplicationLibrary } from './library.js';
+import CREDITS from '../../../core/credits.json' with { type: 'json' };
 
 setupPdfWorker(api.runtime.getURL('materials/pdf.worker.mjs'));
 const $ = id => document.getElementById(id);
@@ -42,6 +43,7 @@ function showView(view) {
   }
   $('editor-actions').hidden = !selected || view !== 'edit';
   $('generate').textContent = selected ? kind === 'resume' ? 'Regenerate resume' : 'Regenerate cover letter' : kind === 'resume' ? 'Tailor resume' : 'Generate cover letter';
+  $('generate').title = `Uses ${CREDITS.costs.document} Kareer AI credits`;
   if (view === 'edit') requestAnimationFrame(resizePaper);
 }
 

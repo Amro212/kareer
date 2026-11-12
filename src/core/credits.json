@@ -1,0 +1,14 @@
+{
+  "costs": {
+    "autofill": 1,
+    "repair": 1,
+    "optionDiscovery": 1,
+    "fieldRewrite": 1,
+    "document": 3,
+    "documentRewrite": 2
+  },
+  "trial": {
+    "credits": 10,
+    "days": 30
+  }
+}

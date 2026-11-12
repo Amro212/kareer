@@ -1,4 +1,5 @@
 import { TOKENS, VISUAL_NAME, installPanelFonts } from './theme.js';
+import CREDITS from './credits.json' with { type: 'json' };
 import { APP_VERSION, APP_NAME, UI_IDS, FILL_STATUS, STORAGE_KEYS } from './constants.js';
 import { PROFILE_SECTIONS, PROFILE_FIELDS, calculateProfileStrength } from './profile.js';
 import {
@@ -2856,9 +2857,9 @@ function renderApiKeyGroup() {
   if (isManagedAi()) {
     const status = platform.ai.status();
     return `<div class="kr-card"><span class="kr-card-title">Kareer AI · ${escapeHtml(getStatusInfo().label)}</span>
-      <p><strong>${escapeHtml(headerAiLabel())}</strong>${status.total != null ? ` · Purchased: ${status.purchased} · Monthly: ${status.monthly}` : ''}</p>
+      <p><strong>${escapeHtml(headerAiLabel())}</strong>${status.total != null ? ` · Purchased: ${status.purchased} · Monthly: ${status.monthly}${status.trial ? ` · Trial: ${status.trial}` : ''}` : ''}</p>
       ${status.monthlyExpiresAt ? `<p>Monthly credits expire ${escapeHtml(new Date(status.monthlyExpiresAt).toLocaleDateString())}.</p>` : ''}
-      <p>Each completed AI request costs one credit. A run can make multiple requests.</p>
+      <p>Each completed autofill AI request costs 1 credit; a résumé or cover letter costs ${CREDITS.costs.document}. A run can make multiple requests.</p>
       <button type="button" class="kr-btn kr-btn-secondary" id="kr-open-options">${status.state === 'ready' ? 'Manage Kareer AI' : 'Set up Kareer AI'}</button></div>`;
   }
   const keySaved = hasApiKey();

@@ -222,6 +222,7 @@ function extensionOptions(pkg, browser) {
       __TARGET_BROWSER__: JSON.stringify(browser),
       KAREER_GATEWAY_URL: JSON.stringify(gateway.origin),
       KAREER_MANAGED_DEFAULT: JSON.stringify(managedDefault),
+      KAREER_BYOK: JSON.stringify(!production),
     },
   };
 }

@@ -58,7 +58,7 @@ for (const ats of ['Greenhouse', 'Ashby']) test(`${ats}: first run refreshes a f
   await expect(page.locator('.kr-model-chip')).toHaveText('0 credits');
   await page.setViewportSize({ width: 320, height: 720 });
   await page.locator('#kr-autofill-btn').click();
-  await expect(page.locator('#kr-main-panel')).toContainText('No credit was charged.');
+  await expect(page.locator('#kr-main-panel')).toContainText('No credits were charged.');
   await expect(page.locator('#email')).toHaveValue('kareer-test@example.com');
   await expect(page.locator('#reference')).toHaveValue('Saved reference');
   await expect(page.locator('#why')).toHaveValue('');

@@ -7,6 +7,7 @@ import { UndoRedo } from '@tiptap/extensions';
 import { Plugin } from '@tiptap/pm/state';
 import { modelToEditor, editorToModel, editorSections, categoryLabel } from './editor-model.js';
 import { skillsAreCategorized } from './document-format.js';
+import CREDITS from '../../../core/credits.json' with { type: 'json' };
 
 const element = (tag, className, text) => { const el = document.createElement(tag); el.className = className; if (text !== undefined) el.textContent = text; return el; };
 
@@ -45,6 +46,7 @@ export function createMaterialEditor({ container, model, onUpdate, onSelection, 
       if (model.kind === 'resume' && section.id !== 'summary') contentDOM.dataset.section = String(model.sections.findIndex(s => s.id === section.id));
       const rewrite = element('button', 'section-rewrite secondary', 'Rewrite');
       rewrite.type = 'button'; rewrite.contentEditable = 'false'; rewrite.setAttribute('aria-label', model.kind === 'coverLetter' ? 'Rewrite selected paragraph' : `Rewrite ${section.label}`);
+      rewrite.title = `Uses ${CREDITS.costs.documentRewrite} Kareer AI credits`;
       rewrite.dataset.rewrite = model.kind === 'coverLetter' ? 'letter' : section.id === 'summary' ? 'summary' : `section:${section.id}`;
       rewrite.onmousedown = event => event.preventDefault();
       rewrite.onclick = () => onRewrite(section.id);

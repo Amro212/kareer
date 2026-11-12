@@ -2,13 +2,18 @@ import { api, sendMessage } from '../shared/browser.js';
 import { MSG } from '../shared/protocol.js';
 import { SUPPORT_EMAIL } from '../../../core/endpoints.js';
 import OFFERS from '../../../core/offers.json' with { type: 'json' };
+import CREDITS from '../../../core/credits.json' with { type: 'json' };
+
+const COST_NOTE = `Autofill requests use 1 credit; a résumé or cover letter uses ${CREDITS.costs.document} and rewriting part of one uses ${CREDITS.costs.documentRewrite}.`;
 
 const $ = id => document.getElementById(id);
 const labels = { ready: 'Ready', consentNeeded: 'AI sharing off', activationNeeded: 'Activation needed', outOfCredits: 'Out of credits', loading: 'Checking balance…', unavailable: 'Temporarily unavailable' };
+const BYOK = typeof KAREER_BYOK !== 'boolean' || KAREER_BYOK;
 let bound = false, timer;
 function draw(status) {
   if (!$('ai-data-consent').disabled) $('ai-data-consent').checked = status?.dataConsent === true;
-  const managed = status?.mode !== 'byok';
+  const managed = !BYOK || status?.mode !== 'byok';
+  $('advanced-ai').hidden = !BYOK;
   $('ai-mode').value = managed ? 'managed' : 'byok';
   $('managed-ai').hidden = !managed;
   $('byok-connection').hidden = managed;
@@ -20,7 +25,12 @@ function draw(status) {
   $('total-balance').textContent = status?.total != null ? `${status.total.toLocaleString()} credits` : status?.balanceState === 'loading' ? 'Checking balance…' : 'Balance unavailable';
   $('monthly-balance').textContent = status?.monthly?.toLocaleString() ?? '—';
   $('purchased-balance').textContent = status?.purchased?.toLocaleString() ?? '—';
-  $('monthly-expiry').textContent = status?.monthlyExpiresAt ? `Monthly credits expire ${new Date(status.monthlyExpiresAt).toLocaleString()}. Purchased credits never expire.` : 'Purchased credits never expire.';
+  $('trial-offer').hidden = status?.trialAvailable !== true;
+  $('trial-balance-row').hidden = !status?.trial;
+  $('trial-balance').textContent = status?.trial?.toLocaleString() ?? '—';
+  $('monthly-expiry').textContent = [status?.monthlyExpiresAt ? `Monthly credits expire ${new Date(status.monthlyExpiresAt).toLocaleString()}.` : '',
+    status?.trial && status?.trialExpiresAt ? `Trial credits expire ${new Date(status.trialExpiresAt).toLocaleDateString()}.` : '',
+    'Purchased credits never expire.', COST_NOTE].filter(Boolean).join(' ');
   const subscriptions = status?.subscriptions || [];
   $('plan-status').textContent = [status?.flagged ? `A payment on this key is disputed. Its credits are on hold and new purchases are paused. Email ${SUPPORT_EMAIL} with questions.` : '',
     subscriptions.length ? subscriptions.map(planText).join(' ') : 'No monthly plan. Credit packs work on their own.'].filter(Boolean).join(' ');
@@ -105,6 +115,10 @@ export function setupBilling(snapshot) {
     await refresh(); $('activation-feedback').textContent = 'Key activated. Kareer AI is ready.';
   }, 'activation-feedback');
   $('license-key').oninput = () => { $('activate-license').disabled = !$('license-key').value.trim(); };
+  action('start-trial', async () => {
+    await billing('trial');
+    await refresh(); $('managed-feedback').textContent = 'Your free trial is ready. Use Show key to save your key for another browser.';
+  });
   action('refresh-usage', async () => { await refresh(); $('managed-feedback').textContent = 'Usage refreshed. Connection checks use no credits.'; });
   action('reveal-license', async () => {
     const { licenseKey } = await billing('revealKey');

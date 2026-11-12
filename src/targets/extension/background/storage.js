@@ -79,8 +79,11 @@ export async function applyDelete(key) {
   await area().remove(key);
 }
 
+// Official (--production) builds are Kareer AI only; your own OpenRouter key needs a self-built copy.
+export const BYOK_ENABLED = typeof KAREER_BYOK !== 'boolean' || KAREER_BYOK;
+
 export async function writeSecret(apiKey) {
-  const clean = typeof apiKey === 'string' ? apiKey.trim() : '';
+  const clean = BYOK_ENABLED && typeof apiKey === 'string' ? apiKey.trim() : '';
   await updateStoredRecord('kr:secrets', previous => ({ ...previous, apiKey: clean }));
 }
 
@@ -95,9 +98,9 @@ export async function clearSecret() {
 }
 
 // Build-time default: Kareer AI (managed) only once it is released; otherwise your own key.
-const DEFAULT_MODE = typeof KAREER_MANAGED_DEFAULT === 'boolean' && KAREER_MANAGED_DEFAULT ? 'managed' : 'byok';
+const DEFAULT_MODE = !BYOK_ENABLED || (typeof KAREER_MANAGED_DEFAULT === 'boolean' && KAREER_MANAGED_DEFAULT) ? 'managed' : 'byok';
 export function cachedAiStatus(all) {
-  const mode = all['kr:settings']?.aiMode || (all['kr:secrets']?.apiKey ? 'byok' : all['kr:secrets']?.licenseKey ? 'managed' : DEFAULT_MODE);
+  const mode = !BYOK_ENABLED ? 'managed' : all['kr:settings']?.aiMode || (all['kr:secrets']?.apiKey ? 'byok' : all['kr:secrets']?.licenseKey ? 'managed' : DEFAULT_MODE);
   const dataConsent = all['kr:secrets']?.aiDataConsent === 1;
   const consentState = !dataConsent && (mode === 'byok' ? all['kr:secrets']?.apiKey : all['kr:secrets']?.licenseKey) ? 'consentNeeded' : null;
   if (mode === 'byok') return { mode, dataConsent, state: consentState || (all['kr:secrets']?.apiKey ? 'ready' : 'activationNeeded') };
@@ -105,7 +108,9 @@ export function cachedAiStatus(all) {
   const state = all['kr:secrets']?.licenseKey ? saved.state || 'loading' : 'activationNeeded';
   const hasBalance = ['ready', 'outOfCredits'].includes(state) && Number.isSafeInteger(saved.total);
   return { mode: 'managed', dataConsent, state: consentState || state, balanceState: hasBalance ? 'known' : state,
+    trialAvailable: !all['kr:secrets']?.licenseKey && !all['kr:secrets']?.trialUsed,
     monthly: hasBalance ? saved.monthly ?? 0 : null, purchased: hasBalance ? saved.purchased ?? 0 : null, total: hasBalance ? saved.total : null,
+    trial: hasBalance ? saved.trial ?? 0 : null, trialExpiresAt: hasBalance ? saved.trialExpiresAt || null : null,
     monthlyExpiresAt: hasBalance ? saved.monthlyExpiresAt || null : null,
     flagged: saved.flagged === true, subscriptions: saved.subscriptions || [] };
 }
@@ -122,7 +127,7 @@ export async function writeLicense(licenseKey) {
 export async function readApiKey() {
   const stored = await area().get('kr:secrets');
   const key = stored?.['kr:secrets']?.apiKey;
-  return typeof key === 'string' ? key.trim() : '';
+  return BYOK_ENABLED && typeof key === 'string' ? key.trim() : '';
 }
 
 export async function hasApiKey() {
