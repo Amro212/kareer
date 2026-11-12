@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { checkRelease } from '../server/tools/release-gate.js';
+import { checkRelease } from './release-gate.js';
 import { STAGING_GATEWAY_ORIGIN, PRODUCTION_GATEWAY_ORIGIN } from '../src/core/endpoints.js';
 
 export async function uploadChrome({ env = process.env, fetcher = fetch, submit = false, checks, zip } = {}) {

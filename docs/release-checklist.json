@@ -5,7 +5,7 @@
   },
   "stripeSandbox": {
     "passed": false,
-    "evidence": "Requires the Stripe sandbox checklist in server/docs/stripe-setup.md: card, 3DS, decline, dispute, test-clock renewal and failed renewal, webhook delivery and claim."
+    "evidence": "Requires the Stripe sandbox checklist in the kareer-gateway repo (docs/stripe-setup.md): card, 3DS, decline, dispute, test-clock renewal and failed renewal, webhook delivery and claim."
   },
   "chromeStagingPurchaseAi": {
     "passed": false,

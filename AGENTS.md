@@ -51,9 +51,12 @@ The architecture, implementation roadmap, and engineering patterns follow two di
 5. **Single panel host**: one persistent Shadow DOM panel, top frame only.
    Subframes run field agents with no UI.
 6. **Runtime boundary**: browser + page DOM + extension APIs. Advanced BYOK calls
-   OpenRouter directly. Managed extension AI uses the isolated `server/` Cloudflare
-   Worker + D1 gateway for Stripe billing, Kareer key authentication, credits,
-   and fixed-policy OpenRouter requests. Profiles, files and application execution
+   OpenRouter directly and exists only in self-built (non `--production`) builds;
+   official `--production` packages are Kareer AI only. Managed extension AI uses
+   the Kareer gateway, a Cloudflare Worker + D1 kept in the separate private
+   `kareer-gateway` repo, for Stripe billing, Kareer key authentication, credits,
+   free trials and fixed-policy OpenRouter requests. Its shared prompts, offers and
+   credit costs stay in `src/core` here. Profiles, files and application execution
    remain local. No external browser controller. Playwright is for tests only.
 7. **Action execution & event strategy**: Actuators and ATS action executors use
    clean, deterministic DOM event dispatch (React-friendly native value setters,

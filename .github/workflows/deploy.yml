@@ -93,7 +93,7 @@ jobs:
           # Kareer AI is on by default only after its release evidence is recorded.
           # Without it, packages default to your own OpenRouter key and still ship.
           if [ "$MANAGED_AI_RELEASE" = "true" ]; then
-            node server/tools/release-gate.js --submission
+            node tools/release-gate.js --submission
             npm run build:extension -- --production --managed
           else
             npm run build:extension -- --production

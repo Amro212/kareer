@@ -16,6 +16,6 @@ Outputs:
 
 The build defaults to the production origin in `src/core/endpoints.js` when --production is present. Do not use the default staging build for store review. No API key or server deployment is needed to reproduce the browser packages. Fresh builds keep the package version; the source-change cache may bump it if a previous build cache is present.
 
-The source uses esbuild to bundle/minify the extension and keeps third-party license notices. `tools/build.js` copies the local PDF worker, fonts, HTML, icons and licenses. It does not fetch executable code at extension runtime. The separate `server/` source implements optional managed billing/inference and is included for review, not embedded as an extension server.
+The source uses esbuild to bundle/minify the extension and keeps third-party license notices. `tools/build.js` copies the local PDF worker, fonts, HTML, icons and licenses. It does not fetch executable code at extension runtime. The Kareer AI gateway (managed billing and inference) is a separate closed-source Cloudflare Worker; the extension only calls its HTTPS API and embeds none of its code.
 
 The public privacy/terms JSON is included under `site/src/` for review context. The full website build is separate in the repository and is not reproduced from this browser-source archive. The optional promotional export script uses Windows System.Drawing and is not part of the extension build.
