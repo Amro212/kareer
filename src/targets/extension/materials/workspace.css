@@ -22,7 +22,7 @@
   font-display: swap;
 }
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 * {
   box-sizing: border-box;
@@ -200,7 +200,7 @@ main {
   font-weight: 500;
 }
 .tabs button[aria-selected=true] {
-  color: var(--kr-signal);
+  color: var(--kr-signal-ink);
   background: var(--kr-bg-2);
   border-color: var(--kr-line);
 }
@@ -214,8 +214,8 @@ main {
   padding: 10px 0;
 }
 .task-tabs button[aria-selected=true] {
-  color: var(--kr-signal);
-  border-bottom-color: var(--kr-signal);
+  color: var(--kr-signal-ink);
+  border-bottom-color: var(--kr-focus);
 }
 .feedback {
   font-size: 12px;
@@ -291,7 +291,9 @@ textarea::placeholder {
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: var(--kr-signal);
+  border-color: var(--kr-focus);
+  outline: 2px solid var(--kr-focus);
+  outline-offset: 1px;
 }
 textarea {
   line-height: 1.7;
@@ -401,7 +403,7 @@ textarea {
   overflow-wrap: anywhere;
 }
 #editor-sections button[aria-current] {
-  color: var(--kr-signal);
+  color: var(--kr-signal-ink);
   background: var(--kr-bg-2);
   border-color: var(--kr-line);
 }
@@ -522,8 +524,11 @@ textarea {
   font-style: italic;
   margin-bottom: 1.333px;
 }
+.document-content:focus-visible {
+  outline: 2px solid var(--kr-focus);
+  outline-offset: 4px;
+}
 .document-content {
-  outline: none;
   caret-color: #406900;
 }
 .material-section {
@@ -721,7 +726,7 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 summary:focus-visible {
-  outline: 2px solid var(--kr-signal);
+  outline: 2px solid var(--kr-focus);
   outline-offset: 3px;
 }
 [hidden] {
@@ -927,7 +932,7 @@ summary:focus-visible {
 .materials .tabs button[aria-selected=true] { color: var(--kr-text-1); border-color: var(--kr-line); }
 .materials .task-tabs { border: 0; gap: 8px; }
 .materials .task-tabs button { padding: 8px 10px; border-radius: var(--kr-radius-sm); font-size: 12px; }
-.materials .task-tabs button[aria-selected=true] { border-color: transparent; background: var(--kr-bg-2); color: var(--kr-signal); }
+.materials .task-tabs button[aria-selected=true] { border-color: transparent; background: var(--kr-bg-2); color: var(--kr-signal-ink); }
 .materials #editor-actions { margin-left: auto; gap: 6px; }
 .materials #editor-actions button { font-size: 12px; }
 .materials .prepare-content { max-width: 1120px; padding: 40px 32px; }
@@ -1018,8 +1023,8 @@ summary:focus-visible {
   color: var(--kr-text-1);
 }
 .task-tabs button[aria-selected=true]:hover {
-  color: var(--kr-signal);
-  border-bottom-color: var(--kr-signal);
+  color: var(--kr-signal-ink);
+  border-bottom-color: var(--kr-focus);
 }
 .paper-bullets p:has(> br:only-child)::before {
   display: none;

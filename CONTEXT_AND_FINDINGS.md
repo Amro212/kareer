@@ -1,3 +1,10 @@
+## Turn: 2026-11-12 - Extension chrome takes the site's paper, ink, and lime
+
+- Request: do not commit. Make the extension use the website's coloring and styling, and keep it accessible.
+- Site palette (site/src/styles.css): paper `#f7f6f0`, sheet `#fffefa`, ink `#20231c`, lime fill `#c5f55a`, olive text `#385008`, focus `#496b18`. Lime on paper is about 1.17:1, so it stays a button fill. Text, borders, meters, and focus rings use the darker olive and ink, which clear WCAG AA (text 4.5:1, UI boundaries 3:1).
+- Extension: `src/core/theme.js` tokens now carry that palette for the panel, Settings, popup, first-run, and tailored documents. Primary buttons are lime with ink text. Accent text and the focus ring are olive. Status badges use the site's saved, amber, and error washes with dark ink, and AI stays a separate purple wash so source is not color alone. The field rewrite control uses the same lime button. Geist stays the UI face because the site's display face is for marketing headlines.
+- Verification: `tests/unit/theme-contrast.test.js` and `tests/e2e/theme-surface.spec.js`. No commit.
+
 ## Turn: 2026-11-11 - Staging rollout of trial and credit costs; document JSON failures
 
 - Request: finish the loose ends and deploy staging with the Stripe and Cloudflare plugins.
