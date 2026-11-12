@@ -17,7 +17,7 @@
   {
     "id": "credits",
     "title": "Kareer AI and Credits",
-    "html": "<p>Filling forms from your saved profile is free. Kareer AI is optional and paid. The monthly plan is US$9.99 per month and adds 1,000 credits each paid month; unused monthly credits expire when that month ends. The credit pack is US$4.99 once for 300 credits that do not expire. Taxes may apply. Payment is handled by Stripe.</p><p>Credits are usage units for Kareer AI, not money. They have no cash value and cannot be transferred, exchanged or redeemed for cash. Each completed AI request uses one credit, and one autofill run can make several requests. Failed or invalid results use no credit. Prices and credit amounts can change for future purchases; they never change for a purchase you already made.</p>"
+    "html": "<p>Filling forms from your saved profile is free. Kareer AI is optional and paid. Each new key can claim 10 free trial credits once; they expire after 30 days and have no cash value. The monthly plan is US$9.99 per month and adds 1,000 credits each paid month; unused monthly credits expire when that month ends. The credit pack is US$4.99 once for 300 credits that do not expire. Taxes may apply. Payment is handled by Stripe.</p><p>Credits are usage units for Kareer AI, not money. They have no cash value and cannot be transferred, exchanged or redeemed for cash. Each completed autofill, repair, option or field-rewrite request uses 1 credit; generating a résumé or cover letter uses 3 credits and rewriting part of one uses 2. One autofill run can make several requests. Failed or invalid results use no credit. Prices and credit amounts can change for future purchases; they never change for a purchase you already made.</p>"
   },
   {
     "id": "subscriptions",
@@ -32,7 +32,7 @@
   {
     "id": "keys",
     "title": "Your Kareer Key",
-    "html": "<p>Kareer creates a key when your first payment is confirmed and shows it in Settings. Anyone with the key can use its credits, so keep it private. Use Show key in Settings to save it, and activate it in another browser to share the same credits. Kareer does not email keys and has no accounts. If you lose your key, email <a href=\"mailto:amromousa8@gmail.com\">amromousa8@gmail.com</a> from the address you paid with; Kareer will check the purchase in Stripe before helping.</p>"
+    "html": "<p>Kareer creates a key when you start the free trial or when your first payment is confirmed, and shows it in Settings. Buying from a trial key keeps the same key. Anyone with the key can use its credits, so keep it private. Use Show key in Settings to save it, and activate it in another browser to share the same credits. Kareer does not email keys and has no accounts. If you lose your key, email <a href=\"mailto:amromousa8@gmail.com\">amromousa8@gmail.com</a> from the address you paid with; Kareer will check the purchase in Stripe before helping.</p>"
   },
   {
     "id": "availability",
