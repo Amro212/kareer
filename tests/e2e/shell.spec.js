@@ -87,15 +87,14 @@ test.describe('extension shell', () => {
     const page = await kr.context.newPage();
     await page.goto(kr.optionsUrl());
 
-    await page.locator('.app-configuration > .nav-item').click();
+    await page.locator('#settings-nav-link').click();
     await expect(page.locator('#ai-mode')).toHaveValue('managed');
-    await page.locator('#advanced-ai summary').click();
+    await page.locator('#advanced-ai > summary').click();
     await page.locator('#ai-mode').selectOption('byok');
     await page.locator('#api-key').fill('sk-or-v1-from-options-page');
     await page.locator('#save-key').click();
     await expect(page.locator('#key-status')).toHaveText('Key saved');
 
-    await page.locator('.configuration-links a[href="#models"]').click();
     await page.locator('#byok-model summary').click();
     await expect(page.locator('#model')).toHaveJSProperty('tagName', 'INPUT');
     await expect(page.locator('#model')).toHaveValue('');
@@ -106,6 +105,7 @@ test.describe('extension shell', () => {
     await page.screenshot({ path: testInfo.outputPath('byok-model-mobile.png'), fullPage: true });
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.locator('#model').fill('openai/gpt-4o-mini');
+    await page.locator('#profile-nav-link').click();
     await page.locator('#save-model').click();
     await expect(page.locator('#model-feedback')).toHaveText('Writing preferences saved.');
 
@@ -125,10 +125,11 @@ test.describe('extension shell', () => {
     expect(await kr.readStorage('kr:secrets')).toEqual({ apiKey: 'sk-or-v1-from-options-page' });
     expect((await kr.readStorage('kr:settings')).model).toBe('openai/gpt-4o-mini');
     await page.reload();
-    await page.goto(`${kr.optionsUrl()}#models`);
+    await page.goto(`${kr.optionsUrl()}#settings`);
     await page.locator('#byok-model summary').click();
     await expect(page.locator('#model')).toHaveValue('openai/gpt-4o-mini');
     await page.locator('#model').fill('');
+    await page.locator('#profile-nav-link').click();
     await page.locator('#save-model').click();
     expect((await kr.readStorage('kr:settings')).model).toBe('openai/gpt-4o-mini');
 

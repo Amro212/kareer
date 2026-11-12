@@ -100,7 +100,7 @@ test('Profile subsection links jump to summary cards and preserve route history 
   await expect(section(page, 'projects').locator('h2')).toBeFocused();
   await expect(page.locator('#pf-firstName')).toHaveValue('Unfinished');
   await section(page, 'identity').getByRole('button', { name: 'Cancel', exact: true }).click();
-  await page.locator('.app-configuration > a').click();
+  await page.locator('#settings-nav-link').click();
   await expect(page.locator('#profile-subsections')).toBeHidden();
   await page.locator('#profile-nav-link').click();
   await expect(page.locator('#profile-subsections')).toBeVisible();
@@ -204,7 +204,8 @@ test('document outline has room for section titles and keeps the canvas usable a
     const outline = await page.locator('.document-outline').boundingBox();
     const canvas = await page.locator('.document-stage').boundingBox();
     if (width > 1000) {
-      expect(outline.width).toBeGreaterThanOrEqual(220);
+      expect(outline.width).toBeGreaterThanOrEqual(140);
+      expect(outline.width).toBeLessThanOrEqual(180);
       expect(canvas.width).toBeGreaterThan(600);
     } else {
       expect(Math.abs(outline.width - canvas.width)).toBeLessThan(2);

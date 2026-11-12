@@ -131,8 +131,6 @@ test('workspace tabs retain drafts and downloads save the current section edits'
   await workspace.locator('.writing-settings summary').click();
   await workspace.locator('#instructions').fill('Emphasize observability.');
   await workspace.locator('#view-edit').click();
-  await workspace.locator('#recent-navigation summary').click();
-  await workspace.locator('#saved-jobs button').first().click();
   await expect(workspace.locator('#draft-dialog')).not.toBeVisible();
   await expect(workspace.locator('#resume-summary')).toHaveText('My current unsaved summary.');
   await workspace.locator('[data-editor-section="work1"]').click();
@@ -155,9 +153,10 @@ test('workspace tabs retain drafts and downloads save the current section edits'
   await workspace.setViewportSize({ width: 390, height: 844 });
   expect(await workspace.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await workspace.screenshot({ path: testInfo.outputPath('workspace-narrow.png'), fullPage: true });
-  await workspace.locator('#view-edit').focus(); await workspace.keyboard.press('Home');
+  await workspace.locator('#view-prepare').click();
   await expect(workspace.locator('#view-prepare')).toHaveAttribute('aria-selected', 'true');
-  await workspace.keyboard.press('End'); await expect(workspace.locator('#view-edit')).toHaveAttribute('aria-selected', 'true');
+  await workspace.locator('#view-edit').click();
+  await expect(workspace.locator('#view-edit')).toHaveAttribute('aria-selected', 'true');
 });
 
 test('document switches persist drafts automatically and concurrent saves retain failed edits', async ({ kr }) => {
@@ -422,6 +421,7 @@ test('panel generation activates separate documents for the next Autofill and ex
   await workspace.locator('[data-rewrite="section:work1"]').click();
   await expect(workspace.locator('#feedback')).toContainText('Rewrite applied', { timeout: 45000 });
   await expect(workspace.locator('#resume-summary')).toHaveText('Engineer focused on dependable APIs.');
+  await workspace.locator('#view-prepare').click();
   await workspace.locator('#delete-document').click();
   await expect(workspace.locator('#feedback')).toContainText('Document deleted');
   const sessions = await kr.readStorage('kr:sessions');

@@ -506,8 +506,8 @@ const STYLES = `
 }
 
 .kr-hud-cta {
-  background: var(--kr-signal);
-  color: var(--kr-on-signal);
+  background: var(--kr-action);
+  color: var(--kr-on-action);
   border: 1px solid transparent;
   border-radius: var(--kr-radius-sm);
   padding: 6px 13px;
@@ -522,7 +522,7 @@ const STYLES = `
 }
 
 .kr-hud-cta:hover {
-  background: var(--kr-signal-hover);
+  background: var(--kr-action-hover);
 }
 
 .kr-hud-cta:active {
@@ -978,8 +978,8 @@ const STYLES = `
 
 /* Buttons */
 .kr-btn {
-  background: var(--kr-signal);
-  color: var(--kr-on-signal);
+  background: var(--kr-action);
+  color: var(--kr-on-action);
   border: 1px solid transparent;
   border-radius: var(--kr-radius-sm);
   padding: 8px 14px;
@@ -995,7 +995,7 @@ const STYLES = `
 }
 
 .kr-btn:hover {
-  background: var(--kr-signal-hover);
+  background: var(--kr-action-hover);
 }
 
 .kr-btn:active {
@@ -1016,12 +1016,12 @@ const STYLES = `
 .kr-btn-large {
   padding: 9px 16px;
   font-size: 13px;
-  background: var(--kr-signal);
-  color: var(--kr-on-signal);
+  background: var(--kr-action);
+  color: var(--kr-on-action);
 }
 
 .kr-btn-large:hover {
-  background: var(--kr-signal-hover);
+  background: var(--kr-action-hover);
 }
 
 .kr-btn-secondary {

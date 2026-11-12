@@ -19,8 +19,8 @@ input, select, textarea { width: 100%; min-width: 0; padding: 9px 11px; backgrou
 input::placeholder, textarea::placeholder { color: var(--kr-text-3); }
 input:focus, select:focus, textarea:focus { border-color: var(--kr-focus); outline: 2px solid var(--kr-focus); outline-offset: 1px; }
 textarea { min-height: 120px; resize: vertical; }
-button, input::file-selector-button { cursor: pointer; border: 1px solid transparent; border-radius: var(--kr-radius-sm); padding: 9px 15px; font-weight: 650; background: var(--kr-signal); color: var(--kr-on-signal); transition: background 120ms ease, border-color 120ms ease; }
-button:hover { background: var(--kr-signal-hover); }
+button, input::file-selector-button { cursor: pointer; border: 1px solid transparent; border-radius: var(--kr-radius-sm); padding: 9px 15px; font-weight: 650; background: var(--kr-action); color: var(--kr-on-action); transition: background 120ms ease, border-color 120ms ease; }
+button:hover { background: var(--kr-action-hover); }
 button.secondary, input::file-selector-button { background: var(--kr-bg-2); border-color: var(--kr-line-strong); color: var(--kr-text-1); }
 button.secondary:hover, input::file-selector-button:hover { background: var(--kr-bg-3); }
 button.danger { color: var(--kr-danger); }
@@ -93,7 +93,7 @@ input::file-selector-button { font: inherit; padding: 4px 10px; margin-right: 12
 .settings-nav nav { display: flex; flex-direction: column; gap: 4px; margin: 32px 0; }
 .settings-nav a { display: block; color: var(--kr-text-2); text-decoration: none; border-radius: var(--kr-radius-sm); padding: 8px 12px; transition: background 0.12s ease, color 0.12s ease; }
 .settings-nav a:hover, .settings-nav a:focus-visible { background: var(--kr-bg-2); color: var(--kr-text-1); }
-.settings-nav a.active { color: var(--kr-signal-ink); background: var(--kr-signal-dim); font-weight: 500; }
+.settings-nav a.active { color: var(--kr-text-1); background: var(--kr-bg-2); font-weight: 500; box-shadow: inset 3px 0 0 var(--kr-signal); }
 
 .settings-nav .note { padding: 16px 12px 0; border-top: 1px solid var(--kr-line); font-size: 12px; }
 .settings-main fieldset[id],
@@ -358,12 +358,15 @@ button.icon-btn:disabled, button.secondary.icon-btn:disabled { opacity: 0.35 !im
   transition: color 140ms ease, background-color 140ms ease;
 }
 .app-sidebar .nav-item:hover { background: var(--kr-bg-2); color: var(--kr-text-1); }
-.app-sidebar .nav-item.active { background: var(--kr-bg-2); color: var(--kr-text-1); }
-.app-sidebar .nav-item.active svg { color: var(--kr-signal-ink); }
+.app-sidebar .nav-item.active { background: var(--kr-bg-2); color: var(--kr-text-1); box-shadow: inset 3px 0 0 var(--kr-signal); }
+.app-sidebar .nav-item.active svg { color: var(--kr-text-1); }
 .app-sidebar .app-configuration { margin-top: 36px; }
-.profile-subsections { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 12px 20px; padding-left: 12px; border-left: 1px solid var(--kr-line); }
-.settings-nav .profile-section-link { padding: 7px 10px; font-size: 12px; line-height: 1.5; }
-.configuration-links { display: flex; flex-direction: column; gap: 4px; padding-top: 12px; }
+.profile-subsections { display: flex; flex-wrap: wrap; gap: 28px 40px; margin: 28px 0 8px; }
+.profile-jump-group { min-width: 140px; }
+.profile-group-label { margin-bottom: 8px; color: var(--kr-text-3); font-size: 12px; font-weight: 550; }
+.profile-section-link { display: block; padding: 4px 0; color: var(--kr-text-2); font-size: 13px; line-height: 1.5; text-decoration: none; }
+.profile-section-link:hover, .profile-section-link:focus-visible { color: var(--kr-text-1); }
+.profile-section-link.active { color: var(--kr-text-1); box-shadow: inset 0 -2px 0 var(--kr-signal); }
 .app-nav-label { color: var(--kr-text-3); padding: 0 12px 8px; font-size: 12px; }
 .app-sidebar-footer { margin-top: auto; padding: 32px 12px 0; color: var(--kr-text-3); font-size: 12px; }
 .app-sidebar-footer .version { display: block; margin-top: 6px; }
@@ -373,7 +376,15 @@ button.icon-btn:disabled, button.secondary.icon-btn:disabled { opacity: 0.35 !im
 .options .settings-nav { position: sticky; top: 0; height: 100dvh; overflow-y: auto; }
 .options .settings-main { width: 100%; max-width: 1192px; margin-inline: auto; padding: 48px 56px 80px; }
 .options .settings-main > section { border: 0; padding: 0; }
-.options .settings-main > section:not(#profile) { padding-top: 28px; max-width: 760px; }
+.options .settings-main > section:not(#profile) { padding-top: 8px; max-width: 1040px; }
+#settings { display: flex; flex-direction: column; gap: 36px; }
+#connection, #advanced { display: flex; flex-direction: column; gap: 24px; }
+#profile-resume, .profile-group, #models { grid-column: 1 / -1; }
+#profile-resume, #models { padding: 24px; background: var(--kr-bg-1); border: 1px solid var(--kr-line); border-radius: var(--kr-radius-md); }
+#profile-resume h2, #models h2, .profile-group h2 { font-size: 22px; letter-spacing: -.02em; }
+#profile-resume .hint, #models .hint, .profile-group .hint { margin-top: 8px; }
+#profile-resume .row, #profile-resume .actions, #models .group, #models .actions { margin-top: 16px; }
+.profile-group { margin-top: 12px; padding-top: 8px; }
 .options .profile-heading { align-items: center; gap: 24px; }
 .options .profile-heading .hint { margin-top: 10px; font-size: 14px; }
 .options .profile-materials-link { font-size: 13px; padding: 10px 14px; border-color: var(--kr-line); }
@@ -430,15 +441,9 @@ button.icon-btn:disabled, button.secondary.icon-btn:disabled { opacity: 0.35 !im
   .app-sidebar .app-brand { padding: 0; margin-bottom: 16px; font-size: 18px; }
   .app-sidebar .app-navigation { flex-direction: row; gap: 6px; }
   .options .app-navigation { flex-wrap: wrap; }
-  .options .profile-subsections { order: 3; flex: 0 0 100%; flex-direction: row; overflow-x: auto; margin: 6px 0 0; padding: 0; border: 0; }
-  .options .profile-section-link { flex: 0 0 auto; white-space: nowrap; }
+  .profile-subsections { gap: 20px 24px; }
   .app-sidebar .nav-item { width: auto; flex: 1; justify-content: center; padding: 9px 10px; font-size: 12px; }
-  .app-sidebar .app-configuration { flex-direction: row; margin-top: 12px; gap: 2px; flex-wrap: wrap; }
-  .app-sidebar .app-configuration { position: absolute; top: 10px; right: 16px; margin: 0; }
-  .app-sidebar .configuration-links { position: absolute; top: 40px; right: 0; padding: 12px; min-width: 180px; background: var(--kr-bg-1); border: 1px solid var(--kr-line); border-radius: var(--kr-radius-sm); z-index: 3; }
-  .options.configuration-open .app-configuration { position: static; margin-top: 12px; flex-direction: column; }
-  .options.configuration-open .configuration-links { position: static; flex-direction: row; flex-wrap: wrap; padding: 0; min-width: 0; border: 0; }
-  .app-configuration .nav-item { flex: 0 1 auto; padding: 6px 8px; }
+  .app-sidebar .nav-item.active { box-shadow: inset 0 -2px 0 var(--kr-signal); }
   .app-nav-label, .app-sidebar-footer { display: none; }
   .options .settings-shell { display: block; }
   .options .settings-nav { position: static; height: auto; overflow: visible; }

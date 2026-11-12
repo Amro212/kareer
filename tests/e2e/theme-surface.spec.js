@@ -9,7 +9,7 @@ test('settings and the application panel use the site paper, ink, and lime', asy
   const options = await kr.context.newPage();
   await options.goto(kr.optionsUrl());
   const optionsColors = await options.evaluate(() => {
-    for (const id of ['resume', 'profile-form']) document.querySelector(`#${id}`).hidden = false;
+    document.querySelector('#profile-form').hidden = false;
     const body = getComputedStyle(document.documentElement);
     const button = getComputedStyle(document.querySelector('#save-resume'));
     const secondary = getComputedStyle(document.querySelector('#add-work-btn'));
@@ -33,8 +33,8 @@ test('settings and the application panel use the site paper, ink, and lime', asy
   expect(optionsColors.scheme).toBe('light');
   expect(optionsColors.background).toBe(rgb('#f7f6f0'));
   expect(optionsColors.text).toBe(rgb('#20231c'));
-  expect(optionsColors.buttonBackground).toBe(rgb('#c5f55a'));
-  expect(optionsColors.buttonText).toBe(rgb('#20231c'));
+  expect(optionsColors.buttonBackground).toBe(rgb('#20231c'));
+  expect(optionsColors.buttonText).toBe(rgb('#f7f6f0'));
   expect(optionsColors.secondaryBackground).toBe(rgb('#efeee6'));
   expect(optionsColors.secondaryText).toBe(rgb('#20231c'));
   expect(optionsColors.focus).toContain('var(--kr-focus)');
@@ -60,7 +60,7 @@ test('settings and the application panel use the site paper, ink, and lime', asy
   expect(panelColors.scheme).toBe('light');
   expect(panelColors.background).toBe(rgb('#fffefa'));
   expect(panelColors.text).toBe(rgb('#20231c'));
-  expect(panelColors.buttonBackground).toBe(rgb('#c5f55a'));
-  expect(panelColors.buttonText).toBe(rgb('#20231c'));
+  expect(panelColors.buttonBackground).toBe(rgb('#20231c'));
+  expect(panelColors.buttonText).toBe(rgb('#f7f6f0'));
   await application.screenshot({ path: testInfo.outputPath('panel-paper.png'), fullPage: false });
 });

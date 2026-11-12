@@ -42,6 +42,8 @@ function showView(view) {
     $(name + '-panel').hidden = name !== view;
   }
   $('editor-actions').hidden = !selected || view !== 'edit';
+  $('view-edit').hidden = view !== 'prepare' || !selected;
+  $('delete-document').hidden = !selected;
   $('generate').textContent = selected ? kind === 'resume' ? 'Regenerate resume' : 'Regenerate cover letter' : kind === 'resume' ? 'Tailor resume' : 'Generate cover letter';
   $('generate').title = `Uses ${CREDITS.costs.document} Kareer AI credits`;
   if (view === 'edit') requestAnimationFrame(resizePaper);
@@ -50,13 +52,11 @@ function showView(view) {
 function showWorkspace() {
   $('materials-library').hidden = true;
   $('application-workspace').hidden = false;
-  $('recent-navigation').hidden = false;
 }
 
 function showLibrary(focus = true) {
   $('materials-library').hidden = false;
   $('application-workspace').hidden = true;
-  $('recent-navigation').hidden = true;
   $('download-menu').close();
   const url = new URL(location.href);
   url.searchParams.set('view', 'library');
@@ -95,7 +95,7 @@ async function newApplication() {
 
 function setBusy(value) {
   busy = value;
-  for (const control of document.querySelectorAll('#prepare-panel button, #prepare-panel input, #prepare-panel textarea, #prepare-panel select, .tabs button, .task-tabs button, #new-job, #start-new-application, #materials-home, #back-to-library, #delete-document, #saved-jobs button, #application-list button, #application-search')) control.disabled = value;
+  for (const control of document.querySelectorAll('#prepare-panel button, #prepare-panel input, #prepare-panel textarea, #prepare-panel select, .tabs button, #view-prepare, #view-edit, #new-job, #start-new-application, #materials-home, #back-to-library, #delete-document, #application-list button, #application-search')) control.disabled = value;
   $('cancel').disabled = false;
   documentEditor?.editor.setEditable(!value, false);
 }
@@ -181,28 +181,10 @@ async function toggleProof() {
     try { await autosave.flush(); } catch (error) { feedback(error.message, true); }
   } else resizePaper();
 }
-function updateSelectedJobNav() {
-  for (const button of $('saved-jobs').querySelectorAll('button')) {
-    const current = button.dataset.job === materialJobKey(job);
-    button.classList.toggle('active', current);
-    if (current) button.setAttribute('aria-current', 'true'); else button.removeAttribute('aria-current');
-  }
-}
 async function refreshLibrary() {
   records = await request('list');
-  const jobs = new Map();
-  for (const record of records.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))) if (!jobs.has(materialJobKey(record.job))) jobs.set(materialJobKey(record.job), record.job);
-  $('saved-jobs').replaceChildren();
-  for (const [key, item] of jobs) {
-    const button = document.createElement('button'); button.className = 'secondary'; button.dataset.job = key;
-    button.append(document.createTextNode(item.title || 'Untitled job'));
-    const company = document.createElement('small'); company.textContent = item.company || 'Company not specified'; button.append(company);
-    button.onclick = () => { if (key !== materialJobKey(job)) void switchDocument(() => selectJob(item)).catch(error => feedback(error.message, true)); };
-    $('saved-jobs').append(button);
-  }
-  if (!jobs.size) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Prepared documents appear here.'; $('saved-jobs').append(p); }
   paintLibrary();
-  updateSelectedJobNav(); setBusy(busy);
+  setBusy(busy);
 }
 function paperHeader(model) {
   $('document-paper').classList.toggle('letter-paper', model.kind === 'coverLetter');
@@ -326,7 +308,7 @@ async function selectJob(next, load = true) {
   sessionId = originJobKey && materialJobKey(job) === originJobKey ? originalSessionId : null;
   $('job-title').value = job.title || ''; $('job-company').value = job.company || ''; $('job-description').value = job.description || '';
   updateJobContext();
-  updateSelectedJobNav(); if (load) await loadCurrentDocument();
+  if (load) await loadCurrentDocument();
 }
 async function loadCurrentDocument() {
   const record = records.find(r => r.kind === kind && materialJobKey(r.job) === materialJobKey(job));

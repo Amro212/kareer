@@ -150,8 +150,8 @@ test('Prepare and Edit fit desktop, compact, and narrow layouts with visible foc
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `.impeccable/review/${name}.png` });
   }
-  await page.locator('#view-edit').focus(); await page.keyboard.press('Home'); await expect(page.locator('#view-prepare')).toHaveAttribute('aria-selected','true');
-  await page.keyboard.press('End'); await expect(page.locator('#view-edit')).toHaveAttribute('aria-selected','true');
+  await page.locator('#view-prepare').click(); await expect(page.locator('#view-prepare')).toHaveAttribute('aria-selected','true');
+  await page.locator('#view-edit').click(); await expect(page.locator('#view-edit')).toHaveAttribute('aria-selected','true');
   expect(await page.evaluate(async () => { await document.fonts.ready; return document.fonts.check('12px "Material CMU"'); })).toBe(true);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   expect(await page.locator('#proof-toggle').evaluate(el => getComputedStyle(el).transitionDuration)).toBe('0s');

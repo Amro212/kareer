@@ -12,24 +12,15 @@
       <a class="brand app-brand" href="#profile"><span data-product-name>{{VISUAL_NAME}}</span></a>
       <nav class="app-navigation" aria-label="Workspace navigation">
         <a href="#profile" class="nav-item" id="profile-nav-link"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2"/></svg>Profile</a>
-        <div id="profile-subsections" class="profile-subsections" aria-label="Profile sections"></div>
-        <a href="../materials/index.html" class="nav-item" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5"/></svg>Tailored documents</a>
-      </nav>
-      <nav class="app-configuration" aria-label="Configuration">
-        <a href="#connection" class="nav-item">Settings</a>
-        <div class="configuration-links" id="configuration-links" hidden>
-          <a href="#connection" class="nav-item">AI &amp; billing</a>
-          <a href="#models" class="nav-item">Writing preferences</a>
-          <a href="#resume" class="nav-item">Uploaded resume</a>
-          <a href="#advanced" class="nav-item">Backup &amp; migration</a>
-        </div>
+        <a href="../materials/index.html" class="nav-item" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5"/></svg>Applications</a>
+        <a href="#settings" class="nav-item" id="settings-nav-link"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</a>
       </nav>
       <div class="app-sidebar-footer"><p>Stored in this browser</p><span class="version" id="version"></span></div>
     </aside>
     <main class="settings-main">
-<header class="page-heading" id="options-heading" hidden><h1 id="options-title">Settings</h1><p class="hint">Manage the settings for your application workspace.</p></header>
-
-    <section id="connection" hidden>
+    <section id="settings" hidden>
+      <header class="page-heading"><h1>Settings</h1><p class="hint">AI, billing, and a backup of what is stored in this browser.</p></header>
+      <div id="connection">
       <div id="managed-ai">
         <div class="ai-introduction">
           <div class="ai-introduction-copy">
@@ -96,34 +87,29 @@
         <button class="secondary danger" id="clear-key">Remove key</button>
         <span class="feedback" role="status" aria-live="polite" id="key-feedback"></span>
       </div>
-      </div>
-        </div>
-      </details>
-    </section>
-
-    <section id="models" hidden>
-      <div>
-        <h2>Writing preferences</h2>
-        <p class="hint">Used for the primary autofill request, repairs, and rewrites.</p>
-      </div>
       <details id="byok-model">
-        <summary>Advanced: AI model</summary>
+        <summary>Model</summary>
         <div class="group">
         <label for="model">OpenRouter model ID</label>
         <input id="model" type="text" placeholder="provider/model-id" autocomplete="off" spellcheck="false" aria-describedby="model-help" />
-        <p class="hint" id="model-help">Copy the model ID from OpenRouter and paste it here.</p>
+        <p class="hint" id="model-help">Copy the model ID from OpenRouter and paste it here. Save it with your writing style on your profile.</p>
         </div>
       </details>
-      <div class="group">
-        <label for="narrative-style">Writing style</label>
-        <select id="narrative-style" aria-describedby="style-description"></select>
-        <p class="hint" id="style-description"></p>
-        <p class="hint">Example wording</p>
-        <p id="style-example"></p>
       </div>
-      <div class="actions">
-        <button id="save-model">Save writing preferences</button>
-        <span class="feedback" role="status" aria-live="polite" id="model-feedback"></span>
+        </div>
+      </details>
+      </div>
+      <div id="advanced">
+        <div>
+          <h2>Backup and migration</h2>
+          <p class="hint">Import a JSON export from the Tampermonkey userscript, or back up what is stored here. Exports never include the API key.</p>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="export-data">Export JSON</button>
+          <button class="secondary" id="import-data">Import JSON</button>
+          <input id="import-file" type="file" accept="application/json,.json" hidden />
+          <span class="feedback" role="status" aria-live="polite" id="migration-feedback"></span>
+        </div>
       </div>
     </section>
 
@@ -134,14 +120,28 @@
         <p class="hint">Your career facts, ready for every application.</p>
         </div>
         <a id="profile-materials-link" class="profile-materials-link" href="../materials/index.html" target="_blank" rel="noopener noreferrer" title="Open tailored documents in a new tab">
-          Tailored documents
+          Applications
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M10 14 21 3M21 14v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h6"/></svg>
         </a>
       </div>
       <p class="feedback profile-save-feedback" role="status" aria-live="polite" id="profile-feedback"></p>
       <button type="button" class="secondary profile-retry" id="profile-retry" hidden>Retry loading profile</button>
       <p id="profile-loading" class="hint" role="status">Loading your profile…</p>
+      <div id="profile-subsections" class="profile-subsections" aria-label="Profile sections"></div>
       <form id="profile-form" hidden>
+        <div id="profile-resume">
+          <h2>Resume file</h2>
+          <p class="hint">The file Kareer attaches to resume uploads. One file, stored in this browser.</p>
+          <div class="row">
+            <input aria-label="Resume file" id="resume-file" type="file" accept=".pdf,.doc,.docx,application/pdf" />
+          </div>
+          <p class="hint" id="resume-status">No resume stored.</p>
+          <div class="actions">
+            <button type="button" id="save-resume">Store resume</button>
+            <button class="secondary danger" type="button" id="clear-resume">Remove resume</button>
+            <span class="feedback" role="status" aria-live="polite" id="resume-feedback"></span>
+          </div>
+        </div>
         <fieldset id="section-identity">
           <legend>Identity and contact</legend>
           <div class="grid" id="identity-fields"></div>
@@ -250,36 +250,22 @@
             <button type="submit" id="floating-save-btn" aria-describedby="profile-feedback">Save all</button>
           </div>
         </div>
+        <div id="models">
+          <h2>Writing style</h2>
+          <p class="hint">Used when Kareer writes application answers, repairs, and tailored documents.</p>
+          <div class="group">
+            <label for="narrative-style">Writing style</label>
+            <select id="narrative-style" aria-describedby="style-description"></select>
+            <p class="hint" id="style-description"></p>
+            <p class="hint">Example wording</p>
+            <p id="style-example"></p>
+          </div>
+          <div class="actions">
+            <button type="button" id="save-model">Save writing style</button>
+            <span class="feedback" role="status" aria-live="polite" id="model-feedback"></span>
+          </div>
+        </div>
       </form>
-    </section>
-
-    <section id="resume" hidden>
-      <div>
-        <h2>Resume</h2>
-        <p class="hint">One file, stored in the extension. Autofill attaches it to resume upload controls and checks the filename afterwards.</p>
-      </div>
-      <div class="row">
-        <input aria-label="Resume file" id="resume-file" type="file" accept=".pdf,.doc,.docx,application/pdf" />
-      </div>
-      <p class="hint" id="resume-status">No resume stored.</p>
-      <div class="actions">
-        <button type="button" id="save-resume">Store resume</button>
-        <button class="secondary danger" type="button" id="clear-resume">Remove resume</button>
-        <span class="feedback" role="status" aria-live="polite" id="resume-feedback"></span>
-      </div>
-    </section>
-
-    <section id="advanced" hidden>
-      <div>
-        <h2>Backup and migration</h2>
-        <p class="hint">Import a JSON export from the Tampermonkey userscript, or back up what is stored here. Exports never include the API key.</p>
-      </div>
-      <div class="actions">
-        <button class="secondary" id="export-data">Export JSON</button>
-        <button class="secondary" id="import-data">Import JSON</button>
-        <input id="import-file" type="file" accept="application/json,.json" hidden />
-        <span class="feedback" role="status" aria-live="polite" id="migration-feedback"></span>
-      </div>
     </section>
     </main>
   </div>

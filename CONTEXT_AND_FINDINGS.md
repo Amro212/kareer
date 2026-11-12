@@ -1,3 +1,13 @@
+## Turn: 2026-11-12 - Options and applications workspace
+
+- Request: reorganize the extension options and tailored-documents pages. Interview settled the structure before building.
+- Sidebar is three items on every page: Profile, Applications, Settings. Profile field links and the recent-job list left the rail.
+- Profile: the uploaded resume file is the first block. Sections are grouped on the page as About you, Career, Answers for applications, and Notes. Writing style lives in Notes. The OpenRouter model id stays with the bring-your-own-key controls in Settings.
+- Settings is one page: AI and billing, then backup.
+- Applications: the library is the only job list. A document opens on the paper. The role name opens the job details; Download is the ink button; PDF proof stays a quiet action. Before a draft exists, the page is one centered form.
+- Color: primary buttons are ink (`#20231c`) with paper text. Lime stays a small mark (selection, the active item) because a lime fill on the cream page was bright and low-contrast.
+- Verification: theme contrast unit test, then the options, profile, migration, and materials Playwright specs after a build.
+
 ## Turn: 2026-11-12 - Extension chrome takes the site's paper, ink, and lime
 
 - Request: do not commit. Make the extension use the website's coloring and styling, and keep it accessible.

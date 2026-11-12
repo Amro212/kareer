@@ -403,9 +403,10 @@ textarea {
   overflow-wrap: anywhere;
 }
 #editor-sections button[aria-current] {
-  color: var(--kr-signal-ink);
+  color: var(--kr-text-1);
   background: var(--kr-bg-2);
-  border-color: var(--kr-line);
+  border-color: transparent;
+  box-shadow: inset 2px 0 0 var(--kr-signal);
 }
 #editor-sections small {
   display: block;
@@ -921,7 +922,12 @@ summary:focus-visible {
 .workspace-back { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--kr-text-3); padding: 4px 0; font-size: 12px; font-weight: 450; }
 .workspace-back:hover { background: transparent; color: var(--kr-text-1); }
 .workspace-back svg { width: 14px; height: 14px; }
-.materials .workspace-toolbar { padding: 24px 32px 0; border-bottom: 1px solid var(--kr-line); }
+.materials .workspace-toolbar { padding: 16px 32px 0; border-bottom: 1px solid var(--kr-line); }
+.materials .document-header { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px; min-height: 64px; padding-bottom: 12px; }
+.materials .role-button { display: flex; flex: 1; flex-direction: column; align-items: flex-start; min-width: 0; border: 0; background: transparent; color: var(--kr-text-1); padding: 0; text-align: left; }
+.materials .role-button:hover { background: transparent; }
+.materials .role-button[aria-selected="false"] { box-shadow: inset 0 -2px 0 transparent; }
+.materials #view-edit { flex: 0 0 auto; }
 .materials #job-heading { font-size: 22px; font-weight: 600; letter-spacing: -.02em; }
 .materials #company-heading { margin-top: 6px; font-size: 13px; }
 .materials #document-status { font-size: 12px; }
@@ -938,11 +944,12 @@ summary:focus-visible {
 .materials .prepare-content { max-width: 1120px; padding: 40px 32px; }
 .materials .prepare-heading { margin-bottom: 28px; }
 .materials .prepare-heading h2 { font-size: 24px; }
-.materials .prepare-grid { grid-template-columns: minmax(0, 1fr) 224px; gap: 40px; }
+.materials .prepare-grid { grid-template-columns: minmax(0, 640px); justify-content: center; gap: 28px; }
+.materials .prepare-content { max-width: 720px; }
 .materials .prepare-context p, .materials .prepare-context a { font-size: 13px; }
 .materials .generation-note { font-size: 12px; }
-.materials .edit-layout { grid-template-columns: clamp(220px, 18vw, 280px) minmax(0, 1fr); }
-.materials .document-outline { padding: 22px 20px; border-right: 0; }
+.materials .edit-layout { grid-template-columns: 160px minmax(0, 1fr); }
+.materials .document-outline { padding: 16px 8px 16px 0; border-right: 0; }
 .materials .document-outline > h3 { font-size: 12px; }
 .materials .document-stage { background: var(--kr-bg-0); }
 .materials .canvas-toolbar { background: var(--kr-bg-0); border-bottom: 0; }
@@ -956,7 +963,7 @@ summary:focus-visible {
   .materials-library { padding: 36px 32px; }
   .application-columns, .application-row { grid-template-columns: minmax(0, 1fr) 180px 110px; gap: 20px; }
   .materials #editor-actions { flex: 1 1 auto; }
-  .materials .prepare-grid { gap: 28px; grid-template-columns: minmax(0, 1fr) 200px; }
+  .materials .prepare-grid { gap: 28px; grid-template-columns: minmax(0, 640px); }
 }
 @media (max-width: 1000px) {
   .materials .prepare-grid { grid-template-columns: minmax(0, 1fr); }

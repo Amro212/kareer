@@ -15,6 +15,9 @@ export const TOKENS = `
   --kr-signal-dim: rgba(197, 245, 90, 0.45);
   --kr-signal-ink: #385008;
   --kr-on-signal: #20231c;
+  --kr-action: #20231c;
+  --kr-action-hover: #3a3f34;
+  --kr-on-action: #f7f6f0;
   --kr-focus: #496b18;
   --kr-info: #1e4d82;
   --kr-success: #3b5918;
