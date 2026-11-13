@@ -3834,3 +3834,10 @@ Narrative voice prompt updated and verified.
 - Root causes: (1) every row autocomplete (title, company, institution, location) was searched twice, a separate harvest then `fillCombobox`, which already searches with the value and commits only an exact owned option; each search waits on SmartRecruiters' network. (2) Every row scan walked the whole application's shadow DOM. Timing in the row simulation: each combobox ~0.9s of fixed open/settle/verify, all other fields ~1ms. (3) Saved rows become summary cards with no inputs, so the review list (built from scanned fields) dropped them.
 - Changes: `smartrecruiters-sections.js` drops the harvest, scans only the row, and records one review entry per Experience/Education record (verified when saved or matched, failed when Save is rejected), in page order. Adapter exposes `reviewFields`; `ui.js` appends them in `getAllDetectedFields`, reads their result in `summarizeFieldResults`, and locates their card. Display only: they never become fill targets.
 - Tests: row simulation 7.0s -> 4.7s and 4.0s -> 2.8s; new review assertions. `smartrecruiters` + `panel` 39/39. Built v0.5.163. Live retest by the user pending (CAPTCHA blocks automated browsers here).
+
+## Turn: 2026-11-12 - PR #15 CI fix and SmartRecruiters Codex review items
+
+- Target: extension/userscript core; PR #15 CI and Codex P2 on `smartrecruiters-sections.js`.
+- Changes: `tests/unit/adapters.test.js` — Workday test no longer requires `stepReviewPause` (QA-160 Auto Continue). `smartrecruiters-sections.js` — explicit `current: false`, `syncCurrentCheckbox`, cancellation in work loop / `addRow` / `saveRow`. `tests/unit/smartrecruiters.test.js` — regressions for unchecked current and cancel paths.
+- Verification: `node --test tests/unit/adapters.test.js tests/unit/smartrecruiters.test.js` — 29 pass, 0 fail.
+- Next: push to `fix/qa-160-application-reliability` for green CI.
