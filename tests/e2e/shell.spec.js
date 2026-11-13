@@ -105,9 +105,8 @@ test.describe('extension shell', () => {
     await page.screenshot({ path: testInfo.outputPath('byok-model-mobile.png'), fullPage: true });
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.locator('#model').fill('openai/gpt-4o-mini');
-    await page.locator('#profile-nav-link').click();
-    await page.locator('#save-model').click();
-    await expect(page.locator('#model-feedback')).toHaveText('Writing preferences saved.');
+    await page.locator('#save-byok-model').click();
+    await expect(page.locator('#byok-model-feedback')).toHaveText('Model saved.');
 
     await page.locator('#profile-nav-link').click();
     await page.locator('[data-profile-section=identity] .profile-edit-button').click();
@@ -129,8 +128,8 @@ test.describe('extension shell', () => {
     await page.locator('#byok-model summary').click();
     await expect(page.locator('#model')).toHaveValue('openai/gpt-4o-mini');
     await page.locator('#model').fill('');
-    await page.locator('#profile-nav-link').click();
-    await page.locator('#save-model').click();
+    await page.locator('#save-byok-model').click();
+    await expect(page.locator('#byok-model-feedback')).toHaveText('Model saved.');
     expect((await kr.readStorage('kr:settings')).model).toBe('openai/gpt-4o-mini');
 
     const profile = await kr.readStorage('kr:profile');
@@ -194,7 +193,8 @@ test.describe('extension shell', () => {
 
     await page.bringToFront();
     await page.locator('[data-tab=profile]').click();
-    await expect(page.locator('#kareer-root [name=fullName]')).toHaveValue('Broadcast Applicant');
+    await expect(page.locator('#kareer-root [name=firstName]')).toHaveValue('Broadcast');
+    await expect(page.locator('#kareer-root [name=lastName]')).toHaveValue('Applicant');
   });
 
   test('popup reports fields without internal frame diagnostics', async ({ kr }) => {

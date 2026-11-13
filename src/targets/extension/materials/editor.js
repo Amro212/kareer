@@ -5,13 +5,15 @@ import Text from '@tiptap/extension-text';
 import HardBreak from '@tiptap/extension-hard-break';
 import { UndoRedo } from '@tiptap/extensions';
 import { Plugin } from '@tiptap/pm/state';
+import { closeHistory, isHistoryTransaction } from '@tiptap/pm/history';
 import { modelToEditor, editorToModel, editorSections, categoryLabel } from './editor-model.js';
 import { skillsAreCategorized } from './document-format.js';
 import CREDITS from '../../../core/credits.json' with { type: 'json' };
 
+const docIds = doc => { const ids = []; doc.forEach(node => ids.push(node.attrs.id)); return ids; };
 const element = (tag, className, text) => { const el = document.createElement(tag); el.className = className; if (text !== undefined) el.textContent = text; return el; };
 
-export function createMaterialEditor({ container, model, onUpdate, onSelection, onRewrite }) {
+export function createMaterialEditor({ container, model, onUpdate, onSelection, onRewrite, onRemove }) {
   const sections = editorSections(model), ids = sections.map(s => s.id);
   const MaterialSection = Node.create({
     name: 'materialSection', group: 'block', content: 'materialKeywords? paragraph+', isolating: true, defining: true,
@@ -21,11 +23,10 @@ export function createMaterialEditor({ container, model, onUpdate, onSelection, 
     renderHTML: ({ node }) => ['section', { 'data-material-section': node.attrs.id }, 0],
     addNodeView: () => ({ node }) => {
       const section = sections.find(s => s.id === node.attrs.id);
-      const dom = element('section', 'material-section'); dom.dataset.materialSection = section.id;
+      const dom = element('section', 'material-section'); dom.dataset.materialSection = section.id; dom.dataset.category = section.category || '';
       const heading = element('div', 'material-heading'); heading.contentEditable = 'false';
       if (model.kind !== 'coverLetter') {
-        const previous = sections[sections.indexOf(section) - 1];
-        if (section.category && previous?.category !== section.category) heading.append(element('h2', 'paper-category', categoryLabel(section.category)));
+        if (section.category) { const category = element('h2', 'paper-category', categoryLabel(section.category)); category.dataset.category = section.category; heading.append(category); }
         if (section.id === 'summary') heading.append(element('h2', 'paper-category', 'Summary'));
         else if (section.category !== 'Skills') {
           const title = element('div', 'paper-title');
@@ -50,10 +51,19 @@ export function createMaterialEditor({ container, model, onUpdate, onSelection, 
       rewrite.dataset.rewrite = model.kind === 'coverLetter' ? 'letter' : section.id === 'summary' ? 'summary' : `section:${section.id}`;
       rewrite.onmousedown = event => event.preventDefault();
       rewrite.onclick = () => onRewrite(section.id);
-      dom.append(heading, contentDOM, rewrite);
+      const tools = element('div', 'section-actions'); tools.contentEditable = 'false'; tools.append(rewrite);
+      if (model.kind === 'resume' && section.id !== 'summary') {
+        const remove = element('button', 'section-remove secondary danger', 'Remove');
+        remove.type = 'button'; remove.setAttribute('aria-label', `Remove ${section.label} from this document`);
+        remove.title = 'Remove this section from this document. Undo restores it.';
+        remove.onmousedown = event => event.preventDefault();
+        remove.onclick = () => onRemove(section.id);
+        tools.append(remove);
+      }
+      dom.append(heading, contentDOM, tools);
       return { dom, contentDOM,
         update(next) { if (next.type !== node.type || next.attrs.id !== section.id) return false; updateSkillsLayout(next); return true; },
-        stopEvent: event => rewrite.contains(event.target),
+        stopEvent: event => tools.contains(event.target),
         ignoreMutation: mutation => mutation.type !== 'selection' && !contentDOM.contains(mutation.target) };
     },
   });
@@ -67,10 +77,22 @@ export function createMaterialEditor({ container, model, onUpdate, onSelection, 
     name: 'materialBoundaries',
     addProseMirrorPlugins: () => [new Plugin({ filterTransaction: transaction => {
       if (!transaction.docChanged) return true;
-      const next = []; transaction.doc.forEach(node => next.push(node.attrs.id));
-      return next.length === ids.length && next.every((id, index) => id === ids[index]);
+      const next = docIds(transaction.doc), before = docIds(transaction.before);
+      if (next.join('\n') === before.join('\n')) return true;
+      // Typing never adds or drops sections; only Remove and its undo/redo do.
+      if (!transaction.getMeta('materialRemoveSection') && !isHistoryTransaction(transaction)) return false;
+      let index = 0;
+      return next.length >= Math.min(2, ids.length) && next.every(id => (index = ids.indexOf(id, index) + 1) > 0);
     } })],
   });
+  const refreshCategories = () => {
+    let previous;
+    for (const section of container.querySelectorAll('.material-section')) {
+      const heading = section.querySelector('.paper-category[data-category]');
+      if (heading) heading.hidden = heading.dataset.category === previous;
+      previous = section.dataset.category;
+    }
+  };
   const editor = new Editor({ element: container, injectCSS: false,
     extensions: [Document.extend({ content: 'materialSection+' }), MaterialSection, Keywords, Paragraph, Text, HardBreak, UndoRedo, Boundaries],
     content: modelToEditor(model),
@@ -93,7 +115,8 @@ export function createMaterialEditor({ container, model, onUpdate, onSelection, 
         }).join('');
       },
     },
-    onUpdate: () => onUpdate(),
+    onCreate: refreshCategories,
+    onUpdate: () => { refreshCategories(); onUpdate(); },
     onSelectionUpdate: ({ editor }) => {
       const { $from } = editor.state.selection;
       for (let depth = $from.depth; depth > 0; depth--) if ($from.node(depth).type.name === 'materialSection') { onSelection($from.node(depth).attrs.id); break; }
@@ -102,6 +125,12 @@ export function createMaterialEditor({ container, model, onUpdate, onSelection, 
   return {
     editor,
     model: () => editorToModel(editor.getJSON(), model),
+    sectionIds: () => docIds(editor.state.doc),
+    remove(id) {
+      editor.state.doc.forEach((node, pos) => {
+        if (node.attrs.id === id) editor.view.dispatch(closeHistory(editor.state.tr.delete(pos, pos + node.nodeSize).setMeta('materialRemoveSection', true)));
+      });
+    },
     focusSection(id) {
       editor.state.doc.forEach((node, pos) => {
         if (node.attrs.id !== id) return;

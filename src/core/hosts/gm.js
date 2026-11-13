@@ -97,6 +97,7 @@ export function createGmHost() {
       menuCommands: typeof GM_registerMenuCommand === 'function',
       crossFrame: false,
       fileUpload: false,
+      optionsPage: false,
     },
     storageReady: () => resolved,
     storageGet,

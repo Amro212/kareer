@@ -122,9 +122,12 @@ test('Kareer AI activates without showing models or leaking license credentials'
   await expect(options.locator('#start-checkout')).toBeVisible();
   await expect(options.locator('#start-checkout')).toHaveText('View plans');
   await expect(options.locator('#purchase-offer')).toHaveCount(0);
-  await expect(options.locator('#ai-plans li')).toHaveCount(2);
-  await expect(options.locator('#ai-plans')).toContainText('Kareer Monthly · US$9.99 / month');
-  await expect(options.locator('#ai-plans')).toContainText('Kareer Credit Pack · US$4.99 once');
+  await expect(options.locator('#ai-plans li.ai-plan')).toHaveCount(2);
+  await expect(options.locator('#ai-plans li.ai-plan').nth(0)).toContainText('Kareer Monthly');
+  await expect(options.locator('#ai-plans li.ai-plan').nth(0).locator('.ai-plan-price')).toHaveText('US$9.99 / month');
+  await expect(options.locator('#ai-plans li.ai-plan').nth(0)).toContainText('Best value · 40% less per credit');
+  await expect(options.locator('#ai-plans li.ai-plan').nth(1)).toContainText('Kareer Credit Pack');
+  await expect(options.locator('#ai-plans li.ai-plan').nth(1).locator('.ai-plan-price')).toHaveText('US$4.99 once');
   await expect(options.locator('.ai-purchase-note')).toContainText('All sales are final');
   await expect(options.locator('#usage-details')).toBeHidden();
   await expect(options.locator('#byok-connection')).toBeHidden();

@@ -23,22 +23,24 @@
       <div id="connection">
       <div id="managed-ai">
         <div class="ai-introduction">
-          <div class="ai-introduction-copy">
-            <div class="ai-introduction-heading"><h2>Kareer AI</h2><span class="badge warn" id="managed-state" role="status" aria-live="polite">Activation needed</span></div>
-            <h3>Put your experience<br />to work.</h3>
-            <p>Spend less time turning the same career facts into new answers. Connect Kareer AI for help with application questions and documents, grounded in your profile and the job.</p>
-            <p class="hint" id="ai-data-details">Kareer AI sends your saved profile (including any salary, demographic or disability answers you saved), the job description and the application's questions to AI providers through Kareer. Starting a trial, buying or activating a key means you agree to this. <a href="https://kareer.itsamro.me/privacy/" target="_blank" rel="noopener noreferrer">Privacy policy</a></p>
-            <div class="actions" id="trial-offer" hidden><button id="start-trial">Try Kareer AI free (10 credits)</button><p class="hint">No payment needed. Trial credits expire after 30 days.</p></div>
-            <ul class="ai-plans" id="ai-plans" aria-label="Kareer AI plans"></ul>
-            <p class="ai-purchase-note">Buying opens Stripe's secure checkout. By buying you agree to the <a href="https://kareer.itsamro.me/terms/" target="_blank" rel="noopener noreferrer">Terms of Service</a>. All sales are final. No AI provider account or API key to set up.</p>
-            <div class="actions"><button id="start-checkout" class="secondary">View plans <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></button></div>
-            <p id="purchase-status" role="status" aria-live="polite"></p>
+          <div class="ai-introduction-heading"><h2>Kareer AI</h2><span class="badge warn" id="managed-state" role="status" aria-live="polite">Activation needed</span></div>
+          <div class="ai-hero">
+            <h3>Put your experience to work.</h3>
+            <p>Finish applications faster. Kareer AI writes the answers and documents your profile can't fill on its own, grounded in your real experience and the job in front of you.</p>
           </div>
           <ul class="ai-capabilities" aria-label="What Kareer AI helps with">
-            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5ZM8 9h8M8 12h5" /></svg><div><strong>Answers for this application</strong><span>Use your saved experience and job context for questions beyond exact profile matches.</span></div></li>
-            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H5v18h14V8l-5-5ZM14 3v5h5M8 12h8M8 16h6" /></svg><div><strong>Documents for this role</strong><span>Tailor resumes and cover letters from your structured profile.</span></div></li>
-            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6M4 21h16" /></svg><div><strong>You review the results</strong><span>Check generated answers and make changes before submitting.</span></div></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5ZM8 9h8M8 12h5" /></svg><div><strong>Answers that sound like you</strong><span>Open questions drafted from your saved experience and the job.</span></div></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H5v18h14V8l-5-5ZM14 3v5h5M8 12h8M8 16h6" /></svg><div><strong>A résumé for every role</strong><span>Tailored résumés and cover letters in one click.</span></div></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6M4 21h16" /></svg><div><strong>You stay in control</strong><span>Every generated answer is marked and editable before you submit.</span></div></li>
           </ul>
+          <div class="ai-trial" id="trial-offer" hidden><div><strong>New to Kareer AI?</strong><p>Try it free with 10 credits. No card needed; trial credits last 30 days.</p></div><button id="start-trial">Start free trial</button></div>
+          <ul class="ai-plans" id="ai-plans" aria-label="Kareer AI plans"></ul>
+          <div class="ai-fine-print">
+            <p id="ai-data-details">Kareer AI sends your saved profile (including any salary, demographic or disability answers you saved), the job description and the application's questions to AI providers through Kareer. Starting a trial, buying or activating a key means you agree to this. <a href="https://kareer.itsamro.me/privacy/" target="_blank" rel="noopener noreferrer">Privacy policy</a></p>
+            <p class="ai-purchase-note">Secure checkout by Stripe. No AI provider account or API key to set up. By buying you agree to the <a href="https://kareer.itsamro.me/terms/" target="_blank" rel="noopener noreferrer">Terms of Service</a>. All sales are final.</p>
+            <button id="start-checkout" class="secondary">View plans <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></button>
+          </div>
+          <p id="purchase-status" role="status" aria-live="polite"></p>
         </div>
         <details id="license-activation" class="ai-disclosure">
           <summary><span>Already purchased?<small>Activate your Kareer key</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></summary>
@@ -92,7 +94,11 @@
         <div class="group">
         <label for="model">OpenRouter model ID</label>
         <input id="model" type="text" placeholder="provider/model-id" autocomplete="off" spellcheck="false" aria-describedby="model-help" />
-        <p class="hint" id="model-help">Copy the model ID from OpenRouter and paste it here. Save it with your writing style on your profile.</p>
+        <p class="hint" id="model-help">Copy the model ID from OpenRouter and paste it here.</p>
+        </div>
+        <div class="actions">
+          <button type="button" id="save-byok-model">Save model</button>
+          <span class="feedback" role="status" aria-live="polite" id="byok-model-feedback"></span>
         </div>
       </details>
       </div>
@@ -127,7 +133,7 @@
       <p class="feedback profile-save-feedback" role="status" aria-live="polite" id="profile-feedback"></p>
       <button type="button" class="secondary profile-retry" id="profile-retry" hidden>Retry loading profile</button>
       <p id="profile-loading" class="hint" role="status">Loading your profile…</p>
-      <div id="profile-subsections" class="profile-subsections" aria-label="Profile sections"></div>
+      <nav id="profile-subsections" class="profile-subsections" aria-label="Profile sections"></nav>
       <form id="profile-form" hidden>
         <div id="profile-resume">
           <h2>Resume file</h2>

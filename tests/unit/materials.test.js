@@ -46,6 +46,13 @@ test('resume retains generated sections with unknown or repeated IDs as editable
   assert.equal(new Set(result.sections.map(s => s.id)).size, 2);
 });
 
+test('resume drops generated sections that have no text instead of printing a placeholder heading', () => {
+  const source = model.buildMaterialSource(profile);
+  const result = model.validateMaterial('resume', { sections: [{ id: 'work1', bullets: ['Built APIs.'] }, { id: 'extra', bullets: [] }, { id: 'other', bullets: ['  '] }] }, source);
+  assert.deepEqual(result.sections.map(s => s.id), ['work1']);
+  assert.ok(!result.sections.some(s => s.heading === 'Additional information'));
+});
+
 test('numbers do not block resume summaries, bullets, cover letters or targeted rewrites', () => {
   const source = model.buildMaterialSource(profile);
   const resume = model.validateMaterial('resume', { summary: 'Engineer supporting 10 services.', sections: [{ id: 'work1', bullets: ['Reduced latency by 80%.'] }] }, source);

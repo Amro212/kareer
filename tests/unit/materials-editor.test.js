@@ -32,7 +32,17 @@ test('background editable bridge rejects structural edits and protects profile f
   const saved = editableModel(model, input);
   assert.equal(saved.name, model.name); assert.equal(saved.sections[0].title, 'Engineer');
   assert.deepEqual(saved.sections[0].bullets, ['Edited achievement.']);
-  input.sections.pop(); assert.throws(() => editableModel(model, input), /Invalid resume/);
+  input.sections.push({ id: 'forged', category: 'Experience', bullets: ['Invented'] });
+  assert.deepEqual(editableModel(model, input).sections.map(s => s.id), ['work', 'project', 'skills']);
+  input.sections = input.sections.filter(s => s.id !== 'project' && s.id !== 'forged');
+  assert.deepEqual(editableModel(model, input).sections.map(s => s.id), ['work', 'skills']);
+  input.sections = [];
+  assert.throws(() => editableModel(model, input), /Invalid resume/);
+});
+test('removed sections leave the editor model without breaking the round trip', () => {
+  const doc = modelToEditor(model);
+  doc.content = doc.content.filter(s => s.attrs.id !== 'project');
+  assert.deepEqual(editorToModel(doc, model).sections.map(s => s.id), ['work', 'skills']);
 });
 test('rewrite guards detect paragraph insertion before the selected paragraph', () => {
   const letter = { paragraphs: ['Opening', 'Body', 'Closing'] };

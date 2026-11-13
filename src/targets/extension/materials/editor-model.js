@@ -22,6 +22,7 @@ export function editorToModel(document, original) {
   if (result.kind === 'coverLetter') result.paragraphs = contents.get('letter').map(s => s.trim()).filter(Boolean);
   else {
     result.summary = contents.get('summary').join('\n').trim();
+    result.sections = result.sections.filter(section => contents.has(section.id));
     for (const section of result.sections) {
       section.bullets = contents.get(section.id).map(s => s.trim()).filter(Boolean);
       if (section.category === 'Projects') {
@@ -42,8 +43,11 @@ export function editableModel(original, incoming) {
     if (!Array.isArray(incoming.paragraphs) || incoming.paragraphs.length > 100 || incoming.paragraphs.some(p => typeof p !== 'string')) throw new Error('Invalid letter draft.');
     result.paragraphs = incoming.paragraphs;
   } else {
-    if (typeof incoming.summary !== 'string' || !Array.isArray(incoming.sections) || incoming.sections.length !== original.sections.length) throw new Error('Invalid resume draft.');
+    if (typeof incoming.summary !== 'string' || !Array.isArray(incoming.sections) || incoming.sections.length > 100) throw new Error('Invalid resume draft.');
     result.summary = incoming.summary;
+    // Drafts may remove sections; they never add sections or change their metadata.
+    result.sections = result.sections.filter(section => incoming.sections.some(s => s?.id === section.id));
+    if (!result.sections.length) throw new Error('Invalid resume draft: keep at least one section.');
     for (const section of result.sections) {
       const next = incoming.sections.find(s => s.id === section.id);
       if (!next || !Array.isArray(next.bullets) || next.bullets.length > 100 || next.bullets.some(b => typeof b !== 'string')) throw new Error('Invalid section draft.');

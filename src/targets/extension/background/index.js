@@ -72,8 +72,8 @@ const handlers = {
     sessionId: await getTabSession(sender?.tab?.id),
   }),
 
-  [MSG.OPEN_OPTIONS]: async () => {
-    await api.tabs.create({ url: api.runtime.getURL('options/index.html#connection') });
+  [MSG.OPEN_OPTIONS]: async ({ page }) => {
+    await api.tabs.create({ url: api.runtime.getURL(`options/index.html#${page === 'profile' ? 'profile' : 'connection'}`) });
     return { ok: true };
   },
 

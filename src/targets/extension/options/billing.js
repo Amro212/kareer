@@ -123,16 +123,26 @@ export function setupBilling(snapshot) {
     $('managed-feedback').textContent = '';
     await poll();
   };
+  const perCredit = offer => offer.cents / offer.credits;
+  const cheapest = Math.min(...Object.values(OFFERS).map(perCredit)), priciest = Math.max(...Object.values(OFFERS).map(perCredit));
+  const el = (tag, className, text) => { const node = document.createElement(tag); node.className = className; node.textContent = text; return node; };
   $('ai-plans').replaceChildren(...Object.entries(OFFERS).map(([key, offer]) => {
-    const item = document.createElement('li'), copy = document.createElement('div');
-    const name = document.createElement('strong'), line = document.createElement('span'), button = document.createElement('button');
-    name.textContent = `${offer.name} · ${offer.price} ${offer.cadence}`;
-    line.textContent = offer.summary;
+    const item = el('li', 'ai-plan', ''), best = perCredit(offer) === cheapest && cheapest < priciest;
+    item.classList.toggle('featured', best);
+    if (best) item.append(el('p', 'ai-plan-tag', `Best value · ${Math.round((1 - cheapest / priciest) * 100)}% less per credit`));
+    const name = el('h4', 'ai-plan-name', offer.name);
+    const price = el('p', 'ai-plan-price', '');
+    price.append(el('strong', '', offer.price), el('span', '', ` ${offer.cadence}`));
+    const facts = el('ul', 'ai-plan-facts', '');
+    for (const fact of [
+      `${offer.credits.toLocaleString()} credits${key === 'monthly' ? ' every month' : ' that never expire'}`,
+      `About ${Math.floor(offer.credits / CREDITS.costs.autofill).toLocaleString()} autofilled pages or ${Math.floor(offer.credits / CREDITS.costs.document).toLocaleString()} tailored résumés`,
+      key === 'monthly' ? 'Cancel anytime' : 'No subscription',
+    ]) facts.append(el('li', '', fact));
+    const button = el('button', best ? '' : 'secondary', key === 'monthly' ? 'Subscribe' : 'Buy pack');
     button.id = `buy-${key}`;
-    button.textContent = key === 'monthly' ? 'Subscribe' : 'Buy pack';
     button.setAttribute('aria-label', `${button.textContent}: ${offer.name}, ${offer.price} ${offer.cadence}`);
-    copy.append(name, line);
-    item.append(copy, button);
+    item.append(name, price, facts, button);
     return item;
   }));
   for (const key of Object.keys(OFFERS)) action(`buy-${key}`, checkout(key));

@@ -64,6 +64,43 @@ test('continuous document edits autosave, survive reload, retain history, and ex
   expect(errors).toEqual([]);
 });
 
+test('resume sections can be removed from the document, undone, and stay removed after reload and export', async ({ kr }) => {
+  const page = await setup(kr);
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  const outline = page.locator('#editor-sections button');
+  await expect(outline).toHaveCount(5);
+  await expect(page.locator('[data-material-section="summary"] .section-remove')).toHaveCount(0);
+  await page.locator('[data-material-section="project"]').hover();
+  await page.getByRole('button', { name: 'Remove Service Monitor from this document' }).click();
+  await expect(page.locator('[data-material-section="project"]')).toHaveCount(0);
+  await expect(outline).toHaveCount(4);
+  await expect(page.locator('#editor-sections')).not.toContainText('Service Monitor');
+  await expect(page.locator('#feedback')).toContainText('Removed Service Monitor from this document');
+  await expect(page.locator('.paper-category:visible', { hasText: 'Projects' })).toHaveCount(0);
+  expect(await page.evaluate(() => document.activeElement?.closest('#document-editor') !== null)).toBe(true);
+  await page.locator('#undo').click();
+  await expect(page.locator('[data-material-section="project"]')).toHaveCount(1);
+  await expect(outline).toHaveCount(5);
+  await page.locator('#redo').click();
+  await expect(page.locator('[data-material-section="project"]')).toHaveCount(0);
+  await expect(page.locator('#document-status')).toContainText('Saved locally');
+  const [meta] = await message(page, 'list');
+  await expect.poll(async () => (await message(page, 'get', { id: meta.id })).model.sections.map(s => s.id)).toEqual(['work', 'education', 'skills']);
+  expect(await pdfText(await downloaded(page, 'pdf'))).not.toContain('Service Monitor');
+  await page.reload();
+  await expect(page.locator('[data-material-section="project"]')).toHaveCount(0);
+  await expect(outline).toHaveCount(4);
+  for (const id of ['work', 'education']) {
+    await page.locator(`[data-material-section="${id}"]`).hover();
+    await page.locator(`[data-material-section="${id}"] .section-remove`).click();
+  }
+  await page.locator('[data-material-section="skills"]').hover();
+  await page.locator('[data-material-section="skills"] .section-remove').click();
+  await expect(page.locator('#feedback')).toHaveText('Keep at least one section besides the summary.');
+  await expect(page.locator('[data-material-section="skills"]')).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
 for (const width of [1280, 600]) test(`paragraph split, merge, and rich paste use library editing without unsupported formatting at ${width}px`, async ({ kr }) => {
   const page = await setup(kr, 'coverLetter');
   await page.setViewportSize({ width, height: 900 });
@@ -150,8 +187,8 @@ test('Prepare and Edit fit desktop, compact, and narrow layouts with visible foc
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `.impeccable/review/${name}.png` });
   }
-  await page.locator('#view-prepare').click(); await expect(page.locator('#view-prepare')).toHaveAttribute('aria-selected','true');
-  await page.locator('#view-edit').click(); await expect(page.locator('#view-edit')).toHaveAttribute('aria-selected','true');
+  await page.locator('#view-prepare').click(); await expect(page.locator('#view-prepare')).toHaveAttribute('aria-expanded','true');
+  await page.locator('#view-edit').click(); await expect(page.locator('#edit-panel')).toBeVisible();
   expect(await page.evaluate(async () => { await document.fonts.ready; return document.fonts.check('12px "Material CMU"'); })).toBe(true);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   expect(await page.locator('#proof-toggle').evaluate(el => getComputedStyle(el).transitionDuration)).toBe('0s');

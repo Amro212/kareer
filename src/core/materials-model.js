@@ -81,7 +81,8 @@ export function validateMaterial(kind, output, source) {
   }
   if (!Array.isArray(output.sections) || !output.sections.length || output.sections.length > 100) throw new Error('Resume sections are empty or invalid.');
   const ids = new Set(['summary']);
-  const sections = output.sections.map((section, index) => {
+  // A section outside the profile source with no bullets would render as a bare placeholder heading.
+  const sections = output.sections.filter(section => source.sections.some(s => s.id === section?.id) || section?.bullets?.some?.(b => text(b))).map((section, index) => {
     if (!section || typeof section !== 'object') throw new Error('Resume section data is invalid.');
     const original = source.sections.find(s => s.id === section.id) || {
       id: text(section.id) || `generated-${index}`, category: section.id === 'skills' ? 'Skills' : text(section.category) || 'Additional information',
@@ -99,6 +100,7 @@ export function validateMaterial(kind, output, source) {
     // Normalize optional metadata; content judgments belong to the user, not rejection gates.
     return { ...original, id, bullets, ...(section.relevance !== undefined ? { relevance: Number.isFinite(relevance) ? Math.max(1, Math.min(3, Math.round(relevance))) : 2 } : {}), ...(keywords ? { keywords: [...new Set(keywords)] } : {}) };
   });
+  if (!sections.length) throw new Error('Resume sections are empty or invalid.');
   const summary = text(output.summary);
   return { kind, name: source.name, contact: source.contact, summary, sections };
 }

@@ -277,7 +277,7 @@ const ICONS = {
   minimize: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="8" x2="13" y2="8"/></svg>`,
   chevronDown: `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 6 8 10 12 6"/></svg>`,
   user: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 14v-1.5a3.5 3.5 0 0 0-3.5-3.5h-3A3.5 3.5 0 0 0 3 12.5V14"/><circle cx="8" cy="5" r="3"/></svg>`,
-  settings: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.5"/><path d="M13.5 9.5l1.1-.6a1 1 0 0 0 .4-1.3l-1-1.7a1 1 0 0 0-1.2-.5l-1.2.5a5 5 0 0 0-1.1-.6L10.3 4a1 1 0 0 0-1-.8H7.3a1 1 0 0 0-1 .8L6.1 5.3a5 5 0 0 0-1.1.6l-1.2-.5a1 1 0 0 0-1.2.5l-1 1.7a1 1 0 0 0 .4 1.3l1.1.6a5 5 0 0 0 0 1.2l-1.1.6a1 1 0 0 0-.4 1.3l1 1.7a1 1 0 0 0 1.2.5l1.2-.5a5 5 0 0 0 1.1.6l.2 1.3a1 1 0 0 0 1 .8h2a1 1 0 0 0 1-.8l.2-1.3a5 5 0 0 0 1.1-.6l1.2.5a1 1 0 0 0 1.2-.5l1-1.7a1 1 0 0 0-.4-1.3l-1.1-.6a5 5 0 0 0 0-1.2z"/></svg>`,
+  settings: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>`,
   terminal: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 4 7 8 3 12"/><line x1="9" y1="12" x2="13" y2="12"/></svg>`,
   list: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="4" x2="14" y2="4"/><line x1="6" y1="8" x2="14" y2="8"/><line x1="6" y1="12" x2="14" y2="12"/><circle cx="3" cy="4" r=".8" fill="currentColor"/><circle cx="3" cy="8" r=".8" fill="currentColor"/><circle cx="3" cy="12" r=".8" fill="currentColor"/></svg>`,
   externalLink: `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h4"/><polyline points="10 2 14 2 14 6"/><line x1="7" y1="9" x2="14" y2="2"/></svg>`,
@@ -1679,6 +1679,16 @@ button svg { flex-shrink: 0; }
 .kr-content { scrollbar-color: var(--kr-line-strong) var(--kr-bg-0); scrollbar-width: thin; }
 .kr-card-title { font-size: 12px; text-transform: none; letter-spacing: 0; color: var(--kr-text-1); }
 .kr-form-group label { text-transform: none; letter-spacing: 0; font-size: 12px; }
+.kr-badge, .kr-wf-badge, .kr-mvp-alert-title, .kr-hud-adapter { text-transform: none; letter-spacing: 0; }
+.kr-badge, .kr-wf-badge { font-size: 11px; font-weight: 500; }
+.kr-mvp-alert-title { font-size: 12px; color: var(--kr-text-1); }
+.kr-section-heading { margin: 4px 0 0; font-size: 12px; font-weight: 600; line-height: 1.4; color: var(--kr-text-1); }
+.kr-card-text { margin: 0; font-size: 12px; line-height: 1.5; color: var(--kr-text-2); }
+.kr-profile-counts { display: flex; flex-wrap: wrap; gap: 6px; }
+.kr-profile-counts .kr-badge { background: var(--kr-bg-1); border: 1px solid var(--kr-line-strong); color: var(--kr-text-2); }
+.kr-details { border-bottom: 1px solid var(--kr-line); }
+.kr-details-summary { padding: 8px 0; font-size: 12px; font-weight: 500; color: var(--kr-text-1); cursor: pointer; }
+.kr-details-body { display: flex; flex-direction: column; gap: 10px; padding: 4px 0 12px; }
 .kr-review-value { font-family: var(--kr-font); }
 .kr-review-item { background: transparent; border: 0; border-bottom: 1px solid var(--kr-line); border-radius: 0; padding: 10px 0; }
 .kr-review-item:last-child { border-bottom: 0; }
@@ -1933,7 +1943,7 @@ async function handleUnifiedAutofillClick() {
     panelVisible = true;
     currentTab = 'profile';
     updatePanelDOM();
-    const fieldId = 'kr-profile-fullName';
+    const fieldId = 'kr-profile-firstName';
     setTimeout(() => shadowRootRef?.querySelector(`#${fieldId}`)?.focus(), 50);
     return;
   }
@@ -1988,7 +1998,7 @@ async function executeAutofillFlow() {
     panelVisible = true;
     currentTab = 'profile';
     updatePanelDOM();
-    const fieldId = 'kr-profile-fullName';
+    const fieldId = 'kr-profile-firstName';
     if (fieldId) {
       setTimeout(() => shadowRootRef?.querySelector(`#${fieldId}`)?.focus(), 50);
     }
@@ -2072,7 +2082,7 @@ async function executeAutofillFlow() {
     if (aiTargetFields.length === 0 && remoteFields.length === 0 && fileFields.length === 0 && remoteUploads.length === 0 && generatedResults.length === 0) {
       autofillProgress.statusText = (detectedFieldsCache.length === 0 && remoteFieldCount === 0)
         ? 'No form fields detected on this page.'
-        : 'All fields are already filled. Enable "Overwrite Existing Values" in Settings to overwrite.';
+        : 'All fields are already filled. Turn on "Overwrite existing values" in Settings to overwrite.';
       logger.info(autofillProgress.statusText);
       isAutofilling = false;
       if (!inspectContinue().count && inspectSubmit().count) await applicationEngine?.reviewFilledPage(fieldResultsCache);
@@ -2527,7 +2537,7 @@ function renderHomeTab() {
     <div class="kr-mvp-alert">
       <div class="kr-mvp-alert-header">
         <span class="kr-mvp-alert-icon">${ICONS.alert}</span>
-        <span class="kr-mvp-alert-title">Minimum Profile Required</span>
+        <span class="kr-mvp-alert-title">Minimum profile required</span>
       </div>
       <div class="kr-mvp-alert-desc">
         Autofill is locked until required core fields are saved (${escapeHtml(strength.missingCore.join(', '))} required).
@@ -2539,9 +2549,9 @@ function renderHomeTab() {
         <button type="button" class="kr-btn kr-btn-secondary" id="kr-complete-profile-btn" style="font-size: 11px; padding: 4px 8px;">
           ${ICONS.user} Complete Profile
         </button>
-        <button type="button" class="kr-btn kr-btn-secondary" id="kr-mvp-settings-link" style="font-size: 11px; padding: 4px 8px;">
-          Settings ↗
-        </button>
+        ${platform.capabilities.optionsPage ? `<button type="button" class="kr-btn kr-btn-secondary" id="kr-mvp-settings-link" style="font-size: 11px; padding: 4px 8px;">
+          Full profile ↗
+        </button>` : ''}
       </div>
     </div>
   ` : '';
@@ -2617,7 +2627,7 @@ function renderHomeTab() {
       <div class="kr-row">
         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
           <span class="kr-card-title">${escapeHtml(adapter.id === 'generic' ? 'Job Application' : `${adapter.label} Application`)}</span>
-          <span class="kr-badge kr-badge-blue" style="text-transform: uppercase;">${totalFieldCount} detected</span>
+          <span class="kr-badge kr-badge-blue">${totalFieldCount} detected</span>
           ${strength.isMvpComplete ? `
             <div class="kr-strength-chip ${strength.percentage >= 80 ? 'high' : strength.percentage >= 50 ? 'med' : 'low'}" title="Profile Strength: ${strength.percentage}% (${strength.tierLabel})">
               <span class="kr-strength-chip-bar"><span class="kr-strength-chip-fill" style="transform: scaleX(${strength.percentage / 100});"></span></span>
@@ -2713,7 +2723,7 @@ function renderProfileTab() {
   const strengthCardHtml = `
     <div class="kr-card" style="margin-bottom: 2px; gap: 8px;">
       <div class="kr-row" style="margin-bottom: 0;">
-        <span class="kr-card-title">Profile Strength</span>
+        <span class="kr-card-title">Profile strength</span>
         <span class="kr-badge ${strength.percentage >= 80 ? 'kr-badge-green' : strength.percentage >= 50 ? 'kr-badge-blue' : 'kr-badge-amber'}">${strength.tierLabel} (${strength.percentage}%)</span>
       </div>
       <div class="kr-strength-track">
@@ -2732,26 +2742,25 @@ function renderProfileTab() {
     </div>
   `;
 
-  const backgroundSummaryHtml = `
-    <div class="kr-card" style="gap: 8px; border-color: var(--kr-focus); background: var(--kr-signal-dim);">
+  const backgroundSummaryHtml = !platform.capabilities.optionsPage ? '' : `
+    <div class="kr-card">
       <div class="kr-row" style="margin-bottom: 0;">
-        <span class="kr-card-title" style="color: var(--kr-text-1);">Full Profile &amp; Records</span>
-        <button type="button" class="kr-btn kr-btn-secondary kr-btn-small" id="kr-open-full-profile-btn" style="color: var(--kr-signal-ink); border-color: var(--kr-focus);">Open Settings ↗</button>
+        <span class="kr-card-title">Full profile</span>
+        <button type="button" class="kr-btn kr-btn-secondary kr-btn-small" id="kr-open-full-profile-btn">Open profile ↗</button>
       </div>
-      <p style="font-size: 11px; color: var(--kr-text-2); margin: 0; line-height: 1.4;">
-        Work history, education, projects, skills, compensation, and demographics are configured in the full console.
-      </p>
-      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px;">
-        <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${workCount} Experience${workCount === 1 ? '' : 's'}</span>
-        <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${eduCount} Education</span>
-        <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${projCount} Project${projCount === 1 ? '' : 's'}</span>
-        <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${skillCount} Skill${skillCount === 1 ? '' : 's'}</span>
-        <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${eligCount} Work Countr${eligCount === 1 ? 'y' : 'ies'}</span>
+      <p class="kr-card-text">Experience, education, projects, skills, and saved answers live on your full profile.</p>
+      <div class="kr-profile-counts">
+        <span class="kr-badge">${workCount} experience${workCount === 1 ? '' : 's'}</span>
+        <span class="kr-badge">${eduCount} education</span>
+        <span class="kr-badge">${projCount} project${projCount === 1 ? '' : 's'}</span>
+        <span class="kr-badge">${skillCount} skill${skillCount === 1 ? '' : 's'}</span>
+        <span class="kr-badge">${eligCount} work countr${eligCount === 1 ? 'y' : 'ies'}</span>
       </div>
     </div>
   `;
 
-  const sections = PROFILE_SECTIONS.map(section => `
+  // The userscript has no options page, so its saved answers are edited here.
+  const answerSections = platform.capabilities.optionsPage ? '' : PROFILE_SECTIONS.map(section => `
     <details class="kr-details">
       <summary class="kr-details-summary">${escapeHtml(section.title)}</summary>
       <div class="kr-details-body">
@@ -2770,18 +2779,26 @@ function renderProfileTab() {
     </details>
   `).join('');
 
+  const nameParts = String(profile.fullName || '').trim().split(/\s+/).filter(Boolean);
+  const firstName = profile.firstName || profile.lastName ? profile.firstName || '' : nameParts[0] || '';
+  const lastName = profile.firstName || profile.lastName ? profile.lastName || '' : nameParts.slice(1).join(' ');
+
   return `
     <form id="kr-profile-form" style="display: flex; flex-direction: column; gap: 12px;">
       ${strengthCardHtml}
       ${backgroundSummaryHtml}
 
-      <div style="font-size: 11px; color: var(--kr-text-3); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-top: 4px;">
-        Core Identity &amp; Contact
-      </div>
+      <h3 class="kr-section-heading">Contact details</h3>
 
-      <div class="kr-form-group">
-        <label for="kr-profile-fullName">Full Name</label>
-        <input class="kr-input" id="kr-profile-fullName" type="text" name="fullName" value="${escapeHtml(profile.fullName || '')}" placeholder="e.g. Jane Doe" />
+      <div class="kr-row" style="gap: 10px;">
+        <div class="kr-form-group" style="flex: 1;">
+          <label for="kr-profile-firstName">First name</label>
+          <input class="kr-input" id="kr-profile-firstName" type="text" name="firstName" autocomplete="given-name" value="${escapeHtml(firstName)}" placeholder="Jane" />
+        </div>
+        <div class="kr-form-group" style="flex: 1;">
+          <label for="kr-profile-lastName">Last name</label>
+          <input class="kr-input" id="kr-profile-lastName" type="text" name="lastName" autocomplete="family-name" value="${escapeHtml(lastName)}" placeholder="Doe" />
+        </div>
       </div>
 
       <div class="kr-row" style="gap: 10px;">
@@ -2817,21 +2834,14 @@ function renderProfileTab() {
       </div>
 
       <div class="kr-form-group">
-        <label for="kr-profile-applicantNotes">Applicant Notes / Instructions</label>
-        <textarea id="kr-profile-applicantNotes" class="kr-textarea" name="applicantNotes" rows="2" placeholder="Custom rules, phrasing preferences, and instructions for written answers...">${escapeHtml(profile.applicantNotes || '')}</textarea>
+        <label for="kr-profile-applicantNotes">Notes for written answers</label>
+        <textarea id="kr-profile-applicantNotes" class="kr-textarea" name="applicantNotes" rows="2" placeholder="Phrasing preferences and rules Kareer follows when it writes for you">${escapeHtml(profile.applicantNotes || '')}</textarea>
       </div>
 
-      <details class="kr-details" style="margin-top: 4px;">
-        <summary class="kr-details-summary" style="font-size: 11px; color: var(--kr-text-2); text-transform: uppercase; letter-spacing: 0.04em;">
-          Additional Saved Answers &amp; Disclosures
-        </summary>
-        <div class="kr-details-body" style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
-          ${sections}
-        </div>
-      </details>
+      ${answerSections ? `<h3 class="kr-section-heading">Saved answers</h3>${answerSections}` : ''}
 
       <div class="kr-row" style="margin-top: 4px;">
-        <button class="kr-btn" type="submit" style="flex: 1;">Save Profile</button>
+        <button class="kr-btn" type="submit" style="flex: 1;">Save profile</button>
         <span class="kr-save-feedback" id="kr-profile-feedback">Saved ✓</span>
       </div>
     </form>
@@ -2862,7 +2872,7 @@ function renderApiKeyGroup() {
   if (!platform.capabilities.writeSecretsInPage) {
     return `
       <div class="kr-form-group">
-        <label>OpenRouter API Key</label>
+        <label>OpenRouter API key</label>
         <div class="kr-row">
           <span class="kr-badge ${keySaved ? 'kr-badge-green' : 'kr-badge-amber'}">${keySaved ? 'Key saved' : 'No key'}</span>
           <button type="button" class="kr-btn kr-btn-secondary" id="kr-open-options" style="flex: 1;">Open extension options</button>
@@ -2876,7 +2886,7 @@ function renderApiKeyGroup() {
 
   return `
     <div class="kr-form-group">
-      <label>OpenRouter API Key</label>
+      <label>OpenRouter API key</label>
       <div class="kr-row">
         <input class="kr-input" id="kr-api-key-input" type="password" autocomplete="off" placeholder="${keySaved ? 'Key saved — enter replacement' : 'sk-or-v1-...'}" />
         <button type="button" class="kr-btn kr-btn-secondary" id="kr-toggle-key-btn" style="padding: 8px 10px;">${ICONS.eye}</button>
@@ -2916,11 +2926,11 @@ ${isManagedAi() ? '' : `      <div class="kr-form-group">
       </div>
 
       <div class="kr-card">
-        <span class="kr-card-title">Behavior Controls</span>
+        <span class="kr-card-title">Behavior</span>
         
         <div class="kr-toggle-row">
           <div>
-            <div class="kr-label">AI Autofill</div>
+            <div class="kr-label">AI autofill</div>
             <div style="font-size: 11px; color: var(--kr-text-3);">Enable AI form filling capabilities</div>
           </div>
           <label class="kr-switch">
@@ -2931,7 +2941,7 @@ ${isManagedAi() ? '' : `      <div class="kr-form-group">
 
         <div class="kr-toggle-row">
           <div>
-            <div class="kr-label">Overwrite Existing Values</div>
+            <div class="kr-label">Overwrite existing values</div>
             <div style="font-size: 11px; color: var(--kr-text-3);">Overwrite non-empty fields on autofill</div>
           </div>
           <label class="kr-switch">
@@ -2969,7 +2979,7 @@ ${isManagedAi() ? '' : `      <div class="kr-form-group">
       <p style="font-size: 11px; color: var(--kr-text-3); margin: 0;">Profile, settings, memory, and job only. API keys and license credentials are never included.</p>
 
       <div class="kr-row">
-        <button class="kr-btn" type="submit" style="flex: 1;">Save Settings</button>
+        <button class="kr-btn" type="submit" style="flex: 1;">Save settings</button>
         <span class="kr-save-feedback" id="kr-settings-feedback">Saved ✓</span>
       </div>
     </form>
@@ -3311,7 +3321,7 @@ function attachEventHandlers() {
       const profile = getProfile();
       const strength = calculateProfileStrength(profile);
       const firstMissing = strength.missingCore[0];
-      const keyMap = { 'Full Name': 'fullName', 'Email': 'email', 'Phone': 'phone', 'Location': 'location' };
+      const keyMap = { 'Name': 'firstName', 'Email': 'email', 'Phone': 'phone', 'Location': 'location' };
       const fieldId = keyMap[firstMissing] ? `kr-profile-${keyMap[firstMissing]}` : null;
       if (fieldId) {
         setTimeout(() => shadowRootRef?.querySelector(`#${fieldId}`)?.focus(), 50);
@@ -3320,19 +3330,11 @@ function attachEventHandlers() {
   }
 
   const mvpSettingsLink = shadowRootRef.querySelector('#kr-mvp-settings-link');
-  if (mvpSettingsLink) {
-    mvpSettingsLink.onclick = () => {
-      platform.openOptions();
-    };
-  }
+  if (mvpSettingsLink) mvpSettingsLink.onclick = () => platform.openOptions('profile');
 
   // Profile Form
   const openFullProfileBtn = shadowRootRef.querySelector('#kr-open-full-profile-btn');
-  if (openFullProfileBtn) {
-    openFullProfileBtn.onclick = () => {
-      platform.openOptions();
-    };
-  }
+  if (openFullProfileBtn) openFullProfileBtn.onclick = () => platform.openOptions('profile');
 
   const profileForm = shadowRootRef.querySelector('#kr-profile-form');
   if (profileForm) {
@@ -3340,9 +3342,12 @@ function attachEventHandlers() {
       e.preventDefault();
       const formData = new FormData(profileForm);
       const current = getProfile();
+      const firstName = String(formData.get('firstName') ?? '').trim(), lastName = String(formData.get('lastName') ?? '').trim();
       const newProfile = {
         ...current,
-        fullName: formData.get('fullName') !== null ? String(formData.get('fullName')).trim() : current.fullName,
+        firstName,
+        lastName,
+        fullName: [firstName, current.middleName, lastName].filter(Boolean).join(' '),
         email: formData.get('email') !== null ? String(formData.get('email')).trim() : current.email,
         phone: formData.get('phone') !== null ? String(formData.get('phone')).trim() : current.phone,
         location: formData.get('location') !== null ? String(formData.get('location')).trim() : current.location,

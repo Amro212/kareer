@@ -29,9 +29,9 @@
       <div class="workspace-toolbar">
         <div class="document-header">
           <button class="workspace-back" id="back-to-library" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>All applications</button>
-          <button class="role-button" id="view-prepare" type="button" aria-selected="true" aria-controls="prepare-panel"><span id="job-heading" tabindex="-1">Prepare for a job</span><span id="company-heading" class="muted"></span></button>
-          <button class="secondary" id="view-edit" type="button" aria-selected="false" aria-controls="edit-panel" hidden>Back to document</button>
-          <button class="workspace-back" id="start-new-application" type="button">New</button>
+          <h1 class="role-heading"><button class="role-button" id="view-prepare" type="button" aria-expanded="true" aria-controls="prepare-panel" title="Job details"><span id="job-heading">Prepare for a job</span><span id="company-heading" class="muted"></span></button></h1>
+          <button class="secondary" id="view-edit" type="button" aria-controls="edit-panel" hidden>Back to document</button>
+          <button class="workspace-back" id="start-new-application" type="button">New application</button>
           <div class="tabs" role="tablist" aria-label="Document type"><button id="tab-resume" role="tab" aria-selected="true" aria-controls="document-workspace">Resume</button><button id="tab-coverLetter" role="tab" aria-selected="false" aria-controls="document-workspace" tabindex="-1">Cover letter</button></div>
           <div class="actions" id="editor-actions" hidden>
             <button class="secondary" id="save-document" title="Retry saving or prepare downloads now">Save now</button>
@@ -46,7 +46,7 @@
         <p id="feedback" class="feedback" role="status" aria-live="polite"></p>
       </div>
       <div id="document-workspace">
-        <section id="prepare-panel" role="tabpanel" aria-labelledby="view-prepare">
+        <section id="prepare-panel" aria-label="Job details">
           <div class="prepare-content">
             <div class="prepare-heading"><h2>Prepare your application</h2><p class="muted">Add the role. We’ll use your profile to shape the draft.</p></div>
             <div class="prepare-grid">
@@ -62,7 +62,7 @@
             </div>
           </div>
         </section>
-        <section id="edit-panel" role="tabpanel" aria-labelledby="view-edit" hidden>
+        <section id="edit-panel" aria-label="Document editor" hidden>
           <div id="empty-editor" class="empty-state"><h2>Your document starts with your profile</h2><p class="muted">Add a job description in Prepare to create your first draft.</p><button class="secondary" id="prepare-document">Go to Prepare</button></div>
           <div class="edit-layout" id="editor-layout" hidden>
             <aside class="document-outline"><h3>In this document</h3><nav id="editor-sections" aria-label="Document sections"></nav><p class="muted outline-note">Update profile facts, then regenerate to use them.</p><a href="../options/index.html#profile" target="_blank" rel="noopener noreferrer">Edit profile facts</a></aside>

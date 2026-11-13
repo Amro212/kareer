@@ -353,7 +353,7 @@ export function workEligibilityAnswer(field, profile, job) {
 }
 
 export const MVP_PROFILE_FIELDS = [
-  { key: 'fullName', label: 'Full Name' },
+  { key: 'fullName', label: 'Name' },
   { key: 'email', label: 'Email' },
   { key: 'phone', label: 'Phone' },
   { key: 'city', label: 'City' },
@@ -413,9 +413,9 @@ export function calculateProfileStrength(profile = {}) {
   const isMvpComplete = missingCore.length === 0;
 
   let tierLabel = 'Incomplete';
-  if (percentage >= 85) tierLabel = 'Flight-Deck Ready';
+  if (percentage >= 85) tierLabel = 'Complete';
   else if (percentage >= 60) tierLabel = 'Strong';
-  else if (isMvpComplete) tierLabel = 'Basic MVP Ready';
+  else if (isMvpComplete) tierLabel = 'Basic';
 
   return {
     score: percentage,

@@ -76,7 +76,12 @@ for (const [ats,host] of [['greenhouse',GREENHOUSE_HOST],['ashby',ASHBY_HOST]]) 
     await page.locator('#kr-autofill-btn').click();
     await expect(page.locator('#kr-main-panel')).toContainText('Required saved values or documents are unavailable',{timeout:60000});
     await expect(page.locator('#preferred_first_name')).toHaveValue('Alex');await expect(page.locator('#email')).toHaveValue('');
-    await page.locator('[data-tab="profile"]').click();await page.locator('#kr-profile-email').fill('new@example.com');
+    await page.locator('[data-tab="profile"]').click();
+    await expect(page.locator('#kr-profile-firstName')).toBeVisible();await expect(page.locator('#kr-profile-lastName')).toBeVisible();
+    await expect(page.locator('#kr-main-panel')).not.toContainText('Additional Saved Answers');
+    const [options]=await Promise.all([kr.context.waitForEvent('page'),page.locator('#kr-open-full-profile-btn').click()]);
+    await expect(options).toHaveURL(/options\/index\.html#profile$/);await options.close();
+    await page.locator('#kr-profile-email').fill('new@example.com');
     await page.locator('#kr-profile-form button[type="submit"]').click();await page.locator('[data-tab="home"]').click();await page.locator('#kr-autofill-btn').click();
     await expect(page.locator('#kr-main-panel')).toContainText('Page filled. Auto Continue is off.',{timeout:60000});
     await expect(page.locator('#email')).toHaveValue('new@example.com');await expect(page.locator('#first_name')).toHaveValue('User name');

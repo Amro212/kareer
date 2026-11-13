@@ -1538,14 +1538,16 @@ async function init() {
     else flash(feedback, `OpenRouter returned HTTP ${result.status}.`, true);
   };
 
-  $('save-model').onclick = async () => {
+  const saveWriting = (feedback, message) => async () => {
     const enteredModel = $('model').value.trim();
     const current = await readStore();
     const model = enteredModel || current.data[STORAGE_KEYS.SETTINGS]?.model || '';
     const next = { ...DEFAULT_SETTINGS, ...(current.data[STORAGE_KEYS.SETTINGS] || {}), model, narrativeStyle: getNarrativeStyle(styleSelect.value).id };
     await sendMessage({ type: MSG.STORAGE_SET, key: STORAGE_KEYS.SETTINGS, value: next });
-    flash($('model-feedback'), 'Writing preferences saved.');
+    flash($(feedback), message);
   };
+  $('save-model').onclick = saveWriting('model-feedback', 'Writing style saved.');
+  $('save-byok-model').onclick = saveWriting('byok-model-feedback', 'Model saved.');
 
   $('add-work-btn').onclick = () => {
     currentWork.push(createWorkExperience({ _collapsed: false }));

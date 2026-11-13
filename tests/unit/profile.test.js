@@ -393,11 +393,11 @@ test('calculateProfileStrength and getMissingCoreProfileFields correctly evaluat
 
   // Empty profile
   const empty = {};
-  assert.deepEqual(getMissingCoreProfileFields(empty), ['Full Name', 'Email', 'Phone', 'City', 'Country']);
+  assert.deepEqual(getMissingCoreProfileFields(empty), ['Name', 'Email', 'Phone', 'City', 'Country']);
   const emptyStrength = calculateProfileStrength(empty);
   assert.equal(emptyStrength.percentage, 0);
   assert.equal(emptyStrength.isMvpComplete, false);
-  assert.deepEqual(emptyStrength.missingCore, ['Full Name', 'Email', 'Phone', 'City', 'Country']);
+  assert.deepEqual(emptyStrength.missingCore, ['Name', 'Email', 'Phone', 'City', 'Country']);
   assert.equal(emptyStrength.tierLabel, 'Incomplete');
 
   // Partial MVP (name + email only)
@@ -418,7 +418,7 @@ test('calculateProfileStrength and getMissingCoreProfileFields correctly evaluat
   const mvpStrength = calculateProfileStrength(mvp);
   assert.equal(mvpStrength.percentage, 40);
   assert.equal(mvpStrength.isMvpComplete, true);
-  assert.equal(mvpStrength.tierLabel, 'Basic MVP Ready');
+  assert.equal(mvpStrength.tierLabel, 'Basic');
 
   // MVP + Work + Education + 2 Skills
   const mid = {
@@ -431,7 +431,7 @@ test('calculateProfileStrength and getMissingCoreProfileFields correctly evaluat
   // 40 (core) + 20 (work) + 15 (edu) + 10 (2 skills) = 85
   assert.equal(midStrength.percentage, 85);
   assert.equal(midStrength.isMvpComplete, true);
-  assert.equal(midStrength.tierLabel, 'Flight-Deck Ready');
+  assert.equal(midStrength.tierLabel, 'Complete');
 
   // Complete profile with projects and links
   const full = {
@@ -444,7 +444,7 @@ test('calculateProfileStrength and getMissingCoreProfileFields correctly evaluat
   // 40 + 20 + 15 + 15 (3 skills) + 5 (project) + 5 (link) = 100
   assert.equal(fullStrength.percentage, 100);
   assert.equal(fullStrength.isMvpComplete, true);
-  assert.equal(fullStrength.tierLabel, 'Flight-Deck Ready');
+  assert.equal(fullStrength.tierLabel, 'Complete');
 
   // Decomposed address fields fulfill MVP requirements
   const splitMvp = {

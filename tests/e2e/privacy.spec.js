@@ -10,8 +10,9 @@ test('Settings discloses AI data sharing next to Kareer AI and AI works without 
   await expect(notice).toContainText('disability');
   await expect(notice).toContainText('Starting a trial, buying or activating a key means you agree');
   await expect(notice.getByRole('link', { name: 'Privacy policy' })).toHaveAttribute('href', 'https://kareer.itsamro.me/privacy/');
-  const noticeBox = await notice.boundingBox(), trialBox = await options.locator('#start-trial').boundingBox();
-  expect(trialBox.y).toBeGreaterThan(noticeBox.y);
+  const noticeBox = await notice.boundingBox(), trialBox = await options.locator('#start-trial').boundingBox(), plansBox = await options.locator('#ai-plans').boundingBox();
+  expect(noticeBox.y).toBeGreaterThan(trialBox.y);
+  expect(noticeBox.y - (plansBox.y + plansBox.height)).toBeLessThan(48);
   await options.setViewportSize({ width: 390, height: 844 });
   expect(await options.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await options.screenshot({ path: testInfo.outputPath('ai-disclosure-mobile.png'), fullPage: true });

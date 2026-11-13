@@ -161,12 +161,12 @@ test('Materials opens on recent applications, searches jobs, and preserves edits
   for (const width of [1440, 900, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.locator('#view-prepare').click();
-    await expect(page.locator('#view-prepare')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('#view-edit')).toHaveAttribute('aria-selected', 'false');
+    await expect(page.locator('#view-prepare')).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('#edit-panel')).toBeHidden();
     await page.screenshot({ animations: 'disabled', path: `scratch/saas-preview/prepare-${width}.png` });
     await page.locator('#view-edit').click();
-    await expect(page.locator('#view-edit')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('#view-prepare')).toHaveAttribute('aria-selected', 'false');
+    await expect(page.locator('#edit-panel')).toBeVisible();
+    await expect(page.locator('#view-prepare')).toHaveAttribute('aria-expanded', 'false');
     await page.screenshot({ animations: 'disabled', path: `scratch/saas-preview/editor-${width}.png` });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -204,8 +204,8 @@ test('document outline has room for section titles and keeps the canvas usable a
     const outline = await page.locator('.document-outline').boundingBox();
     const canvas = await page.locator('.document-stage').boundingBox();
     if (width > 1000) {
-      expect(outline.width).toBeGreaterThanOrEqual(140);
-      expect(outline.width).toBeLessThanOrEqual(180);
+      expect(outline.width).toBeGreaterThanOrEqual(200);
+      expect(outline.width).toBeLessThanOrEqual(240);
       expect(canvas.width).toBeGreaterThan(600);
     } else {
       expect(Math.abs(outline.width - canvas.width)).toBeLessThan(2);

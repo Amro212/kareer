@@ -36,11 +36,8 @@ const readJob = () => ({ ...job, title: $('job-title').value.trim(), company: $(
 const options = () => ({ pageTarget: Number($('page-target').value), tone: $('tone').value, length: $('length').value, instructions: $('instructions').value.trim() });
 const readDraft = () => ({ model: documentEditor.model(), pageTarget: Number($('page-target').value) });
 function showView(view) {
-  for (const name of ['prepare', 'edit']) {
-    $('view-' + name).setAttribute('aria-selected', String(name === view));
-    $('view-' + name).tabIndex = name === view ? 0 : -1;
-    $(name + '-panel').hidden = name !== view;
-  }
+  for (const name of ['prepare', 'edit']) $(name + '-panel').hidden = name !== view;
+  $('view-prepare').setAttribute('aria-expanded', String(view === 'prepare'));
   $('editor-actions').hidden = !selected || view !== 'edit';
   $('view-edit').hidden = view !== 'prepare' || !selected;
   $('delete-document').hidden = !selected;
@@ -73,7 +70,7 @@ function paintLibrary() {
       void switchDocument(async () => {
         await selectJob(next, false);
         await switchKind(nextKind);
-        $('job-heading').focus({ preventScroll: true });
+        focusAfterSwitch = $('view-prepare');
       }).catch(error => feedback(error.message, true));
     },
   });
@@ -204,6 +201,30 @@ function paperHeader(model) {
     }
   }
 }
+function paintOutline(model) {
+  const ids = documentEditor.sectionIds(), key = ids.join('\n');
+  if ($('editor-sections').dataset.ids === key) return;
+  $('editor-sections').dataset.ids = key;
+  const current = $('editor-sections').querySelector('[aria-current]')?.dataset.editorSection;
+  $('editor-sections').replaceChildren();
+  for (const section of editorSections(model).filter(s => ids.includes(s.id))) {
+    const button = document.createElement('button'); button.className = 'secondary'; button.dataset.editorSection = section.id; button.textContent = section.label; button.title = section.label;
+    if (section.category && section.category !== section.label) { const small = document.createElement('small'); small.textContent = section.category; button.append(small); }
+    button.onclick = () => { if (proof) void toggleProof(); documentEditor.focusSection(section.id); activeSection(section.id); };
+    $('editor-sections').append(button);
+  }
+  if (current && ids.includes(current)) activeSection(current);
+}
+function removeSection(model, id) {
+  const ids = documentEditor.sectionIds();
+  if (busy || rewritePending) return;
+  if (ids.length <= 2) { feedback('Keep at least one section besides the summary.', true); return; }
+  const label = editorSections(model).find(s => s.id === id)?.label || 'Section';
+  const next = ids[ids.indexOf(id) + 1] || ids[ids.indexOf(id) - 1];
+  documentEditor.remove(id);
+  documentEditor.focusSection(next); activeSection(next);
+  feedback(`Removed ${label} from this document. Undo restores it; your profile is unchanged.`);
+}
 async function renderDocument(record) {
   showWorkspace();
   ++previewVersion;
@@ -233,17 +254,13 @@ async function renderDocument(record) {
   $('page-target').value = String(draft?.pageTarget || record.options?.pageTarget || 1);
   $('tone').value = record.options?.tone || 'professional'; $('length').value = record.options?.length || 'standard'; $('instructions').value = record.options?.instructions || '';
   paperHeader(model);
-  $('editor-sections').replaceChildren();
-  for (const section of editorSections(model)) {
-    const button = document.createElement('button'); button.className = 'secondary'; button.dataset.editorSection = section.id; button.textContent = section.label; button.title = section.label;
-    if (section.category && section.category !== section.label) { const small = document.createElement('small'); small.textContent = section.category; button.append(small); }
-    button.onclick = () => { if (proof) void toggleProof(); documentEditor.focusSection(section.id); activeSection(section.id); };
-    $('editor-sections').append(button);
-  }
+  delete $('editor-sections').dataset.ids;
   documentEditor = createMaterialEditor({ container: $('document-editor'), model,
-    onUpdate: () => { autosave?.change(); updateHistory(); resizePaper(); }, onSelection: activeSection,
+    onUpdate: () => { paintOutline(model); autosave?.change(); updateHistory(); resizePaper(); }, onSelection: activeSection,
     onRewrite: id => void rewriteSection(id).catch(error => feedback(error.message, true)),
+    onRemove: id => removeSection(model, id),
   });
+  paintOutline(model);
   const coordinator = new MaterialAutosave({ record, draft, read: readDraft,
     request: (operation, input) => request(operation, { ...input, sessionId }), onState: saveState,
     onCompiled: saved => { selected = saved; updatePages(); void renderProof().catch(error => feedback(error.message, true)); },
