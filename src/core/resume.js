@@ -2,6 +2,7 @@ import { detectAdapter } from './adapters/index.js';
 import { fillField, fillFileInput } from './fields/fillers.js';
 import { UI_IDS } from './constants.js';
 import { logger } from './debug.js';
+import { accessibleRoots, isKareerElement } from './domRoots.js';
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -45,7 +46,7 @@ export function isResumeField(field, allFileFields) {
   }
   return true;
 }
-const parserHosts = new Set(['ashby', 'lever', 'workday', 'greenhouse']);
+const parserHosts = new Set(['ashby', 'lever', 'workday', 'greenhouse', 'smartrecruiters']);
 const BUSY = '[aria-busy="true"], [role="progressbar"], .resume-upload-working, ' +
   '.ashby-application-form-autofill-input-root:is([data-state="loading"], [data-state="uploading"], [data-state="parsing"], [data-state="processing"])';
 
@@ -71,8 +72,8 @@ function parserBusy(doc, uploadElement) {
 // Poll properties as well as DOM structure: React and server parsers can replace
 // controls or set .value without a mutation event. Never log applicant values.
 function formState(doc) {
-  return Array.from(doc.querySelectorAll('input:not([type="file"]), textarea, select, button[aria-pressed]'))
-    .filter(el => !el.closest(`#${UI_IDS.CONTAINER}`))
+  return accessibleRoots(doc).flatMap(root => Array.from(root.querySelectorAll('input:not([type="file"]), textarea, select, button[aria-pressed]')))
+    .filter(el => !isKareerElement(el))
     .map(el => [el, JSON.stringify([el.value, el.checked, el.disabled, el.getAttribute('aria-pressed')])]);
 }
 

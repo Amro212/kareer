@@ -1702,13 +1702,14 @@ test('Resume with a shared heading fills a replacement form without recapture', 
   } finally { engine.destroy(); }
 });
 
-test('Workday stepReviewPause pauses filled step for user review and continueStep advances', async () => {
+test('Workday Auto Continue advances intermediate steps while Auto Submit stays off', async () => {
   if (dom) dom.window.close();
   dom = new JSDOM('<body><main></main></body>', { url: 'https://acme.myworkdayjobs.com/en-US/job/apply' });
   for (const key of ['window', 'document', 'location', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement', 'Element', 'Event', 'KeyboardEvent', 'MouseEvent', 'MutationObserver']) globalThis[key] = dom.window[key];
   globalThis.CSS = { escape: value => value };
   Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { get: () => 200 });
   HTMLElement.prototype.scrollIntoView = () => {};
+  saveSettings({autoContinue:true,autoSubmit:false});
 
   render(`<h2>My Information</h2>${input('city', 'City')}<button data-automation-id="bottom-navigation-next-button">Next</button>`);
   let continueClicked = false;
@@ -1721,20 +1722,10 @@ test('Workday stepReviewPause pauses filled step for user review and continueSte
   const engine = createApplicationEngine({ settleMs: 0, transitionMs: 0, answer: workflowAnswers });
   try {
     await engine.start();
-    // After step 1 is filled, Workday pauses for review
-    assert.equal(document.querySelector('#city').value, 'Applicant');
-    assert.equal(engine.session.status, 'paused');
-    assert.equal(engine.session.reason, 'Workday step filled. Ready for your review.');
-    assert.equal(engine.stepReview, true);
-    assert.equal(continueClicked, false);
-
-    // Calling continueStep() triggers Continue and proceeds
-    await engine.continueStep();
     assert.equal(continueClicked, true);
-    // After step 2 is filled, it pauses again for review
-    assert.equal(document.querySelector('#title').value, 'Applicant');
-    assert.equal(engine.session.status, 'paused');
-    assert.equal(engine.stepReview, true);
+    assert.equal(engine.session.status, 'review');
+    assert.equal(engine.session.completedSteps, 2);
+    assert.equal(engine.session.active, false);
   } finally { engine.destroy(); }
 });
 
@@ -1745,6 +1736,7 @@ test('native on-page Continue click is detected and resumes autofill when stepRe
   globalThis.CSS = { escape: value => value };
   Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { get: () => 200 });
   HTMLElement.prototype.scrollIntoView = () => {};
+  saveSettings({autoContinue:false});
 
   render(`<h2>My Information</h2>${input('city', 'City')}<button data-automation-id="bottom-navigation-next-button">Next</button>`);
 

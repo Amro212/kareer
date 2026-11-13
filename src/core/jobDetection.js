@@ -29,7 +29,7 @@ function visible(element) {
 
 function controlLabel(element) {
   const root = element.getRootNode();
-  const referenced = (element.getAttribute('aria-labelledby') || '').split(/\s+/).map(id => root.getElementById?.(id)?.textContent || '').join(' ');
+  const referenced = (element.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean).map(id => root.getElementById?.(id)?.textContent || '').join(' ');
   const labels = [...(element.labels || [])].map(label => label.textContent).join(' ');
   const heading = element.closest('fieldset,section,.form-section')?.querySelector(JOB_HEADINGS)?.textContent || '';
   return [element.getAttribute('aria-label'), element.getAttribute('label'), referenced, labels,

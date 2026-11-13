@@ -170,7 +170,7 @@ export function workdayValue(field, profile) {
     return value.split('-')[{ year: 0, month: 1, day: 2 }[date[2]]];
   }
   if (record && Object.hasOwn(record, canonical)) return record[canonical];
-  if (canonical === 'source') return 'LinkedIn';
+  if (canonical === 'source') return profile.source || 'LinkedIn';
   if (canonical === 'over18' || canonical === 'under18') {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(profile.birthDate || '')) return '';
     const now = new Date(), [year, month, day] = profile.birthDate.split('-').map(Number);
@@ -228,6 +228,7 @@ export function workdayAnswer(field, profile) {
     return matches.length === 1 ? matches[0] : null;
   });
   if (matched.some(option => !option)) {
+    if (field.ats?.canonicalKey === 'source' && field.options?.length) return null;
     const unrec = values.find((_, index) => !matched[index]);
     const query = field.ats?.canonicalKey === 'ethnicity' && /middle eastern|mena/i.test(unrec) ? 'Arab' : String(unrec);
     return { ...answer, value: '', ...(field.type === 'combobox' ? { searchQuery: query } : {}) };

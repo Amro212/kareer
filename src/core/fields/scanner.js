@@ -111,7 +111,7 @@ export function scanFormFields(root = document) {
     if (el.matches('.select2-container') && !adapter.isCombobox?.(el)) return false;
     if (el.closest('header,nav,footer,[role="banner"],[role="navigation"],[role="contentinfo"],.g-recaptcha,.h-captcha,[data-captcha]')) return false;
     if (/^(g-recaptcha-response|h-captcha-response|cf-turnstile-response)(?:$|-)/i.test(el.name || el.id || '')) return false;
-    if (el.shadowRoot?.querySelector('input, textarea, select')) return false;
+    if (el.shadowRoot && accessibleRoots(el.shadowRoot).some(current => current.querySelector('input, textarea, select'))) return false;
     return true;
   });
 

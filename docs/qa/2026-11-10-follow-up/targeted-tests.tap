@@ -1,0 +1,270 @@
+TAP version 13
+# Subtest: captured DoorDash contains distinct entry and native submit buttons
+ok 1 - captured DoorDash contains distinct entry and native submit buttons
+  ---
+  duration_ms: 416.3561
+  type: 'test'
+  ...
+# Subtest: QA-160-02 entry Apply must not compete with actual submission
+ok 2 - QA-160-02 entry Apply must not compete with actual submission
+  ---
+  duration_ms: 265.7047
+  type: 'test'
+  ...
+# Subtest: ambiguous Apply needs application form evidence; external localized submits retain native ownership
+ok 3 - ambiguous Apply needs application form evidence; external localized submits retain native ownership
+  ---
+  duration_ms: 76.5331
+  type: 'test'
+  ...
+# Subtest: hidden unrelated uploads do not create application evidence
+ok 4 - hidden unrelated uploads do not create application evidence
+  ---
+  duration_ms: 77.1126
+  type: 'test'
+  ...
+# Subtest: adapter-owned Apply remains a final action without a native form
+ok 5 - adapter-owned Apply remains a final action without a native form
+  ---
+  duration_ms: 63.1818
+  type: 'test'
+  ...
+# [Kareer:INFO] Scan[source--source]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[country--country]: 0 owned options, committed=true 
+# [Kareer:INFO] Scan[address--countryRegion]: 0 owned options, committed=true 
+# [Kareer:INFO] Scan[phoneNumber--phoneType]: 0 owned options, committed=true 
+# [Kareer:INFO] Scan[phoneNumber--countryPhoneCode]: 0 owned options, committed=true 
+# Subtest: QA-160-04 unlabeled controls must not look up an empty ID
+ok 6 - QA-160-04 unlabeled controls must not look up an empty ID
+  ---
+  duration_ms: 93.4774
+  type: 'test'
+  ...
+# Subtest: QA-160-05 unsupported Workday source must remain available for contextual fallback
+ok 7 - QA-160-05 unsupported Workday source must remain available for contextual fallback
+  ---
+  duration_ms: 250.1028
+  type: 'test'
+  ...
+# Subtest: QA-160-06 Workday upload-only step must classify as application
+ok 8 - QA-160-06 Workday upload-only step must classify as application
+  ---
+  duration_ms: 141.6613
+  type: 'test'
+  ...
+# Subtest: QA-160-03 clearing required Lever answer must invalidate review state
+ok 9 - QA-160-03 clearing required Lever answer must invalidate review state
+  ---
+  duration_ms: 519.7942
+  type: 'test'
+  ...
+# Subtest: QA-160-07 manual Back from Workday final review must invalidate submission state
+ok 10 - QA-160-07 manual Back from Workday final review must invalidate submission state
+  ---
+  duration_ms: 551.1128
+  type: 'test'
+  ...
+# Subtest: QA-160-09 accepted SmartRecruiters resume must verify after native FileList clears
+ok 11 - QA-160-09 accepted SmartRecruiters resume must verify after native FileList clears
+  ---
+  duration_ms: 78.6014
+  type: 'test'
+  ...
+# [Kareer:INFO] Page detection { eligible: true, reasons: [ 'ats-adapter' ] }
+# [Kareer:INFO] Kareer Shadow DOM UI mounted successfully. 
+# [Kareer:INFO] Kareer v0.3.0 initialized on jobs.lever.co 
+# [Kareer:INFO] Field action [Profile]: id=email, label="Email" 
+# [Kareer:INFO] Field action: id=email, type=email, tag=INPUT, path=/qa/apply 
+# [Kareer:INFO] Timing[email]: fill=3ms, settle=206ms, verify=0ms 
+# [Kareer:INFO] Page detection { eligible: true, reasons: [ 'ats-adapter' ] }
+# [Kareer:INFO] Kareer Shadow DOM UI mounted successfully. 
+# [Kareer:INFO] Kareer v0.3.0 initialized on jobs.lever.co 
+# Subtest: rendered review card clears old answer and readiness after manual deletion
+ok 12 - rendered review card clears old answer and readiness after manual deletion
+  ---
+  duration_ms: 2412.6909
+  type: 'test'
+  ...
+# [Kareer:INFO] Page detection { eligible: true, reasons: [ 'ats-adapter' ] }
+# [Kareer:INFO] Kareer Shadow DOM UI mounted successfully. 
+# [Kareer:INFO] Kareer v0.3.0 initialized on acme.myworkdayjobs.com 
+# Subtest: rendered failed card becomes verified after manual correction without AI or execution
+ok 13 - rendered failed card becomes verified after manual correction without AI or execution
+  ---
+  duration_ms: 1536.8008
+  type: 'test'
+  ...
+# Subtest: rendered Workday Back restores Autofill without continuing the earlier step
+ok 14 - rendered Workday Back restores Autofill without continuing the earlier step
+  ---
+  duration_ms: 595.704
+  type: 'test'
+  ...
+# [Kareer:INFO] Scan[city]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[institution-before]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[city]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[institution-before]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[city]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[institution-before]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[city]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[institution-before]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[city]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[city]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[institution-before]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[(combobox)]: 0 owned options, committed=true 
+# [Kareer:INFO] Scan[city]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[institution-before]: 0 owned options, committed=false 
+# [Kareer:INFO] Field action: id=city, type=combobox, tag=INPUT, path=/oneclick-ui/company/qa/publication/qa 
+# Subtest: SmartRecruiters scans one native descriptor per nested logical control
+ok 15 - SmartRecruiters scans one native descriptor per nested logical control
+  ---
+  duration_ms: 326.6142
+  type: 'test'
+  ...
+# Subtest: overwrite-off filling preserves an existing compound phone value
+ok 16 - overwrite-off filling preserves an existing compound phone value
+  ---
+  duration_ms: 92.2095
+  type: 'test'
+  ...
+# Subtest: accepted upload metadata belongs to each native shadow file input
+ok 17 - accepted upload metadata belongs to each native shadow file input
+  ---
+  duration_ms: 69.3497
+  type: 'test'
+  ...
+# Subtest: native parser upload retains its prefill-only ownership boundary
+ok 18 - native parser upload retains its prefill-only ownership boundary
+  ---
+  duration_ms: 67.553
+  type: 'test'
+  ...
+# Subtest: fresh applications choose the parser; existing experience or education forbids reparsing
+ok 19 - fresh applications choose the parser; existing experience or education forbids reparsing
+  ---
+  duration_ms: 110.6421
+  type: 'test'
+  ...
+# Subtest: native City input resolves its ancestor shadow menu and only reads committed options
+ok 20 - native City input resolves its ancestor shadow menu and only reads committed options
+  ---
+  duration_ms: 31.9555
+  type: 'test'
+  ...
+# Subtest: selected country code is read through its assigned trigger slot
+ok 21 - selected country code is read through its assigned trigger slot
+  ---
+  duration_ms: 68.2644
+  type: 'test'
+  ...
+# [Kareer:INFO] Fill[city]: selecting exact option "Milton, Ontario, Canada" 
+# [Kareer:INFO] Scan[city]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[institution-before]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[city]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[institution-before]: 2 owned options, committed=false 
+# [Kareer:INFO] Field action: id=institution-before, type=combobox, tag=INPUT, path=/oneclick-ui/company/qa/publication/qa 
+# Subtest: City fill activates the native option target across both component shadows
+ok 22 - City fill activates the native option target across both component shadows
+  ---
+  duration_ms: 920.5602
+  type: 'test'
+  ...
+# Subtest: personal City and unambiguous Institution searches use saved facts rather than empty queries
+ok 23 - personal City and unambiguous Institution searches use saved facts rather than empty queries
+  ---
+  duration_ms: 50.3927
+  type: 'test'
+  ...
+# [Kareer:INFO] Fill[institution-before]: selecting exact option "University of Guelph" 
+# [Kareer:INFO] Scan[city]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[institution-before]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[city]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[institution-before]: 0 owned options, committed=false 
+# [Kareer:INFO] Waiting for resume parsing and stable application fields. 
+# Subtest: Institution catalog country decoration is excluded from search and committed school identity
+ok 24 - Institution catalog country decoration is excluded from search and committed school identity
+  ---
+  duration_ms: 1155.7958
+  type: 'test'
+  ...
+# Subtest: missing Transcript cannot borrow an accepted resume or become a resume target
+ok 25 - missing Transcript cannot borrow an accepted resume or become a resume target
+  ---
+  duration_ms: 50.4967
+  type: 'test'
+  ...
+# [Kareer:INFO] Resume processing settled; rescanning application fields. 
+# [Kareer:INFO] Waiting for resume parsing and stable application fields. 
+# Subtest: waits for parser-disabled state and shadow editor replacement before choosing targets
+ok 26 - waits for parser-disabled state and shadow editor replacement before choosing targets
+  ---
+  duration_ms: 160.4561
+  type: 'test'
+  ...
+# [Kareer:INFO] Resume processing settled; rescanning application fields. 
+# Subtest: parser wait observes late shadow property changes through the quiet window
+ok 27 - parser wait observes late shadow property changes through the quiet window
+  ---
+  duration_ms: 119.0141
+  type: 'test'
+  ...
+# [Kareer:INFO] Page detection { eligible: true, reasons: [ 'ats-adapter' ] }
+# [Kareer:INFO] Kareer Shadow DOM UI mounted successfully. 
+# [Kareer:INFO] Kareer v0.3.0 initialized on jobs.smartrecruiters.com 
+# [Kareer:INFO] Field action: id=apply-with-resume-container, type=file, tag=INPUT, path=/oneclick-ui/company/qa/publication/qa 
+# [Kareer:INFO] Waiting for resume parsing and stable application fields. 
+# [Kareer:INFO] Resume processing settled; rescanning application fields. 
+# [Kareer:INFO] Starting progressive fill of 0 local, 1 upload and 0 embedded fields... 
+# [Kareer:INFO] Autofill finished: 1 filled, 0 failed and 1 untouched out of 2 current fields. 
+# [Kareer:INFO] All fields are already filled. Enable "Overwrite Existing Values" in Settings to overwrite. 
+# Subtest: panel preserves both accepted widgets after parsing and on retry
+ok 28 - panel preserves both accepted widgets after parsing and on retry
+  ---
+  duration_ms: 3761.1643
+  type: 'test'
+  ...
+# [Kareer:INFO] Field action [Profile]: id=workday:linkedin:url, label="URL" 
+# [Kareer:INFO] Field action: id=workday:linkedin:url, type=text, tag=INPUT, path=/qa/apply 
+# [Kareer:INFO] Timing[workday:linkedin:url]: fill=4ms, settle=61ms, verify=0ms 
+# [Kareer:INFO] Field action [Profile]: id=workday:github:url, label="URL" 
+# [Kareer:INFO] Field action: id=workday:github:url, type=text, tag=INPUT, path=/qa/apply 
+# [Kareer:INFO] Timing[workday:github:url]: fill=1ms, settle=50ms, verify=1ms 
+# [Kareer:INFO] Field action [Profile]: id=workday:portfolio:url, label="URL" 
+# [Kareer:INFO] Field action: id=workday:portfolio:url, type=text, tag=INPUT, path=/qa/apply 
+# [Kareer:INFO] Timing[workday:portfolio:url]: fill=1ms, settle=55ms, verify=0ms 
+# [Kareer:INFO] Field action [Profile]: id=workday:linkedin:url, label="URL" 
+# [Kareer:INFO] Field action: id=workday:linkedin:url, type=text, tag=INPUT, path=/qa/apply 
+# [Kareer:INFO] Timing[workday:linkedin:url]: fill=1ms, settle=75ms, verify=0ms 
+# [Kareer:INFO] Field action [Profile]: id=workday:github:url, label="URL" 
+# [Kareer:INFO] Field action: id=workday:github:url, type=text, tag=INPUT, path=/qa/apply 
+# [Kareer:INFO] Timing[workday:github:url]: fill=1ms, settle=65ms, verify=0ms 
+# [Kareer:INFO] Field action [Profile]: id=workday:portfolio:url, label="URL" 
+# [Kareer:INFO] Field action: id=workday:portfolio:url, type=text, tag=INPUT, path=/qa/apply 
+# [Kareer:INFO] Timing[workday:portfolio:url]: fill=0ms, settle=57ms, verify=0ms 
+# Subtest: website answer memory separates identical URL questions by saved record
+ok 29 - website answer memory separates identical URL questions by saved record
+  ---
+  duration_ms: 257.8993
+  type: 'test'
+  ...
+# Subtest: Workday revisit ignores legacy flat URL memory and retains three distinct websites on retry
+ok 30 - Workday revisit ignores legacy flat URL memory and retains three distinct websites on retry
+  ---
+  duration_ms: 1170.1421
+  type: 'test'
+  ...
+# Subtest: ordinary flat answer recall still works after row-scoped answers are remembered
+ok 31 - ordinary flat answer recall still works after row-scoped answers are remembered
+  ---
+  duration_ms: 19.5511
+  type: 'test'
+  ...
+1..31
+# tests 31
+# suites 0
+# pass 31
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 26052.9354

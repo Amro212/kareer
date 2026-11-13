@@ -249,6 +249,29 @@ test('Workday deterministic profile fields bypass AI and unresolved questions sh
   assert.equal(response.answers.length, 3);
 });
 
+test('Workday source uses exact saved answers, otherwise contextual AI with owned choices', async () => {
+  boot('<main></main>');
+  const field = {fieldId:'source',type:'combobox',label:'How did you hear about us?',required:true,ats:{adapter:'workday',canonicalKey:'source'},options:[{value:'corp',label:'Corporate Website'},{value:'other',label:'Other'}]};
+  saveProfile({savedAnswers:{[field.label]:'Corporate Website'}});
+  saveApiKey('fixture-key');
+  let requests = 0;
+  globalThis.GM_xmlhttpRequest = options => {
+    requests++;
+    const body = JSON.parse(options.data);
+    assert.ok(JSON.stringify(body).includes('Corporate Website'));
+    options.onload({status:200,responseText:JSON.stringify({choices:[{message:{content:JSON.stringify({answers:[{fieldId:'source',value:'Other',inferred:true}]})}}]})});
+  };
+  const saved = (await generateAutofillAnswers([field])).answers[0];
+  assert.equal(saved.value, 'Corporate Website');
+  assert.equal(saved.source, 'saved');
+  assert.equal(requests, 0);
+  saveProfile({fullName:'Test Applicant'});
+  const inferred = (await generateAutofillAnswers([field])).answers[0];
+  assert.equal(inferred.value, 'Other');
+  assert.equal(inferred.source, 'ai');
+  assert.equal(requests, 1);
+});
+
 test('Workday country phone code comes from phone rather than residence and unmatched choices stay unresolved', () => {
   boot('<main></main>');
   const field = { fieldId: 'dial', type: 'combobox', ats: { adapter: 'workday', canonicalKey: 'phone_country' }, options: [{ value: 'ca', label: 'Canada (+1)' }, { value: 'gb', label: 'United Kingdom (+44)' }] };

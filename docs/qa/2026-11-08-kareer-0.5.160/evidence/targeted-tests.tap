@@ -1,0 +1,225 @@
+TAP version 13
+# Subtest: captured DoorDash contains distinct entry and native submit buttons
+ok 1 - captured DoorDash contains distinct entry and native submit buttons
+  ---
+  duration_ms: 586.3944
+  type: 'test'
+  ...
+# Subtest: QA-160-02 entry Apply must not compete with actual submission
+not ok 2 - QA-160-02 entry Apply must not compete with actual submission # TODO Unfixed; reproduced on captured DoorDash DOM
+  ---
+  duration_ms: 291.3121
+  type: 'test'
+  location: 'C:\\VScode\\job-copilot-extension\\tests\\unit\\production-0.5.160.test.js:49:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    2 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 2
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/VScode/job-copilot-extension/tests/unit/production-0.5.160.test.js:51:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# [Kareer:INFO] Scan[source--source]: 0 owned options, committed=false 
+# [Kareer:INFO] Scan[country--country]: 0 owned options, committed=true 
+# [Kareer:INFO] Scan[address--countryRegion]: 0 owned options, committed=true 
+# [Kareer:INFO] Scan[phoneNumber--phoneType]: 0 owned options, committed=true 
+# [Kareer:INFO] Scan[phoneNumber--countryPhoneCode]: 0 owned options, committed=true 
+# Subtest: QA-160-04 unlabeled controls must not look up an empty ID
+not ok 3 - QA-160-04 unlabeled controls must not look up an empty ID # TODO Unfixed Firefox warning source
+  ---
+  duration_ms: 61.1732
+  type: 'test'
+  location: 'C:\\VScode\\job-copilot-extension\\tests\\unit\\production-0.5.160.test.js:54:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + [
+    +   '',
+    +   ''
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0: ''
+    1: ''
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/VScode/job-copilot-extension/tests/unit/production-0.5.160.test.js:60:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: QA-160-05 unsupported Workday source must remain available for contextual fallback
+not ok 4 - QA-160-05 unsupported Workday source must remain available for contextual fallback # TODO Unfixed hardcoded LinkedIn/empty deterministic answer
+  ---
+  duration_ms: 268.928
+  type: 'test'
+  location: 'C:\\VScode\\job-copilot-extension\\tests\\unit\\production-0.5.160.test.js:63:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    no supported deterministic answer should suppress fallback
+    + actual - expected
+    
+    + {
+    +   fieldId: 'source--source',
+    +   inferred: false,
+    +   provenance: 'inferred',
+    +   searchQuery: 'LinkedIn',
+    +   source: 'profile',
+    +   value: ''
+    + }
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual:
+    fieldId: 'source--source'
+    value: ''
+    inferred: false
+    provenance: 'inferred'
+    source: 'profile'
+    searchQuery: 'LinkedIn'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/VScode/job-copilot-extension/tests/unit/production-0.5.160.test.js:68:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: QA-160-06 Workday upload-only step must classify as application
+not ok 5 - QA-160-06 Workday upload-only step must classify as application # TODO Unfixed hidden upload visibility mismatch
+  ---
+  duration_ms: 186.4367
+  type: 'test'
+  location: 'C:\\VScode\\job-copilot-extension\\tests\\unit\\production-0.5.160.test.js:71:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'unrelated'
+    - 'application'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'application'
+  actual: 'unrelated'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/VScode/job-copilot-extension/tests/unit/production-0.5.160.test.js:76:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: QA-160-03 clearing required Lever answer must invalidate review state
+not ok 6 - QA-160-03 clearing required Lever answer must invalidate review state # TODO Unfixed; engine-level reproduction; live panel evidence in action log
+  ---
+  duration_ms: 523.7129
+  type: 'test'
+  location: 'C:\\VScode\\job-copilot-extension\\tests\\unit\\production-0.5.160.test.js:79:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected "actual" to be strictly unequal to:
+    
+    'review'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'review'
+  actual: 'review'
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/VScode/job-copilot-extension/tests/unit/production-0.5.160.test.js:95:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: QA-160-07 manual Back from Workday final review must invalidate submission state
+not ok 7 - QA-160-07 manual Back from Workday final review must invalidate submission state # TODO Unfixed; captures real earlier-step upload DOM
+  ---
+  duration_ms: 560.1536
+  type: 'test'
+  location: 'C:\\VScode\\job-copilot-extension\\tests\\unit\\production-0.5.160.test.js:98:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected "actual" to be strictly unequal to:
+    
+    'review'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'review'
+  actual: 'review'
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/VScode/job-copilot-extension/tests/unit/production-0.5.160.test.js:108:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: QA-160-09 accepted SmartRecruiters resume must verify after native FileList clears
+not ok 8 - QA-160-09 accepted SmartRecruiters resume must verify after native FileList clears # TODO Unfixed; captured files attribute, no ATS scripts executed
+  ---
+  duration_ms: 92.6243
+  type: 'test'
+  location: 'C:\\VScode\\job-copilot-extension\\tests\\unit\\production-0.5.160.test.js:111:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/VScode/job-copilot-extension/tests/unit/production-0.5.160.test.js:115:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: QA-160-08 SmartRecruiters duplicate shadow controls and field identity errors: native reproduction in regression-cases.md; saved HTML excludes open shadow internals
+ok 9 - QA-160-08 SmartRecruiters duplicate shadow controls and field identity errors: native reproduction in regression-cases.md; saved HTML excludes open shadow internals # TODO
+  ---
+  duration_ms: 31.3019
+  type: 'test'
+  ...
+# Subtest: QA-160-10 SmartRecruiters first-run phone clearing: native reproduction in regression-cases.md; first-run occurrence, corrected phone survived retry
+ok 10 - QA-160-10 SmartRecruiters first-run phone clearing: native reproduction in regression-cases.md; first-run occurrence, corrected phone survived retry # TODO
+  ---
+  duration_ms: 31.1975
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 9
+# duration_ms 19786.721

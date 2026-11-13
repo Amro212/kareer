@@ -201,13 +201,12 @@ function resolveLiveElement(field) {
 }
 
 function resolveLiveFileElement(field, root = document) {
-  if (field.element?.isConnected) return field.element;
   const fields = scanFormFields(root);
   deduplicateFields(fields);
   const fresh = fields.find(candidate => candidate.id === field.id && candidate.type === "file")
     || fields.find(candidate => candidate.type === "file");
   if (fresh) {
-    field.element = fresh.element;
+    Object.assign(field, fresh);
     return fresh.element;
   }
   return field.element;
@@ -255,6 +254,7 @@ export function getAllDetectedFields() {
       });
     }
   }
+  for (const f of detectAdapter().reviewFields?.() || []) if (!map.has(f.id)) map.set(f.id, f);
   return Array.from(map.values());
 }
 
@@ -1900,6 +1900,7 @@ function stopAutofillFlow(reason = 'Autofill stopped.') {
   autofillGeneration++;
   cancelAutofillDelay?.();
   isAutofilling = false;
+  applicationEngine?.setExternalFillActive(false);
   autofillProgress.statusText = reason;
   logger.info(`Single-page autofill stopped: ${reason}`);
   resumeFormObserver();
@@ -2001,6 +2002,7 @@ async function executeAutofillFlow() {
   }
 
   isAutofilling = true;
+  applicationEngine?.setExternalFillActive(true);
   autofillProgress = { current: 0, total: 0, statusText: 'Scanning page fields...' };
   updatePanelDOM();
   pauseFormObserver();
@@ -2273,6 +2275,7 @@ async function executeAutofillFlow() {
   } finally {
     if (token === autofillGeneration) {
       isAutofilling = false;
+      applicationEngine?.setExternalFillActive(false);
       resumeFormObserver();
       refreshDetectedFields();
       updatePanelDOM();
@@ -2328,7 +2331,7 @@ export function summarizeFieldResults(fields, results) {
 
   for (const f of fields) {
     const id = f.id || f.fieldId;
-    const res = results.get(id);
+    const res = results.get(id) ?? f.result;
     if (res?.status === FILL_STATUS.VERIFIED) {
       verifiedFields.push({ field: f, result: res });
     } else if (res?.status === FILL_STATUS.FAILED) {
@@ -2342,7 +2345,7 @@ export function summarizeFieldResults(fields, results) {
     if (res && res.status !== FILL_STATUS.UNTOUCHED && (res.value !== '' && res.value != null)) {
       if (res.source === 'ai' || (res.inferred && res.source !== 'profile' && res.source !== 'saved')) {
         aiCount++;
-      } else {
+      } else if (res.source !== 'manual') {
         profileCount++;
       }
     }
@@ -2386,6 +2389,8 @@ function renderFieldReviewSection() {
         sourceBadge = '<span class="kr-badge kr-badge-ai" title="Filled using an AI call">AI</span>';
       } else if (src === 'saved') {
         sourceBadge = '<span class="kr-badge kr-badge-saved" title="Reused exact saved answer">SAVED</span>';
+      } else if (src === 'manual') {
+        sourceBadge = '<span class="kr-badge" title="Edited on the application page">MANUAL</span>';
       } else {
         sourceBadge = '<span class="kr-badge kr-badge-profile" title="Deterministically filled from profile">PROFILE</span>';
       }
@@ -3264,7 +3269,7 @@ function attachEventHandlers() {
         if (targetIframe) targetIframe.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
       }
-      const target = detectedFieldsCache.find((f) => (f.id || f.fieldId) === fieldId);
+      const target = getAllDetectedFields().find((f) => f.id === fieldId);
       if (target?.element) {
         scrollToField(target.element);
         highlightActiveField(target.element);

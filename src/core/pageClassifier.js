@@ -40,7 +40,7 @@ export const CONTINUE_LABEL = /^(?:next(?: step)?(?:\s*[:–—-]\s*.+)?|continu
 
 export function controlLabel(element) {
   const root = element.getRootNode();
-  const referenced = (element.getAttribute('aria-labelledby') || '').split(/\s+/)
+  const referenced = (element.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean)
     .map(id => root.getElementById?.(id)?.textContent || '').join(' ').trim();
   return (referenced || element.getAttribute('aria-label') ||
     (element.matches('input') ? element.value : visibleText(element)) || '').replace(/\s+/g, ' ').trim();
@@ -71,7 +71,10 @@ export function isSubmitControl(element) {
   if (element.closest('header,nav,footer') &&
       !(element.form && !element.form.closest('header,nav,footer')) && !/\bapplication\b/i.test(label)) return false;
   if (CONTINUE_LABEL.test(label)) return false;
-  if (/^(?:submit(?: (?:my|your|the))? application|submit|apply(?: now)?|send(?: (?:my|your|the))? application|final submit|finish(?: application)?|complete application)(?:\s*[→›»])?$/i.test(label)) return true;
+  if (/^apply(?: now)?(?:\s*[→›»])?$/i.test(label)) {
+    return Boolean(element.form && isApplicationForm(element.form));
+  }
+  if (/^(?:submit(?: (?:my|your|the))? application|submit|send(?: (?:my|your|the))? application|final submit|finish(?: application)?|complete application)(?:\s*[→›»])?$/i.test(label)) return true;
   // Native semantics apply only to an identified application form.
   return Boolean(element.matches('button,input[type=submit]') && element.type === 'submit' && element.form && isApplicationForm(element.form) &&
     !/\b(?:save|delete|remove|upload|attach|add|reset|search|subscribe|sign up|sign in|log in)\b/i.test(label));
@@ -86,10 +89,13 @@ export function classifyPage(doc = document) {
   if (/application (?:has been |was )?(?:submitted|received)|thank you for applying/i.test(text)) return { type: 'confirmation', reason: 'Application confirmation detected.' };
   if (/review (?:your )?application|final review|review and submit/i.test(headings)) return { type: 'review', reason: 'Ready for review. Final submission is manual.' };
   const adapter = detectAdapter(doc.location, doc);
-  const fields = all('input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=search]),textarea,select,[role=combobox],[contenteditable=true],button,input[type=search],spl-input,spl-textarea,spl-checkbox,spl-autocomplete,spl-phone-field,spl-dropzone').some(el => isVisible(el) &&
+  const fields = all('input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=search]),textarea,select,[role=combobox],[contenteditable=true],button,input[type=search],spl-input,spl-textarea,spl-checkbox,spl-autocomplete,spl-phone-field,spl-dropzone').some(el => (isVisible(el) ||
+    el.type === 'file' && isVisible(el.parentElement) &&
+    (el.form && isApplicationForm(el.form) || adapter.id === 'workday' && adapter.fieldMetadata(el)?.ats?.canonicalKey === 'resume')) &&
     (!el.matches('button,input[type=search]') || !el.closest('header,nav,footer') && (el.matches('button[aria-haspopup=listbox]') || adapter.isCombobox?.(el))));
   if (fields) return { type: 'application', reason: 'Application fields detected.' };
-  const final = actionControls(doc).some(isSubmitControl);
+  const adapterSubmit = adapter.submitControl?.(doc);
+  const final = actionControls(doc).some(isSubmitControl) || adapterSubmit && isVisible(adapterSubmit);
   if (final) return { type: 'review', reason: 'Ready for review. Final submission is manual.' };
   if (doc.querySelector('script[type="application/ld+json"]') && /JobPosting/.test(doc.querySelector('script[type="application/ld+json"]')?.textContent || '') || /job description|about (?:the|this) (?:role|job)/i.test(text)) return { type: 'listing', reason: 'Job listing detected.' };
   return { type: 'unrelated', reason: 'No application step detected.' };

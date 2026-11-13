@@ -8,8 +8,9 @@ import { workdayAdapter } from './workday.js';
 import { greenhouseAdapter } from './greenhouse.js';
 import { leverAdapter } from './lever.js';
 import { ashbyAdapter } from './ashby.js';
+import { smartrecruitersAdapter } from './smartrecruiters.js';
 
-const SPECIFIC = [workdayAdapter, greenhouseAdapter, leverAdapter, ashbyAdapter];
+const SPECIFIC = [workdayAdapter, greenhouseAdapter, leverAdapter, ashbyAdapter, smartrecruitersAdapter];
 export const adapterById = id => SPECIFIC.find(adapter => adapter.id === id) || genericAdapter;
 
 function currentLocation() {
@@ -38,4 +39,4 @@ export function detectAdapter(loc = currentLocation(), doc = currentDocument()) 
   }) || genericAdapter;
 }
 
-export { genericAdapter, workdayAdapter, greenhouseAdapter, leverAdapter, ashbyAdapter };
+export { genericAdapter, workdayAdapter, greenhouseAdapter, leverAdapter, ashbyAdapter, smartrecruitersAdapter };
