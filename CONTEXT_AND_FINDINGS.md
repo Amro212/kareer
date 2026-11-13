@@ -1,3 +1,19 @@
+## Turn: 2026-11-13 - Workday source deterministic fallback fix (PR #15 CI run 43371336419)
+
+- CI Finding (run 43371336419, step 17 `Run npm run test:e2e -- --max-failures=1`, commit 471b4c7 on PR #15 `fix/qa-160-application-reliability` -> `prod`):
+  - Failed tests: `tests/e2e/workday-prompts.spec.js:6:1 › Workday Enter prompts commit owned tokens and parsed experience rows are completed without duplicates or AI` and `tests/e2e/workday-prompts.spec.js:34:1 › Workday profile autofill works without an API key`.
+  - Symptoms: `locator('[data-automation-id="formField-source"] [data-automation-id="selectedItem"]') Expected: "LinkedIn" Error: element(s) not found`.
+  - Root cause: In commit 1be26ef, `if (canonical === 'source') return 'LinkedIn';` was removed from `workdayValue` in `src/core/adapters/workday-fields.js` to address QA-160-05 on Clio (where LinkedIn was not in the available source options). However, removing it completely broke `workday-prompts.spec.js`, where unharvested Workday comboboxes require a deterministic fallback to `'LinkedIn'` when AI is disabled or unavailable. Furthermore, in `workdayAnswer`, if `field.options` are already populated and do not contain LinkedIn, it should return `null` so the engine falls back to contextual AI (preserving QA-160-05).
+  - Resolution:
+    - Updated `src/core/adapters/workday-fields.js`:
+      - In `workdayValue`: restored `if (canonical === 'source') return profile.source || 'LinkedIn';`.
+      - In `workdayAnswer`: marked `answer.provenance = 'inferred'` for `canonicalKey === 'source'`, and if `field.ats?.canonicalKey === 'source' && field.options?.length`, returned `null` when no exact option matches to allow contextual AI fallback.
+  - Verification:
+    - Targeted execution of `tests/e2e/workday-prompts.spec.js`: 4/4 passed (1.6m).
+    - Targeted execution of unit tests `production-0.5.160.test.js` and `workday.test.js`: 63/63 passed (65.8s).
+    - Targeted execution of `upload.spec.js` (7/7 passed), `workflow-recovery.spec.js` (4/4 passed), `reported-applications.spec.js` (5/5 passed), `remaining-ats-qa.spec.js` (3/3 passed), `greenhouse-workday-qa.spec.js` (4/4 passed), and `ats-hardening.spec.js` (5/5 passed).
+  - Turn changes: `src/core/adapters/workday-fields.js` modified; `CONTEXT_AND_FINDINGS.md` updated.
+
 ## Turn: 2026-11-13 - CI E2E assertion repairs for truncated-form test specs (PR #15)
 
 - CI Finding (run 43357545737, job 131616025753, step 17 `Run npm run test:e2e -- --max-failures=1`, commit 3761a58 on PR #15 `fix/qa-160-application-reliability` -> `prod`):
