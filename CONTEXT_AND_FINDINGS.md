@@ -1,3 +1,13 @@
+## Turn: 2026-11-13 - CI E2E assertion repairs for truncated-form test specs (PR #15)
+
+- CI Finding (run 43357545737, job 131616025753, step 17 `Run npm run test:e2e -- --max-failures=1`, commit 3761a58 on PR #15 `fix/qa-160-application-reliability` -> `prod`):
+  - Failed test: `tests/e2e/remaining-ats-qa.spec.js:7:1 › captured paginated Greenhouse school resolves Guelph and retries the partial row without Add` (test 193).
+  - Symptoms: 60s timeout waiting for `'Page filled. Review your answers, then submit the application.'` in `#kr-main-panel`.
+  - Root cause: The test simplifies the Greenhouse fixture DOM using `document.querySelector('form').replaceChildren(section)`, which strips the form submit button. Because there is no submit button and no continue button, and `autoContinue` is false, `src/core/application.js` (lines 801-815) enters status `paused` with `'Page filled. Auto Continue is off.'`. In commit 7f62e56, a broad string search-and-replace mistakenly changed the expected message in this test and two others (`reported-applications.spec.js` line 80 and `workflow-recovery.spec.js` line 56) to `'Page filled. Review your answers, then submit the application.'`.
+  - Resolution: Reverted the assertions in `remaining-ats-qa.spec.js`, `reported-applications.spec.js`, and `workflow-recovery.spec.js` back to `'Page filled. Auto Continue is off.'`.
+  - Verification: Targeted execution of `remaining-ats-qa.spec.js` passed 3/3 tests (3.2m).
+  - Turn changes: `tests/e2e/remaining-ats-qa.spec.js`, `tests/e2e/reported-applications.spec.js`, `tests/e2e/workflow-recovery.spec.js` updated; this log updated.
+
 ## Turn: 2026-11-09 - QA-160 diagnosis and focused repair branch
 
 - User authorized implementation after completing the remaining SmartRecruiters identity diagnosis, then requested a new branch from prod and meaningful incremental commits. Created fix/qa-160-application-reliability from e9c23ea, preserving the pre-existing QA evidence and findings-log edits. No submissions, deployment, new dependencies, or broad live testing are authorized.
