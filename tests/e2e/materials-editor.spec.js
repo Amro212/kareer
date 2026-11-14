@@ -51,6 +51,7 @@ test('continuous document edits autosave, survive reload, retain history, and ex
   await expect(page.locator('#undo')).toBeEnabled();
   await page.locator('#undo').click(); await expect(page.locator('#resume-summary')).toHaveText(/Software engineer/);
   await page.locator('#redo').click(); await expect(page.locator('#resume-summary')).toHaveText('Current inline summary.');
+  await page.locator('[data-editable-section="work"]').click();
   await page.locator('[data-editable-section="work"]').fill('Edited production API achievement.');
   await page.locator('[data-material-section="project"] .paper-keywords').fill('Python, SQL, Monitoring');
   const word = await mammoth.extractRawText({ buffer: await downloaded(page, 'docx') });
