@@ -5,7 +5,7 @@
  * identity and never deleted or edited.
  */
 import { scanFormFields } from '../fields/scanner.js';
-import { fillField } from '../fields/fillers.js';
+import { fillCheckbox, fillField } from '../fields/fillers.js';
 import { clickFieldControl, optionKey } from '../fields/combobox.js';
 import { getSettings } from '../storage.js';
 import { logger } from '../debug.js';
@@ -66,19 +66,35 @@ function rowValue(record, key) {
   if (key === 'endDate' && record.current) return '';
   // The month-year picker accepts YYYY-MM; other formats silently become January.
   if (key === 'startDate' || key === 'endDate') return /^\d{4}-\d{2}/.test(record[key] || '') ? record[key].slice(0, 7) : '';
-  if (key === 'current') return record.current ? true : '';
+  if (key === 'current') {
+    if (record.current === true) return true;
+    if (record.current === false) return false;
+    return '';
+  }
   return record[key] ?? '';
+}
+
+async function syncCurrentCheckbox(row, record, isCurrent) {
+  if (record.current !== true && record.current !== false) return;
+  if (!isCurrent()) throw new Error('SmartRecruiters row preparation cancelled.');
+  const host = row.querySelector('[data-test="experience-current"], [data-test="education-current"]');
+  const input = host?.querySelector('spl-checkbox')?.shadowRoot?.querySelector('input[type="checkbox"]');
+  if (!input) return;
+  const want = record.current === true;
+  if (input.checked !== want) await fillCheckbox(input, want);
 }
 
 async function fillRow(doc, row, record, overwrite, isCurrent) {
   // "Currently" first: it can remove the end date from the editor.
+  await syncCurrentCheckbox(row, record, isCurrent);
   const ordered = fields => fields.sort((a, b) => (b.ats.canonicalKey === 'current') - (a.ats.canonicalKey === 'current'));
   const done = new Set();
   for (let pass = 0; pass < 2; pass++) {
     for (const field of ordered(rowFields(doc, row))) {
       if (!isCurrent()) throw new Error('SmartRecruiters row preparation cancelled.');
       const key = field.ats.canonicalKey, value = rowValue(record, key);
-      if (done.has(key) || value === '' || field.currentValue && field.currentValue !== 'false' && !overwrite) { done.add(key); continue; }
+      const clearingCurrent = key === 'current' && value === false;
+      if (done.has(key) || value === '' || field.currentValue && field.currentValue !== 'false' && !overwrite && !clearingCurrent) { done.add(key); continue; }
       done.add(key);
       // fillCombobox searches with the value and commits only an exact owned option.
       if (!await fillField(field, field.type === 'combobox' ? String(value) : value)) logger.warn(`SmartRecruiters ${key}: the editor did not accept the saved value.`);
@@ -88,9 +104,11 @@ async function fillRow(doc, row, record, overwrite, isCurrent) {
 }
 
 async function addRow(doc, recipe, rows, isCurrent) {
+  if (!isCurrent()) throw new Error('SmartRecruiters row preparation cancelled.');
   const button = innerButton(doc.querySelector(`oc-button[data-test="${recipe.add}"]`));
   if (!button) throw new Error(`SmartRecruiters ${recipe.label}: Add is unavailable. Add the entry manually.`);
   const before = new Set(rows());
+  if (!isCurrent()) throw new Error('SmartRecruiters row preparation cancelled.');
   clickFieldControl(button);
   const deadline = Date.now() + 5000;
   do {
@@ -103,12 +121,14 @@ async function addRow(doc, recipe, rows, isCurrent) {
   throw new Error(`SmartRecruiters ${recipe.label}: Add did not open an editor. Add the entry manually.`);
 }
 
-async function saveRow(row, recipe) {
+async function saveRow(row, recipe, isCurrent = () => true) {
   const button = innerButton(row.querySelector(`${recipe.form} oc-button[data-test="${recipe.save}"]`));
   if (!button) return false;
+  if (!isCurrent()) throw new Error('SmartRecruiters row preparation cancelled.');
   clickFieldControl(button);
   const deadline = Date.now() + 3000;
   do {
+    if (!isCurrent()) throw new Error('SmartRecruiters row preparation cancelled.');
     if (!row.querySelector(recipe.form)) return true;
     await delay(100);
   } while (Date.now() < deadline);
@@ -131,14 +151,18 @@ export async function prepareSmartRecruitersSections(doc, profile, { isCurrent =
     }
     // Add prepends, so creating in reverse keeps the saved profile order.
     for (const item of work.reverse()) {
+      if (!isCurrent()) throw new Error('SmartRecruiters row preparation cancelled.');
       let row = item.row || rows().find(candidate => !claimed.has(candidate) && candidate.querySelector(recipe.form) &&
         !Object.values(identity(doc, candidate, recipe)).some(Boolean));
-      row ||= await addRow(doc, recipe, rows, isCurrent);
+      if (!row) {
+        if (!isCurrent()) throw new Error('SmartRecruiters row preparation cancelled.');
+        row = await addRow(doc, recipe, rows, isCurrent);
+      }
       claimed.add(row);
       entryRecords.set(row, item.record);
       await fillRow(doc, row, item.record, overwrite, isCurrent);
       // A rejected Save leaves the editor open and bound for review.
-      const saved = await saveRow(row, recipe);
+      const saved = await saveRow(row, recipe, isCurrent);
       if (!saved) logger.warn(`SmartRecruiters ${recipe.label}: Save was not accepted. Review the open entry.`);
       review(recipe, item.record, row, saved ? 'saved' : 'failed');
     }

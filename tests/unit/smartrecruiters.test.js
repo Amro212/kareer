@@ -372,3 +372,76 @@ test('a rejected Save leaves the editor open and bound for review without a seco
   await prepareSmartRecruitersSections(document, profile);
   assert.equal(adds.experience, 1, 'retry completes the open editor instead of adding another');
 });
+
+test('row preparation unchecks "currently work here" when the saved record is not current', async () => {
+  boot(); wireRows();
+  const id = ++ids;
+  const entry = document.createElement('oc-experience-entry');
+  entry.innerHTML = `<oc-experience-edit-form><div data-test="experience-edit-form">${
+    autocomplete('job-title-autocomplete', 'Title', `title-${id}`)
+  }${autocomplete('company-autocomplete', 'Company', `company-${id}`)}${
+    date('experience-date-from', 'From')
+  }${date('experience-date-to', 'To')
+  }<oc-checkbox data-test="experience-current"><spl-checkbox><template shadowrootmode="open"><input type="checkbox" aria-label="I currently work here" checked></template></spl-checkbox></oc-checkbox>${
+    button('experience-save', 'Save')
+  }</div></oc-experience-edit-form>`;
+  hydrate(entry);
+  document.querySelector('oc-experience .entries').prepend(entry);
+  wireEditor(entry, 'experience');
+  const profile = {
+    workExperiences: [{
+      id: 'w1', title: 'Software Developer', company: 'Acme Robotics', endDate: '2023-08', current: false,
+    }],
+  };
+  globalThis.GM_getValue = (key, fallback) => (key === 'kr:settings' ? { overwriteExisting: false } : fallback);
+  await prepareSmartRecruitersSections(document, profile);
+  assert.ok(entry.querySelector('oc-experience-edit-form'), 'Save stays open so the current checkbox remains inspectable');
+  const checkbox = entry.querySelector('oc-checkbox[data-test="experience-current"] spl-checkbox').shadowRoot.querySelector('input');
+  assert.equal(checkbox.checked, false);
+  const to = entry.querySelector('[data-test="experience-date-to"] spl-date-field');
+  assert.equal(to.getAttribute('value'), '2023-08-01');
+});
+
+test('row preparation aborts before Add when autofill is already cancelled', async () => {
+  boot(); const adds = wireRows(); document.querySelector('oc-education-entry').remove();
+  await assert.rejects(
+    prepareSmartRecruitersSections(document, {
+      workExperiences: [{ id: 'w1', title: 'Software Developer', company: 'Acme Robotics', startDate: '2022-05' }],
+    }, { isCurrent: () => false }),
+    /cancelled/,
+  );
+  assert.equal(adds.experience, 0);
+});
+
+test('row preparation aborts while Save is waiting for the editor to close', async () => {
+  boot();
+  const adds = { experience: 0, education: 0 };
+  for (const kind of ['experience', 'education']) {
+    document.querySelector(`oc-button[data-test="add-${kind}"] spl-button`).shadowRoot.querySelector('button').onclick = () => {
+      adds[kind]++;
+      const id = ++ids;
+      const entry = document.createElement(`oc-${kind}-entry`);
+      entry.innerHTML = `<oc-${kind}-edit-form><div data-test="${kind}-edit-form">${kind === 'experience'
+        ? autocomplete('job-title-autocomplete', 'Title', `title-${id}`) + autocomplete('company-autocomplete', 'Company', `company-${id}`) + date('experience-date-from', 'From') + date('experience-date-to', 'To') +
+          `<oc-checkbox data-test="experience-current"><spl-checkbox><template shadowrootmode="open"><input type="checkbox" aria-label="I currently work here"></template></spl-checkbox></oc-checkbox>`
+        : autocomplete('institution-autocomplete', 'Institution', `school-${id}`) + `<oc-input data-test="education-degree"><spl-input label="Degree"><template shadowrootmode="open"><input id="degree-${id}" type="text"></template></spl-input></oc-input>` + date('education-date-from', 'From')
+      }${button(`${kind}-save`, 'Save')}</div></oc-${kind}-edit-form>`;
+      hydrate(entry);
+      document.querySelector(`oc-${kind} .entries`).prepend(entry);
+      wireEditor(entry, kind);
+      if (kind === 'experience') {
+        const save = entry.querySelector('oc-button[data-test="experience-save"] spl-button').shadowRoot.querySelector('button');
+        const prior = save.onclick;
+        save.onclick = () => new Promise(resolve => setTimeout(() => { prior(); resolve(); }, 500));
+      }
+    };
+  }
+  document.querySelector('oc-education-entry').remove();
+  let active = true;
+  const profile = { workExperiences: [{ id: 'w1', title: 'Software Developer', company: 'Acme Robotics', startDate: '2022-05', endDate: '2023-08' }] };
+  const task = prepareSmartRecruitersSections(document, profile, { isCurrent: () => active });
+  await new Promise(resolve => setTimeout(resolve, 200));
+  active = false;
+  await assert.rejects(task, /cancelled/);
+  assert.equal(adds.experience, 1);
+});

@@ -52,6 +52,31 @@
 - Cost check (staging D1, completed requests): autofill n=23 avg US$0.00113 (max 0.00180); document n=2 avg US$0.00091; repair n=8 avg US$0.00079. Production has no completed requests yet. Documents cost no more to serve than autofill, so 3 credits is value pricing (a pack credit is about US$0.0166), not cost recovery.
 - Verification: gateway 52/52 unit tests, real-D1 smoke with migration 0002, staging dry-run deploy, and the hosted plans Playwright spec all pass. Client: `byok-gate`, `managed-ai`, `release-gate` and `chrome-store` unit tests pass; site typecheck and build pass; `tests/e2e/managed-ai.spec.js` passes 12 (2 skipped by design), including the new trial-claim and 3-credit cover-letter test. On a `--production` build, the production-only test passes (no Advanced/BYOK, managed mode, no OpenRouter calls); on the default build it fails as expected.
 - Status: committed on the public branch `feat/fair-source-store-only-ai` (not pushed). The private repo pushed `main` and `feat/trial-and-credit-costs`. Production `SALES_ENABLED` is still false, so trials stay off in production until launch. Follow-up: Manage billing still appears on trial-only keys (the gateway replies NO_BILLING).
+## Turn: 2026-11-13 - Workday source deterministic fallback fix (PR #15 CI run 43371336419)
+
+- CI Finding (run 43371336419, step 17 `Run npm run test:e2e -- --max-failures=1`, commit 471b4c7 on PR #15 `fix/qa-160-application-reliability` -> `prod`):
+  - Failed tests: `tests/e2e/workday-prompts.spec.js:6:1 › Workday Enter prompts commit owned tokens and parsed experience rows are completed without duplicates or AI` and `tests/e2e/workday-prompts.spec.js:34:1 › Workday profile autofill works without an API key`.
+  - Symptoms: `locator('[data-automation-id="formField-source"] [data-automation-id="selectedItem"]') Expected: "LinkedIn" Error: element(s) not found`.
+  - Root cause: In commit 1be26ef, `if (canonical === 'source') return 'LinkedIn';` was removed from `workdayValue` in `src/core/adapters/workday-fields.js` to address QA-160-05 on Clio (where LinkedIn was not in the available source options). However, removing it completely broke `workday-prompts.spec.js`, where unharvested Workday comboboxes require a deterministic fallback to `'LinkedIn'` when AI is disabled or unavailable. Furthermore, in `workdayAnswer`, if `field.options` are already populated and do not contain LinkedIn, it should return `null` so the engine falls back to contextual AI (preserving QA-160-05).
+  - Resolution:
+    - Updated `src/core/adapters/workday-fields.js`:
+      - In `workdayValue`: restored `if (canonical === 'source') return profile.source || 'LinkedIn';`.
+      - In `workdayAnswer`: marked `answer.provenance = 'inferred'` for `canonicalKey === 'source'`, and if `field.ats?.canonicalKey === 'source' && field.options?.length`, returned `null` when no exact option matches to allow contextual AI fallback.
+  - Verification:
+    - Targeted execution of `tests/e2e/workday-prompts.spec.js`: 4/4 passed (1.6m).
+    - Targeted execution of unit tests `production-0.5.160.test.js` and `workday.test.js`: 63/63 passed (65.8s).
+    - Targeted execution of `upload.spec.js` (7/7 passed), `workflow-recovery.spec.js` (4/4 passed), `reported-applications.spec.js` (5/5 passed), `remaining-ats-qa.spec.js` (3/3 passed), `greenhouse-workday-qa.spec.js` (4/4 passed), and `ats-hardening.spec.js` (5/5 passed).
+  - Turn changes: `src/core/adapters/workday-fields.js` modified; `CONTEXT_AND_FINDINGS.md` updated.
+
+## Turn: 2026-11-13 - CI E2E assertion repairs for truncated-form test specs (PR #15)
+
+- CI Finding (run 43357545737, job 131616025753, step 17 `Run npm run test:e2e -- --max-failures=1`, commit 3761a58 on PR #15 `fix/qa-160-application-reliability` -> `prod`):
+  - Failed test: `tests/e2e/remaining-ats-qa.spec.js:7:1 › captured paginated Greenhouse school resolves Guelph and retries the partial row without Add` (test 193).
+  - Symptoms: 60s timeout waiting for `'Page filled. Review your answers, then submit the application.'` in `#kr-main-panel`.
+  - Root cause: The test simplifies the Greenhouse fixture DOM using `document.querySelector('form').replaceChildren(section)`, which strips the form submit button. Because there is no submit button and no continue button, and `autoContinue` is false, `src/core/application.js` (lines 801-815) enters status `paused` with `'Page filled. Auto Continue is off.'`. In commit 7f62e56, a broad string search-and-replace mistakenly changed the expected message in this test and two others (`reported-applications.spec.js` line 80 and `workflow-recovery.spec.js` line 56) to `'Page filled. Review your answers, then submit the application.'`.
+  - Resolution: Reverted the assertions in `remaining-ats-qa.spec.js`, `reported-applications.spec.js`, and `workflow-recovery.spec.js` back to `'Page filled. Auto Continue is off.'`.
+  - Verification: Targeted execution of `remaining-ats-qa.spec.js` passed 3/3 tests (3.2m).
+  - Turn changes: `tests/e2e/remaining-ats-qa.spec.js`, `tests/e2e/reported-applications.spec.js`, `tests/e2e/workflow-recovery.spec.js` updated; this log updated.
 
 ## Turn: 2026-11-09 - QA-160 diagnosis and focused repair branch
 
@@ -3897,3 +3922,5 @@ Narrative voice prompt updated and verified.
 - Changes: `background/storage.js` now defaults to Kareer AI unless a personal key is saved (or a mode was chosen); `KAREER_MANAGED_DEFAULT` and `--managed` removed from `tools/build.js` and `.github/workflows/deploy.yml` (release gate still runs when `MANAGED_AI_RELEASE` is set). Consent gate removed: the Settings section and checkbox (`options/index.html`, `options/billing.js`), `AI_DATA_CONSENT` message/handler (`shared/protocol.js`, `background/index.js`), consent checks in `background/ai.js` and `background/materials.js`, `consentNeeded` state in `background/storage.js`, `src/core/ui.js` and `popup/index.js`. Replaced by an inline notice of what Kareer AI sends, directly above the trial/plan buttons ("starting a trial, buying or activating a key means you agree"), and a matching line in the own-key hint; this keeps the Chrome Web Store prominent-disclosure requirement, Firefox consents at install. Privacy policy text updated (Version 2.3), `docs/chrome-web-store.md` reviewer notes updated.
 - Tests: `privacy.spec.js` first test now checks no checkbox, the notice above the trial button, mobile width and an AI request without consent; `managed-ai.spec.js` new-install test expects Kareer AI plus the trial offer; `shell.spec.js` keyless panel shows "Activation needed" and the options test switches to own key before saving one; unit seeds cleaned. Unit (managed-ai, materials-ai, byok-gate) pass; Playwright privacy + managed-ai + shell 22 pass, 3 env-gated skips; live staging trial (`KR_STAGING_TRIAL=1`) passes; site typecheck/build pass. Built v0.5.168.
 - Next: user reloads the unpacked extension at chrome://extensions (or loads `dist/chrome`, v0.5.168).
+- Production changes: `src/core/materials-model.js` now builds enabled structured profile records and notes only, excludes imported/base/resume-context content, and removes the diff helper. `background/materials.js` removes extraction and base
+... [truncated for diff preview]
