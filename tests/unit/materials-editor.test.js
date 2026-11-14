@@ -44,6 +44,19 @@ test('removed sections leave the editor model without breaking the round trip', 
   doc.content = doc.content.filter(s => s.attrs.id !== 'project');
   assert.deepEqual(editorToModel(doc, model).sections.map(s => s.id), ['work', 'skills']);
 });
+test('undoing a section removal after an autosave restores the section from baseSections', () => {
+  const removedDraft = structuredClone(model);
+  removedDraft.sections = removedDraft.sections.filter(s => s.id !== 'project');
+  const savedAfterRemoval = editableModel(model, removedDraft, model.sections);
+  assert.deepEqual(savedAfterRemoval.sections.map(s => s.id), ['work', 'skills']);
+
+  // Undoing in the editor restores 'project' from ProseMirror history
+  const restoredDraft = structuredClone(model);
+  const savedAfterUndo = editableModel(savedAfterRemoval, restoredDraft, model.sections);
+  assert.deepEqual(savedAfterUndo.sections.map(s => s.id), ['work', 'project', 'skills']);
+  assert.equal(savedAfterUndo.sections[1].title, model.sections[1].title);
+  assert.deepEqual(savedAfterUndo.sections[1].bullets, model.sections[1].bullets);
+});
 test('rewrite guards detect paragraph insertion before the selected paragraph', () => {
   const letter = { paragraphs: ['Opening', 'Body', 'Closing'] };
   assert.notEqual(rewriteText(letter, 'paragraph:1'), rewriteText({ paragraphs: ['New', ...letter.paragraphs] }, 'paragraph:1'));

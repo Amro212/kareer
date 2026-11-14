@@ -36,7 +36,8 @@ export function editorToModel(document, original) {
 }
 
 // Only editable text crosses this boundary; profile identity and section metadata stay intact.
-export function editableModel(original, incoming) {
+// Preserved baseSections allow undoing a section removal even after an autosave has flushed.
+export function editableModel(original, incoming, baseSections = original.sections) {
   if (incoming?.kind !== original.kind) throw new Error('Document type changed. Reopen the document.');
   const result = structuredClone(original);
   if (original.kind === 'coverLetter') {
@@ -45,18 +46,23 @@ export function editableModel(original, incoming) {
   } else {
     if (typeof incoming.summary !== 'string' || !Array.isArray(incoming.sections) || incoming.sections.length > 100) throw new Error('Invalid resume draft.');
     result.summary = incoming.summary;
-    // Drafts may remove sections; they never add sections or change their metadata.
-    result.sections = result.sections.filter(section => incoming.sections.some(s => s?.id === section.id));
+    const available = baseSections || original.sections || [];
+    // Drafts may remove or restore known sections; they never add unknown sections or change their metadata.
+    result.sections = incoming.sections
+      .map(incomingSection => {
+        const trusted = available.find(s => s?.id === incomingSection?.id);
+        if (!trusted) return null;
+        const section = structuredClone(trusted);
+        if (!Array.isArray(incomingSection.bullets) || incomingSection.bullets.length > 100 || incomingSection.bullets.some(b => typeof b !== 'string')) throw new Error('Invalid section draft.');
+        section.bullets = incomingSection.bullets;
+        if (section.category === 'Projects' && incomingSection.keywords !== undefined) {
+          if (!Array.isArray(incomingSection.keywords) || incomingSection.keywords.length > 100 || incomingSection.keywords.some(k => typeof k !== 'string')) throw new Error('Invalid project keywords.');
+          section.keywords = incomingSection.keywords;
+        }
+        return section;
+      })
+      .filter(Boolean);
     if (!result.sections.length) throw new Error('Invalid resume draft: keep at least one section.');
-    for (const section of result.sections) {
-      const next = incoming.sections.find(s => s.id === section.id);
-      if (!next || !Array.isArray(next.bullets) || next.bullets.length > 100 || next.bullets.some(b => typeof b !== 'string')) throw new Error('Invalid section draft.');
-      section.bullets = next.bullets;
-      if (section.category === 'Projects' && next.keywords !== undefined) {
-        if (!Array.isArray(next.keywords) || next.keywords.length > 100 || next.keywords.some(k => typeof k !== 'string')) throw new Error('Invalid project keywords.');
-        section.keywords = next.keywords;
-      }
-    }
   }
   if (JSON.stringify(result).length > 200000) throw new Error('Draft is too large. Shorten the text and retry.');
   return result;

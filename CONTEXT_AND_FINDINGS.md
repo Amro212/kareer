@@ -1,3 +1,18 @@
+## Turn: 2026-11-13 - Preserve removed section baseline metadata so undo survives autosave
+
+- User report: Reviewer finding on PR #16 (chatgpt-codex-connector bot review on `src/targets/extension/materials/editor-model.js` lines 48-49): "P2: Preserve removed section metadata so undo survives autosave. If a user removes a résumé section, waits for autosave to complete, and then clicks Undo, the section reappears in the editor but is silently omitted from subsequent saves. Both putDraft and save call editableModel with the latest saved model, which no longer contains the removed section, so this filter cannot restore it. MaterialAutosave nevertheless marks the editor snapshot as compiled, reporting 'Saved locally' while downloads and reloads omit the restored content."
+- Symptoms: When a user removed a resume section, waited 1.6s for autosave to compile/flush to background storage, and then clicked Undo, the section reappeared in the editor, but subsequent saves/drafts dropped the section. The status showed "Saved locally", but downloads and reloads omitted the restored section (silent data loss).
+- Root cause: `editableModel(original, incoming)` in `src/targets/extension/materials/editor-model.js` filtered `result.sections` (`original.sections`) against `incoming.sections`. When called in `background/materials.js` during `putDraft` and `save`, `original` was `record.model` (the previously saved model that already had the section stripped). Therefore, `result.sections` lacked the removed section, and the filter could never restore it even though `incoming.sections` from the editor contained the undone section.
+- Resolution:
+  - In `src/targets/extension/materials/editor-model.js`: updated `editableModel(original, incoming, baseSections = original.sections)` to accept `baseSections`. When reconstructing `result.sections`, maps `incoming.sections` against `available = baseSections || original.sections || []`. If an incoming section exists in `available`, its trusted metadata is preserved while attaching incoming bullets (and project keywords).
+  - In `src/targets/extension/background/materials.js`: preserved `baseSections` on the stored record during generation (`stampFiles`) and `save`, and passed `baseSections` to `editableModel` in `putDraft`, `rewriteDraft`, and `save`.
+- Verification:
+  - Unit tests: `node --test tests/unit/materials-editor.test.js` passed 11/11 (including new unit test `undoing a section removal after an autosave restores the section from baseSections`).
+  - Unit tests: `node --test tests/unit/materials.test.js` (22/22 passed), `node --test tests/unit/materials-ai.test.js` (8/8 passed).
+  - E2E tests: `npx playwright test tests/e2e/materials-editor.spec.js` (passed).
+- Files changed this turn: `src/targets/extension/materials/editor-model.js`, `src/targets/extension/background/materials.js`, `tests/unit/materials-editor.test.js`, `CONTEXT_AND_FINDINGS.md`.
+- Status: Local fixes applied and verified. Per user instruction, nothing pushed.
+
 ## Turn: 2026-11-12 - Panel profile tab, Open profile routing, typography
 
 - Request: replace the panel Settings tab icon; clean up the Profile tab; "Open settings" must open the Profile page; split Full name into First and Last name; remove "Additional Saved Answers & Disclosures"; check typography consistency.
