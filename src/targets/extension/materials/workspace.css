@@ -22,7 +22,7 @@
   font-display: swap;
 }
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 * {
   box-sizing: border-box;
@@ -124,13 +124,6 @@ main {
   flex-shrink: 0;
   background: var(--kr-bg-0);
 }
-.job-context {
-  margin-bottom: 18px;
-}
-.job-context-text {
-  flex: 1;
-  min-width: 0;
-}
 #job-heading {
   overflow-wrap: anywhere;
 }
@@ -169,14 +162,6 @@ main {
 .status-error {
   color: var(--kr-danger);
 }
-.document-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
 .actions {
   display: flex;
   align-items: center;
@@ -191,8 +176,7 @@ main {
   border: 1px solid var(--kr-line);
   border-radius: 6px;
 }
-.tabs button,
-.task-tabs button {
+.tabs button {
   background: transparent;
   border: 1px solid transparent;
   color: var(--kr-text-2);
@@ -200,22 +184,9 @@ main {
   font-weight: 500;
 }
 .tabs button[aria-selected=true] {
-  color: var(--kr-signal);
+  color: var(--kr-signal-ink);
   background: var(--kr-bg-2);
-  border-color: var(--kr-line);
-}
-.task-tabs {
-  display: flex;
-  gap: 24px;
-  border-bottom: 1px solid var(--kr-line);
-}
-.task-tabs button {
-  border-radius: 0;
-  padding: 10px 0;
-}
-.task-tabs button[aria-selected=true] {
-  color: var(--kr-signal);
-  border-bottom-color: var(--kr-signal);
+  border-color: var(--kr-line-strong);
 }
 .feedback {
   font-size: 12px;
@@ -291,7 +262,9 @@ textarea::placeholder {
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: var(--kr-signal);
+  border-color: var(--kr-focus);
+  outline: 2px solid var(--kr-focus);
+  outline-offset: 1px;
 }
 textarea {
   line-height: 1.7;
@@ -401,9 +374,11 @@ textarea {
   overflow-wrap: anywhere;
 }
 #editor-sections button[aria-current] {
-  color: var(--kr-signal);
+  color: var(--kr-text-1);
   background: var(--kr-bg-2);
-  border-color: var(--kr-line);
+  border-color: transparent;
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--kr-focus);
 }
 #editor-sections small {
   display: block;
@@ -522,8 +497,11 @@ textarea {
   font-style: italic;
   margin-bottom: 1.333px;
 }
+.document-content:focus-visible {
+  outline: 2px solid var(--kr-focus);
+  outline-offset: 4px;
+}
 .document-content {
-  outline: none;
   caret-color: #406900;
 }
 .material-section {
@@ -566,19 +544,28 @@ textarea {
   font-style: italic;
   pointer-events: none;
 }
-.section-rewrite {
+.section-actions {
   position: absolute;
-  right: -16px;
-  top: 0;
-  transform: translateY(-100%);
-  font: 11px var(--kr-font);
+  right: 0;
+  top: 2px;
+  display: flex;
+  gap: 4px;
   opacity: 0;
   pointer-events: none;
-  z-index: 1;
+  z-index: 10;
+  transition: opacity 120ms ease;
 }
-.material-section:hover > .section-rewrite,
-.material-section:focus-within > .section-rewrite,
-.section-rewrite:focus-visible {
+.section-actions button {
+  font: 11px var(--kr-font);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+}
+.material-section.has-category-header:has(.paper-title) > .section-actions,
+.material-section:has(.paper-category:not([hidden]) + .paper-title) > .section-actions {
+  top: 28px;
+}
+.material-section:hover > .section-actions,
+.material-section:focus-within > .section-actions,
+.section-actions:focus-within {
   opacity: 1;
   pointer-events: auto;
 }
@@ -721,7 +708,7 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 summary:focus-visible {
-  outline: 2px solid var(--kr-signal);
+  outline: 2px solid var(--kr-focus);
   outline-offset: 3px;
 }
 [hidden] {
@@ -796,9 +783,6 @@ summary:focus-visible {
   .workspace-toolbar {
     padding: 14px 16px 0;
   }
-  .job-context {
-    margin-bottom: 12px;
-  }
   #job-heading {
     font-size: 16px;
   }
@@ -806,9 +790,6 @@ summary:focus-visible {
     font-size: 10px;
     white-space: normal;
     max-width: 130px;
-  }
-  .document-toolbar {
-    gap: 10px;
   }
   #editor-actions {
     gap: 6px;
@@ -847,12 +828,9 @@ summary:focus-visible {
     max-width: 32ch;
     margin: 16px auto 0;
   }
-  .section-rewrite {
+  .section-actions {
     opacity: 1;
     pointer-events: auto;
-  }
-  .document-paper .section-rewrite {
-    transform: translateY(-80%);
   }
   .overflow-status,
   .rewrite-status {
@@ -873,14 +851,8 @@ summary:focus-visible {
 .materials .jobs.app-sidebar { padding: 28px 16px 20px; max-height: none; }
 .materials .jobs .app-navigation { margin: 0; overflow: visible; flex: 0 0 auto; }
 .materials .jobs .app-navigation .nav-item { flex: none; }
-.materials .jobs .app-configuration { margin-top: 36px; flex: 0 0 auto; overflow: visible; }
 .materials .app-brand { font-size: 20px; font-weight: 650; letter-spacing: -.025em; }
 .materials main { overflow: hidden; }
-.recent-navigation { margin: 28px 12px 0; color: var(--kr-text-2); font-size: 12px; overflow-y: auto; }
-.recent-navigation summary { cursor: pointer; padding: 8px 0; }
-.materials #saved-jobs { margin-top: 8px; overflow: visible; }
-.materials #saved-jobs button { padding: 10px 8px; font-size: 12px; }
-.materials #saved-jobs button small { font-size: 12px; }
 .materials .app-sidebar-footer { flex: 0 0 auto; }
 .materials-library { padding: 48px 56px; overflow-y: auto; flex: 1; }
 .library-heading { display: flex; align-items: center; justify-content: space-between; gap: 28px; margin-bottom: 56px; }
@@ -891,7 +863,7 @@ summary:focus-visible {
 .library-controls h2 { font-size: 16px; }
 .application-search { position: relative; width: 260px; max-width: 100%; }
 .application-search svg { position: absolute; left: 12px; top: 12px; color: var(--kr-text-3); pointer-events: none; }
-.application-search input { padding-left: 38px; font-size: 13px; background: var(--kr-bg-1); border-color: var(--kr-line); }
+.application-search input { padding-left: 38px; font-size: 13px; background: var(--kr-bg-1); border-color: var(--kr-line-strong); }
 .application-columns, .application-row { display: grid; grid-template-columns: minmax(0, 1fr) 220px 120px; gap: 24px; align-items: center; }
 .application-columns { color: var(--kr-text-3); font-size: 12px; padding: 0 20px 14px; border-bottom: 1px solid var(--kr-line); }
 .application-columns > :last-child { text-align: right; }
@@ -912,33 +884,35 @@ summary:focus-visible {
 .application-loading { padding: 32px 20px; }
 .application-workspace { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .workspace-load-error { padding: 20px 32px; display: flex; align-items: center; flex-wrap: wrap; gap: 16px; border-bottom: 1px solid var(--kr-line); color: var(--kr-danger); }
-.workspace-breadcrumb { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
 .workspace-back { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--kr-text-3); padding: 4px 0; font-size: 12px; font-weight: 450; }
 .workspace-back:hover { background: transparent; color: var(--kr-text-1); }
 .workspace-back svg { width: 14px; height: 14px; }
-.materials .workspace-toolbar { padding: 24px 32px 0; border-bottom: 1px solid var(--kr-line); }
+.materials .workspace-toolbar { padding: 16px 32px 0; border-bottom: 1px solid var(--kr-line); }
+.materials .document-header { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px; min-height: 64px; padding-bottom: 12px; }
+.materials .role-heading { flex: 1; min-width: 0; margin: 0; font: inherit; }
+.materials .role-button { display: flex; flex-direction: column; align-items: flex-start; max-width: 100%; border: 0; background: transparent; color: var(--kr-text-1); padding: 2px 4px; margin-left: -4px; text-align: left; }
+.materials .role-button:hover { background: transparent; }
+.materials .role-button:hover #job-heading { text-decoration: underline; text-underline-offset: 4px; }
+.materials #view-edit { flex: 0 0 auto; }
 .materials #job-heading { font-size: 22px; font-weight: 600; letter-spacing: -.02em; }
-.materials #company-heading { margin-top: 6px; font-size: 13px; }
+.materials #company-heading { margin-top: 6px; font-size: 13px; font-weight: 400; }
 .materials #document-status { font-size: 12px; }
-.materials .job-context { margin-bottom: 20px; }
-.materials .document-toolbar { justify-content: flex-start; gap: 16px; margin-bottom: 14px; }
 .materials .tabs { padding: 2px; border-color: transparent; background: var(--kr-bg-1); }
 .materials .tabs button { font-size: 12px; }
-.materials .tabs button[aria-selected=true] { color: var(--kr-text-1); border-color: var(--kr-line); }
-.materials .task-tabs { border: 0; gap: 8px; }
-.materials .task-tabs button { padding: 8px 10px; border-radius: var(--kr-radius-sm); font-size: 12px; }
-.materials .task-tabs button[aria-selected=true] { border-color: transparent; background: var(--kr-bg-2); color: var(--kr-signal); }
+.materials .tabs button[aria-selected=true] { color: var(--kr-text-1); border-color: var(--kr-line-strong); font-weight: 600; }
 .materials #editor-actions { margin-left: auto; gap: 6px; }
 .materials #editor-actions button { font-size: 12px; }
-.materials .prepare-content { max-width: 1120px; padding: 40px 32px; }
+.materials .prepare-content { max-width: 720px; padding: 40px 32px; }
 .materials .prepare-heading { margin-bottom: 28px; }
 .materials .prepare-heading h2 { font-size: 24px; }
-.materials .prepare-grid { grid-template-columns: minmax(0, 1fr) 224px; gap: 40px; }
+.materials .prepare-grid { grid-template-columns: minmax(0, 640px); justify-content: center; gap: 28px; }
 .materials .prepare-context p, .materials .prepare-context a { font-size: 13px; }
 .materials .generation-note { font-size: 12px; }
-.materials .edit-layout { grid-template-columns: clamp(220px, 18vw, 280px) minmax(0, 1fr); }
-.materials .document-outline { padding: 22px 20px; border-right: 0; }
-.materials .document-outline > h3 { font-size: 12px; }
+.materials .edit-layout { grid-template-columns: 216px minmax(0, 1fr); }
+.materials .document-outline { padding: 16px 16px 24px 24px; border-right: 1px solid var(--kr-line); }
+.materials .document-outline > h3 { display: flex; align-items: center; min-height: 36px; margin-bottom: 8px; padding-left: 10px; font-size: 12px; }
+.materials #editor-sections button { padding: 8px 10px; }
+.materials .outline-note, .materials .document-outline > a { padding-left: 10px; }
 .materials .document-stage { background: var(--kr-bg-0); }
 .materials .canvas-toolbar { background: var(--kr-bg-0); border-bottom: 0; }
 .materials .canvas-scroll { padding-top: 16px; }
@@ -951,7 +925,7 @@ summary:focus-visible {
   .materials-library { padding: 36px 32px; }
   .application-columns, .application-row { grid-template-columns: minmax(0, 1fr) 180px 110px; gap: 20px; }
   .materials #editor-actions { flex: 1 1 auto; }
-  .materials .prepare-grid { gap: 28px; grid-template-columns: minmax(0, 1fr) 200px; }
+  .materials .prepare-grid { gap: 28px; grid-template-columns: minmax(0, 640px); }
 }
 @media (max-width: 1000px) {
   .materials .prepare-grid { grid-template-columns: minmax(0, 1fr); }
@@ -972,8 +946,6 @@ summary:focus-visible {
   .materials .jobs.app-sidebar { padding: 16px; flex: 0 0 auto; }
   .materials .jobs .app-navigation { flex-direction: row; }
   .materials .jobs .app-navigation .nav-item { flex: 1; }
-  .materials .jobs .app-configuration { display: flex; position: absolute; top: 10px; right: 16px; margin: 0; }
-  .materials .recent-navigation { display: none; }
   .materials main { flex: 1; }
   .materials-library { padding: 32px 20px; }
   .library-heading { flex-wrap: wrap; gap: 20px; margin-bottom: 40px; }
@@ -986,11 +958,8 @@ summary:focus-visible {
   .application-empty { padding: 40px 0; text-align: left; }
   .application-empty p { margin: 0; }
   .materials .workspace-toolbar { padding: 16px 20px 0; }
-  .workspace-breadcrumb { margin-bottom: 12px; }
   .materials #job-heading { font-size: 18px; }
-  .materials .job-context { align-items: flex-start; gap: 12px; margin-bottom: 16px; }
   .materials #document-status { max-width: 110px; font-size: 11px; }
-  .materials .document-toolbar { gap: 10px; }
   .materials #editor-actions { margin-left: 0; flex: 1 1 100%; flex-wrap: wrap; }
   .materials #editor-actions button { padding: 7px 9px; font-size: 12px; }
   .materials .prepare-content { padding: 28px 20px; }
@@ -1012,15 +981,6 @@ summary:focus-visible {
 .paper-text p.paper-keywords:empty::after {
   content: "Add project keywords, separated by commas";
 }
-.task-tabs button:hover {
-  background: transparent;
-  border-color: transparent;
-  color: var(--kr-text-1);
-}
-.task-tabs button[aria-selected=true]:hover {
-  color: var(--kr-signal);
-  border-bottom-color: var(--kr-signal);
-}
 .paper-bullets p:has(> br:only-child)::before {
   display: none;
 }
@@ -1035,12 +995,12 @@ summary:focus-visible {
   #document-status {
     font-size: 11px;
   }
-  .section-rewrite {
+  .section-actions {
     opacity: 0;
     pointer-events: none;
   }
-  .material-section:focus-within > .section-rewrite,
-  .section-rewrite:focus-visible {
+  .material-section:focus-within > .section-actions,
+  .section-actions:focus-within {
     opacity: 1;
     pointer-events: auto;
   }

@@ -1,6 +1,6 @@
 {
   "name": "kareer",
-  "version": "0.5.160",
+  "version": "0.5.174",
   "description": "Kareer — AI job application autofill for Chrome, Firefox, and Tampermonkey",
   "type": "module",
   "scripts": {
@@ -22,7 +22,7 @@
     "autofill"
   ],
   "author": "Kareer Team",
-  "license": "MIT",
+  "license": "FSL-1.1-MIT",
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "esbuild": "^0.25.0",

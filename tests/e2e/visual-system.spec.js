@@ -25,8 +25,7 @@ test('local typography, internal options navigation, and responsive console', as
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath(`options-${width}.png`), fullPage: true });
   }
-  await page.locator('.app-configuration > .nav-item').click();
-  await page.locator('.configuration-links a[href="#advanced"]').click();
+  await page.locator('#settings-nav-link').click();
   await expect(page.locator('#export-data')).toBeVisible();
 });
 

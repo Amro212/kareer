@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 globalThis.chrome = { runtime: {}, storage: { local: { async get(key) {
-  if (key === null) return { 'kr:secrets': { apiKey: 'test-key', aiDataConsent: 1 }, 'kr:settings': { model: 'google/gemini-2.5-flash-lite' } };
-  return { [key]: key === 'kr:secrets' ? { apiKey: 'test-key', aiDataConsent: 1 } : { model: 'google/gemini-2.5-flash-lite' } };
+  if (key === null) return { 'kr:secrets': { apiKey: 'test-key' }, 'kr:settings': { model: 'google/gemini-2.5-flash-lite' } };
+  return { [key]: key === 'kr:secrets' ? { apiKey: 'test-key' } : { model: 'google/gemini-2.5-flash-lite' } };
 } } } };
 const { writingRequest, materialWritingInstructions } = await import('../../src/targets/extension/background/materials.js');
 const realFetch = globalThis.fetch;
@@ -24,6 +24,12 @@ test('materials request structured JSON for resumes and cover letters', async ()
 test('complete JSON fallback and fenced JSON remain supported', async () => {
   globalThis.fetch = async () => Response.json({ choices: [{ message: { content: '```json\n{"paragraphs":["Hello"]}\n```' }, finish_reason: 'stop' }] });
   try { assert.deepEqual(await writingRequest(input, materialWritingInstructions(input.kind), new AbortController()), { paragraphs: ['Hello'] }); }
+  finally { globalThis.fetch = realFetch; }
+});
+
+test('a complete answer followed by a repeated tail keeps the complete answer', async () => {
+  globalThis.fetch = async () => Response.json({ choices: [{ message: { content: '{"paragraphs":["Sincerely,\\nTest \\"A\\" ]}"]}\nTest \\"A\\" ]}"]}' }, finish_reason: 'stop' }] });
+  try { assert.deepEqual(await writingRequest(input, materialWritingInstructions(input.kind), new AbortController()), { paragraphs: ['Sincerely,\nTest "A" ]}'] }); }
   finally { globalThis.fetch = realFetch; }
 });
 

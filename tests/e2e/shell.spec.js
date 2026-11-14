@@ -48,12 +48,12 @@ test.describe('extension shell', () => {
     await expect(page.locator('#kr-main-panel')).toContainText('detected');
   });
 
-  test('a new installation asks for a key without collecting credentials in the page', async ({ kr }) => {
+  test('a new installation asks for activation without collecting credentials in the page', async ({ kr }) => {
     const page = await kr.context.newPage();
     await page.goto(kr.fixtureUrl('phase2-form-fixture.html'));
     await kr.openPanel(page);
 
-    await expect(page.locator('#kr-main-panel')).toContainText('No API Key');
+    await expect(page.locator('#kr-main-panel')).toContainText('Activation needed');
 
     // The panel offers the options page instead of collecting the key in-page.
     await page.locator('[data-tab=settings]').click();
@@ -87,14 +87,14 @@ test.describe('extension shell', () => {
     const page = await kr.context.newPage();
     await page.goto(kr.optionsUrl());
 
-    await page.locator('.app-configuration > .nav-item').click();
-    await expect(page.locator('#advanced-ai')).toHaveJSProperty('open', true);
-    await expect(page.locator('#ai-mode')).toHaveValue('byok');
+    await page.locator('#settings-nav-link').click();
+    await expect(page.locator('#ai-mode')).toHaveValue('managed');
+    await page.locator('#advanced-ai > summary').click();
+    await page.locator('#ai-mode').selectOption('byok');
     await page.locator('#api-key').fill('sk-or-v1-from-options-page');
     await page.locator('#save-key').click();
     await expect(page.locator('#key-status')).toHaveText('Key saved');
 
-    await page.locator('.configuration-links a[href="#models"]').click();
     await page.locator('#byok-model summary').click();
     await expect(page.locator('#model')).toHaveJSProperty('tagName', 'INPUT');
     await expect(page.locator('#model')).toHaveValue('');
@@ -105,8 +105,8 @@ test.describe('extension shell', () => {
     await page.screenshot({ path: testInfo.outputPath('byok-model-mobile.png'), fullPage: true });
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.locator('#model').fill('openai/gpt-4o-mini');
-    await page.locator('#save-model').click();
-    await expect(page.locator('#model-feedback')).toHaveText('Writing preferences saved.');
+    await page.locator('#save-byok-model').click();
+    await expect(page.locator('#byok-model-feedback')).toHaveText('Model saved.');
 
     await page.locator('#profile-nav-link').click();
     await page.locator('[data-profile-section=identity] .profile-edit-button').click();
@@ -124,11 +124,12 @@ test.describe('extension shell', () => {
     expect(await kr.readStorage('kr:secrets')).toEqual({ apiKey: 'sk-or-v1-from-options-page' });
     expect((await kr.readStorage('kr:settings')).model).toBe('openai/gpt-4o-mini');
     await page.reload();
-    await page.goto(`${kr.optionsUrl()}#models`);
+    await page.goto(`${kr.optionsUrl()}#settings`);
     await page.locator('#byok-model summary').click();
     await expect(page.locator('#model')).toHaveValue('openai/gpt-4o-mini');
     await page.locator('#model').fill('');
-    await page.locator('#save-model').click();
+    await page.locator('#save-byok-model').click();
+    await expect(page.locator('#byok-model-feedback')).toHaveText('Model saved.');
     expect((await kr.readStorage('kr:settings')).model).toBe('openai/gpt-4o-mini');
 
     const profile = await kr.readStorage('kr:profile');
@@ -192,7 +193,8 @@ test.describe('extension shell', () => {
 
     await page.bringToFront();
     await page.locator('[data-tab=profile]').click();
-    await expect(page.locator('#kareer-root [name=fullName]')).toHaveValue('Broadcast Applicant');
+    await expect(page.locator('#kareer-root [name=firstName]')).toHaveValue('Broadcast');
+    await expect(page.locator('#kareer-root [name=lastName]')).toHaveValue('Applicant');
   });
 
   test('popup reports fields without internal frame diagnostics', async ({ kr }) => {

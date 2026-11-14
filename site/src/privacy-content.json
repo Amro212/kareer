@@ -2,7 +2,7 @@
   {
     "id": "overview",
     "title": "Overview",
-    "html": "<p>Profiles, files, sessions and application execution remain local. Optional managed Kareer AI in Chrome/Firefox uses a payment and AI gateway. Advanced BYOK connects directly to OpenRouter; the userscript remains BYOK.</p>"
+    "html": "<p>Profiles, files, sessions and application execution remain local. Official extension builds use Kareer AI, which goes through a payment and AI gateway. Copies you build yourself can instead connect your own OpenRouter key directly; the userscript uses your own key only.</p>"
   },
   {
     "id": "local-storage",
@@ -12,7 +12,7 @@
   {
     "id": "ai-transmission",
     "title": "Information Transmitted When AI Features Are Used",
-    "html": "<p>Autofill, option discovery, repairs, rewrites and document writing send relevant profile facts, resume context, notes, job descriptions, questions and choices over HTTPS. Page-answer requests include the current application page URL and hostname. Profile context can include contact details, location, salary expectations and optional demographic or disability answers you have saved. These are used to answer application questions, not for advertising or general browsing-history analytics. Automatic follow-ups can make additional requests.</p><p>Managed AI travels from the privileged extension background through https://api.kareer.itsamro.me (Cloudflare Worker) to OpenRouter and its downstream provider. The gateway holds prompts and outputs in memory during the bounded request and does not persist them. Advanced BYOK travels directly from the privileged background or userscript host to OpenRouter and your selected provider.</p><p>External providers have their own terms and retention practices; Kareer does not promise zero external retention. Avoid unnecessary sensitive information. Local features remain available without paid AI.</p>"
+    "html": "<p>Autofill, option discovery, repairs, rewrites and document writing send relevant profile facts, resume context, notes, job descriptions, questions and choices over HTTPS. Page-answer requests include the current application page URL and hostname. Profile context can include contact details, location, salary expectations and optional demographic or disability answers you have saved. These are used to answer application questions, not for advertising or general browsing-history analytics. Automatic follow-ups can make additional requests.</p><p>Managed AI travels from the privileged extension background through https://api.kareer.itsamro.me (Cloudflare Worker) to OpenRouter and its downstream provider. The gateway holds prompts and outputs in memory during the bounded request and does not persist them. In self-built copies, your own key's requests travel directly from the privileged background or userscript host to OpenRouter and your selected provider.</p><p>External providers have their own terms and retention practices; Kareer does not promise zero external retention. Avoid unnecessary sensitive information. Local features remain available without paid AI.</p>"
   },
   {
     "id": "limited-use",
@@ -22,7 +22,7 @@
   {
     "id": "api-keys",
     "title": "Credentials and Activation",
-    "html": "<p>A personal reusable Kareer key authenticates Kareer AI. Kareer creates it when your first payment is confirmed and shows it once in Settings; it is never emailed. Anyone with the key can spend your shared credits. Raw keys and private checkout claim secrets stay in privileged background storage, excluded from content snapshots, backups, page DOM and logs. The gateway stores only key hashes and verified payment identifiers. Keys are not device locked. BYOK keys stay local and are never sent to the gateway. Changing connections is explicit; credit exhaustion never silently spends a personal key. Removing one credential preserves the other.</p>"
+    "html": "<p>A personal reusable Kareer key authenticates Kareer AI. Kareer creates it when you start the free trial or when your first payment is confirmed, and shows it in Settings; it is never emailed. Starting a trial stores only the new key hash and its trial credits; Cloudflare uses your IP address transiently to rate-limit trial creation. Anyone with the key can spend your shared credits. Raw keys and private checkout claim secrets stay in privileged background storage, excluded from content snapshots, backups, page DOM and logs. The gateway stores only key hashes and verified payment identifiers. Keys are not device locked. Your own OpenRouter key (self-built copies) stays local and is never sent to the gateway. Changing connections is explicit; credit exhaustion never silently spends a personal key. Removing one credential preserves the other.</p>"
   },
   {
     "id": "billing",
@@ -32,7 +32,7 @@
   {
     "id": "credits",
     "title": "Credits, Cancellation and Charging",
-    "html": "<p>Launch pricing is US$9.99/month for 1,000 credits per paid billing period, or US$4.99 once for 300 non-expiring credits. Taxes may apply. Monthly credits expire at period end and are spent first. Cancel in Manage billing; the paid allowance remains until expiry. Packs need no subscription and remain after cancellation. Failed renewals grant nothing new.</p><p>Each completed AI request costs one credit, including automatic follow-ups, repairs and rewrites. A run may use multiple credits. Oversized inputs, provider errors, timeouts, truncated or invalid completions are not charged. A validated, settled completion remains charged if delivery fails or an application rejects it. Server outputs cannot be recovered because they are not stored. Explicit retry is a new request and may spend another credit. No trial or automatic top-ups. Credits are usage units with no cash value. All sales are final, except where the law requires a refund. A refunded or disputed payment loses the credits it bought; a disputed payment also pauses new purchases until the dispute is resolved. See the <a href=\"/terms/\">Terms of Service</a>.</p>"
+    "html": "<p>Launch pricing is US$9.99/month for 1,000 credits per paid billing period, or US$4.99 once for 300 non-expiring credits. Taxes may apply. Monthly credits expire at period end and are spent first. Cancel in Manage billing; the paid allowance remains until expiry. Packs need no subscription and remain after cancellation. Failed renewals grant nothing new.</p><p>Each completed autofill, option, repair or field-rewrite request costs 1 credit, including automatic follow-ups. Generating a résumé or cover letter costs 3 credits; rewriting part of one costs 2. A run may use multiple credits. Oversized inputs, provider errors, timeouts, truncated or invalid completions are not charged. A validated, settled completion remains charged if delivery fails or an application rejects it. Server outputs cannot be recovered because they are not stored. Explicit retry is a new request and may spend another credit. New keys can claim 10 free trial credits once, expiring after 30 days. No automatic top-ups. Credits are usage units with no cash value. All sales are final, except where the law requires a refund. A refunded or disputed payment loses the credits it bought; a disputed payment also pauses new purchases until the dispute is resolved. See the <a href=\"/terms/\">Terms of Service</a>.</p>"
   },
   {
     "id": "retention",
@@ -52,12 +52,12 @@
   {
     "id": "control",
     "title": "Your Controls",
-    "html": "<p>Before using extension AI features, review the data-sharing disclosure in Settings and select the agreement checkbox. It starts unchecked, including for existing saved credentials. You can turn it off to stop new AI requests without deleting your profile, files or credentials; this cannot recall data already sent. Kareer requests OpenRouter provider routing with data collection denied. This is a provider-routing restriction, not a promise of zero retention by every service.</p><p>Edit or delete local profiles and files in the extension. Save your Kareer key (Settings → Show key) and activate it after reinstalling to regain your credits; this does not restore files. Lost your key? Email <a href=\"mailto:amromousa8@gmail.com\">amromousa8@gmail.com</a> from the address you paid with. Uninstalling or removing a key does not cancel billing. Use Manage billing to cancel or update payment details. Never post personal information or keys in bug reports.</p>"
+    "html": "<p>Settings shows what Kareer AI sends next to the trial, purchase and activation buttons; starting a trial, buying credits or activating a key is your agreement. To stop AI requests, remove your key from the browser (Settings → Remove key from this browser); saved profile filling keeps working, and data already sent cannot be recalled. Kareer requests OpenRouter provider routing with data collection denied. This is a provider-routing restriction, not a promise of zero retention by every service.</p><p>Edit or delete local profiles and files in the extension. Save your Kareer key (Settings → Show key) and activate it after reinstalling to regain your credits; this does not restore files. Lost your key? Email <a href=\"mailto:amromousa8@gmail.com\">amromousa8@gmail.com</a> from the address you paid with. Uninstalling or removing a key does not cancel billing. Use Manage billing to cancel or update payment details. Never post personal information or keys in bug reports.</p>"
   },
   {
     "id": "third-parties",
     "title": "Third-Party Services",
-    "html": "<p>Managed AI uses <a href=\"https://www.cloudflare.com/privacypolicy/\">Cloudflare</a>, <a href=\"https://stripe.com/privacy\">Stripe</a>, <a href=\"https://openrouter.ai/privacy\">OpenRouter</a> and downstream providers. BYOK uses OpenRouter and your chosen provider. Their policies govern their processing. Application sites receive answers and files you enter or submit.</p>"
+    "html": "<p>Managed AI uses <a href=\"https://www.cloudflare.com/privacypolicy/\">Cloudflare</a>, <a href=\"https://stripe.com/privacy\">Stripe</a>, <a href=\"https://openrouter.ai/privacy\">OpenRouter</a> and downstream providers. Your own key in a self-built copy uses OpenRouter and your chosen provider. Their policies govern their processing. Application sites receive answers and files you enter or submit.</p>"
   },
   {
     "id": "security",
@@ -66,8 +66,8 @@
   },
   {
     "id": "open-source",
-    "title": "Open Source",
-    "html": "<p>The extension, userscript and gateway source are in the <a href=\"https://github.com/Amro212/kareer\">Kareer repository</a> under MIT, with third-party notices preserved.</p>"
+    "title": "Source Code",
+    "html": "<p>The extension and userscript source are in the <a href=\"https://github.com/Amro212/kareer\">Kareer repository</a> under FSL-1.1-MIT, with third-party notices preserved. The Kareer AI gateway is a separate, closed-source service.</p>"
   },
   {
     "id": "contact",

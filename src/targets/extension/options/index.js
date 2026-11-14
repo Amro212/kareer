@@ -1538,14 +1538,16 @@ async function init() {
     else flash(feedback, `OpenRouter returned HTTP ${result.status}.`, true);
   };
 
-  $('save-model').onclick = async () => {
+  const saveWriting = (feedback, message) => async () => {
     const enteredModel = $('model').value.trim();
     const current = await readStore();
     const model = enteredModel || current.data[STORAGE_KEYS.SETTINGS]?.model || '';
     const next = { ...DEFAULT_SETTINGS, ...(current.data[STORAGE_KEYS.SETTINGS] || {}), model, narrativeStyle: getNarrativeStyle(styleSelect.value).id };
     await sendMessage({ type: MSG.STORAGE_SET, key: STORAGE_KEYS.SETTINGS, value: next });
-    flash($('model-feedback'), 'Writing preferences saved.');
+    flash($(feedback), message);
   };
+  $('save-model').onclick = saveWriting('model-feedback', 'Writing style saved.');
+  $('save-byok-model').onclick = saveWriting('byok-model-feedback', 'Model saved.');
 
   $('add-work-btn').onclick = () => {
     currentWork.push(createWorkExperience({ _collapsed: false }));
@@ -1667,17 +1669,11 @@ async function init() {
 
 function showOptionsRoute() {
   const hash = location.hash || '#profile';
-  const profileRoute = hash === '#profile' || hash.startsWith('#section-');
-  const targetId = profileRoute ? 'profile' : ['#connection', '#models', '#resume', '#advanced'].includes(hash) ? hash.slice(1) : 'profile';
+  const settingsRoute = ['#settings', '#connection', '#advanced'].includes(hash);
+  const targetId = settingsRoute ? 'settings' : 'profile';
   for (const section of document.querySelectorAll('.settings-main > section')) {
     section.hidden = section.id !== targetId;
   }
-  const titles = { connection: 'AI & billing', models: 'Writing preferences', resume: 'Uploaded resume', advanced: 'Backup & migration' };
-  $('options-heading').hidden = targetId === 'profile';
-  $('configuration-links').hidden = targetId === 'profile';
-  $('profile-subsections').hidden = targetId !== 'profile';
-  document.body.classList.toggle('configuration-open', targetId !== 'profile');
-  $('options-title').textContent = titles[targetId] || 'Profile';
   document.querySelectorAll('.settings-nav .nav-item[href^="#"]').forEach(link => {
     const current = link.getAttribute('href') === `#${targetId}`;
     link.classList.toggle('active', current);
@@ -1695,6 +1691,8 @@ function showOptionsRoute() {
     const card = target?.closest('.profile-summary-section');
     card?.scrollIntoView({ block: 'start' });
     card?.querySelector('h2')?.focus({ preventScroll: true });
+  } else if (hash === '#models' || hash === '#resume') {
+    document.getElementById(hash === '#resume' ? 'profile-resume' : 'models')?.scrollIntoView({ block: 'start' });
   } else {
     window.scrollTo({ top: 0 });
   }
@@ -1703,7 +1701,7 @@ function showOptionsRoute() {
 function setupNavigation() {
   if (navigationBound) return;
   navigationBound = true;
-  document.querySelectorAll('.settings-nav a[href^="#"]').forEach(link => {
+  document.querySelectorAll('.settings-nav a[href^="#"], #profile-subsections a[href^="#"]').forEach(link => {
     link.onclick = event => {
       event.preventDefault();
       history.pushState(null, '', link.getAttribute('href'));

@@ -1,19 +1,26 @@
 // The overview wraps the existing field editors. Inputs stay mounted while a
 // section opens, saves or closes, so other unfinished sections keep their state.
 const SECTIONS = [
-  { id: 'identity', title: 'Identity & contact', wide: true },
-  { id: 'work', title: 'Experience', keys: ['workExperiences'], wide: true },
-  { id: 'education', title: 'Education', keys: ['education'] },
-  { id: 'skills', title: 'Skills', keys: ['skills'] },
-  { id: 'projects', title: 'Projects', keys: ['projects'], wide: true },
-  { id: 'links', title: 'Online profiles' },
-  { id: 'address', title: 'Address' },
-  { id: 'languages', title: 'Languages', keys: ['languageRecords'] },
-  { id: 'eligibility', title: 'Work eligibility', keys: ['workEligibilities'] },
-  { id: 'preferences', title: 'Job preferences', wide: true },
-  { id: 'demographics', title: 'Demographics & disclosures' },
-  { id: 'rules', title: 'Writing guidance' },
+  { id: 'identity', title: 'Identity & contact', group: 'about', wide: true },
+  { id: 'address', title: 'Address', group: 'about' },
+  { id: 'links', title: 'Online profiles', group: 'about' },
+  { id: 'work', title: 'Experience', group: 'career', keys: ['workExperiences'], wide: true },
+  { id: 'education', title: 'Education', group: 'career', keys: ['education'] },
+  { id: 'skills', title: 'Skills', group: 'career', keys: ['skills'] },
+  { id: 'projects', title: 'Projects', group: 'career', keys: ['projects'], wide: true },
+  { id: 'languages', title: 'Languages', group: 'career', keys: ['languageRecords'] },
+  { id: 'eligibility', title: 'Work eligibility', group: 'answers', keys: ['workEligibilities'] },
+  { id: 'preferences', title: 'Job preferences', group: 'answers', wide: true },
+  { id: 'demographics', title: 'Demographics & disclosures', group: 'answers' },
+  { id: 'rules', title: 'Writing guidance', group: 'notes' },
 ];
+
+const GROUPS = {
+  about: ['About you', 'Name, contact, address, and the links you share on applications.'],
+  career: ['Career', 'Experience, education, skills, projects, and languages.'],
+  answers: ['Answers for applications', 'Eligibility, preferences, and demographic answers reused across applications.'],
+  notes: ['Notes', 'Guidance Kareer uses when it writes for you.'],
+};
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -107,6 +114,9 @@ export function createProfileWorkspace({ form, read, restore, save }) {
   const sections = [];
   const navigation = document.getElementById('profile-subsections');
   navigation?.replaceChildren();
+  const jumpGroups = new Map();
+  let openGroup = '';
+  const dock = document.getElementById('profile-floating-dock');
 
   for (const config of SECTIONS) {
     const fields = document.getElementById(`section-${config.id}`);
@@ -119,9 +129,16 @@ export function createProfileWorkspace({ form, read, restore, save }) {
     const heading = element('h2', '', config.title);
     heading.tabIndex = -1;
     if (navigation) {
+      if (!jumpGroups.has(config.group)) {
+        const [title] = GROUPS[config.group];
+        const block = element('div', 'profile-jump-group');
+        block.append(element('p', 'profile-group-label', title));
+        navigation.append(block);
+        jumpGroups.set(config.group, block);
+      }
       const link = element('a', 'profile-section-link', config.title);
       link.href = `#section-${config.id}`;
-      navigation.append(link);
+      jumpGroups.get(config.group).append(link);
     }
     const edit = element('button', 'profile-edit-button', 'Edit');
     edit.type = 'button';
@@ -146,7 +163,21 @@ export function createProfileWorkspace({ form, read, restore, save }) {
     actions.append(submit, cancel, status);
     editor.append(actions);
     wrapper.append(header, summary, editor);
-    form.insertBefore(wrapper, document.getElementById('profile-floating-dock'));
+    if (config.group !== openGroup) {
+      openGroup = config.group;
+      const [title, description] = GROUPS[config.group];
+      const group = element('div', 'profile-group');
+      group.id = `group-${config.group}`;
+      const groupTitle = element('h2', '', title);
+      groupTitle.tabIndex = -1;
+      group.append(groupTitle, element('p', 'hint', description));
+      form.insertBefore(group, dock);
+    }
+    form.insertBefore(wrapper, dock);
+    if (config.id === 'rules') {
+      const writing = document.getElementById('models');
+      if (writing) wrapper.after(writing);
+    }
 
     function refreshFields() {
       section.fields = [...fields.querySelectorAll('[name]')]

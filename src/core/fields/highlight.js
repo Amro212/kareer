@@ -125,13 +125,13 @@ export function initInlineRewriteBadge(onRewriteClick) {
     }
     .kr-style-label {
       display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box;
-      padding: 3px 6px; background: #0D1117; color: #F2F5F7; border: 1px solid #26303D; border-radius: 6px;
+      padding: 3px 6px; background: #fffefa; color: #20231c; border: 1px solid #777d6d; border-radius: 9px;
     }
     .kr-style-select {
-      color-scheme: dark; background: #0D1117; color: #F2F5F7; border: 0;
+      color-scheme: light; background: #fffefa; color: #20231c; border: 0;
       min-width: 0; max-width: 160px; font: inherit; line-height: normal;
     }
-    .kr-rewrite-btn:focus-visible, .kr-style-select:focus-visible { outline: 2px solid #A3E635; outline-offset: 2px; }
+    .kr-rewrite-btn:focus-visible, .kr-style-select:focus-visible { outline: 2px solid #496b18; outline-offset: 2px; }
     .kr-rewrite-btn {
       all: initial;
       display: inline-flex !important;
@@ -140,25 +140,23 @@ export function initInlineRewriteBadge(onRewriteClick) {
       height: 26px !important;
       box-sizing: border-box !important;
       padding: 0 10px !important;
-      background: #0D1117 !important;
-      color: #F2F5F7 !important;
-      border: 1px solid #26303D !important;
-      border-radius: 6px !important;
+      background: #c5f55a !important;
+      color: #20231c !important;
+      border: 1px solid transparent !important;
+      border-radius: 9px !important;
       font-family: 'Kareer Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
       font-size: 11px !important;
-      font-weight: 500 !important;
+      font-weight: 650 !important;
       line-height: 1 !important;
       cursor: pointer !important;
       user-select: none !important;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45) !important;
+      box-shadow: 0 10px 24px -18px #353b2850 !important;
       white-space: nowrap !important;
-      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     }
     .kr-rewrite-btn:hover {
-      background: #1A222D !important;
-      border-color: #A3E635 !important;
-      color: #FFFFFF !important;
-      transform: translateY(-1px);
+      background: #b6ea45 !important;
+      color: #20231c !important;
     }
     .kr-rewrite-btn:active {
       transform: translateY(0) scale(0.98);
@@ -166,7 +164,7 @@ export function initInlineRewriteBadge(onRewriteClick) {
     .kr-rewrite-icon {
       width: 12px !important;
       height: 12px !important;
-      color: #A3E635 !important;
+      color: #385008 !important;
       flex-shrink: 0 !important;
       display: block !important;
     }
@@ -175,23 +173,23 @@ export function initInlineRewriteBadge(onRewriteClick) {
     }
     .kr-rewrite-btn[data-state="loading"] {
       pointer-events: none !important;
-      border-color: #344152 !important;
-      color: #A8B2BF !important;
+      background: #efeee6 !important;
+      color: #51564a !important;
       cursor: wait !important;
     }
     .kr-rewrite-btn[data-state="success"] {
-      border-color: #52D98C !important;
-      color: #52D98C !important;
+      background: #e3efcf !important;
+      color: #3b5918 !important;
     }
     .kr-rewrite-btn[data-state="success"] .kr-rewrite-icon {
-      color: #52D98C !important;
+      color: #3b5918 !important;
     }
     .kr-rewrite-btn[data-state="error"] {
-      border-color: #F06A6A !important;
-      color: #F06A6A !important;
+      background: #fdf2ed !important;
+      color: #9a3412 !important;
     }
     .kr-rewrite-btn[data-state="error"] .kr-rewrite-icon {
-      color: #F06A6A !important;
+      color: #9a3412 !important;
     }
   `;
   shadow.appendChild(styleEl);

@@ -2,13 +2,17 @@ import { api, sendMessage } from '../shared/browser.js';
 import { MSG } from '../shared/protocol.js';
 import { SUPPORT_EMAIL } from '../../../core/endpoints.js';
 import OFFERS from '../../../core/offers.json' with { type: 'json' };
+import CREDITS from '../../../core/credits.json' with { type: 'json' };
+
+const COST_NOTE = `Autofill requests use 1 credit; a résumé or cover letter uses ${CREDITS.costs.document} and rewriting part of one uses ${CREDITS.costs.documentRewrite}.`;
 
 const $ = id => document.getElementById(id);
-const labels = { ready: 'Ready', consentNeeded: 'AI sharing off', activationNeeded: 'Activation needed', outOfCredits: 'Out of credits', loading: 'Checking balance…', unavailable: 'Temporarily unavailable' };
+const labels = { ready: 'Ready', activationNeeded: 'Activation needed', outOfCredits: 'Out of credits', loading: 'Checking balance…', unavailable: 'Temporarily unavailable' };
+const BYOK = typeof KAREER_BYOK !== 'boolean' || KAREER_BYOK;
 let bound = false, timer;
 function draw(status) {
-  if (!$('ai-data-consent').disabled) $('ai-data-consent').checked = status?.dataConsent === true;
-  const managed = status?.mode !== 'byok';
+  const managed = !BYOK || status?.mode !== 'byok';
+  $('advanced-ai').hidden = !BYOK;
   $('ai-mode').value = managed ? 'managed' : 'byok';
   $('managed-ai').hidden = !managed;
   $('byok-connection').hidden = managed;
@@ -20,7 +24,13 @@ function draw(status) {
   $('total-balance').textContent = status?.total != null ? `${status.total.toLocaleString()} credits` : status?.balanceState === 'loading' ? 'Checking balance…' : 'Balance unavailable';
   $('monthly-balance').textContent = status?.monthly?.toLocaleString() ?? '—';
   $('purchased-balance').textContent = status?.purchased?.toLocaleString() ?? '—';
-  $('monthly-expiry').textContent = status?.monthlyExpiresAt ? `Monthly credits expire ${new Date(status.monthlyExpiresAt).toLocaleString()}. Purchased credits never expire.` : 'Purchased credits never expire.';
+  $('trial-offer').hidden = status?.trialAvailable !== true;
+  $('manage-billing').hidden = status?.billing === false;
+  $('trial-balance-row').hidden = !status?.trial;
+  $('trial-balance').textContent = status?.trial?.toLocaleString() ?? '—';
+  $('monthly-expiry').textContent = [status?.monthlyExpiresAt ? `Monthly credits expire ${new Date(status.monthlyExpiresAt).toLocaleString()}.` : '',
+    status?.trial && status?.trialExpiresAt ? `Trial credits expire ${new Date(status.trialExpiresAt).toLocaleDateString()}.` : '',
+    'Purchased credits never expire.', COST_NOTE].filter(Boolean).join(' ');
   const subscriptions = status?.subscriptions || [];
   $('plan-status').textContent = [status?.flagged ? `A payment on this key is disputed. Its credits are on hold and new purchases are paused. Email ${SUPPORT_EMAIL} with questions.` : '',
     subscriptions.length ? subscriptions.map(planText).join(' ') : 'No monthly plan. Credit packs work on their own.'].filter(Boolean).join(' ');
@@ -82,18 +92,6 @@ export function setupBilling(snapshot) {
   draw(snapshot.aiStatus || { mode: 'byok', state: snapshot.hasApiKey ? 'ready' : 'activationNeeded' });
   if (bound) return;
   bound = true;
-  $('ai-data-consent').onchange = async () => {
-    const checkbox = $('ai-data-consent');
-    checkbox.disabled = true;
-    try {
-      const result = await sendMessage({ type: MSG.AI_DATA_CONSENT, accepted: checkbox.checked });
-      if (result?.error) throw new Error(result.error);
-      $('ai-consent-feedback').textContent = checkbox.checked ? 'AI data sharing enabled.' : 'AI data sharing off. Saved profile filling still works.';
-    } catch (error) {
-      checkbox.checked = !checkbox.checked;
-      $('ai-consent-feedback').textContent = error.message;
-    } finally { checkbox.disabled = false; }
-  };
   $('ai-mode').onchange = async () => {
     const snapshot = await sendMessage({ type: MSG.SNAPSHOT });
     await sendMessage({ type: MSG.STORAGE_SET, key: 'kr:settings', value: { ...snapshot.data['kr:settings'], aiMode: $('ai-mode').value } });
@@ -105,6 +103,10 @@ export function setupBilling(snapshot) {
     await refresh(); $('activation-feedback').textContent = 'Key activated. Kareer AI is ready.';
   }, 'activation-feedback');
   $('license-key').oninput = () => { $('activate-license').disabled = !$('license-key').value.trim(); };
+  action('start-trial', async () => {
+    await billing('trial');
+    await refresh(); $('managed-feedback').textContent = 'Your free trial is ready. Use Show key to save your key for another browser.';
+  });
   action('refresh-usage', async () => { await refresh(); $('managed-feedback').textContent = 'Usage refreshed. Connection checks use no credits.'; });
   action('reveal-license', async () => {
     const { licenseKey } = await billing('revealKey');
@@ -121,16 +123,26 @@ export function setupBilling(snapshot) {
     $('managed-feedback').textContent = '';
     await poll();
   };
+  const perCredit = offer => offer.cents / offer.credits;
+  const cheapest = Math.min(...Object.values(OFFERS).map(perCredit)), priciest = Math.max(...Object.values(OFFERS).map(perCredit));
+  const el = (tag, className, text) => { const node = document.createElement(tag); node.className = className; node.textContent = text; return node; };
   $('ai-plans').replaceChildren(...Object.entries(OFFERS).map(([key, offer]) => {
-    const item = document.createElement('li'), copy = document.createElement('div');
-    const name = document.createElement('strong'), line = document.createElement('span'), button = document.createElement('button');
-    name.textContent = `${offer.name} · ${offer.price} ${offer.cadence}`;
-    line.textContent = offer.summary;
+    const item = el('li', 'ai-plan', ''), best = perCredit(offer) === cheapest && cheapest < priciest;
+    item.classList.toggle('featured', best);
+    if (best) item.append(el('p', 'ai-plan-tag', `Best value · ${Math.round((1 - cheapest / priciest) * 100)}% less per credit`));
+    const name = el('h4', 'ai-plan-name', offer.name);
+    const price = el('p', 'ai-plan-price', '');
+    price.append(el('strong', '', offer.price), el('span', '', ` ${offer.cadence}`));
+    const facts = el('ul', 'ai-plan-facts', '');
+    for (const fact of [
+      `${offer.credits.toLocaleString()} credits${key === 'monthly' ? ' every month' : ' that never expire'}`,
+      `About ${Math.floor(offer.credits / CREDITS.costs.autofill).toLocaleString()} autofilled pages or ${Math.floor(offer.credits / CREDITS.costs.document).toLocaleString()} tailored résumés`,
+      key === 'monthly' ? 'Cancel anytime' : 'No subscription',
+    ]) facts.append(el('li', '', fact));
+    const button = el('button', best ? '' : 'secondary', key === 'monthly' ? 'Subscribe' : 'Buy pack');
     button.id = `buy-${key}`;
-    button.textContent = key === 'monthly' ? 'Subscribe' : 'Buy pack';
     button.setAttribute('aria-label', `${button.textContent}: ${offer.name}, ${offer.price} ${offer.cadence}`);
-    copy.append(name, line);
-    item.append(copy, button);
+    item.append(name, price, facts, button);
     return item;
   }));
   for (const key of Object.keys(OFFERS)) action(`buy-${key}`, checkout(key));

@@ -83,5 +83,5 @@ export const platform = {
     // session/job, and open. Host implementations own files and API secrets.
     request: (operation, input = {}) => host.materialsRequest?.(operation, input) ?? Promise.reject(new Error('Tailored documents require the extension.')),
   },
-  openOptions: () => host.openOptions(),
+  openOptions: page => host.openOptions(page),
 };

@@ -16,10 +16,10 @@
   </p>
 
   <p>
-    <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
+    <a href="./LICENSE"><img src="https://img.shields.io/badge/License-FSL--1.1--MIT-blue.svg" alt="License: FSL-1.1-MIT" /></a>
     <a href="./package.json"><img src="https://img.shields.io/github/package-json/v/Amro212/kareer?color=A3E635" alt="Version" /></a>
     <a href="#installation"><img src="https://img.shields.io/badge/platform-Chrome%20%7C%20Firefox%20%7C%20Tampermonkey-orange.svg" alt="Platform" /></a>
-    <a href="./SECURITY.md"><img src="https://img.shields.io/badge/security-BYOK%20%7C%20Zero%20Telemetry-purple.svg" alt="Security: BYOK & Isolated" /></a>
+    <a href="./SECURITY.md"><img src="https://img.shields.io/badge/security-Local--first%20%7C%20Zero%20Telemetry-purple.svg" alt="Security: Local-first & Isolated" /></a>
   </p>
 
   <p><em>Fill job application forms from your saved profile, then review the answers.<br />Local profile tools with optional AI-assisted writing.</em></p>
@@ -43,8 +43,8 @@
 - [Key Features](#key-features)
 - [Supported ATS Matrix](#supported-ats-matrix)
 - [Quick Start for Job Seekers](#quick-start-for-job-seekers)
-  - [Step 1: Get an OpenRouter API Key](#step-1-get-an-openrouter-api-key)
-  - [Step 2: Install the Extension or Userscript](#step-2-install-the-extension-or-userscript)
+  - [Step 1: Install Kareer](#step-1-install-kareer)
+  - [Step 2: Turn On AI](#step-2-turn-on-ai)
   - [Step 3: Configure Your Profile & Resume](#step-3-configure-your-profile--resume)
   - [Step 4: Autofill Your First Job Application](#step-4-autofill-your-first-job-application)
 - [Safety & Privacy Guarantees](#safety--privacy-guarantees)
@@ -60,11 +60,11 @@
 
 ## What is Kareer?
 
-Kareer is an open-source browser assistant that scans job application forms, matches questions to your resume and experience, and accurately fills out inputs, comboboxes, dropdowns, radio buttons, and textareas.
+Kareer is a source-available browser assistant that scans job application forms, matches questions to your resume and experience, and accurately fills out inputs, comboboxes, dropdowns, radio buttons, and textareas.
 
-Unlike proprietary autofill extensions that store your sensitive resume data on third-party servers or charge monthly subscriptions, Kareer:
-- **Runs entirely in your browser** with **zero telemetry** and no external backend.
-- Uses **Bring Your Own Key (BYOK)** with OpenRouter, allowing you to use fast, cost-effective models (such as `google/gemini-2.0-flash` or `anthropic/claude-3.5-sonnet`) for fractions of a cent per application.
+Unlike autofill extensions that store your sensitive resume data on third-party servers, Kareer:
+- **Keeps your profile, resume and files in your browser** with **zero telemetry**.
+- Fills from your saved profile for free. AI answers come from **Kareer AI**, which works right after install (new users get 10 free credits), or from **your own OpenRouter key** if you build Kareer yourself.
 - Uses a **non-intrusive Shadow DOM floating panel** that never conflicts with website stylesheets.
 
 ---
@@ -81,7 +81,7 @@ Unlike proprietary autofill extensions that store your sensitive resume data on 
 - **Application review controls**: Review filled answers, including certifications and disclosures, and correct anything that needs attention. Auto Continue and Auto Submit follow your settings; Auto Submit is off by default.
 - 🔄 **Automated Job Capture & Multi-Step Continuity**: Automatically captures job titles, companies, and requirements on navigation. Tracks multi-page workflows, reconciles parsed resume rows without duplicating records, and provides instant rescan/engine reset to prevent request-limit stalls.
 - ✍️ **Inline Narrative Rewrite**: Easily tweak open-ended essay questions ("Why do you want to work here?") directly inside the form with an inline AI rewrite tool tailored to specific job requirements.
-- 🔒 **Ironclad Key Isolation**: Your OpenRouter API key is stored in sandboxed extension storage and used only by background workers. It is never exposed to page scripts or web DOM.
+- 🔒 **Ironclad Key Isolation**: Your Kareer key (or your own OpenRouter key in a self-built copy) is stored in sandboxed extension storage and used only by background workers. It is never exposed to page scripts or web DOM.
 
 ---
 
@@ -103,23 +103,18 @@ Kareer includes dedicated adapters for major Applicant Tracking Systems (ATS) as
 
 Follow this simple 4-step guide to get up and running in less than 5 minutes.
 
-### Step 1: Get an OpenRouter API Key
+### Step 1: Install Kareer
 
-Kareer connects to AI models via [OpenRouter](https://openrouter.ai/), an API aggregator providing access to dozens of leading LLMs.
+#### Option A: Firefox (Signed Add-on)
+1. Download the latest signed extension directly:
+   **[Download Kareer for Firefox (.xpi)](https://kareer.itsamro.me/downloads/kareer-firefox.xpi)**
+2. In Firefox, open the downloaded `.xpi` file (or drag it into any open Firefox tab).
+3. Firefox will detect Mozilla's signature and prompt: *"Add Kareer? This extension has been verified by Mozilla"*. Click **Add** to install.
 
-1. Create a free account at [openrouter.ai](https://openrouter.ai/).
-2. Navigate to **Keys** and click **Create Key**.
-3. Add a small credit balance (e.g., $3–$5 is typically enough for hundreds of applications).
-   > [!TIP]
-   > We recommend the default model: **`google/gemini-2.5-flash-lite`**. It is extremely fast, accurate at structured JSON output, and costs fractions of a cent per application. All testing was done using this model.
+#### Option B: Build it yourself (Chrome, Brave, Edge, Firefox, or Tampermonkey)
+Self-built copies are for your own personal use (see [License](#license--security)). They can use either Kareer AI or your own OpenRouter key.
 
----
-
-### Step 2: Install the Extension or Userscript
-
-Choose whichever method fits your browser:
-
-#### Option A: Chrome, Brave, Edge, or Chromium Browsers
+**Chromium browsers:**
 1. Download or clone this repository to your computer.
 2. Build the project (or use the pre-built `dist/chrome` directory):
    ```bash
@@ -133,15 +128,9 @@ Choose whichever method fits your browser:
 4. Toggle on **Developer mode** (usually a switch in the top-right corner).
 5. Click **Load unpacked** and select the `dist/chrome` folder inside this project.
 
-#### Option B: Firefox (Signed Add-on)
-1. Download the latest signed extension directly:
-   **[Download Kareer for Firefox (.xpi)](https://kareer.itsamro.me/downloads/kareer-firefox.xpi)**
-2. In Firefox, open the downloaded `.xpi` file (or drag it into any open Firefox tab).
-3. Firefox will detect Mozilla's signature and prompt: *"Add Kareer? This extension has been verified by Mozilla"*. Click **Add** to install.
-*(Alternatively, build from source and load temporarily via `about:debugging`)*.
+**Firefox:** run the same build, then load `dist/firefox` temporarily via `about:debugging`.
 
-#### Option C: Tampermonkey Userscript (Any Browser)
-If you prefer userscripts:
+**Tampermonkey / Violentmonkey (userscript, uses your own OpenRouter key):**
 1. Install the [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/) browser extension.
 2. Build the userscript:
    ```bash
@@ -151,17 +140,26 @@ If you prefer userscripts:
 
 ---
 
+### Step 2: Turn On AI
+
+Filling from your saved profile works without AI. For AI answers, open **Settings → AI & billing**:
+
+- **Kareer AI (official builds and self-built copies):** choose **Try Kareer AI free** for 10 free credits, or pick a plan. No account and no setup. Filling a page costs 1 credit; generating a resume or cover letter costs 3, and rewriting part of one costs 2.
+- **Your own OpenRouter key (self-built copies only):**
+  1. Create an account at [openrouter.ai](https://openrouter.ai/), open **Keys** and click **Create Key**.
+  2. Add a small credit balance (e.g., $3–$5 is typically enough for hundreds of applications).
+  3. In Settings, choose **Use my own OpenRouter key** and paste it. We recommend **`google/gemini-2.5-flash-lite`**; all testing was done using this model.
+
+---
+
 ### Step 3: Configure Your Profile & Resume
 
 1. Click the **Kareer** icon in your browser toolbar (or open the floating side panel).
-2. Go to the **Settings** tab:
-   - Paste your **OpenRouter API Key**.
-   - Select your preferred model (e.g. `google/gemini-2.0-flash`).
-3. Go to the **Profile** tab:
+2. Go to the **Profile** tab:
    - Fill in your basic information (Full Name, Email, Phone, LinkedIn, GitHub, Portfolio).
    - Paste your **Resume text / context**.
    - Add any **Applicant Notes** (e.g. salary expectations, notice period, sponsorship requirements, preferred pronouns).
-4. Click **Save Profile**. Your data is saved locally in your browser.
+3. Click **Save Profile**. Your data is saved locally in your browser.
 
 ---
 
@@ -275,7 +273,9 @@ origin into the background script and both manifests' host permissions.
 | `npm run build -- --production` | `KAREER_GATEWAY_ORIGIN` if set, otherwise `https://api.kareer.itsamro.me` | `dist/chrome`, `dist/firefox`, `dist/kareer-chrome.zip`, `dist/kareer-firefox.xpi` |
 
 Only `--production` builds can use the production gateway, and they can't use
-the staging one. The release workflows build with `--production` and read
+the staging one. `--production` builds are the official store packages: they
+use Kareer AI only and leave out the "Use my own OpenRouter key" option. Every
+other build keeps it. The release workflows build with `--production` and read
 `KAREER_GATEWAY_ORIGIN` from the repository variable of the same name.
 `--gateway=https://…` overrides the gateway for non-production builds. Plan
 prices and credits come from `src/core/offers.json`, which the gateway, the
@@ -336,5 +336,7 @@ If you encounter a form or ATS edge case that doesn't fill correctly:
 
 ## License & Security
 
-- **License**: Released under the [MIT License](./LICENSE).
+- **License**: [FSL-1.1-MIT](./LICENSE) (Functional Source License). You can read, modify and build Kareer for your own use, for non-commercial education and research. You can't offer it, or a substantially similar product, to others commercially. Each release becomes MIT-licensed two years after it is published.
+- **Trademark**: The Kareer name and logo are not covered by the license. See [TRADEMARK.md](./TRADEMARK.md).
+- **Kareer AI**: Official builds use Kareer AI only. The Kareer AI gateway is a separate, closed-source service.
 - **Security & Privacy**: Read our complete [Security Policy](./SECURITY.md) for details on key isolation and data protection.

@@ -6,7 +6,7 @@ import { findExactOption } from './fields/combobox.js';
 import { profileForAI, fixedProfileAnswer, workEligibilityAnswer, formatStructuredBackground } from './profile.js';
 import { adapterById, detectAdapter } from './adapters/index.js';
 import { isResidenceLabel, locationMatches } from './location.js';
-import { buildAiMessages } from './ai-prompts.js';
+import { buildAiMessages, parseModelJson } from './ai-prompts.js';
 
 export { CANDIDATE_VOICE_PROFILE, NARRATIVE_VOICE_RULES, USER_APPROVED_WRITING_EXAMPLES, BASELINE_STYLE_EXAMPLES, getNarrativeStyleExamples, buildNarrativeVoicePrompt, isNarrativeField, buildStructuredSystemPrompt, buildNarrativeSystemPrompt, buildNarrativeEditorSystemPrompt } from './ai-prompts.js';
 
@@ -35,15 +35,6 @@ function aiStyle(profile, settings) {
 
 function sendAiRequest(options) {
   return platform.ai.request({ ...options, headers: { ...REQUEST_HEADERS, ...options.headers } });
-}
-
-function cleanJsonFence(text) {
-  if (!text) return '';
-  let cleaned = text.trim();
-  if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
-  }
-  return cleaned;
 }
 
 // `input` is the structured operation the managed gateway accepts; it builds the
@@ -90,10 +81,9 @@ async function requestAiJson({ model, input, temperature = 0.2, timeout = AUTOFI
     throw new Error(`Failed to parse OpenRouter response: ${err.message}`);
   }
 
-  const cleaned = cleanJsonFence(rawContent);
   let parsed;
   try {
-    parsed = JSON.parse(cleaned);
+    parsed = parseModelJson(rawContent);
   } catch (err) {
     logger.error(`Failed to parse ${tag} answers JSON`);
     throw new Error(`AI returned invalid JSON: ${err.message}`);

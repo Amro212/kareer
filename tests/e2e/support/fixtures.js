@@ -84,7 +84,7 @@ export const test = base.extend({
       async seed({ apiKey = 'sk-or-v1-e2e-test-key', settings, profile, resume } = {}) {
         await worker.evaluate(async ({ apiKey, settings, profile }) => {
           const secrets = (await chrome.storage.local.get('kr:secrets'))['kr:secrets'] || {};
-          await chrome.storage.local.set({ 'kr:secrets': { ...secrets, ...(apiKey ? { apiKey } : {}), aiDataConsent: 1 } });
+          await chrome.storage.local.set({ 'kr:secrets': { ...secrets, ...(apiKey ? { apiKey } : {}) } });
           if (settings) {
             const cur = (await chrome.storage.local.get('kr:settings'))['kr:settings'] || {};
             await chrome.storage.local.set({ 'kr:settings': { ...cur, ...settings } });

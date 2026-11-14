@@ -13,38 +13,8 @@ const { STAGING_GATEWAY_ORIGIN: GATEWAY } = await import('../../src/core/endpoin
 const PAGE = { applicantProfile: {}, fieldsToFill: [{ fieldId: 'f1' }] };
 beforeEach(() => {
   for (const key of Object.keys(records)) delete records[key];
-  records['kr:secrets'] = { apiKey: 'byok-secret', licenseKey: 'private-license', aiDataConsent: 1 };
+  records['kr:secrets'] = { apiKey: 'byok-secret', licenseKey: 'private-license' };
   records['kr:settings'] = { aiMode: 'managed' };
-});
-
-test('AI sends nothing before explicit data consent and stops after consent is withdrawn', async () => {
-  const { writingRequest } = await import('../../src/targets/extension/background/materials.js');
-  const previousFetch = globalThis.fetch;
-  let requests = 0;
-  globalThis.fetch = async () => { requests++; return Response.json({ choices: [] }); };
-  records['kr:profile'] = { fullName: 'Local Applicant' };
-  delete records['kr:secrets'].aiDataConsent;
-  try {
-    for (const mode of ['byok', 'managed']) {
-      records['kr:settings'].aiMode = mode;
-      const result = await proxyAiRequest({ operation: 'autofill', input: PAGE });
-      assert.equal(result.kind, 'CONSENT_REQUIRED');
-      assert.match(result.error, /Settings/);
-      assert.equal((await storage.readAiStatus()).state, 'consentNeeded');
-      await assert.rejects(writingRequest({ kind: 'resume' }, '', new AbortController()), /allow AI data sharing/);
-    }
-    assert.equal(requests, 0);
-    await storage.writeAiDataConsent(true);
-    assert.equal((await storage.readAiStatus()).dataConsent, true);
-    records['kr:settings'].aiMode = 'byok';
-    assert.equal((await proxyAiRequest({ url: 'https://openrouter.ai/api/v1/chat/completions', data: '{}' })).status, 200);
-    assert.equal(requests, 1);
-    await storage.writeAiDataConsent(false);
-    assert.equal((await proxyAiRequest({ operation: 'document', input: PAGE })).kind, 'CONSENT_REQUIRED');
-    assert.equal(requests, 1);
-    assert.equal(records['kr:profile'].fullName, 'Local Applicant');
-    assert.equal(records['kr:secrets'].apiKey, 'byok-secret');
-  } finally { globalThis.fetch = previousFetch; }
 });
 
 test('credential changes preserve the other credential and snapshots exclude all secrets', async () => {
@@ -90,7 +60,7 @@ test('managed requests strip BYOK policy, use bounded streaming, and never fall 
       data: JSON.stringify({ model: 'custom', messages: [{ role: 'user', content: 'hello' }] }), input: PAGE });
     assert.equal(JSON.parse(result.responseText).choices[0].message.content, '{"answers":[]}');
     globalThis.fetch = async url => { if (url.endsWith('/v1/ai')) calls++; return Response.json({ code: 'NO_CREDITS', error: 'Out of credits.' }, { status: 402 }); };
-    assert.match((await proxyAiRequest({ operation: 'autofill', input: PAGE })).error, /Out of credits/);
+    assert.match((await proxyAiRequest({ operation: 'autofill', input: PAGE })).error, /Not enough credits/);
     assert.equal(calls, 2);
   } finally { globalThis.fetch = realFetch; }
 });
@@ -116,7 +86,7 @@ test('managed stream failures report whether the credit release was confirmed', 
       globalThis.fetch = async () => new Response(JSON.stringify(event), { headers: { 'Content-Type': 'application/x-ndjson' } });
       const { error } = await proxyAiRequest({ operation: 'autofill', input: PAGE });
       assert.match(error, /incomplete or invalid/);
-      assert.match(error, charged === false ? /No credit was charged/ : /could not confirm whether a credit was used/i);
+      assert.match(error, charged === false ? /No credits were charged/ : /could not confirm whether credits were used/i);
       assert.doesNotMatch(error, /private details/);
       assert.equal((await storage.readAiStatus()).total, charged === false ? 300 : null);
     }
@@ -243,16 +213,16 @@ test('released credit restores readiness after another concurrent request report
   const realFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ type: 'error', code: 'INVALID_COMPLETION', charged: false, credits: { monthly: 0, purchased: 1, total: 1 } }) + '\n', { headers: { 'Content-Type': 'application/x-ndjson' } });
   try {
-    assert.match((await proxyAiRequest({ operation: 'autofill', input: PAGE })).error, /No credit was charged/);
+    assert.match((await proxyAiRequest({ operation: 'autofill', input: PAGE })).error, /No credits were charged/);
     assert.equal(records['kr:ai-status'].state, 'ready');
     assert.equal(records['kr:ai-status'].total, 1);
   } finally { globalThis.fetch = realFetch; }
 });
 
-test('claims use the purchase route, a first claim selects Kareer AI, and new installs default to your own key', async () => {
+test('claims use the purchase route, a first claim selects Kareer AI, and new installs default to Kareer AI', async () => {
   delete records['kr:settings'];
   records['kr:secrets'] = { checkout: { id: 'purchase-1', claimSecret: 'claim-secret', expiresAt: new Date(Date.now() + 60000).toISOString() } };
-  assert.equal((await storage.readAiStatus()).mode, 'byok');
+  assert.equal((await storage.readAiStatus()).mode, 'managed');
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url, options) => {
     assert.equal(url, `${GATEWAY}/v1/purchases/purchase-1`);

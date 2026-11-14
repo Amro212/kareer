@@ -100,6 +100,7 @@ export function createExtensionHost() {
       crossFrame: true,
       fileUpload: true,
       materials: true,
+      optionsPage: true,
     },
     storageReady: () => (hydrated ||= hydrate()),
     storageGet,
@@ -151,8 +152,8 @@ export function createExtensionHost() {
       if (operation === 'snapshot') return { ...result, records: Object.fromEntries(Object.entries(result.records).map(([kind, record]) => [kind, decodeMaterial(record)])) };
       return ['get', 'save'].includes(operation) ? decodeMaterial(result) : result;
     },
-    openOptions: () => {
-      sendMessage({ type: MSG.OPEN_OPTIONS }).catch(() => {});
+    openOptions: (page = 'settings') => {
+      sendMessage({ type: MSG.OPEN_OPTIONS, page }).catch(() => {});
     },
     menuRegister: () => {},
   };

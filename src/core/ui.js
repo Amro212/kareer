@@ -1,4 +1,5 @@
 import { TOKENS, VISUAL_NAME, installPanelFonts } from './theme.js';
+import CREDITS from './credits.json' with { type: 'json' };
 import { APP_VERSION, APP_NAME, UI_IDS, FILL_STATUS, STORAGE_KEYS } from './constants.js';
 import { PROFILE_SECTIONS, PROFILE_FIELDS, calculateProfileStrength } from './profile.js';
 import {
@@ -276,7 +277,7 @@ const ICONS = {
   minimize: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="8" x2="13" y2="8"/></svg>`,
   chevronDown: `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 6 8 10 12 6"/></svg>`,
   user: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 14v-1.5a3.5 3.5 0 0 0-3.5-3.5h-3A3.5 3.5 0 0 0 3 12.5V14"/><circle cx="8" cy="5" r="3"/></svg>`,
-  settings: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.5"/><path d="M13.5 9.5l1.1-.6a1 1 0 0 0 .4-1.3l-1-1.7a1 1 0 0 0-1.2-.5l-1.2.5a5 5 0 0 0-1.1-.6L10.3 4a1 1 0 0 0-1-.8H7.3a1 1 0 0 0-1 .8L6.1 5.3a5 5 0 0 0-1.1.6l-1.2-.5a1 1 0 0 0-1.2.5l-1 1.7a1 1 0 0 0 .4 1.3l1.1.6a5 5 0 0 0 0 1.2l-1.1.6a1 1 0 0 0-.4 1.3l1 1.7a1 1 0 0 0 1.2.5l1.2-.5a5 5 0 0 0 1.1.6l.2 1.3a1 1 0 0 0 1 .8h2a1 1 0 0 0 1-.8l.2-1.3a5 5 0 0 0 1.1-.6l1.2.5a1 1 0 0 0 1.2-.5l1-1.7a1 1 0 0 0-.4-1.3l-1.1-.6a5 5 0 0 0 0-1.2z"/></svg>`,
+  settings: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>`,
   terminal: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 4 7 8 3 12"/><line x1="9" y1="12" x2="13" y2="12"/></svg>`,
   list: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="4" x2="14" y2="4"/><line x1="6" y1="8" x2="14" y2="8"/><line x1="6" y1="12" x2="14" y2="12"/><circle cx="3" cy="4" r=".8" fill="currentColor"/><circle cx="3" cy="8" r=".8" fill="currentColor"/><circle cx="3" cy="12" r=".8" fill="currentColor"/></svg>`,
   externalLink: `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h4"/><polyline points="10 2 14 2 14 6"/><line x1="7" y1="9" x2="14" y2="2"/></svg>`,
@@ -290,13 +291,13 @@ const STYLES = `
 :host {
   all: initial;
   ${TOKENS}
-  --kr-bg-surface-glass: rgba(13, 17, 23, 0.97);
-  --kr-bg-subtle: rgba(255, 255, 255, 0.03);
-  --kr-success-bg: rgba(82, 217, 140, 0.12);
-  --kr-warning-bg: rgba(242, 184, 75, 0.12);
-  --kr-danger-bg: rgba(240, 106, 106, 0.12);
-  --kr-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
-  --kr-shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(255, 255, 255, 0.025);
+  --kr-bg-surface-glass: rgba(255, 254, 250, 0.96);
+  --kr-bg-subtle: #efeee6;
+  --kr-success-bg: #e3efcf;
+  --kr-warning-bg: #fff0c9;
+  --kr-danger-bg: #fdf2ed;
+  --kr-shadow-sm: 0 1px 0 rgba(53, 59, 40, 0.06);
+  --kr-shadow-lg: 0 18px 48px -14px #353b2826;
 
   box-sizing: border-box;
 }
@@ -306,8 +307,8 @@ const STYLES = `
 }
 
 ::selection {
-  background: var(--kr-signal-dim);
-  color: var(--kr-signal);
+  background: var(--kr-signal);
+  color: var(--kr-on-signal);
 }
 
 /* Container & Edge Dock */
@@ -336,17 +337,17 @@ const STYLES = `
   width: 44px;
   height: 44px;
   border-radius: 12px 0 0 12px;
-  border-top: 1px solid var(--kr-line);
-  border-left: 1px solid var(--kr-line);
-  border-bottom: 1px solid var(--kr-line);
+  border-top: 1px solid var(--kr-line-strong);
+  border-left: 1px solid var(--kr-line-strong);
+  border-bottom: 1px solid var(--kr-line-strong);
   border-right: none;
   background: var(--kr-bg-1);
-  box-shadow: -4px 6px 20px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  box-shadow: -8px 12px 28px -16px #353b2848;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: grab;
-  color: var(--kr-signal);
+  color: var(--kr-text-1);
   transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), background 0.15s ease, border-color 0.15s ease, box-shadow 0.18s ease;
   user-select: none;
 }
@@ -364,9 +365,9 @@ const STYLES = `
 
 .kr-pebble:hover {
   transform: translateY(-50%) translateX(-4px);
-  border-color: var(--kr-signal);
+  border-color: var(--kr-focus);
   background: var(--kr-bg-2);
-  box-shadow: -6px 8px 24px rgba(0, 0, 0, 0.55), 0 0 14px rgba(163, 230, 53, 0.25);
+  box-shadow: -8px 12px 28px -16px #353b2848;
 }
 
 .kr-pebble-dot {
@@ -390,13 +391,13 @@ const STYLES = `
   align-items: center;
   gap: 8px;
   background: var(--kr-bg-1);
-  border-top: 1px solid var(--kr-line);
-  border-left: 1px solid var(--kr-line);
-  border-bottom: 1px solid var(--kr-line);
+  border-top: 1px solid var(--kr-line-strong);
+  border-left: 1px solid var(--kr-line-strong);
+  border-bottom: 1px solid var(--kr-line-strong);
   border-right: none;
   border-radius: 14px 0 0 14px;
   padding: 6px 12px 6px 14px;
-  box-shadow: -8px 8px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  box-shadow: -8px 12px 28px -16px #353b2848;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.18s ease;
   user-select: none;
   cursor: grab;
@@ -429,7 +430,7 @@ const STYLES = `
 }
 
 .kr-hud-brand-mark {
-  color: var(--kr-signal);
+  color: var(--kr-text-1);
   display: flex;
   align-items: center;
 }
@@ -445,23 +446,23 @@ const STYLES = `
   height: 7px;
   border-radius: 50%;
   background: var(--kr-success);
-  box-shadow: 0 0 6px rgba(82, 217, 140, 0.6);
+  box-shadow: none;
   flex-shrink: 0;
 }
 
 .kr-status-dot.no-key {
   background: var(--kr-warning);
-  box-shadow: 0 0 6px rgba(242, 184, 75, 0.6);
+  box-shadow: none;
 }
 
 .kr-status-dot.error {
   background: var(--kr-danger);
-  box-shadow: 0 0 6px rgba(240, 106, 106, 0.6);
+  box-shadow: none;
 }
 
 .kr-status-dot.running {
-  background: var(--kr-signal);
-  box-shadow: 0 0 4px rgba(163, 230, 53, 0.4);
+  background: var(--kr-focus);
+  box-shadow: none;
   animation: kr-pulse-dot 1.5s ease-in-out infinite;
 }
 
@@ -486,9 +487,9 @@ const STYLES = `
 }
 
 .kr-hud-badge-accent {
-  background: var(--kr-bg-2);
-  color: var(--kr-signal);
-  border-color: rgba(163, 230, 53, 0.35);
+  background: var(--kr-signal-dim);
+  color: var(--kr-signal-ink);
+  border-color: var(--kr-focus);
 }
 
 .kr-hud-adapter {
@@ -505,9 +506,9 @@ const STYLES = `
 }
 
 .kr-hud-cta {
-  background: var(--kr-signal);
-  color: #0A0D10;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--kr-action);
+  color: var(--kr-on-action);
+  border: 1px solid transparent;
   border-radius: var(--kr-radius-sm);
   padding: 6px 13px;
   font-size: 12px;
@@ -516,15 +517,12 @@ const STYLES = `
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: all 0.15s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: background 0.15s ease;
   white-space: nowrap;
 }
 
 .kr-hud-cta:hover {
-  background: var(--kr-signal-hover);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
-  transform: translateY(-1px);
+  background: var(--kr-action-hover);
 }
 
 .kr-hud-cta:active {
@@ -540,8 +538,8 @@ const STYLES = `
 
 .kr-hud-cta-running {
   background: var(--kr-bg-2);
-  color: var(--kr-signal);
-  border: 1px solid rgba(163, 230, 53, 0.4);
+  color: var(--kr-signal-ink);
+  border: 1px solid var(--kr-focus);
   box-shadow: none;
 }
 
@@ -582,12 +580,12 @@ const STYLES = `
   width: 440px;
   max-width: 95vw;
   background: var(--kr-bg-1);
-  border-left: 1px solid var(--kr-line);
+  border-left: 1px solid var(--kr-line-strong);
   border-top: none;
   border-right: none;
   border-bottom: none;
   border-radius: 0;
-  box-shadow: -14px 0 45px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  box-shadow: -18px 0 48px -14px #353b2826;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -636,8 +634,8 @@ const STYLES = `
 }
 
 .kr-material-row.is-generating {
-  border-color: rgba(163, 230, 53, 0.4);
-  background: rgba(163, 230, 53, 0.03);
+  border-color: var(--kr-focus);
+  background: var(--kr-signal-dim);
 }
 
 .kr-material-row-header {
@@ -671,7 +669,7 @@ const STYLES = `
 .kr-material-progress {
   width: 100%;
   height: 3px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--kr-line);
   border-radius: 2px;
   overflow: hidden;
   position: relative;
@@ -682,11 +680,10 @@ const STYLES = `
   top: 0;
   left: 0;
   bottom: 0;
-  background: var(--kr-signal);
+  background: var(--kr-focus);
   border-radius: 2px;
   width: 40%;
   animation: krProgressShimmer 1.4s ease-in-out infinite;
-  box-shadow: 0 0 8px rgba(163, 230, 53, 0.6);
 }
 
 @keyframes krProgressShimmer {
@@ -700,7 +697,7 @@ const STYLES = `
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: var(--kr-signal);
+  color: var(--kr-signal-ink);
   line-height: 1.3;
 }
 
@@ -739,7 +736,7 @@ const STYLES = `
 }
 
 .kr-material-workspace-link:hover {
-  color: var(--kr-signal);
+  color: var(--kr-signal-ink);
 }
 
 /* Panel Header */
@@ -763,7 +760,7 @@ const STYLES = `
 }
 
 .kr-brand-mark {
-  color: var(--kr-signal);
+  color: var(--kr-text-1);
   display: flex;
   align-items: center;
 }
@@ -864,9 +861,9 @@ const STYLES = `
 }
 
 .kr-tab-btn.active {
-  color: var(--kr-signal);
-  background: var(--kr-bg-2);
-  border-color: rgba(163, 230, 53, 0.35);
+  color: var(--kr-signal-ink);
+  background: var(--kr-signal-dim);
+  border-color: var(--kr-focus);
   font-weight: 600;
 }
 
@@ -963,14 +960,15 @@ const STYLES = `
   padding: 7px 10px;
   font-size: 12px;
   font-family: inherit;
-  outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
-  caret-color: var(--kr-signal);
+  caret-color: var(--kr-text-1);
 }
 
-.kr-input:focus, .kr-select:focus, .kr-textarea:focus {
-  border-color: var(--kr-signal);
-  box-shadow: 0 0 0 2px rgba(163, 230, 53, 0.2);
+.kr-input:focus, .kr-select:focus, .kr-textarea:focus,
+.kr-input:focus-visible, .kr-select:focus-visible, .kr-textarea:focus-visible {
+  border-color: var(--kr-focus);
+  outline: 2px solid var(--kr-focus);
+  outline-offset: 1px;
 }
 
 .kr-textarea {
@@ -980,9 +978,9 @@ const STYLES = `
 
 /* Buttons */
 .kr-btn {
-  background: var(--kr-signal);
-  color: #0A0D10;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--kr-action);
+  color: var(--kr-on-action);
+  border: 1px solid transparent;
   border-radius: var(--kr-radius-sm);
   padding: 8px 14px;
   font-size: 12px;
@@ -992,13 +990,12 @@ const STYLES = `
   align-items: center;
   justify-content: center;
   gap: 6px;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease;
   white-space: nowrap;
 }
 
 .kr-btn:hover {
-  background: var(--kr-signal-hover);
-  transform: translateY(-1px);
+  background: var(--kr-action-hover);
 }
 
 .kr-btn:active {
@@ -1006,8 +1003,8 @@ const STYLES = `
 }
 
 .kr-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(163, 230, 53, 0.35);
+  outline: 2px solid var(--kr-focus);
+  outline-offset: 2px;
 }
 
 .kr-btn:disabled {
@@ -1019,14 +1016,12 @@ const STYLES = `
 .kr-btn-large {
   padding: 9px 16px;
   font-size: 13px;
-  background: var(--kr-signal);
-  color: #0A0D10;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  background: var(--kr-action);
+  color: var(--kr-on-action);
 }
 
 .kr-btn-large:hover {
-  background: var(--kr-signal-hover);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  background: var(--kr-action-hover);
 }
 
 .kr-btn-secondary {
@@ -1091,7 +1086,7 @@ const STYLES = `
   width: 12px;
   left: 3px;
   bottom: 3px;
-  background-color: var(--kr-text-1);
+  background-color: var(--kr-bg-1);
   transition: 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   border-radius: 50%;
 }
@@ -1102,7 +1097,7 @@ input:checked + .kr-slider {
 
 input:checked + .kr-slider:before {
   transform: translateX(16px);
-  background-color: #0A0D10;
+  background-color: var(--kr-on-signal);
 }
 
 /* Badges & Chips */
@@ -1121,45 +1116,45 @@ input:checked + .kr-slider:before {
 }
 
 .kr-badge-green {
-  background: rgba(82, 217, 140, 0.12);
+  background: #e3efcf;
   color: var(--kr-success);
-  border: 1px solid rgba(82, 217, 140, 0.3);
+  border: 1px solid #c2d3a8;
 }
 
 .kr-badge-amber {
-  background: rgba(242, 184, 75, 0.12);
+  background: #fff0c9;
   color: var(--kr-warning);
-  border: 1px solid rgba(242, 184, 75, 0.3);
+  border: 1px solid #e4d3a0;
 }
 
 .kr-badge-red {
-  background: rgba(240, 106, 106, 0.12);
+  background: #fdf2ed;
   color: var(--kr-danger);
-  border: 1px solid rgba(240, 106, 106, 0.3);
+  border: 1px solid #e7c4b8;
 }
 
 .kr-badge-blue {
-  background: rgba(98, 200, 255, 0.12);
+  background: #e7eef6;
   color: var(--kr-info);
-  border: 1px solid rgba(98, 200, 255, 0.3);
+  border: 1px solid #c5d4e6;
 }
 
 .kr-badge-ai {
-  background: rgba(168, 85, 247, 0.12);
-  color: #c084fc;
-  border: 1px solid rgba(168, 85, 247, 0.3);
+  background: #f4eaf8;
+  color: #5b2a6e;
+  border: 1px solid #ddc6e6;
 }
 
 .kr-badge-profile {
-  background: rgba(148, 163, 184, 0.12);
-  color: #94a3b8;
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: var(--kr-bg-2);
+  color: var(--kr-text-2);
+  border: 1px solid var(--kr-line-strong);
 }
 
 .kr-badge-saved {
-  background: rgba(98, 200, 255, 0.12);
-  color: var(--kr-info);
-  border: 1px solid rgba(98, 200, 255, 0.3);
+  background: #e3efcf;
+  color: var(--kr-success);
+  border: 1px solid #c2d3a8;
 }
 
 
@@ -1172,15 +1167,15 @@ input:checked + .kr-slider:before {
 }
 
 .kr-alert-success {
-  background: rgba(82, 217, 140, 0.1);
-  border: 1px solid rgba(82, 217, 140, 0.3);
-  color: #a7f3d0;
+  background: #e3efcf;
+  border: 1px solid #c2d3a8;
+  color: var(--kr-success);
 }
 
 .kr-alert-error {
-  background: rgba(240, 106, 106, 0.1);
-  border: 1px solid rgba(240, 106, 106, 0.3);
-  color: #fecaca;
+  background: #fdf2ed;
+  border: 1px solid #e7c4b8;
+  color: var(--kr-danger);
 }
 
 /* Page attention card */
@@ -1308,8 +1303,8 @@ input:checked + .kr-slider:before {
   transition: transform 0.2s ease;
 }
 
-.kr-strength-chip.high .kr-strength-chip-fill { background: var(--kr-signal); }
-.kr-strength-chip.med .kr-strength-chip-fill { background: #38bdf8; }
+.kr-strength-chip.high .kr-strength-chip-fill { background: var(--kr-focus); }
+.kr-strength-chip.med .kr-strength-chip-fill { background: var(--kr-info); }
 .kr-strength-chip.low .kr-strength-chip-fill { background: var(--kr-warning); }
 
 .kr-strength-chip-val {
@@ -1335,8 +1330,8 @@ input:checked + .kr-slider:before {
   transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.kr-strength-fill.high { background: var(--kr-signal); }
-.kr-strength-fill.med { background: #38bdf8; }
+.kr-strength-fill.high { background: var(--kr-focus); }
+.kr-strength-fill.med { background: var(--kr-info); }
 .kr-strength-fill.low { background: var(--kr-warning); }
 
 /* Progress Bars */
@@ -1351,7 +1346,7 @@ input:checked + .kr-slider:before {
 .kr-progress-bar {
   width: 100%;
   height: 100%;
-  background: var(--kr-signal);
+  background: var(--kr-focus);
   transform-origin: left center;
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   border-radius: 1px;
@@ -1370,23 +1365,23 @@ input:checked + .kr-slider:before {
 }
 
 .kr-workflow-card.wf-running {
-  border-color: rgba(163, 230, 53, 0.35);
-  background: var(--kr-bg-2);
+  border-color: var(--kr-focus);
+  background: var(--kr-signal-dim);
 }
 
 .kr-workflow-card.wf-paused {
-  border-color: rgba(242, 184, 75, 0.35);
-  background: rgba(242, 184, 75, 0.03);
+  border-color: var(--kr-warning);
+  background: #fff0c9;
 }
 
 .kr-workflow-card.wf-step-review {
-  border-color: rgba(163, 230, 53, 0.35);
-  background: rgba(163, 230, 53, 0.03);
+  border-color: var(--kr-focus);
+  background: var(--kr-signal-dim);
 }
 
 .kr-workflow-card.wf-done {
-  border-color: rgba(82, 217, 140, 0.35);
-  background: rgba(82, 217, 140, 0.03);
+  border-color: var(--kr-success);
+  background: #e3efcf;
 }
 
 .kr-wf-badge {
@@ -1405,27 +1400,27 @@ input:checked + .kr-slider:before {
 
 .kr-wf-badge-running {
   background: var(--kr-signal-dim);
-  color: var(--kr-signal);
-  border: 1px solid rgba(163, 230, 53, 0.35);
+  color: var(--kr-signal-ink);
+  border: 1px solid var(--kr-focus);
   animation: kr-pulse-badge 1.8s ease-in-out infinite;
 }
 
 .kr-wf-badge-review {
-  background: rgba(163, 230, 53, 0.12);
-  color: var(--kr-signal);
-  border: 1px solid rgba(163, 230, 53, 0.35);
+  background: var(--kr-signal-dim);
+  color: var(--kr-signal-ink);
+  border: 1px solid var(--kr-focus);
 }
 
 .kr-wf-badge-paused {
-  background: rgba(242, 184, 75, 0.12);
+  background: #fff0c9;
   color: var(--kr-warning);
-  border: 1px solid rgba(242, 184, 75, 0.35);
+  border: 1px solid var(--kr-warning);
 }
 
 .kr-wf-badge-done {
-  background: rgba(82, 217, 140, 0.12);
+  background: #e3efcf;
   color: var(--kr-success);
-  border: 1px solid rgba(82, 217, 140, 0.35);
+  border: 1px solid var(--kr-success);
 }
 
 .kr-wf-badge-idle {
@@ -1448,14 +1443,14 @@ input:checked + .kr-slider:before {
 }
 
 .kr-hero-status-row.running {
-  border-color: rgba(163, 230, 53, 0.35);
-  background: rgba(163, 230, 53, 0.04);
-  color: var(--kr-signal);
+  border-color: var(--kr-focus);
+  background: var(--kr-signal-dim);
+  color: var(--kr-signal-ink);
 }
 
 .kr-hero-status-row.step-review {
-  border-color: rgba(163, 230, 53, 0.35);
-  background: rgba(163, 230, 53, 0.06);
+  border-color: var(--kr-focus);
+  background: var(--kr-signal-dim);
 }
 
 .kr-spin {
@@ -1534,7 +1529,7 @@ input:checked + .kr-slider:before {
 .kr-wf-step-bar {
   width: 100%;
   height: 100%;
-  background: var(--kr-signal);
+  background: var(--kr-focus);
   border-radius: 1px;
   transform-origin: left center;
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
@@ -1672,8 +1667,8 @@ input:checked + .kr-slider:before {
 /* Shared typography and compact, keyboard-accessible instrument surfaces. */
 button, input, select, textarea { font-family: var(--kr-font); }
 button svg { flex-shrink: 0; }
-:host { color-scheme: dark; }
-:focus-visible { outline: 2px solid var(--kr-signal); outline-offset: 3px; }
+:host { color-scheme: light; }
+:focus-visible { outline: 2px solid var(--kr-focus); outline-offset: 3px; }
 .kr-hud-brand { border: 0; background: transparent; color: inherit; font: inherit; }
 .kr-hud-expanded .kr-hud-cta { background: var(--kr-bg-2); color: var(--kr-text-1); border-color: var(--kr-line); }
 .kr-hud-adapter { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1684,6 +1679,16 @@ button svg { flex-shrink: 0; }
 .kr-content { scrollbar-color: var(--kr-line-strong) var(--kr-bg-0); scrollbar-width: thin; }
 .kr-card-title { font-size: 12px; text-transform: none; letter-spacing: 0; color: var(--kr-text-1); }
 .kr-form-group label { text-transform: none; letter-spacing: 0; font-size: 12px; }
+.kr-badge, .kr-wf-badge, .kr-mvp-alert-title, .kr-hud-adapter { text-transform: none; letter-spacing: 0; }
+.kr-badge, .kr-wf-badge { font-size: 11px; font-weight: 500; }
+.kr-mvp-alert-title { font-size: 12px; color: var(--kr-text-1); }
+.kr-section-heading { margin: 4px 0 0; font-size: 12px; font-weight: 600; line-height: 1.4; color: var(--kr-text-1); }
+.kr-card-text { margin: 0; font-size: 12px; line-height: 1.5; color: var(--kr-text-2); }
+.kr-profile-counts { display: flex; flex-wrap: wrap; gap: 6px; }
+.kr-profile-counts .kr-badge { background: var(--kr-bg-1); border: 1px solid var(--kr-line-strong); color: var(--kr-text-2); }
+.kr-details { border-bottom: 1px solid var(--kr-line); }
+.kr-details-summary { padding: 8px 0; font-size: 12px; font-weight: 500; color: var(--kr-text-1); cursor: pointer; }
+.kr-details-body { display: flex; flex-direction: column; gap: 10px; padding: 4px 0 12px; }
 .kr-review-value { font-family: var(--kr-font); }
 .kr-review-item { background: transparent; border: 0; border-bottom: 1px solid var(--kr-line); border-radius: 0; padding: 10px 0; }
 .kr-review-item:last-child { border-bottom: 0; }
@@ -1752,7 +1757,6 @@ function setSafeHTML(element, htmlString) {
 }
 
 function getStatusInfo() {
-  if (platform.ai.status().state === 'consentNeeded') return { label: 'AI sharing off', dotClass: 'no-key', badgeClass: 'kr-badge-amber', text: 'Review and allow AI data sharing in Settings. Saved profile filling remains available.' };
   if (isManagedAi()) {
     const status = platform.ai.status();
     const label = { ready: 'Ready', activationNeeded: 'Activation needed', outOfCredits: 'Out of credits', unavailable: 'Temporarily unavailable' }[status.state] || 'Temporarily unavailable';
@@ -1939,7 +1943,7 @@ async function handleUnifiedAutofillClick() {
     panelVisible = true;
     currentTab = 'profile';
     updatePanelDOM();
-    const fieldId = 'kr-profile-fullName';
+    const fieldId = 'kr-profile-firstName';
     setTimeout(() => shadowRootRef?.querySelector(`#${fieldId}`)?.focus(), 50);
     return;
   }
@@ -1994,7 +1998,7 @@ async function executeAutofillFlow() {
     panelVisible = true;
     currentTab = 'profile';
     updatePanelDOM();
-    const fieldId = 'kr-profile-fullName';
+    const fieldId = 'kr-profile-firstName';
     if (fieldId) {
       setTimeout(() => shadowRootRef?.querySelector(`#${fieldId}`)?.focus(), 50);
     }
@@ -2078,7 +2082,7 @@ async function executeAutofillFlow() {
     if (aiTargetFields.length === 0 && remoteFields.length === 0 && fileFields.length === 0 && remoteUploads.length === 0 && generatedResults.length === 0) {
       autofillProgress.statusText = (detectedFieldsCache.length === 0 && remoteFieldCount === 0)
         ? 'No form fields detected on this page.'
-        : 'All fields are already filled. Enable "Overwrite Existing Values" in Settings to overwrite.';
+        : 'All fields are already filled. Turn on "Overwrite existing values" in Settings to overwrite.';
       logger.info(autofillProgress.statusText);
       isAutofilling = false;
       if (!inspectContinue().count && inspectSubmit().count) await applicationEngine?.reviewFilledPage(fieldResultsCache);
@@ -2511,7 +2515,7 @@ function renderHomeTab() {
     const reviewText = session?.reason || 'Workday step filled. Ready for your review.';
     heroStatusHtml = `
       <div class="kr-hero-status-row kr-wf-reason step-review">
-        <span style="color: var(--kr-signal); font-size: 13px;">${ICONS.check}</span>
+        <span style="color: var(--kr-signal-ink); font-size: 13px;">${ICONS.check}</span>
         <div><strong>Step filled:</strong> ${escapeHtml(reviewText)}</div>
       </div>
     `;
@@ -2533,7 +2537,7 @@ function renderHomeTab() {
     <div class="kr-mvp-alert">
       <div class="kr-mvp-alert-header">
         <span class="kr-mvp-alert-icon">${ICONS.alert}</span>
-        <span class="kr-mvp-alert-title">Minimum Profile Required</span>
+        <span class="kr-mvp-alert-title">Minimum profile required</span>
       </div>
       <div class="kr-mvp-alert-desc">
         Autofill is locked until required core fields are saved (${escapeHtml(strength.missingCore.join(', '))} required).
@@ -2545,9 +2549,9 @@ function renderHomeTab() {
         <button type="button" class="kr-btn kr-btn-secondary" id="kr-complete-profile-btn" style="font-size: 11px; padding: 4px 8px;">
           ${ICONS.user} Complete Profile
         </button>
-        <button type="button" class="kr-btn kr-btn-secondary" id="kr-mvp-settings-link" style="font-size: 11px; padding: 4px 8px;">
-          Settings ↗
-        </button>
+        ${platform.capabilities.optionsPage ? `<button type="button" class="kr-btn kr-btn-secondary" id="kr-mvp-settings-link" style="font-size: 11px; padding: 4px 8px;">
+          Full profile ↗
+        </button>` : ''}
       </div>
     </div>
   ` : '';
@@ -2623,7 +2627,7 @@ function renderHomeTab() {
       <div class="kr-row">
         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
           <span class="kr-card-title">${escapeHtml(adapter.id === 'generic' ? 'Job Application' : `${adapter.label} Application`)}</span>
-          <span class="kr-badge kr-badge-blue" style="text-transform: uppercase;">${totalFieldCount} detected</span>
+          <span class="kr-badge kr-badge-blue">${totalFieldCount} detected</span>
           ${strength.isMvpComplete ? `
             <div class="kr-strength-chip ${strength.percentage >= 80 ? 'high' : strength.percentage >= 50 ? 'med' : 'low'}" title="Profile Strength: ${strength.percentage}% (${strength.tierLabel})">
               <span class="kr-strength-chip-bar"><span class="kr-strength-chip-fill" style="transform: scaleX(${strength.percentage / 100});"></span></span>
@@ -2719,7 +2723,7 @@ function renderProfileTab() {
   const strengthCardHtml = `
     <div class="kr-card" style="margin-bottom: 2px; gap: 8px;">
       <div class="kr-row" style="margin-bottom: 0;">
-        <span class="kr-card-title">Profile Strength</span>
+        <span class="kr-card-title">Profile strength</span>
         <span class="kr-badge ${strength.percentage >= 80 ? 'kr-badge-green' : strength.percentage >= 50 ? 'kr-badge-blue' : 'kr-badge-amber'}">${strength.tierLabel} (${strength.percentage}%)</span>
       </div>
       <div class="kr-strength-track">
@@ -2738,26 +2742,25 @@ function renderProfileTab() {
     </div>
   `;
 
-  const backgroundSummaryHtml = `
-    <div class="kr-card" style="gap: 8px; border-color: rgba(163, 230, 53, 0.25); background: rgba(163, 230, 53, 0.02);">
+  const backgroundSummaryHtml = !platform.capabilities.optionsPage ? '' : `
+    <div class="kr-card">
       <div class="kr-row" style="margin-bottom: 0;">
-        <span class="kr-card-title" style="color: var(--kr-text-1);">Full Profile &amp; Records</span>
-        <button type="button" class="kr-btn kr-btn-secondary kr-btn-small" id="kr-open-full-profile-btn" style="color: var(--kr-signal); border-color: rgba(163, 230, 53, 0.35);">Open Settings ↗</button>
+        <span class="kr-card-title">Full profile</span>
+        <button type="button" class="kr-btn kr-btn-secondary kr-btn-small" id="kr-open-full-profile-btn">Open profile ↗</button>
       </div>
-      <p style="font-size: 11px; color: var(--kr-text-2); margin: 0; line-height: 1.4;">
-        Work history, education, projects, skills, compensation, and demographics are configured in the full console.
-      </p>
-      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px;">
-        <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${workCount} Experience${workCount === 1 ? '' : 's'}</span>
-        <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${eduCount} Education</span>
-        <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${projCount} Project${projCount === 1 ? '' : 's'}</span>
-        <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${skillCount} Skill${skillCount === 1 ? '' : 's'}</span>
-        <span class="kr-badge" style="font-size: 11px; font-family: var(--kr-font-mono);">${eligCount} Work Countr${eligCount === 1 ? 'y' : 'ies'}</span>
+      <p class="kr-card-text">Experience, education, projects, skills, and saved answers live on your full profile.</p>
+      <div class="kr-profile-counts">
+        <span class="kr-badge">${workCount} experience${workCount === 1 ? '' : 's'}</span>
+        <span class="kr-badge">${eduCount} education</span>
+        <span class="kr-badge">${projCount} project${projCount === 1 ? '' : 's'}</span>
+        <span class="kr-badge">${skillCount} skill${skillCount === 1 ? '' : 's'}</span>
+        <span class="kr-badge">${eligCount} work countr${eligCount === 1 ? 'y' : 'ies'}</span>
       </div>
     </div>
   `;
 
-  const sections = PROFILE_SECTIONS.map(section => `
+  // The userscript has no options page, so its saved answers are edited here.
+  const answerSections = platform.capabilities.optionsPage ? '' : PROFILE_SECTIONS.map(section => `
     <details class="kr-details">
       <summary class="kr-details-summary">${escapeHtml(section.title)}</summary>
       <div class="kr-details-body">
@@ -2776,18 +2779,26 @@ function renderProfileTab() {
     </details>
   `).join('');
 
+  const nameParts = String(profile.fullName || '').trim().split(/\s+/).filter(Boolean);
+  const firstName = profile.firstName || profile.lastName ? profile.firstName || '' : nameParts[0] || '';
+  const lastName = profile.firstName || profile.lastName ? profile.lastName || '' : nameParts.slice(1).join(' ');
+
   return `
     <form id="kr-profile-form" style="display: flex; flex-direction: column; gap: 12px;">
       ${strengthCardHtml}
       ${backgroundSummaryHtml}
 
-      <div style="font-size: 11px; color: var(--kr-text-3); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-top: 4px;">
-        Core Identity &amp; Contact
-      </div>
+      <h3 class="kr-section-heading">Contact details</h3>
 
-      <div class="kr-form-group">
-        <label for="kr-profile-fullName">Full Name</label>
-        <input class="kr-input" id="kr-profile-fullName" type="text" name="fullName" value="${escapeHtml(profile.fullName || '')}" placeholder="e.g. Jane Doe" />
+      <div class="kr-row" style="gap: 10px;">
+        <div class="kr-form-group" style="flex: 1;">
+          <label for="kr-profile-firstName">First name</label>
+          <input class="kr-input" id="kr-profile-firstName" type="text" name="firstName" autocomplete="given-name" value="${escapeHtml(firstName)}" placeholder="Jane" />
+        </div>
+        <div class="kr-form-group" style="flex: 1;">
+          <label for="kr-profile-lastName">Last name</label>
+          <input class="kr-input" id="kr-profile-lastName" type="text" name="lastName" autocomplete="family-name" value="${escapeHtml(lastName)}" placeholder="Doe" />
+        </div>
       </div>
 
       <div class="kr-row" style="gap: 10px;">
@@ -2823,21 +2834,14 @@ function renderProfileTab() {
       </div>
 
       <div class="kr-form-group">
-        <label for="kr-profile-applicantNotes">Applicant Notes / Instructions</label>
-        <textarea id="kr-profile-applicantNotes" class="kr-textarea" name="applicantNotes" rows="2" placeholder="Custom rules, phrasing preferences, and instructions for written answers...">${escapeHtml(profile.applicantNotes || '')}</textarea>
+        <label for="kr-profile-applicantNotes">Notes for written answers</label>
+        <textarea id="kr-profile-applicantNotes" class="kr-textarea" name="applicantNotes" rows="2" placeholder="Phrasing preferences and rules Kareer follows when it writes for you">${escapeHtml(profile.applicantNotes || '')}</textarea>
       </div>
 
-      <details class="kr-details" style="margin-top: 4px;">
-        <summary class="kr-details-summary" style="font-size: 11px; color: var(--kr-text-2); text-transform: uppercase; letter-spacing: 0.04em;">
-          Additional Saved Answers &amp; Disclosures
-        </summary>
-        <div class="kr-details-body" style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
-          ${sections}
-        </div>
-      </details>
+      ${answerSections ? `<h3 class="kr-section-heading">Saved answers</h3>${answerSections}` : ''}
 
       <div class="kr-row" style="margin-top: 4px;">
-        <button class="kr-btn" type="submit" style="flex: 1;">Save Profile</button>
+        <button class="kr-btn" type="submit" style="flex: 1;">Save profile</button>
         <span class="kr-save-feedback" id="kr-profile-feedback">Saved ✓</span>
       </div>
     </form>
@@ -2856,9 +2860,9 @@ function renderApiKeyGroup() {
   if (isManagedAi()) {
     const status = platform.ai.status();
     return `<div class="kr-card"><span class="kr-card-title">Kareer AI · ${escapeHtml(getStatusInfo().label)}</span>
-      <p><strong>${escapeHtml(headerAiLabel())}</strong>${status.total != null ? ` · Purchased: ${status.purchased} · Monthly: ${status.monthly}` : ''}</p>
+      <p><strong>${escapeHtml(headerAiLabel())}</strong>${status.total != null ? ` · Purchased: ${status.purchased} · Monthly: ${status.monthly}${status.trial ? ` · Trial: ${status.trial}` : ''}` : ''}</p>
       ${status.monthlyExpiresAt ? `<p>Monthly credits expire ${escapeHtml(new Date(status.monthlyExpiresAt).toLocaleDateString())}.</p>` : ''}
-      <p>Each completed AI request costs one credit. A run can make multiple requests.</p>
+      <p>Each completed autofill AI request costs 1 credit; a résumé or cover letter costs ${CREDITS.costs.document}. A run can make multiple requests.</p>
       <button type="button" class="kr-btn kr-btn-secondary" id="kr-open-options">${status.state === 'ready' ? 'Manage Kareer AI' : 'Set up Kareer AI'}</button></div>`;
   }
   const keySaved = hasApiKey();
@@ -2868,7 +2872,7 @@ function renderApiKeyGroup() {
   if (!platform.capabilities.writeSecretsInPage) {
     return `
       <div class="kr-form-group">
-        <label>OpenRouter API Key</label>
+        <label>OpenRouter API key</label>
         <div class="kr-row">
           <span class="kr-badge ${keySaved ? 'kr-badge-green' : 'kr-badge-amber'}">${keySaved ? 'Key saved' : 'No key'}</span>
           <button type="button" class="kr-btn kr-btn-secondary" id="kr-open-options" style="flex: 1;">Open extension options</button>
@@ -2882,7 +2886,7 @@ function renderApiKeyGroup() {
 
   return `
     <div class="kr-form-group">
-      <label>OpenRouter API Key</label>
+      <label>OpenRouter API key</label>
       <div class="kr-row">
         <input class="kr-input" id="kr-api-key-input" type="password" autocomplete="off" placeholder="${keySaved ? 'Key saved — enter replacement' : 'sk-or-v1-...'}" />
         <button type="button" class="kr-btn kr-btn-secondary" id="kr-toggle-key-btn" style="padding: 8px 10px;">${ICONS.eye}</button>
@@ -2922,11 +2926,11 @@ ${isManagedAi() ? '' : `      <div class="kr-form-group">
       </div>
 
       <div class="kr-card">
-        <span class="kr-card-title">Behavior Controls</span>
+        <span class="kr-card-title">Behavior</span>
         
         <div class="kr-toggle-row">
           <div>
-            <div class="kr-label">AI Autofill</div>
+            <div class="kr-label">AI autofill</div>
             <div style="font-size: 11px; color: var(--kr-text-3);">Enable AI form filling capabilities</div>
           </div>
           <label class="kr-switch">
@@ -2937,7 +2941,7 @@ ${isManagedAi() ? '' : `      <div class="kr-form-group">
 
         <div class="kr-toggle-row">
           <div>
-            <div class="kr-label">Overwrite Existing Values</div>
+            <div class="kr-label">Overwrite existing values</div>
             <div style="font-size: 11px; color: var(--kr-text-3);">Overwrite non-empty fields on autofill</div>
           </div>
           <label class="kr-switch">
@@ -2975,7 +2979,7 @@ ${isManagedAi() ? '' : `      <div class="kr-form-group">
       <p style="font-size: 11px; color: var(--kr-text-3); margin: 0;">Profile, settings, memory, and job only. API keys and license credentials are never included.</p>
 
       <div class="kr-row">
-        <button class="kr-btn" type="submit" style="flex: 1;">Save Settings</button>
+        <button class="kr-btn" type="submit" style="flex: 1;">Save settings</button>
         <span class="kr-save-feedback" id="kr-settings-feedback">Saved ✓</span>
       </div>
     </form>
@@ -3317,7 +3321,7 @@ function attachEventHandlers() {
       const profile = getProfile();
       const strength = calculateProfileStrength(profile);
       const firstMissing = strength.missingCore[0];
-      const keyMap = { 'Full Name': 'fullName', 'Email': 'email', 'Phone': 'phone', 'Location': 'location' };
+      const keyMap = { 'Name': 'firstName', 'Email': 'email', 'Phone': 'phone', 'Location': 'location' };
       const fieldId = keyMap[firstMissing] ? `kr-profile-${keyMap[firstMissing]}` : null;
       if (fieldId) {
         setTimeout(() => shadowRootRef?.querySelector(`#${fieldId}`)?.focus(), 50);
@@ -3326,19 +3330,11 @@ function attachEventHandlers() {
   }
 
   const mvpSettingsLink = shadowRootRef.querySelector('#kr-mvp-settings-link');
-  if (mvpSettingsLink) {
-    mvpSettingsLink.onclick = () => {
-      platform.openOptions();
-    };
-  }
+  if (mvpSettingsLink) mvpSettingsLink.onclick = () => platform.openOptions('profile');
 
   // Profile Form
   const openFullProfileBtn = shadowRootRef.querySelector('#kr-open-full-profile-btn');
-  if (openFullProfileBtn) {
-    openFullProfileBtn.onclick = () => {
-      platform.openOptions();
-    };
-  }
+  if (openFullProfileBtn) openFullProfileBtn.onclick = () => platform.openOptions('profile');
 
   const profileForm = shadowRootRef.querySelector('#kr-profile-form');
   if (profileForm) {
@@ -3346,9 +3342,12 @@ function attachEventHandlers() {
       e.preventDefault();
       const formData = new FormData(profileForm);
       const current = getProfile();
+      const firstName = String(formData.get('firstName') ?? '').trim(), lastName = String(formData.get('lastName') ?? '').trim();
       const newProfile = {
         ...current,
-        fullName: formData.get('fullName') !== null ? String(formData.get('fullName')).trim() : current.fullName,
+        firstName,
+        lastName,
+        fullName: [firstName, current.middleName, lastName].filter(Boolean).join(' '),
         email: formData.get('email') !== null ? String(formData.get('email')).trim() : current.email,
         phone: formData.get('phone') !== null ? String(formData.get('phone')).trim() : current.phone,
         location: formData.get('location') !== null ? String(formData.get('location')).trim() : current.location,

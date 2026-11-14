@@ -1,45 +1,28 @@
 import { test, expect } from './support/fixtures.js';
 
-test('AI sharing requires explicit Settings consent, persists, and can be withdrawn without losing local filling', async ({ kr }, testInfo) => {
-  await kr.seed({ profile: { fullName: 'Alex Morgan', firstName: 'Alex', lastName: 'Morgan', email: 'alex@example.com' }, settings: { autoContinue: false, autoSubmit: false } });
-  await kr.worker.evaluate(() => chrome.storage.local.get('kr:secrets').then(values => chrome.storage.local.set({ 'kr:secrets': { ...values['kr:secrets'], aiDataConsent: 0 } })));
+test('Settings discloses AI data sharing next to Kareer AI and AI works without a separate consent step', async ({ kr }, testInfo) => {
+  await kr.seed({ apiKey: '', settings: { aiMode: 'managed' }, profile: { fullName: 'Alex Morgan', email: 'alex@example.com' } });
   const options = await kr.context.newPage();
   await options.goto(`${kr.optionsUrl()}#connection`);
-  const consent = options.locator('#ai-data-consent');
-  await expect(consent).not.toBeChecked();
-  await expect(options.locator('#ai-data-heading')).toBeVisible();
-  await expect(options.locator('#ai-data-details')).toContainText('OpenRouter');
-  await expect(options.locator('#ai-data-details')).toContainText('disability');
-  const request = () => options.evaluate(() => chrome.runtime.sendMessage({ type: 'kr:ai-request', options: {
-    operation: 'autofill', input: { fieldsToFill: [{ fieldId: 'why' }] },
-    url: 'https://openrouter.ai/api/v1/chat/completions', data: JSON.stringify({ messages: [{ role: 'user', content: '{}' }] }),
-  } }));
-  expect((await request()).kind).toBe('CONSENT_REQUIRED');
-  expect(kr.openrouter.requests).toHaveLength(0);
-
-  const application = await kr.context.newPage();
-  await application.goto(kr.fixtureUrl('store-demo-application.html'));
-  await kr.openPanel(application);
-  await application.locator('#kr-autofill-btn').click();
-  await expect(application.locator('#email')).toHaveValue('alex@example.com');
-  await expect(application.locator('#kr-autofill-btn')).toBeEnabled();
-  expect(kr.openrouter.requests).toHaveLength(0);
-
-  await consent.check();
-  await expect(options.locator('#ai-consent-feedback')).toHaveText('AI data sharing enabled.');
-  expect((await request()).status).toBe(200);
-  expect(kr.openrouter.requests).toHaveLength(1);
-  await options.reload();
-  await expect(consent).toBeChecked();
+  await expect(options.locator('#ai-data-consent')).toHaveCount(0);
+  const notice = options.locator('#managed-ai #ai-data-details');
+  await expect(notice).toBeVisible();
+  await expect(notice).toContainText('disability');
+  await expect(notice).toContainText('Starting a trial, buying or activating a key means you agree');
+  await expect(notice.getByRole('link', { name: 'Privacy policy' })).toHaveAttribute('href', 'https://kareer.itsamro.me/privacy/');
+  const noticeBox = await notice.boundingBox(), trialBox = await options.locator('#start-trial').boundingBox(), plansBox = await options.locator('#ai-plans').boundingBox();
+  expect(noticeBox.y).toBeGreaterThan(trialBox.y);
+  expect(noticeBox.y - (plansBox.y + plansBox.height)).toBeLessThan(48);
   await options.setViewportSize({ width: 390, height: 844 });
   expect(await options.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await options.screenshot({ path: testInfo.outputPath('ai-disclosure-mobile.png'), fullPage: true });
-  await consent.uncheck();
-  await expect(options.locator('#ai-consent-feedback')).toContainText('sharing off');
-  expect((await request()).kind).toBe('CONSENT_REQUIRED');
+  await kr.worker.evaluate(() => chrome.storage.local.set({ 'kr:settings': { aiMode: 'byok' }, 'kr:secrets': { apiKey: 'sk-or-v1-e2e-test-key' } }));
+  const result = await options.evaluate(() => chrome.runtime.sendMessage({ type: 'kr:ai-request', options: {
+    operation: 'autofill', input: { fieldsToFill: [{ fieldId: 'why' }] },
+    url: 'https://openrouter.ai/api/v1/chat/completions', data: JSON.stringify({ messages: [{ role: 'user', content: '{}' }] }),
+  } }));
+  expect(result.status).toBe(200);
   expect(kr.openrouter.requests).toHaveLength(1);
-  expect((await kr.readStorage('kr:profile')).email).toBe('alex@example.com');
-  expect((await kr.readStorage('kr:secrets')).apiKey).toBeTruthy();
 });
 
 test('Chrome content scripts cannot directly read privileged credential storage', async ({ kr }) => {

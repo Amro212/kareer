@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>{{VISUAL_NAME}} · Tailored documents</title>
+  <title>{{VISUAL_NAME}} · Applications</title>
   <link rel="stylesheet" href="../assets/theme.css"><link rel="stylesheet" href="workspace.css">
 </head>
 <body class="materials">
@@ -11,19 +11,15 @@
       <a class="brand app-brand" href="../options/index.html#profile">{{VISUAL_NAME}}</a>
       <nav class="app-navigation" aria-label="Workspace navigation">
         <a class="nav-item" href="../options/index.html#profile" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2"/></svg>Profile</a>
-        <button class="nav-item active" id="materials-home" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5"/></svg>Tailored documents</button>
+        <button class="nav-item active" id="materials-home" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5"/></svg>Applications</button>
+        <a class="nav-item" href="../options/index.html#settings" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</a>
       </nav>
-      <details class="recent-navigation" id="recent-navigation" hidden>
-        <summary>Recent applications</summary>
-        <nav id="saved-jobs" aria-label="Saved tailored documents"></nav>
-      </details>
-      <nav class="app-configuration" aria-label="Configuration"><a class="nav-item" href="../options/index.html#connection" target="_blank" rel="noopener noreferrer">Settings</a></nav>
       <div class="app-sidebar-footer"><p>Stored in this browser</p><span class="version" id="workspace-version"></span></div>
     </aside>
     <main>
       <div class="workspace-load-error" id="workspace-load-error" hidden><p id="workspace-load-message" role="alert"></p><button class="secondary" id="workspace-retry">Retry loading workspace</button></div>
       <section id="materials-library" class="materials-library" aria-labelledby="library-heading">
-        <header class="library-heading"><div><h1 id="library-heading" tabindex="-1">Tailored documents</h1><p class="muted">Every role. The right documents, together.</p></div><button id="new-job"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New application</button></header>
+        <header class="library-heading"><div><h1 id="library-heading" tabindex="-1">Applications</h1><p class="muted">Every role. The right documents, together.</p></div><button id="new-job"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New application</button></header>
         <div class="library-controls"><h2>Recent applications</h2><label class="application-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><input id="application-search" type="search" aria-label="Search applications" placeholder="Search role or company"></label></div>
         <div class="application-columns" aria-hidden="true"><span>Application</span><span>Documents</span><span>Updated</span></div>
         <div id="application-list" aria-live="polite" aria-busy="true"><p class="muted application-loading">Loading your applications…</p></div>
@@ -31,26 +27,26 @@
       </section>
       <div id="application-workspace" class="application-workspace" hidden>
       <div class="workspace-toolbar">
-        <div class="workspace-breadcrumb"><button class="workspace-back" id="back-to-library"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>All applications</button><button class="workspace-back" id="start-new-application">New application</button></div>
-        <div class="section-heading job-context"><div class="job-context-text"><h2 id="job-heading" tabindex="-1">Prepare for a job</h2><p id="company-heading" class="muted"></p></div><span id="document-status" role="status" aria-live="polite"></span></div>
-        <div class="document-toolbar">
+        <div class="document-header">
+          <button class="workspace-back" id="back-to-library" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>All applications</button>
+          <h1 class="role-heading"><button class="role-button" id="view-prepare" type="button" aria-expanded="true" aria-controls="prepare-panel" title="Job details"><span id="job-heading">Prepare for a job</span><span id="company-heading" class="muted"></span></button></h1>
+          <button class="secondary" id="view-edit" type="button" aria-controls="edit-panel" hidden>Back to document</button>
+          <button class="workspace-back" id="start-new-application" type="button">New application</button>
           <div class="tabs" role="tablist" aria-label="Document type"><button id="tab-resume" role="tab" aria-selected="true" aria-controls="document-workspace">Resume</button><button id="tab-coverLetter" role="tab" aria-selected="false" aria-controls="document-workspace" tabindex="-1">Cover letter</button></div>
-          <div class="task-tabs" role="tablist" aria-label="Workspace view"><button id="view-prepare" role="tab" aria-selected="true" aria-controls="prepare-panel">Prepare</button><button id="view-edit" role="tab" aria-selected="false" aria-controls="edit-panel" tabindex="-1">Edit</button></div>
           <div class="actions" id="editor-actions" hidden>
             <button class="secondary" id="save-document" title="Retry saving or prepare downloads now">Save now</button>
             <button class="secondary" id="discard-draft" hidden>Discard draft</button>
             <span id="export-page-count" role="status" aria-live="polite"></span>
+            <span id="document-status" role="status" aria-live="polite"></span>
             <button class="secondary" id="proof-toggle" aria-pressed="false">PDF proof</button>
             <button id="download-toggle" aria-haspopup="true" aria-expanded="false" aria-controls="download-menu">Download <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
             <dialog id="download-menu" aria-label="Download format"><button class="secondary" data-download="pdf">Download PDF</button><button class="secondary" data-download="docx">Download Word</button></dialog>
-            <button class="secondary icon-button danger" id="delete-document" aria-label="Delete document" title="Delete document"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button>
           </div>
         </div>
-
         <p id="feedback" class="feedback" role="status" aria-live="polite"></p>
       </div>
       <div id="document-workspace">
-        <section id="prepare-panel" role="tabpanel" aria-labelledby="view-prepare">
+        <section id="prepare-panel" aria-label="Job details">
           <div class="prepare-content">
             <div class="prepare-heading"><h2>Prepare your application</h2><p class="muted">Add the role. We’ll use your profile to shape the draft.</p></div>
             <div class="prepare-grid">
@@ -59,14 +55,14 @@
                 <label class="description-label">Job description<textarea id="job-description" rows="6" placeholder="Paste the role, responsibilities, and requirements…"></textarea></label>
                 <div class="prepare-bottom"><label id="page-control">Resume length<select id="page-target"><option value="1">One page</option><option value="2">Two pages</option></select></label><label id="length-control" hidden>Letter length<select id="length"><option value="short">Short · 150–200 words</option><option value="standard" selected>Standard · 250–350 words</option><option value="detailed">Detailed · 400–500 words</option></select></label></div>
                 <details class="writing-settings"><summary>Writing preferences <span class="muted">Optional</span></summary><label id="tone-control" hidden>Tone<select id="tone"><option value="professional">Professional</option><option value="warm">Warm</option><option value="direct">Direct</option></select></label><label>Writing instructions<textarea id="instructions" rows="3" placeholder="Emphasize my API work; use straightforward language…"></textarea></label></details>
-                <div class="generate-actions actions"><button id="generate">Tailor resume</button><button class="secondary" id="cancel" hidden>Cancel</button></div>
-                <p class="muted generation-note">Writing uses your selected AI connection. Each completed Kareer AI request costs one credit, including rewrites.</p>
+                <div class="generate-actions actions"><button id="generate">Tailor resume</button><button class="secondary" id="cancel" hidden>Cancel</button><button class="secondary danger" id="delete-document" type="button" hidden>Delete document</button></div>
+                <p class="muted generation-note">Writing uses your selected AI connection. With Kareer AI, each completed draft uses 3 credits and each section rewrite uses 2.</p>
               </div>
               <aside class="prepare-context"><div class="profile-source"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><h3>Source: your profile</h3><p class="muted">Your experience, education, projects, skills, and notes ground every document.</p><p id="profile-summary" class="profile-summary"></p><a href="../options/index.html#profile" target="_blank" rel="noopener noreferrer">Review profile <span aria-hidden="true">→</span></a></div><div class="prepare-explanation"><h3>From role to ready</h3><p class="muted">Generate a tailored draft, edit directly on the document, then download a PDF or Word file.</p><p class="muted">Edits save locally as you work.</p></div></aside>
             </div>
           </div>
         </section>
-        <section id="edit-panel" role="tabpanel" aria-labelledby="view-edit" hidden>
+        <section id="edit-panel" aria-label="Document editor" hidden>
           <div id="empty-editor" class="empty-state"><h2>Your document starts with your profile</h2><p class="muted">Add a job description in Prepare to create your first draft.</p><button class="secondary" id="prepare-document">Go to Prepare</button></div>
           <div class="edit-layout" id="editor-layout" hidden>
             <aside class="document-outline"><h3>In this document</h3><nav id="editor-sections" aria-label="Document sections"></nav><p class="muted outline-note">Update profile facts, then regenerate to use them.</p><a href="../options/index.html#profile" target="_blank" rel="noopener noreferrer">Edit profile facts</a></aside>

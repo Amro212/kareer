@@ -1,10 +1,10 @@
 import { api } from '../shared/browser.js';
 import { readApiKey, updateStoredRecord, readAiStatus } from './storage.js';
-import { proxyAiRequest, AI_CONSENT_MESSAGE } from './ai.js';
+import { proxyAiRequest } from './ai.js';
 import { readStored, writeStored, removeStored, listStored } from './documents.js';
 import { buildMaterialSource, validateMaterial, materialJobKey, mergeMaterialRewrite, MATERIAL_KINDS } from '../../../core/materials-model.js';
 import { DEFAULT_SETTINGS } from '../../../core/constants.js';
-import { materialWritingInstructions } from '../../../core/ai-prompts.js';
+import { materialWritingInstructions, parseModelJson } from '../../../core/ai-prompts.js';
 import { exportMaterial, MATERIAL_TEMPLATE_VERSION } from '../materials/export.js';
 import { encodeMaterial, encodeDocument } from '../shared/binary.js';
 import { editableModel } from '../materials/editor-model.js';
@@ -35,7 +35,6 @@ export { materialWritingInstructions };
 export async function writingRequest(input, system, signal) {
   const instructions = `Write in English. ${system}`;
   const status = await readAiStatus();
-  if (!status.dataConsent) throw new Error(AI_CONSENT_MESSAGE);
   if (status.mode === 'managed') {
     // The gateway rebuilds these instructions from the document kind; only the structured input is sent.
     const result = await proxyAiRequest({ operation: input.rewrite ? 'documentRewrite' : 'document', input }, signal.signal);
@@ -94,7 +93,7 @@ export async function writingRequest(input, system, signal) {
     }
   }
   if (finishReason === 'length') throw new Error('The model reached its output limit and returned an incomplete document. Shorten the writing instructions or source, then retry.');
-  try { return JSON.parse(content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')); }
+  try { return parseModelJson(content); }
   catch { throw new Error('AI returned malformed document data. Retry or choose another model.'); }
 }
 
@@ -140,6 +139,7 @@ async function execute(task, options, controller) {
     const exported = await exportMaterial(model, task.job, options.pageTarget || 1, { fit: false, signal: controller.signal });
     if (controller.signal.aborted) throw new Error(String(controller.signal.reason || 'Generation cancelled.'));
     const record = stampFiles({ id: recordId(task.job, task.kind), kind: task.kind, job: task.job, source,
+      ...(model.sections ? { baseSections: structuredClone(model.sections) } : {}),
       ...exported, revision: crypto.randomUUID(), updatedAt: new Date().toISOString(), options });
     await commit(async () => {
       const latest = await readStored(record.id);
@@ -213,8 +213,9 @@ export async function handleMaterials(operation, input = {}, sender = {}) {
       const record = await readStored(input.id), previous = await readStored(`draft:${input.id}`);
       if (!record || record.revision !== input.revision || (previous && previous.baseRevision !== record.revision)) throw new Error('A newer document exists. Your draft is retained. Discard the draft to load the newer version.');
       if ((previous?.revision || null) !== (input.draftRevision || null)) throw new Error('A newer draft exists in another window. Your edits are retained here; reopen the document before retrying.');
+      const baseSections = record.baseSections || record.model?.sections;
       const draft = { id: `draft:${input.id}`, baseRevision: record.revision, revision: crypto.randomUUID(),
-        model: editableModel(record.model, input.model), pageTarget: input.pageTarget === 2 ? 2 : 1, updatedAt: new Date().toISOString() };
+        model: editableModel(record.model, input.model, baseSections), pageTarget: input.pageTarget === 2 ? 2 : 1, updatedAt: new Date().toISOString() };
       await writeStored(draft.id, draft);
       return draft;
     });
@@ -233,7 +234,8 @@ export async function handleMaterials(operation, input = {}, sender = {}) {
       if (running.has(input.id)) throw new Error('Wait for the current rewrite or generation, or cancel it.');
       const previous = await readStored(input.id);
       if (!previous || previous.revision !== input.revision) throw new Error('A newer document exists. Reopen it before rewriting.');
-      const currentDocument = editableModel(previous.model, input.model), source = await sourceForGeneration();
+      const baseSections = previous.baseSections || previous.model?.sections;
+      const currentDocument = editableModel(previous.model, input.model, baseSections), source = await sourceForGeneration();
       const controller = new AbortController(); controller.draftRewrite = true;
       running.set(input.id, controller);
       const timer = setTimeout(() => controller.abort('Rewrite timed out. Your text is unchanged; retry when ready.'), 120000);
@@ -243,7 +245,7 @@ export async function handleMaterials(operation, input = {}, sender = {}) {
           ...input.options, rewrite: { path: input.path }, currentDocument }, materialWritingInstructions(previous.kind), controller);
         if (controller.signal.aborted) throw new Error(String(controller.signal.reason));
         const model = validateMaterial(previous.kind, mergeMaterialRewrite(currentDocument, output, input.path), previous.source);
-        return { model: editableModel(currentDocument, model) };
+        return { model: editableModel(currentDocument, model, baseSections) };
       } finally { clearTimeout(timer); clearInterval(heartbeat); running.delete(input.id); }
     }
     case 'snapshot': return commit(async () => {
@@ -282,10 +284,11 @@ export async function handleMaterials(operation, input = {}, sender = {}) {
       const previous = await readStored(input.id);
       if (!previous) throw new Error('Document no longer exists. Generate it again.');
       if (input.revision !== previous.revision) throw new Error('A newer document exists. Reopen it before saving edits.');
-      const model = validateMaterial(previous.kind, input.draftRevision ? editableModel(previous.model, input.model) : input.model, previous.source);
+      const baseSections = previous.baseSections || previous.model?.sections;
+      const model = validateMaterial(previous.kind, input.draftRevision ? editableModel(previous.model, input.model, baseSections) : input.model, previous.source);
       const exported = await exportMaterial(model, previous.job, input.pageTarget || previous.options.pageTarget || 1, { fit: false });
       const { changes: _legacyChanges, ...saved } = previous;
-      const record = stampFiles({ ...saved, ...exported, revision: crypto.randomUUID(), options: { ...previous.options, pageTarget: input.pageTarget || previous.options.pageTarget || 1 }, updatedAt: new Date().toISOString() });
+      const record = stampFiles({ ...saved, ...(baseSections ? { baseSections } : {}), ...exported, revision: crypto.randomUUID(), options: { ...previous.options, pageTarget: input.pageTarget || previous.options.pageTarget || 1 }, updatedAt: new Date().toISOString() });
       await commit(async () => {
         const latest = await readStored(record.id);
         if (latest?.revision !== input.revision) throw new Error('A newer document exists. Reopen it before saving edits.');

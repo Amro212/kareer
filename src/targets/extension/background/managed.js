@@ -5,7 +5,7 @@ import { STAGING_GATEWAY_ORIGIN, SUPPORT_EMAIL } from '../../../core/endpoints.j
 // tools/build.js sets this per build; only --production packages use the production gateway.
 const GATEWAY = typeof KAREER_GATEWAY_URL === 'string' ? KAREER_GATEWAY_URL : STAGING_GATEWAY_ORIGIN;
 const UNREACHABLE = "Can't reach Kareer right now. Check your internet connection and try again. Filling forms from your saved profile still works.";
-const UNCERTAIN = 'Could not confirm the AI result. It may have used one credit. Refresh usage before explicitly retrying.';
+const UNCERTAIN = 'Could not confirm the AI result. It may have used credits. Refresh usage before explicitly retrying.';
 const safeStates = new Set(['ready', 'activationNeeded', 'outOfCredits', 'unavailable']);
 let pendingClaim;
 async function saveStatus(status) {
@@ -13,7 +13,8 @@ async function saveStatus(status) {
     const next = { ...previous, ...status };
     const count = value => Number.isSafeInteger(value) && value >= 0 ? value : 0;
     return { state: safeStates.has(next.state) ? next.state : 'unavailable', monthly: count(next.monthly), purchased: count(next.purchased),
-      total: count(next.total), monthlyExpiresAt: next.monthlyExpiresAt || null, flagged: next.flagged === true,
+      trial: count(next.trial), total: count(next.total), monthlyExpiresAt: next.monthlyExpiresAt || null,
+      trialExpiresAt: next.trialExpiresAt || null, flagged: next.flagged === true, billing: next.billing !== false,
       subscriptions: (Array.isArray(next.subscriptions) ? next.subscriptions : [])
         .map(s => ({ status: String(s.status), cancelAtPeriodEnd: s.cancelAtPeriodEnd === true, periodEnd: s.periodEnd || null })) };
   });
@@ -34,7 +35,8 @@ async function json(response) {
   let body; try { body = await response.json(); } catch { throw new Error('Kareer AI is temporarily unavailable.'); }
   if (!response.ok || body.error) {
     // Fixed client copy prevents an unexpected proxy response exposing provider details.
-    const errors = { NO_CREDITS: 'Out of credits. Buy credits in Settings.', ACTIVATION_NEEDED: 'Activate your Kareer key in Settings.',
+    const errors = { NO_CREDITS: 'Not enough credits for this request. Buy credits in Settings.', ACTIVATION_NEEDED: 'Activate your Kareer key in Settings.',
+      TRIAL_UNAVAILABLE: 'Free trials are paused right now. Try again tomorrow, or choose a plan.',
       INVALID_KEY: 'That Kareer key could not be verified.', KEY_DISABLED: `This key is disabled. Email ${SUPPORT_EMAIL} for help.`,
       SUBSCRIPTION_EXISTS: 'You already have a monthly plan. Open Manage billing.',
       SALES_DISABLED: 'Purchases are not available yet.', INVALID_OFFER: 'That plan is not available.',
@@ -60,10 +62,18 @@ export async function managedOperation(operation, input = {}) {
     await updateStoredRecord('kr:settings', settings => ({ ...settings, aiMode: 'managed' }));
     return saveStatus(result);
   }
+  if (operation === 'trial') {
+    if (secrets.licenseKey || secrets.trialUsed) throw new Error('This browser already used its free trial.');
+    const result = await json(await call('/v1/trial', { body: {}, signal }));
+    if (!/^kr_[A-Za-z0-9_-]{43}$/.test(result.licenseKey || '')) throw new Error('Kareer AI is temporarily unavailable. Try again later.');
+    await updateStoredRecord('kr:secrets', old => ({ ...old, licenseKey: result.licenseKey, trialUsed: 1 }));
+    await updateStoredRecord('kr:settings', settings => ({ ...settings, aiMode: 'managed' }));
+    return saveStatus(result.aiStatus);
+  }
   if (operation === 'revealKey') return { licenseKey: secrets.licenseKey || '' };
   if (operation === 'disconnect') {
     await writeLicense('');
-    return saveStatus({ state: 'activationNeeded', monthly: 0, purchased: 0, total: 0, monthlyExpiresAt: null, subscriptions: [] });
+    return saveStatus({ state: 'activationNeeded', monthly: 0, purchased: 0, trial: 0, total: 0, monthlyExpiresAt: null, trialExpiresAt: null, subscriptions: [] });
   }
   if (operation === 'purchase') {
     const offer = ['monthly', 'pack'].includes(input.offer) ? input.offer : undefined;
@@ -76,7 +86,7 @@ export async function managedOperation(operation, input = {}) {
   }
   if (operation === 'claim') return pendingClaim ||= claim(secrets.checkout, signal).finally(() => { pendingClaim = null; });
   if (!['status', 'billing'].includes(operation)) throw new Error('Unknown billing operation.');
-  if (!secrets.licenseKey) return saveStatus({ state: 'activationNeeded', total: 0, monthly: 0, purchased: 0, monthlyExpiresAt: null, subscriptions: [] });
+  if (!secrets.licenseKey) return saveStatus({ state: 'activationNeeded', total: 0, monthly: 0, purchased: 0, trial: 0, monthlyExpiresAt: null, trialExpiresAt: null, subscriptions: [] });
   try {
     if (operation === 'billing') {
       const { url } = await json(await call('/v1/billing-portal', { body: {}, credential: secrets.licenseKey, signal }));
@@ -118,7 +128,8 @@ export async function managedRequest(options, signal) {
   catch { throw new Error(UNCERTAIN); }
   if (!response.headers.get('content-type')?.includes('application/x-ndjson')) {
     let data; try { data = await json(response); } catch (error) {
-      if (error.code === 'NO_CREDITS') await saveStatus({ state: 'outOfCredits', total: 0, monthly: 0, purchased: 0 });
+      // A document can need more credits than remain, so refresh the real balance instead of assuming zero.
+      if (error.code === 'NO_CREDITS') await managedOperation('status').catch(() => {});
       throw error;
     }
     if (data.duplicate) throw new Error(UNCERTAIN);
@@ -141,7 +152,7 @@ export async function managedRequest(options, signal) {
           const released = event.charged === false;
           if (released && event.credits) await saveStatus({ ...event.credits, state: event.credits.total > 0 ? 'ready' : 'outOfCredits' }).catch(() => {});
           else await saveStatus({ state: 'unavailable' }).catch(() => {});
-          terminalError = new Error(`${reason} ${released ? 'No credit was charged.' : 'Kareer could not confirm whether a credit was used. Refresh usage before retrying.'}`);
+          terminalError = new Error(`${reason} ${released ? 'No credits were charged.' : 'Kareer could not confirm whether credits were used. Refresh usage before retrying.'}`);
           throw terminalError;
         }
         if (event.type === 'result' && typeof event.content === 'string') { result = event.content; credits = event.credits; }

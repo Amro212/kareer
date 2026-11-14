@@ -1,6 +1,6 @@
 import { api, isFirefox } from '../shared/browser.js';
 import { MSG, BROADCAST_KEYS } from '../shared/protocol.js';
-import { buildSnapshot, applySet, applyDelete, applyProfilePatch, writeSecret, clearSecret, hasApiKey, readAiStatus, writeAiDataConsent } from './storage.js';
+import { buildSnapshot, applySet, applyDelete, applyProfilePatch, writeSecret, clearSecret, hasApiKey, readAiStatus } from './storage.js';
 import { managedOperation } from './managed.js';
 import { proxyAiRequest } from './ai.js';
 import { bindTabSession, getTabSession, watchTabLifecycle } from './tabs.js';
@@ -53,10 +53,6 @@ const handlers = {
   },
 
   [MSG.AI_REQUEST]: ({ options }) => proxyAiRequest(options),
-  [MSG.AI_DATA_CONSENT]: async ({ accepted }) => {
-    await writeAiDataConsent(accepted);
-    return readAiStatus();
-  },
   [MSG.AI_STATUS]: async () => {
     if ((await readAiStatus()).mode === 'managed') {
       // A purchase paid while Settings was closed activates on the next status check.
@@ -76,8 +72,8 @@ const handlers = {
     sessionId: await getTabSession(sender?.tab?.id),
   }),
 
-  [MSG.OPEN_OPTIONS]: async () => {
-    await api.tabs.create({ url: api.runtime.getURL('options/index.html#connection') });
+  [MSG.OPEN_OPTIONS]: async ({ page }) => {
+    await api.tabs.create({ url: api.runtime.getURL(`options/index.html#${page === 'profile' ? 'profile' : 'connection'}`) });
     return { ok: true };
   },
 
@@ -154,7 +150,7 @@ function forwardToFrame(tabId, { frameId, command }) {
 api.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handler = handlers[message?.type];
   if (!handler) return false;
-  const privileged = [MSG.SECRET_WRITE, MSG.SECRET_CLEAR, MSG.BILLING, MSG.AI_DATA_CONSENT];
+  const privileged = [MSG.SECRET_WRITE, MSG.SECRET_CLEAR, MSG.BILLING];
   if (privileged.includes(message.type) && !sender?.url?.startsWith(api.runtime.getURL(''))) {
     sendResponse({ error: 'Open Kareer Settings to manage credentials and purchases.' });
     return false;

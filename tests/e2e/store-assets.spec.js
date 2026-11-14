@@ -61,7 +61,7 @@ test('capture real extension store screenshots with fictional data', async ({ kr
   await workspace.locator('#job-description').fill('Build reliable web applications and APIs with JavaScript, Python and SQL. Document integrations and collaborate with support teams.');
   await workspace.locator('#generate').click();
   await expect(workspace.locator('#feedback')).toContainText('Ready', { timeout: 45000 });
-  await expect(workspace.locator('#view-edit')).toHaveAttribute('aria-selected', 'true');
+  await expect(workspace.locator('#edit-panel')).toBeVisible();
   await expect(workspace.locator('#resume-summary')).toContainText('Software developer');
   await expect(workspace.locator('#document-status')).toContainText('Saved locally');
   expect(kr.openrouter.requests.every(request => request.body.provider.data_collection === 'deny')).toBe(true);

@@ -12,47 +12,35 @@
       <a class="brand app-brand" href="#profile"><span data-product-name>{{VISUAL_NAME}}</span></a>
       <nav class="app-navigation" aria-label="Workspace navigation">
         <a href="#profile" class="nav-item" id="profile-nav-link"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2"/></svg>Profile</a>
-        <div id="profile-subsections" class="profile-subsections" aria-label="Profile sections"></div>
-        <a href="../materials/index.html" class="nav-item" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5"/></svg>Tailored documents</a>
-      </nav>
-      <nav class="app-configuration" aria-label="Configuration">
-        <a href="#connection" class="nav-item">Settings</a>
-        <div class="configuration-links" id="configuration-links" hidden>
-          <a href="#connection" class="nav-item">AI &amp; billing</a>
-          <a href="#models" class="nav-item">Writing preferences</a>
-          <a href="#resume" class="nav-item">Uploaded resume</a>
-          <a href="#advanced" class="nav-item">Backup &amp; migration</a>
-        </div>
+        <a href="../materials/index.html" class="nav-item" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5"/></svg>Applications</a>
+        <a href="#settings" class="nav-item" id="settings-nav-link"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</a>
       </nav>
       <div class="app-sidebar-footer"><p>Stored in this browser</p><span class="version" id="version"></span></div>
     </aside>
     <main class="settings-main">
-<header class="page-heading" id="options-heading" hidden><h1 id="options-title">Settings</h1><p class="hint">Manage the settings for your application workspace.</p></header>
-
-    <section id="connection" hidden>
-      <section class="ai-usage" aria-labelledby="ai-data-heading">
-        <h2 id="ai-data-heading">Choose whether to share data with AI</h2>
-        <p id="ai-data-details">AI features send your saved profile context, work history, notes, application questions, job description and current application URL to OpenRouter and its AI providers. Profile context can include contact details, location, salary expectations and optional demographic or disability answers you have saved. Kareer AI sends this through Kareer's gateway; your own OpenRouter key sends it directly. Providers process the data under their own retention policies.</p>
-        <p>Use AI only with information you want processed this way. Saved profile filling and local files remain available with AI sharing off. Turning sharing off stops new AI requests; it cannot recall data already sent. <a href="https://kareer.itsamro.me/privacy/" target="_blank" rel="noopener noreferrer">Read the privacy policy</a>.</p>
-        <label class="checkbox-row"><input type="checkbox" id="ai-data-consent" aria-describedby="ai-data-details ai-consent-feedback"> I agree to this data sharing for AI features.</label>
-        <p id="ai-consent-feedback" class="feedback" role="status" aria-live="polite"></p>
-      </section>
+    <section id="settings" hidden>
+      <header class="page-heading"><h1>Settings</h1><p class="hint">AI, billing, and a backup of what is stored in this browser.</p></header>
+      <div id="connection">
       <div id="managed-ai">
         <div class="ai-introduction">
-          <div class="ai-introduction-copy">
-            <div class="ai-introduction-heading"><h2>Kareer AI</h2><span class="badge warn" id="managed-state" role="status" aria-live="polite">Activation needed</span></div>
-            <h3>Put your experience<br />to work.</h3>
-            <p>Spend less time turning the same career facts into new answers. Connect Kareer AI for help with application questions and documents, grounded in your profile and the job.</p>
-            <ul class="ai-plans" id="ai-plans" aria-label="Kareer AI plans"></ul>
-            <p class="ai-purchase-note">Buying opens Stripe's secure checkout. By buying you agree to the <a href="https://kareer.itsamro.me/terms/" target="_blank" rel="noopener noreferrer">Terms of Service</a>. All sales are final. No AI provider account or API key to set up.</p>
-            <div class="actions"><button id="start-checkout" class="secondary">View plans <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></button></div>
-            <p id="purchase-status" role="status" aria-live="polite"></p>
+          <div class="ai-introduction-heading"><h2>Kareer AI</h2><span class="badge warn" id="managed-state" role="status" aria-live="polite">Activation needed</span></div>
+          <div class="ai-hero">
+            <h3>Put your experience to work.</h3>
+            <p>Finish applications faster. Kareer AI writes the answers and documents your profile can't fill on its own, grounded in your real experience and the job in front of you.</p>
           </div>
           <ul class="ai-capabilities" aria-label="What Kareer AI helps with">
-            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5ZM8 9h8M8 12h5" /></svg><div><strong>Answers for this application</strong><span>Use your saved experience and job context for questions beyond exact profile matches.</span></div></li>
-            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H5v18h14V8l-5-5ZM14 3v5h5M8 12h8M8 16h6" /></svg><div><strong>Documents for this role</strong><span>Tailor resumes and cover letters from your structured profile.</span></div></li>
-            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6M4 21h16" /></svg><div><strong>You review the results</strong><span>Check generated answers and make changes before submitting.</span></div></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5ZM8 9h8M8 12h5" /></svg><div><strong>Answers that sound like you</strong><span>Open questions drafted from your saved experience and the job.</span></div></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H5v18h14V8l-5-5ZM14 3v5h5M8 12h8M8 16h6" /></svg><div><strong>A résumé for every role</strong><span>Tailored résumés and cover letters in one click.</span></div></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6M4 21h16" /></svg><div><strong>You stay in control</strong><span>Every generated answer is marked and editable before you submit.</span></div></li>
           </ul>
+          <div class="ai-trial" id="trial-offer" hidden><div><strong>New to Kareer AI?</strong><p>Try it free with 10 credits. No card needed; trial credits last 30 days.</p></div><button id="start-trial">Start free trial</button></div>
+          <ul class="ai-plans" id="ai-plans" aria-label="Kareer AI plans"></ul>
+          <div class="ai-fine-print">
+            <p id="ai-data-details">Kareer AI sends your saved profile (including any salary, demographic or disability answers you saved), the job description and the application's questions to AI providers through Kareer. Starting a trial, buying or activating a key means you agree to this. <a href="https://kareer.itsamro.me/privacy/" target="_blank" rel="noopener noreferrer">Privacy policy</a></p>
+            <p class="ai-purchase-note">Secure checkout by Stripe. No AI provider account or API key to set up. By buying you agree to the <a href="https://kareer.itsamro.me/terms/" target="_blank" rel="noopener noreferrer">Terms of Service</a>. All sales are final.</p>
+            <button id="start-checkout" class="secondary">View plans <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></button>
+          </div>
+          <p id="purchase-status" role="status" aria-live="polite"></p>
         </div>
         <details id="license-activation" class="ai-disclosure">
           <summary><span>Already purchased?<small>Activate your Kareer key</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></summary>
@@ -67,7 +55,7 @@
         <section id="usage-details" class="ai-usage" aria-labelledby="usage-heading" hidden>
           <div class="ai-usage-heading"><h2 id="usage-heading">Your AI usage</h2><button class="secondary" id="refresh-usage">Refresh usage</button></div>
           <h3 id="total-balance" role="status">Checking balance…</h3>
-          <dl><div><dt>Purchased credits</dt><dd id="purchased-balance">—</dd></div><div><dt>Monthly credits</dt><dd id="monthly-balance">—</dd></div></dl>
+          <dl><div><dt>Purchased credits</dt><dd id="purchased-balance">—</dd></div><div><dt>Monthly credits</dt><dd id="monthly-balance">—</dd></div><div id="trial-balance-row" hidden><dt>Trial credits</dt><dd id="trial-balance">—</dd></div></dl>
           <p class="hint" id="monthly-expiry"></p><p class="hint" id="plan-status"></p>
           <div class="actions"><button class="secondary" id="manage-billing">Manage billing</button><button class="secondary" id="reveal-license">Show key</button><button class="secondary danger" id="disconnect-license">Remove key from this browser</button></div>
           <div class="group" id="license-reveal" hidden><label for="license-value">Your Kareer key</label><input id="license-value" type="text" readonly spellcheck="false" aria-describedby="license-reveal-help" /><p class="hint" id="license-reveal-help">Keep this key somewhere safe to use your credits on another browser. Kareer does not email it.</p></div>
@@ -86,7 +74,7 @@
       <div id="byok-connection" hidden>
       <div>
         <h2>OpenRouter API key</h2>
-        <p class="hint">Stored by the extension. It is never sent to the page, the content script, or any log.</p>
+        <p class="hint">Stored by the extension. It is never sent to the page, the content script, or any log. With your own key, Kareer sends the same profile and application data directly to OpenRouter and its AI providers.</p>
       </div>
       <div class="group">
         <label for="api-key">API key</label>
@@ -101,34 +89,33 @@
         <button class="secondary danger" id="clear-key">Remove key</button>
         <span class="feedback" role="status" aria-live="polite" id="key-feedback"></span>
       </div>
-      </div>
-        </div>
-      </details>
-    </section>
-
-    <section id="models" hidden>
-      <div>
-        <h2>Writing preferences</h2>
-        <p class="hint">Used for the primary autofill request, repairs, and rewrites.</p>
-      </div>
       <details id="byok-model">
-        <summary>Advanced: AI model</summary>
+        <summary>Model</summary>
         <div class="group">
         <label for="model">OpenRouter model ID</label>
         <input id="model" type="text" placeholder="provider/model-id" autocomplete="off" spellcheck="false" aria-describedby="model-help" />
         <p class="hint" id="model-help">Copy the model ID from OpenRouter and paste it here.</p>
         </div>
+        <div class="actions">
+          <button type="button" id="save-byok-model">Save model</button>
+          <span class="feedback" role="status" aria-live="polite" id="byok-model-feedback"></span>
+        </div>
       </details>
-      <div class="group">
-        <label for="narrative-style">Writing style</label>
-        <select id="narrative-style" aria-describedby="style-description"></select>
-        <p class="hint" id="style-description"></p>
-        <p class="hint">Example wording</p>
-        <p id="style-example"></p>
       </div>
-      <div class="actions">
-        <button id="save-model">Save writing preferences</button>
-        <span class="feedback" role="status" aria-live="polite" id="model-feedback"></span>
+        </div>
+      </details>
+      </div>
+      <div id="advanced">
+        <div>
+          <h2>Backup and migration</h2>
+          <p class="hint">Import a JSON export from the Tampermonkey userscript, or back up what is stored here. Exports never include the API key.</p>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="export-data">Export JSON</button>
+          <button class="secondary" id="import-data">Import JSON</button>
+          <input id="import-file" type="file" accept="application/json,.json" hidden />
+          <span class="feedback" role="status" aria-live="polite" id="migration-feedback"></span>
+        </div>
       </div>
     </section>
 
@@ -139,14 +126,28 @@
         <p class="hint">Your career facts, ready for every application.</p>
         </div>
         <a id="profile-materials-link" class="profile-materials-link" href="../materials/index.html" target="_blank" rel="noopener noreferrer" title="Open tailored documents in a new tab">
-          Tailored documents
+          Applications
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M10 14 21 3M21 14v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h6"/></svg>
         </a>
       </div>
       <p class="feedback profile-save-feedback" role="status" aria-live="polite" id="profile-feedback"></p>
       <button type="button" class="secondary profile-retry" id="profile-retry" hidden>Retry loading profile</button>
       <p id="profile-loading" class="hint" role="status">Loading your profile…</p>
+      <nav id="profile-subsections" class="profile-subsections" aria-label="Profile sections"></nav>
       <form id="profile-form" hidden>
+        <div id="profile-resume">
+          <h2>Resume file</h2>
+          <p class="hint">The file Kareer attaches to resume uploads. One file, stored in this browser.</p>
+          <div class="row">
+            <input aria-label="Resume file" id="resume-file" type="file" accept=".pdf,.doc,.docx,application/pdf" />
+          </div>
+          <p class="hint" id="resume-status">No resume stored.</p>
+          <div class="actions">
+            <button type="button" id="save-resume">Store resume</button>
+            <button class="secondary danger" type="button" id="clear-resume">Remove resume</button>
+            <span class="feedback" role="status" aria-live="polite" id="resume-feedback"></span>
+          </div>
+        </div>
         <fieldset id="section-identity">
           <legend>Identity and contact</legend>
           <div class="grid" id="identity-fields"></div>
@@ -255,36 +256,22 @@
             <button type="submit" id="floating-save-btn" aria-describedby="profile-feedback">Save all</button>
           </div>
         </div>
+        <div id="models">
+          <h2>Writing style</h2>
+          <p class="hint">Used when Kareer writes application answers, repairs, and tailored documents.</p>
+          <div class="group">
+            <label for="narrative-style">Writing style</label>
+            <select id="narrative-style" aria-describedby="style-description"></select>
+            <p class="hint" id="style-description"></p>
+            <p class="hint">Example wording</p>
+            <p id="style-example"></p>
+          </div>
+          <div class="actions">
+            <button type="button" id="save-model">Save writing style</button>
+            <span class="feedback" role="status" aria-live="polite" id="model-feedback"></span>
+          </div>
+        </div>
       </form>
-    </section>
-
-    <section id="resume" hidden>
-      <div>
-        <h2>Resume</h2>
-        <p class="hint">One file, stored in the extension. Autofill attaches it to resume upload controls and checks the filename afterwards.</p>
-      </div>
-      <div class="row">
-        <input aria-label="Resume file" id="resume-file" type="file" accept=".pdf,.doc,.docx,application/pdf" />
-      </div>
-      <p class="hint" id="resume-status">No resume stored.</p>
-      <div class="actions">
-        <button type="button" id="save-resume">Store resume</button>
-        <button class="secondary danger" type="button" id="clear-resume">Remove resume</button>
-        <span class="feedback" role="status" aria-live="polite" id="resume-feedback"></span>
-      </div>
-    </section>
-
-    <section id="advanced" hidden>
-      <div>
-        <h2>Backup and migration</h2>
-        <p class="hint">Import a JSON export from the Tampermonkey userscript, or back up what is stored here. Exports never include the API key.</p>
-      </div>
-      <div class="actions">
-        <button class="secondary" id="export-data">Export JSON</button>
-        <button class="secondary" id="import-data">Import JSON</button>
-        <input id="import-file" type="file" accept="application/json,.json" hidden />
-        <span class="feedback" role="status" aria-live="polite" id="migration-feedback"></span>
-      </div>
     </section>
     </main>
   </div>
