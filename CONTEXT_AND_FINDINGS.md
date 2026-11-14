@@ -6,11 +6,12 @@
 - Resolution:
   - In `src/targets/extension/materials/editor-model.js`: updated `editableModel(original, incoming, baseSections = original.sections)` to accept `baseSections`. When reconstructing `result.sections`, maps `incoming.sections` against `available = baseSections || original.sections || []`. If an incoming section exists in `available`, its trusted metadata is preserved while attaching incoming bullets (and project keywords).
   - In `src/targets/extension/background/materials.js`: preserved `baseSections` on the stored record during generation (`stampFiles`) and `save`, and passed `baseSections` to `editableModel` in `putDraft`, `rewriteDraft`, and `save`.
+  - In `src/targets/extension/materials/workspace.css` and `editor.js`: fixed section action toolbar positioning. Previously, `.section-actions` had `top: 0; transform: translateY(-100%); right: -16px;`, which pushed the toolbar above the section boundary into the preceding section's DOM, causing hover flicker/loss when reaching for the buttons (and floating above category headers like `PROJECTS`). Removed `translateY(-100%)`, aligned `.section-actions` at `right: 0; top: 2px;` inside the section, and dynamically offset it to `top: 28px;` when a category header is visible before the section title so the actions sit directly on the hovered item.
 - Verification:
   - Unit tests: `node --test tests/unit/materials-editor.test.js` passed 11/11 (including new unit test `undoing a section removal after an autosave restores the section from baseSections`).
   - Unit tests: `node --test tests/unit/materials.test.js` (22/22 passed), `node --test tests/unit/materials-ai.test.js` (8/8 passed).
-  - E2E tests: `npx playwright test tests/e2e/materials-editor.spec.js` (passed).
-- Files changed this turn: `src/targets/extension/materials/editor-model.js`, `src/targets/extension/background/materials.js`, `tests/unit/materials-editor.test.js`, `CONTEXT_AND_FINDINGS.md`.
+  - E2E tests: `npx playwright test tests/e2e/materials-editor.spec.js` (13/13 passed).
+- Files changed this turn: `src/targets/extension/materials/editor-model.js`, `src/targets/extension/background/materials.js`, `src/targets/extension/materials/editor.js`, `src/targets/extension/materials/workspace.css`, `tests/unit/materials-editor.test.js`, `CONTEXT_AND_FINDINGS.md`.
 - Status: Local fixes applied and verified. Per user instruction, nothing pushed.
 
 ## Turn: 2026-11-12 - Panel profile tab, Open profile routing, typography

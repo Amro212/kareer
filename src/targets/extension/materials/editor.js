@@ -89,7 +89,10 @@ export function createMaterialEditor({ container, model, onUpdate, onSelection, 
     let previous;
     for (const section of container.querySelectorAll('.material-section')) {
       const heading = section.querySelector('.paper-category[data-category]');
-      if (heading) heading.hidden = heading.dataset.category === previous;
+      if (heading) {
+        heading.hidden = heading.dataset.category === previous;
+        section.classList.toggle('has-category-header', !heading.hidden);
+      }
       previous = section.dataset.category;
     }
   };
