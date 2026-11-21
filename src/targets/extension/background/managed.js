@@ -39,6 +39,7 @@ async function json(response) {
       TRIAL_UNAVAILABLE: 'Free trials are paused right now. Try again tomorrow, or choose a plan.',
       INVALID_KEY: 'That Kareer key could not be verified.', KEY_DISABLED: `This key is disabled. Email ${SUPPORT_EMAIL} for help.`,
       SUBSCRIPTION_EXISTS: 'You already have a monthly plan. Open Manage billing.',
+      SUBSCRIPTION_CANCELLED: 'Your monthly plan will not renew. Its credits remain available until the end of the paid period. Open Manage billing to keep your subscription, or subscribe again after it ends.',
       SALES_DISABLED: 'Purchases are not available yet.', INVALID_OFFER: 'That plan is not available.',
       CLAIM_UNAVAILABLE: `Kareer stopped checking for this purchase. If you paid and Kareer did not activate, email ${SUPPORT_EMAIL}.`,
       WALLET_FLAGGED: `Purchases are paused while a payment issue is reviewed. Email ${SUPPORT_EMAIL}.`,

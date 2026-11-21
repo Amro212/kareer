@@ -56,9 +56,8 @@ input::file-selector-button { font: inherit; padding: 4px 10px; margin-right: 12
 .ai-plan-facts li { position: relative; padding-left: 22px; }
 .ai-plan-facts li::before { content: ""; position: absolute; left: 2px; top: 3px; width: 9px; height: 5px; border: solid var(--kr-success); border-width: 0 0 2px 2px; transform: rotate(-45deg); }
 .ai-plan button { width: 100%; margin-top: 4px; }
-.ai-fine-print { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px 24px; }
+.ai-fine-print { display: grid; gap: 6px; }
 .ai-fine-print p { grid-column: 1; color: var(--kr-text-2); font-size: 12px; line-height: 1.55; max-width: 78ch; }
-#start-checkout { grid-column: 2; grid-row: 1 / span 2; display: inline-flex; align-items: center; gap: 12px; padding: 10px 16px; font-size: 13px; }
 .ai-disclosure { border-bottom: 1px solid var(--kr-line); }
 .ai-disclosure summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 0; cursor: pointer; font-size: 15px; font-weight: 550; list-style: none; }
 .ai-disclosure summary::-webkit-details-marker { display: none; }
@@ -79,7 +78,7 @@ input::file-selector-button { font: inherit; padding: 4px 10px; margin-right: 12
 #purchase-status:empty, #managed-feedback:empty, #activation-feedback:empty { display: none; }
 #purchase-status { color: var(--kr-text-1); font-size: 13px; }
 @media (max-width: 860px) { .ai-capabilities { grid-template-columns: minmax(0, 1fr); gap: 16px; } }
-@media (max-width: 540px) { .ai-introduction { padding: 20px; } .ai-hero h3 { font-size: 26px; } .ai-fine-print { grid-template-columns: minmax(0, 1fr); } #start-checkout { grid-column: 1; grid-row: auto; justify-content: center; } .ai-trial button { width: 100%; } }
+@media (max-width: 540px) { .ai-introduction { padding: 20px; } .ai-hero h3 { font-size: 26px; } .ai-trial button { width: 100%; } }
 .badge { font-size: 11px; font-weight: 500; padding: 3px 7px; border: 1px solid currentColor; border-radius: var(--kr-radius-xs); white-space: nowrap; }
 .ok { color: var(--kr-success); }
 .warn { color: var(--kr-warning); }

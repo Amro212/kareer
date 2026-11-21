@@ -7,7 +7,8 @@ async function mockGateway(kr, credits = 5) {
     globalThis.__credits = credits;
     const status = () => ({ state: globalThis.__credits ? 'ready' : 'outOfCredits', monthly: 0,
       purchased: globalThis.__trial ? 0 : globalThis.__credits, trial: globalThis.__trial ? globalThis.__credits : 0, total: globalThis.__credits,
-      trialExpiresAt: globalThis.__trial ? new Date(Date.now() + 30 * 86400000).toISOString() : null, billing: !globalThis.__trial });
+      trialExpiresAt: globalThis.__trial ? new Date(Date.now() + 30 * 86400000).toISOString() : null, billing: !globalThis.__trial,
+      subscriptions: globalThis.__subscriptions || [] });
     globalThis.fetch = async (url, options) => {
       if (!String(url).startsWith(`${gateway}/`)) return original(url, options);
       const path = new URL(url).pathname;
@@ -119,8 +120,7 @@ test('Kareer AI activates without showing models or leaking license credentials'
   await expect(options.locator('#ai-mode')).toHaveValue('managed');
   await expect(options.locator('#ai-mode')).toBeHidden();
   await expect(options.locator('#advanced-ai')).not.toHaveAttribute('open');
-  await expect(options.locator('#start-checkout')).toBeVisible();
-  await expect(options.locator('#start-checkout')).toHaveText('View plans');
+  await expect(options.locator('#start-checkout')).toHaveCount(0);
   await expect(options.locator('#purchase-offer')).toHaveCount(0);
   await expect(options.locator('#ai-plans li.ai-plan')).toHaveCount(2);
   await expect(options.locator('#ai-plans li.ai-plan').nth(0)).toContainText('Kareer Monthly');
@@ -199,14 +199,15 @@ test('purchase auto-claim is privileged and mode switching preserves the saved p
   await expect(page.locator('#advanced-ai')).toHaveAttribute('open', '');
   await page.locator('#ai-mode').selectOption('managed');
   await page.evaluate(() => Object.defineProperty(document, 'hidden', { configurable: true, value: true }));
-  await page.locator('#start-checkout').click();
+  await page.evaluate(() => { chrome.tabs.create = async () => {}; });
+  await page.locator('#buy-pack').click();
   await expect(page.locator('#managed-state')).toHaveText('Ready');
   const secrets = await kr.readStorage('kr:secrets');
   expect(secrets.apiKey).toBe('sk-or-v1-e2e-test-key');
   expect(secrets.licenseKey).toBe('private-managed-license');
   expect(await page.locator('body').textContent()).not.toContain('private-checkout-claim');
   const calls = await kr.worker.evaluate(() => globalThis.__managedCalls);
-  expect(calls.find(c => c.path === '/v1/purchases').body).toEqual({});
+  expect(calls.find(c => c.path === '/v1/purchases').body).toEqual({ offer: 'pack' });
   await page.locator('#ai-mode').selectOption('byok');
   await expect(page.locator('#byok-connection')).toBeVisible();
   expect((await kr.readStorage('kr:secrets')).licenseKey).toBe('private-managed-license');
@@ -225,6 +226,57 @@ test('choosing a plan in Settings goes straight to Stripe Checkout for that plan
   expect(await options.evaluate(() => window.__opened[1])).toBe('https://checkout.stripe.com/c/pay/cs_test_monthly');
   const calls = await kr.worker.evaluate(() => globalThis.__managedCalls.filter(c => c.path === '/v1/purchases').map(c => c.body));
   expect(calls).toEqual([{ offer: 'pack' }, { offer: 'monthly' }]);
+});
+
+for (const cancelled of [true, false]) test(`monthly plan ${cancelled ? 'scheduled to cancel' : 'active'} opens billing instead of duplicate checkout`, async ({ kr }, testInfo) => {
+  await kr.seed({ apiKey: '', settings: { aiMode: 'managed' } });
+  await mockGateway(kr, 1000);
+  await kr.worker.evaluate(async cancelled => {
+    const { 'kr:secrets': secrets } = await chrome.storage.local.get('kr:secrets');
+    await chrome.storage.local.set({ 'kr:secrets': { ...secrets, licenseKey: 'private-managed-license' } });
+    globalThis.__subscriptions = [{ status: 'active', cancelAtPeriodEnd: cancelled, periodEnd: '2026-12-21T12:00:00Z' }];
+  }, cancelled);
+  const options = await kr.context.newPage();
+  await options.goto(`${kr.optionsUrl()}#connection`);
+  await options.evaluate(() => { window.__opened = []; chrome.tabs.create = async ({ url }) => { window.__opened.push(url); }; });
+  await expect(options.locator('#buy-monthly')).toHaveText(cancelled ? 'Keep subscription' : 'Manage subscription');
+  await expect(options.locator('#monthly-plan-status')).toContainText(cancelled ? 'will not renew' : 'renews');
+  if (cancelled) {
+    await expect(options.locator('#monthly-plan-status')).toContainText('subscribe again after it ends');
+    const endDate = await options.evaluate(() => new Date('2026-12-21T12:00:00Z').toLocaleDateString());
+    await expect(options.locator('#monthly-plan-status')).toContainText(endDate);
+    await options.screenshot({ path: testInfo.outputPath('cancelled-plan-desktop.png'), fullPage: true });
+    await options.setViewportSize({ width: 390, height: 844 });
+    expect(await options.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await options.screenshot({ path: testInfo.outputPath('cancelled-plan-mobile.png'), fullPage: true });
+  }
+  await options.locator('#buy-monthly').click();
+  await expect.poll(() => options.evaluate(() => window.__opened)).toEqual(['https://billing.stripe.com/p/session/test_e2e']);
+  expect(await kr.worker.evaluate(() => globalThis.__managedCalls.filter(c => c.path === '/v1/purchases'))).toHaveLength(0);
+  // The cancellation completes via webhook; the same Settings tab can subscribe again.
+  await kr.worker.evaluate(() => { globalThis.__subscriptions[0].status = 'canceled'; });
+  await options.locator('#refresh-usage').click();
+  await expect(options.locator('#buy-monthly')).toHaveText('Subscribe');
+  await options.locator('#buy-monthly').click();
+  await expect.poll(() => options.evaluate(() => window.__opened[1])).toBe('https://checkout.stripe.com/c/pay/cs_test_monthly');
+});
+
+test('monthly checkout refreshes stale subscription state before opening Stripe', async ({ kr }) => {
+  await kr.seed({ apiKey: '', settings: { aiMode: 'managed' } });
+  await mockGateway(kr);
+  const options = await kr.context.newPage();
+  await options.goto(`${kr.optionsUrl()}#connection`);
+  await expect(options.locator('#buy-monthly')).toHaveText('Subscribe');
+  await kr.worker.evaluate(async () => {
+    const { 'kr:secrets': secrets } = await chrome.storage.local.get('kr:secrets');
+    await chrome.storage.local.set({ 'kr:secrets': { ...secrets, licenseKey: 'private-managed-license' } });
+    globalThis.__subscriptions = [{ status: 'active', cancelAtPeriodEnd: true, periodEnd: '2026-12-21T12:00:00Z' }];
+  });
+  await options.evaluate(() => { window.__opened = []; chrome.tabs.create = async ({ url }) => { window.__opened.push(url); }; });
+  await options.locator('#buy-monthly').click();
+  await expect.poll(() => options.evaluate(() => window.__opened)).toEqual(['https://billing.stripe.com/p/session/test_e2e']);
+  await expect(options.locator('#monthly-plan-status')).toContainText('will not renew');
+  expect(await kr.worker.evaluate(() => globalThis.__managedCalls.filter(c => c.path === '/v1/purchases'))).toHaveLength(0);
 });
 
 test('an unreachable gateway shows a plain message instead of a raw network error', async ({ kr }) => {

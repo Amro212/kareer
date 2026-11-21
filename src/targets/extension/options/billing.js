@@ -10,6 +10,7 @@ const $ = id => document.getElementById(id);
 const labels = { ready: 'Ready', activationNeeded: 'Activation needed', outOfCredits: 'Out of credits', loading: 'Checking balance…', unavailable: 'Temporarily unavailable' };
 const BYOK = typeof KAREER_BYOK !== 'boolean' || KAREER_BYOK;
 let bound = false, timer;
+const monthlyPlan = status => status?.subscriptions?.find(s => !['canceled', 'incomplete_expired'].includes(s.status));
 function draw(status) {
   const managed = !BYOK || status?.mode !== 'byok';
   $('advanced-ai').hidden = !BYOK;
@@ -34,11 +35,18 @@ function draw(status) {
   const subscriptions = status?.subscriptions || [];
   $('plan-status').textContent = [status?.flagged ? `A payment on this key is disputed. Its credits are on hold and new purchases are paused. Email ${SUPPORT_EMAIL} with questions.` : '',
     subscriptions.length ? subscriptions.map(planText).join(' ') : 'No monthly plan. Credit packs work on their own.'].filter(Boolean).join(' ');
+  const subscription = monthlyPlan(status), button = $('buy-monthly');
+  if (button) {
+    button.textContent = subscription ? subscription.cancelAtPeriodEnd && ['active', 'trialing'].includes(subscription.status) ? 'Keep subscription' : 'Manage subscription' : 'Subscribe';
+    button.setAttribute('aria-label', `${button.textContent}: ${OFFERS.monthly.name}`);
+    $('monthly-plan-status').textContent = subscription ? planText(subscription) : '';
+    $('monthly-plan-status').hidden = !subscription;
+  }
 }
 function planText(s) {
   const date = s.periodEnd ? new Date(s.periodEnd).toLocaleDateString() : '';
   const until = date || 'the end of the paid period';
-  if (['active', 'trialing'].includes(s.status) && s.cancelAtPeriodEnd) return `Monthly plan cancelled. It stays active and its credits remain until ${until}.`;
+  if (['active', 'trialing'].includes(s.status) && s.cancelAtPeriodEnd) return `Cancellation scheduled. Your monthly plan will not renew. Your plan and monthly credits remain available until ${until}. Open Manage billing to keep your subscription, or subscribe again after it ends.`;
   if (s.status === 'active') return `Monthly plan renews ${date || 'on your billing date'}.`;
   if (s.status === 'trialing') return `Monthly plan trial. Billing starts ${date || 'at the end of the trial'}.`;
   if (['past_due', 'unpaid'].includes(s.status)) return 'Monthly payment failed. No renewal credits were added. Open Manage billing to update your card.';
@@ -89,8 +97,8 @@ async function poll() {
   } catch (error) { $('purchase-status').textContent = error.message; }
 }
 export function setupBilling(snapshot) {
-  draw(snapshot.aiStatus || { mode: 'byok', state: snapshot.hasApiKey ? 'ready' : 'activationNeeded' });
-  if (bound) return;
+  const status = snapshot.aiStatus || { mode: 'byok', state: snapshot.hasApiKey ? 'ready' : 'activationNeeded' };
+  if (bound) { draw(status); return; }
   bound = true;
   $('ai-mode').onchange = async () => {
     const snapshot = await sendMessage({ type: MSG.SNAPSHOT });
@@ -118,7 +126,16 @@ export function setupBilling(snapshot) {
     $('license-reveal').hidden = true; $('license-value').value = ''; await billing('disconnect'); await refresh(); $('managed-feedback').textContent = 'Key removed from this browser. Your paid entitlement is unchanged.'; });
   action('manage-billing', async () => { const result = await billing('billing'); await openBilling(result.url); $('managed-feedback').textContent = ''; });
   const checkout = offer => async () => {
-    const result = await billing('purchase', offer ? { offer } : {});
+    if (offer === 'monthly') {
+      const status = await refresh(), subscription = monthlyPlan(status);
+      if (subscription) {
+        const result = await billing('billing');
+        await openBilling(result.url);
+        $('managed-feedback').textContent = planText(subscription);
+        return;
+      }
+    }
+    const result = await billing('purchase', { offer });
     await api.tabs.create({ url: result.url });
     $('managed-feedback').textContent = '';
     await poll();
@@ -142,12 +159,21 @@ export function setupBilling(snapshot) {
     const button = el('button', best ? '' : 'secondary', key === 'monthly' ? 'Subscribe' : 'Buy pack');
     button.id = `buy-${key}`;
     button.setAttribute('aria-label', `${button.textContent}: ${offer.name}, ${offer.price} ${offer.cadence}`);
-    item.append(name, price, facts, button);
+    item.append(name, price, facts);
+    if (key === 'monthly') {
+      const note = el('p', 'hint', '');
+      note.id = 'monthly-plan-status';
+      note.setAttribute('role', 'status');
+      button.setAttribute('aria-describedby', note.id);
+      item.append(note);
+    }
+    item.append(button);
     return item;
   }));
   for (const key of Object.keys(OFFERS)) action(`buy-${key}`, checkout(key));
-  action('start-checkout', checkout());
+  draw(status);
   window.addEventListener('pagehide', () => clearTimeout(timer));
+  window.addEventListener('focus', () => { void refresh().catch(() => {}); });
   api.runtime.onMessage.addListener(message => { if (message.type === MSG.STORAGE_CHANGED && message.aiStatus) draw(message.aiStatus); });
   void refresh();
   void poll();

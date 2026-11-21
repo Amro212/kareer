@@ -154,6 +154,14 @@ test('choosing a plan in Settings opens Stripe Checkout directly and an unreacha
   } finally { globalThis.fetch = original; }
 });
 
+test('scheduled cancellation errors explain keeping the subscription without replacing the pending claim', async t => {
+  const checkout = { id: 'old-purchase', claimSecret: 'old-claim' };
+  records['kr:secrets'].checkout = checkout;
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ code: 'SUBSCRIPTION_CANCELLED' }, { status: 409 }));
+  await assert.rejects(managedOperation('purchase', { offer: 'monthly' }), /will not renew.*Manage billing.*subscribe again after it ends/);
+  assert.deepEqual(records['kr:secrets'].checkout, checkout);
+});
+
 test('auto-claim preserves an explicit later mode choice and free status retains plan details', async () => {
   records['kr:settings'].aiMode = 'byok';
   records['kr:secrets'].checkout = { id: 'purchase', claimSecret: 'claim-secret', expiresAt: new Date(Date.now() + 60000).toISOString() };
