@@ -12,6 +12,7 @@ const rootDir = path.join(__dirname, '..');
 const srcDir = path.join(rootDir, 'src');
 const staging = process.argv.includes('--staging');
 const production = process.argv.includes('--production');
+const amo = process.argv.includes('--amo');
 if (staging && production) throw new Error('Choose --staging or --production, not both.');
 const gatewayArg = process.argv.find(arg => arg.startsWith('--gateway='))?.slice('--gateway='.length);
 if (gatewayArg && production) throw new Error('Production builds read KAREER_GATEWAY_ORIGIN, not --gateway.');
@@ -86,7 +87,10 @@ function syncSiteAndUpdates(version) {
     } catch {}
   }
 
-  for (const p of [path.join(rootDir, 'site', 'firefox-updates.json'), path.join(rootDir, 'firefox-updates.json')]) {
+  // A listed AMO build is not the signed XPI served by the website's update feeds.
+  const updateFiles = amo ? [] : ['site/firefox-updates.json', 'firefox-updates.json'];
+  for (const file of updateFiles) {
+    const p = path.join(rootDir, file);
     if (fs.existsSync(p)) {
       try {
         const manifest = JSON.parse(fs.readFileSync(p, 'utf8'));
@@ -243,7 +247,7 @@ function writeExtensionStaticFiles(pkg, browser) {
     }
   }
   // AMO rejects listed (Mozilla-hosted) uploads that declare update_url.
-  if (process.argv.includes('--amo')) delete manifest.browser_specific_settings?.gecko?.update_url;
+  if (amo) delete manifest.browser_specific_settings?.gecko?.update_url;
   fs.mkdirSync(outDir, { recursive: true });
   fs.copyFileSync(path.join(rootDir, 'LICENSE'), path.join(outDir, 'LICENSE'));
   fs.writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8');

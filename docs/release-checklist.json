@@ -25,7 +25,7 @@
   },
   "productionGateway": {
     "passed": false,
-    "evidence": "2026-11-05: production Worker dbc0bec9-06a2-40b5-a5c2-c52eab325ed9 deployed with migrated kareer-production D1 and sales disabled. API certificate active and HTTPS verified; Chrome Store and Firefox origins reach the sales gate. Live Stripe prices confirmed at USD 9.99 monthly and 4.99 once. Live Stripe webhook registered. Production Stripe, webhook and OpenRouter secrets plus signed delivery, portal and AI verification are pending."
+    "evidence": "2026-11-22: production Worker e80ce502-aaa3-48c7-b7da-1f1dc7c189ba deployed with migrated kareer-production D1, all three secret bindings, checkout enabled and a 20-credit trial. Both Stripe live Checkout sessions opened and remained unpaid. A live trial returned 20 credits and a synthetic autofill settled for one credit. Live payment, paid claim, resulting webhook delivery and billing portal were not exercised in this run."
   },
   "chromeStoreApproval": {
     "passed": false,

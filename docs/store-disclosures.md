@@ -9,16 +9,15 @@ letter documents. Review saved, inferred, guessed and unresolved answers. Auto
 Submit is off by default. Supported workflows should be demonstrated with test
 data; do not promise every ATS, guaranteed accuracy or automatic hiring outcomes.
 
-Local tools are free. Optional managed AI requires payment: US$9.99/month for 1,000
-credits per paid billing period, or US$4.99 for 300 non-expiring credits. Taxes may
-apply. One completed AI request costs one credit; runs can make multiple requests,
-including automatic follow-ups, repairs and rewrites. Monthly credits expire at
-period end and are spent first. Cancel through Manage billing (Stripe's customer
-portal); the plan stops at the end of the paid month. Paid monthly credits remain
-until expiry; purchased credits remain after cancellation. Credits are usage units
-with no cash value. No automatic credit purchases or trial. All sales are final,
-except where the law requires a refund. Lost keys: email amromousa8@gmail.com. Advanced BYOK remains available
-with separate provider charges. The userscript remains advanced BYOK only.
+Local tools are free. New users can try Kareer AI with 20 credits that expire after
+30 days. No payment card is required. Paid plans are US$9.99/month for 1,000 credits
+per paid billing period or US$4.99 for 300 non-expiring credits. Taxes may apply.
+A completed autofill AI request uses 1 credit, generating a résumé or cover letter
+uses 3, and rewriting part of one uses 2. A run can make multiple requests. Eligible
+credits expiring soonest are used first. Cancel through Manage billing to stop renewal.
+Paid monthly credits remain until period end. Purchased credits remain available.
+Credits are usage units with no cash value. There are no automatic top-ups. All sales
+are final, except where the law requires a refund. Lost keys: email kareer@itsamro.me.
 
 ## Data disclosures
 
@@ -26,12 +25,11 @@ with separate provider charges. The userscript remains advanced BYOK only.
   settings and sessions in extension-controlled storage.
 - Transmitted for AI: relevant profile/notes/job context and application questions.
   This can include saved contact/location/salary/demographic/disability information
-  and the current application URL. Extension AI requires the unchecked-by-default
-  data-sharing agreement in Settings; withdrawing it stops new AI requests while
-  preserving local filling. All OpenRouter generation paths request provider data
-  collection denied; this does not promise zero retention by every service.
-  Managed: background → Kareer Cloudflare gateway → OpenRouter/provider. BYOK:
-  privileged host → OpenRouter/selected provider. External provider terms apply.
+  and the current application URL. The Settings notice explains this before the
+  user starts a trial, purchases credits, or activates a key. The extension
+  background sends AI requests through the Kareer gateway to OpenRouter and its
+  providers. The gateway requests disabled provider data collection. Provider
+  retention and terms still apply.
 - Persistent gateway data: billing IDs, hashed keys/claim secrets, grants and
   request accounting metadata (IDs/hashes/status/tokens/cost/latency/error codes).
   Request dedupe lasts 30 days. No persisted prompt bodies, outputs or raw keys.
@@ -40,7 +38,7 @@ with separate provider charges. The userscript remains advanced BYOK only.
 - No advertising, resale of applicant information, or browsing-history analytics.
   Do not claim no backend, no subscription, no remote processing or no metadata.
 - Credentials are privileged, excluded from page/content snapshots and backups.
-  Kareer keys are reusable bearer credentials, shown once in Settings and never
+  Kareer keys are reusable bearer credentials, available via Show key in Settings and never
   emailed; no Kareer registration is required.
 
 Privacy URL: https://kareer.itsamro.me/privacy/ . Public security policy and source
@@ -50,14 +48,13 @@ content; don't mark all collection as absent because storage is mostly local.
 
 ## Submission and promotion gates
 
-Chrome: use `dist/kareer-chrome.zip`, developer contact/2FA, real screenshots with
-fictional data and the disclosure above. After approval record the real listing URL
-in website installation instructions and the checklist; never invent a store ID.
-Firefox: preserve the existing `kareer@amro212` self-hosted/unlisted update channel
-until a public AMO package/channel is deliberately prepared. A listed submission
-needs the appropriate update configuration, source archive and real Firefox host
-permission/AI verification; the current unsigned self-hosted XPI is not a public
-AMO release.
+Chrome: use `dist/kareer-chrome.zip`, a verified developer contact, 2FA, real
+screenshots with fictional data and the disclosure above. Verify the website's
+existing Chrome item ID resolves to a public install after publishing.
+Firefox: build with `npm run build:extension -- --production --amo` for a public
+AMO submission. Upload `dist/kareer-firefox.xpi` and the matching
+`dist/kareer-amo-source.zip`. Include reviewer steps and the build instructions.
+The website's existing signed download uses the self-hosted update channel.
 
 Current Chrome copy, permission explanations, category mapping, reviewer
 instructions and graphic paths: `docs/chrome-web-store.md`. Current blockers and

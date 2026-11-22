@@ -11,10 +11,11 @@ npm run typecheck --prefix site
 npm run preview --prefix site -- --host 127.0.0.1 --port 4177
 ```
 
-Production output: `site-dist/`. The build prerenders home, privacy, setup and 404 HTML,
-then copies public assets, `CNAME`, `version.json`, `firefox-updates.json`, the Google
-verification file, and any staged `downloads/` directory. Keep `tools/sync-amo.js`
-before the website build in deployment. Do not publish `site/` as unbuilt source.
+Production output is `site-dist/`. The build prerenders home, privacy, terms, pricing,
+setup and 404 HTML. Vite copies `public/robots.txt` and `public/sitemap.xml`, and the
+build preserves the custom domain, verification file, and signed Firefox download and
+update feed staged by `tools/sync-amo.js`. The **Build, Sign & Deploy** workflow runs
+on `master` and uploads `site-dist/` to GitHub Pages.
 
 Focused checks (Playwright uses the root repository's existing test dependency):
 

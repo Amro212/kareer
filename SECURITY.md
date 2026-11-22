@@ -74,7 +74,7 @@ Report vulnerabilities privately using
 [GitHub Private Vulnerability Reporting](https://github.com/Amro212/kareer/security/advisories/new).
 Do not publish applicant information, credentials, payment details or raw request
 dumps in issues. Billing uses Stripe's customer portal; lost keys are recovered by
-email to amromousa8@gmail.com after the purchase is confirmed in Stripe.
+email to kareer@itsamro.me after the purchase is confirmed in Stripe.
 
 Real staging payments, Chrome/Firefox flows, cost measurements, production setup
 and store approval remain explicit gates in `docs/release-checklist.json`. Local

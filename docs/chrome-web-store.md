@@ -7,13 +7,13 @@ Status: preparation only. Do not submit while the production and review blockers
 - Existing draft item: `gnbkbdbpajlpclicmapjghpodogkgblf`.
 - Publisher ID observed in the dashboard: `0eaa0aa2-5ba7-4738-9bc9-75ee41c51787`.
 - Dashboard: https://chrome.google.com/webstore/devconsole/0eaa0aa2-5ba7-4738-9bc9-75ee41c51787/gnbkbdbpajlpclicmapjghpodogkgblf/edit
-- Package: `dist/kareer-chrome.zip`, generated with `npm run build:extension -- --production`. Production gateway, BYOK default; no staging package for submission.
+- Package: `dist/kareer-chrome.zip`, generated with `npm run build:extension -- --production`. The production package uses the production Kareer AI gateway.
 - Name: Kareer. Language: English. Existing category: Tools.
 - Package summary: Fill job application forms from your saved profile, review AI-assisted answers, and prepare tailored application documents.
 - Homepage: https://kareer.itsamro.me/
 - Support: https://github.com/Amro212/kareer/issues
 - Privacy: https://kareer.itsamro.me/privacy/
-- Contact already used publicly by the project: amromousa8@gmail.com. Publisher verification remains pending.
+- Publisher support contact: kareer@itsamro.me. Verify the address in the Chrome Web Store dashboard.
 
 ## Description to use after the service is ready
 
@@ -35,9 +35,7 @@ LOCAL TOOLS AND OPTIONAL AI
 
 Local profile tools and saved-information filling are free. AI processing is optional and requires your agreement in Settings before profile or application content is sent.
 
-Advanced AI features can use your own OpenRouter API key and model. Your provider charges apply separately.
-
-Optional Kareer AI costs US$9.99/month for 1,000 credits per paid billing period, or US$4.99 once for a pack of 300 non-expiring credits. Taxes may apply. Each completed AI request uses one credit; a run can use several requests, including follow-ups, repairs and rewrites. Monthly credits expire at the end of the paid billing period. Credit packs do not require a subscription. Manage or cancel a subscription through Manage billing. All sales are final, except where the law requires a refund.
+New users can try Kareer AI with 20 free credits. No payment card is required. Trial credits expire after 30 days. Kareer AI costs US$9.99/month for 1,000 credits per paid billing period, or US$4.99 once for a pack of 300 non-expiring credits. Taxes may apply. A completed autofill AI request uses 1 credit, generating a résumé or cover letter uses 3, and rewriting part of one uses 2. One autofill run can make several requests. Monthly credits expire at the end of the paid billing period. Credit packs do not require a subscription. Manage or cancel a subscription through Manage billing. All sales are final, except where the law requires a refund.
 
 YOUR INFORMATION
 
@@ -67,7 +65,7 @@ Listens for committed navigation, history changes and fragment updates to keep t
 
 ### Host access
 
-Employer applications use many domains and cross-origin embedded forms. Website access allows packaged content agents to discover, fill and verify the application fields the applicant uses. Matching host access also provides the tab details needed to select the correct application panel. OpenRouter access supports optional BYOK AI; https://api.kareer.itsamro.me supports optional Kareer AI activation, billing and inference. Profile/application context is sent for AI only after the user agrees in Settings. No general browsing-history analytics or advertising.
+Employer applications use many domains and cross-origin embedded forms. Website access allows packaged content agents to discover, fill and verify the application fields the applicant uses. Matching host access also provides the tab details needed to select the correct application panel. The Kareer gateway at https://api.kareer.itsamro.me supports optional Kareer AI activation, billing and inference. Profile/application context is sent for AI only after the user agrees in Settings. No general browsing-history analytics or advertising.
 
 The old draft's separate tabs justification becomes obsolete after uploading the new package: that redundant permission has been removed.
 
@@ -86,7 +84,7 @@ These draft selections describe the data paths in the v0.5.160 candidate. Rechec
 | Personally identifiable information | Profile identity, contact and demographic information |
 | Health information | The optional Profile → Demographics & disclosures section includes a current or past disability answer. If supplied, it can be included in the profile sent with an AI request once the user starts a trial, buys credits or activates a key next to the disclosure. |
 | Financial and payment information | The managed billing service processes Stripe transaction and subscription data. Users enter card details in Stripe-hosted Checkout. |
-| Authentication information | OpenRouter/Kareer credentials and activation |
+| Authentication information | Kareer credentials and activation |
 | Location | Optional user-entered address, city, region and country can be included in AI profile context. The extension does not request device geolocation. The purchase gateway uses the request IP to rate-limit checkout creation. |
 | Web history | The current application URL and hostname are included in page-answer AI requests. Kareer keeps local records of application pages and does not request browser history access. |
 | Website content | Job descriptions, application questions, options and answer text |
@@ -97,11 +95,9 @@ The three Limited Use certifications remain for action-time approval in the dash
 
 ## Reviewer access and instructions
 
-No Kareer account is needed for local tools. Open Profile, save fictional contact/work records, open an application and run Autofill. Review the result/source labels. Check that Auto Submit starts off and that local filling works without a Kareer key.
+Use the following text for Chrome Test instructions and Firefox Notes to Reviewer. Leave the username and password blank. The production trial must be enabled during review.
 
-For AI review, supply a dedicated funded test Kareer credential through the dashboard's private test-instructions field after the production service is working. Do not require a reviewer to buy credits or provide a personal OpenRouter key, and do not put a credential in this file, screenshots or the public listing. In Settings → AI & billing, the AI-data notice sits next to the trial, plan and activation buttons; activating the supplied key is the reviewer's agreement. Then run the answer/document workflows, and check that removing the key stops AI while local filling keeps working.
-
-Reviewer credential: **not provisioned**. These instructions are incomplete until that is available.
+> No login or payment is needed. In Kareer, open Profile and save fictional contact and work details. Open a job application form, run Autofill and review the filled values without submitting. For AI, open Settings → Kareer AI, read the data notice and click Start free trial. Open the Cover Letter tool, enter a fictional job description and generate a draft. Refresh usage in Settings to confirm the draft used 3 trial credits.
 
 ## Graphic assets
 

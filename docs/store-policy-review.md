@@ -1,5 +1,9 @@
 # Store policy review — 2026-11-05
 
+November 21 update: the production free trial is the reviewer access path.
+See [current instructions](chrome-web-store.md#reviewer-access-and-instructions).
+Trials and checkout open together when production sales are enabled.
+
 **Verdict: not ready to submit.** This is a source/package preflight, not store approval or a guarantee against enforcement. The review covers the current working branch and v0.5.160 candidate, with Chrome first. No public submission, payment, gateway deployment or Firefox signing was performed.
 
 ## Policy references checked
@@ -43,7 +47,7 @@
 3. **Updated disclosure and gateway policy are not deployed.** The public privacy page must match the package and dashboard before final certification. The gateway's new provider restriction must be deployed and checked too.
 4. **Dashboard still needs the final package and assets.** The old draft was v0.5.117. The saved text predates the final assistant-focused wording. Privacy Save draft was invoked but persistence was not rechecked after the user stopped computer control. New screenshots/promos have not been uploaded.
 5. **Publisher verification and final certifications remain.** Confirm contact email and publisher requirements in the dashboard; the three Limited Use certifications need action-time approval. Do not certify an undeployed privacy policy as current.
-6. **Reviewer AI access is missing.** Provide a dedicated funded production test credential through private reviewer instructions, never in public files. A reviewer should not need to make a purchase or supply their own personal provider key.
+6. **Reviewer AI access needs live verification.** Enable and verify the production free trial so reviewers can exercise AI without credentials or a purchase.
 7. **Firefox public listing is a separate release step.** The current Firefox artifact is the existing self-hosted/unlisted channel with update_url. Public AMO distribution needs the appropriate listed package/channel, source upload and real Firefox permission/AI testing. No public AMO listing has been created here.
 8. **At-rest secure-handling evidence is unresolved.** The current Chrome User Data FAQ explicitly mentions strong encryption at rest. Kareer persists profiles/credentials with browser storage and documents with IndexedDB; this audit has not established that those stores satisfy that requirement across supported machines. HTTPS, background isolation and a stored hash on the gateway do not establish encryption of local applicant data. Resolve the storage/key-management design or obtain authoritative clarification before treating this gate as passed; do not add cosmetic encryption with an adjacent plaintext key or make an unsupported encryption claim.
 

@@ -211,6 +211,8 @@ test('setup, privacy and terms are directly accessible static pages', async ({ p
   await page.goto('/setup/');
   await expect(page.getByRole('heading', { name: 'A little setup. A lot less repetition.' })).toBeVisible();
   await page.getByRole('tab', { name: 'Chrome & Edge' }).click();
+  await expect(page.getByRole('link', { name: 'Open Chrome Web Store' })).toHaveAttribute('href', /chromewebstore\.google\.com\/detail\/.*gnbkbdbpajlpclicmapjghpodogkgblf$/);
+  await page.getByText('Build for Chrome, Edge or Brave from source', { exact: true }).click();
   await expect(page.getByText('chrome://extensions', { exact: true })).toBeVisible();
   await page.goto('/privacy/');
   await expect(page.getByRole('heading', { name: 'Your data. Your business.' })).toBeVisible();
@@ -223,7 +225,7 @@ test('setup, privacy and terms are directly accessible static pages', async ({ p
   await expect(page.getByRole('heading', { name: 'Plain terms. No surprises.' })).toBeVisible();
   await expect(page.locator('#about')).toContainText('form-filling assistant');
   await expect(page.locator('#refunds')).toContainText('All sales are final');
-  await expect(page.locator('#keys')).toContainText('amromousa8@gmail.com');
+  await expect(page.locator('#keys').getByRole('link', { name: 'kareer@itsamro.me' })).toHaveAttribute('href', 'mailto:kareer@itsamro.me');
   await expect(page.locator('#about')).toContainText('Ontario, Canada');
 });
 
@@ -240,7 +242,8 @@ test('pricing lists both plans from the shared offers and explains that purchase
   await expect(pack).toContainText('300 credits');
   await expect(pack.getByRole('link', { name: /Get Kareer to buy/ })).toHaveAttribute('href', '/setup/#browser');
   await expect(page.locator('#buy-in-extension')).toContainText('All sales are final');
-  await expect(page.locator('#buy-in-extension')).toContainText('amromousa8@gmail.com');
+  await expect(page.locator('#buy-in-extension')).toContainText('20 free credits');
+  await expect(page.locator('#buy-in-extension').getByRole('link', { name: 'kareer@itsamro.me' })).toHaveAttribute('href', 'mailto:kareer@itsamro.me');
   await expect(page.locator('main')).not.toContainText(/\bbot\b|auto-apply|OpenRouter/i);
   await page.goto('/terms/');
   await page.locator('.reading-intro').getByRole('link', { name: 'current pricing' }).click();
@@ -272,6 +275,24 @@ test('content and installation links are available without JavaScript', async ({
     await expect(page.getByRole('link', { name: 'Terms', exact: true })).toBeVisible();
   }
   await context.close();
+});
+
+test('robots and sitemap point to the canonical indexable pages', async ({ request }) => {
+  const origin = 'https://kareer.itsamro.me';
+  const robots = await request.get('/robots.txt');
+  expect(robots.ok()).toBe(true);
+  expect(await robots.text()).toContain(`Sitemap: ${origin}/sitemap.xml`);
+  const sitemap = await request.get('/sitemap.xml');
+  expect(sitemap.ok()).toBe(true);
+  const paths = ['/', '/setup/', '/pricing/', '/privacy/', '/terms/'];
+  expect(Array.from((await sitemap.text()).matchAll(/<loc>([^<]+)<\/loc>/g), match => match[1])).toEqual(paths.map(path => origin + path));
+  for (const path of paths) {
+    const response = await request.get(path);
+    expect(response.ok()).toBe(true);
+    const html = await response.text();
+    expect(html).toContain(`<link rel="canonical" href="${origin}${path}"`);
+    expect(html).not.toMatch(/name="robots" content="noindex/);
+  }
 });
 
 test('document tabs, FAQ disclosures and keyboard activation work', async ({ page }) => {

@@ -4,4 +4,4 @@
 export const STAGING_GATEWAY_ORIGIN = 'https://kareer-gateway-staging.amromousa8.workers.dev';
 export const PRODUCTION_GATEWAY_ORIGIN = 'https://api.kareer.itsamro.me';
 export const SITE_ORIGIN = 'https://kareer.itsamro.me';
-export const SUPPORT_EMAIL = 'amromousa8@gmail.com';
+export const SUPPORT_EMAIL = 'kareer@itsamro.me';

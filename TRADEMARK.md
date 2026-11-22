@@ -20,4 +20,4 @@ You may not:
 If you build Kareer yourself and share the build, remove the Kareer name and
 logo from it first.
 
-Questions: amromousa8@gmail.com
+Questions: kareer@itsamro.me

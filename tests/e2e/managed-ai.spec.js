@@ -21,7 +21,7 @@ async function mockGateway(kr, credits = 5) {
       if (path.startsWith('/v1/purchases/')) return Response.json({ status: 'complete', licenseKey: 'private-managed-license', aiStatus: status() });
       if (path === '/v1/trial') {
         globalThis.__trial = true;
-        globalThis.__credits = 10;
+        globalThis.__credits = 20;
         return Response.json({ licenseKey: `kr_${'T'.repeat(43)}`, aiStatus: status() });
       }
       if (path === '/v1/billing-portal') return Response.json({ url: 'https://billing.stripe.com/p/session/test_e2e' });
@@ -355,7 +355,7 @@ test('managed cover letter generation and document rewrite share the metered gat
   expect(kr.openrouter.requests).toHaveLength(0);
 });
 
-test('a new browser claims the 10-credit trial once and a cover letter uses 3 credits', async ({ kr }, testInfo) => {
+test('a new browser claims the 20-credit trial once and a cover letter uses 3 credits', async ({ kr }, testInfo) => {
   await kr.seed({ apiKey: '', settings: { aiMode: 'managed' }, profile: { fullName: 'Test Applicant', email: 'test@example.com',
     workExperiences: [{ id: 'work1', title: 'Engineer', company: 'Example', description: 'Built useful software.' }] } });
   await mockGateway(kr, 0);
@@ -365,8 +365,8 @@ test('a new browser claims the 10-credit trial once and a cover letter uses 3 cr
   await options.locator('#start-trial').click();
   await expect(options.locator('#managed-state')).toHaveText('Ready');
   await expect(options.locator('#trial-offer')).toBeHidden();
-  await expect(options.locator('#trial-balance')).toHaveText('10');
-  await expect(options.locator('#total-balance')).toHaveText('10 credits');
+  await expect(options.locator('#trial-balance')).toHaveText('20');
+  await expect(options.locator('#total-balance')).toHaveText('20 credits');
   await expect(options.locator('#manage-billing')).toBeHidden();
   await expect(options.locator('#reveal-license')).toBeVisible();
   await expect(options.locator('#monthly-expiry')).toContainText('Trial credits expire');
@@ -382,7 +382,7 @@ test('a new browser claims the 10-credit trial once and a cover letter uses 3 cr
   await page.locator('#generate').click();
   await expect(page.locator('#feedback')).toContainText('Ready', { timeout: 45000 });
   await options.reload();
-  await expect(options.locator('#trial-balance')).toHaveText('7');
+  await expect(options.locator('#trial-balance')).toHaveText('17');
   await expect(options.locator('#trial-offer')).toBeHidden();
   await kr.worker.evaluate(() => chrome.storage.local.set({ 'kr:secrets': { trialUsed: 1 } }));
   await options.reload();
@@ -399,7 +399,7 @@ test('staging: a real trial pays for a 3-credit cover letter and can start a pac
   await options.goto(`${kr.optionsUrl()}#connection`);
   await options.locator('#start-trial').click();
   await expect(options.locator('#managed-state')).toHaveText('Ready', { timeout: 30000 });
-  await expect(options.locator('#trial-balance')).toHaveText('10');
+  await expect(options.locator('#trial-balance')).toHaveText('20');
   await expect(options.locator('#manage-billing')).toBeHidden();
   const materials = await kr.context.newPage();
   await materials.goto(`chrome-extension://${kr.extensionId}/materials/index.html?kind=coverLetter`);
@@ -407,7 +407,7 @@ test('staging: a real trial pays for a 3-credit cover letter and can start a pac
   await materials.locator('#generate').click();
   await expect(materials.locator('#feedback')).toContainText('Ready', { timeout: 120000 });
   await options.reload();
-  await expect(options.locator('#trial-balance')).toHaveText('7');
+  await expect(options.locator('#trial-balance')).toHaveText('17');
   await options.evaluate(() => { window.__opened = []; chrome.tabs.create = async ({ url }) => { window.__opened.push(url); }; });
   await options.locator('#buy-pack').click();
   // Paying stops here: Stripe Checkout challenges automated browsers with hCaptcha, which tests never solve.
