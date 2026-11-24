@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { generateAmoJwt, updateSiteFiles, syncAmo, fetchLatestApprovedAmoVersion } from '../../tools/sync-amo.js';
+import { generateAmoJwt, updateSiteFiles, syncAmo, stagePublishedFirefox } from '../../tools/sync-amo.js';
 
 let tempDir;
 
@@ -127,4 +127,33 @@ test('syncAmo falls back to remote AMO API when local XPI is missing', async () 
   // Verify site badge still displays the canonical baseVersion, not the old remote XPI 4-digit version
   const versionJson = JSON.parse(fs.readFileSync(path.join(tempDir, 'site', 'version.json'), 'utf8'));
   assert.equal(versionJson.version, '0.4.38');
+});
+
+const publishedXpiUrl = 'https://kareer.itsamro.me/downloads/kareer-firefox.xpi';
+const publishedFeedUrl = 'https://kareer.itsamro.me/firefox-updates.json';
+const publishedFeed = JSON.stringify({ addons: { 'kareer@amro212': { updates: [
+  { version: '0.5.177.123', update_link: publishedXpiUrl },
+] } } });
+
+test('Pages can carry forward the published Firefox download and update feed', async () => {
+  const xpi = Buffer.from('PK\x03\x04published-xpi');
+  const fetchFn = async (url, options) => {
+    assert.equal(options.headers, undefined);
+    if (url === publishedFeedUrl) return new Response(publishedFeed);
+    assert.equal(url, publishedXpiUrl);
+    return new Response(xpi);
+  };
+
+  await stagePublishedFirefox({ root: tempDir, fetchFn });
+
+  assert.deepEqual(fs.readFileSync(path.join(tempDir, 'site', 'downloads', 'kareer-firefox.xpi')), xpi);
+  assert.equal(fs.readFileSync(path.join(tempDir, 'site', 'firefox-updates.json'), 'utf8'), publishedFeed);
+});
+
+test('Pages rejects an incomplete or invalid published Firefox fallback', async () => {
+  for (const xpi of [new Response('', { status: 404 }), new Response('<html>Not an XPI</html>')]) {
+    const fetchFn = async url => url === publishedFeedUrl ? new Response(publishedFeed) : xpi;
+    await assert.rejects(stagePublishedFirefox({ root: tempDir, fetchFn }), /published Firefox/i);
+    assert.equal(fs.existsSync(path.join(tempDir, 'site')), false);
+  }
 });

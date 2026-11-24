@@ -1,76 +1,39 @@
-name: Prepare store candidate
+name: Prepare store packages
+
 on:
   workflow_dispatch:
-    inputs:
-      sign_firefox:
-        type: boolean
-        default: false
-        description: Sign Firefox candidate without updating the public download
-      upload_chrome:
-        type: boolean
-        default: false
-        description: Upload Chrome candidate after staging evidence is complete
-      submit_chrome_review:
-        type: boolean
-        default: false
-        description: Submit uploaded Chrome candidate for staged store review
+
 permissions:
   contents: read
+
 jobs:
-  candidate:
+  package:
     runs-on: ubuntu-latest
-    environment: release-candidate
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
+
       - run: npm ci
-      - run: npm test
-      - run: npm ci --prefix site
-      - run: npm run typecheck --prefix site
-      - run: npm run build --prefix site
-      - run: npm run build
-      - run: npx web-ext lint --source-dir=dist/firefox --self-hosted
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
-      - run: npx playwright test --config tests/site/playwright.config.js
-      - name: Build production packages
+      - run: node --test tests/unit/packaging.test.js tests/unit/byok-gate.test.js
+      - name: Build production store packages
         env:
           KAREER_GATEWAY_ORIGIN: ${{ vars.KAREER_GATEWAY_ORIGIN }}
+        run: node tools/build.js --target=extension --production --amo
+      - run: npx --no-install web-ext lint --source-dir=dist/firefox
+
+      - name: Archive the exact reviewer source
         run: |
-          npm run build -- --production
-          npx web-ext lint --source-dir=dist/firefox --self-hosted
-      - name: Sign Firefox candidate
-        if: inputs.sign_firefox
-        env:
-          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
-          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
-        run: |
-          git archive --format=zip --output=dist/kareer-source.zip HEAD src tools package.json package-lock.json LICENSE README.md
-          npx web-ext sign --source-dir=dist/firefox --channel=unlisted --artifacts-dir=dist/signed-firefox --upload-source-code=dist/kareer-source.zip --api-key="$AMO_JWT_ISSUER" --api-secret="$AMO_JWT_SECRET"
-      - name: Upload Chrome candidate
-        if: inputs.upload_chrome
-        env:
-          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
-          CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
-          CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
-          CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
-          CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
-          SUBMIT_REVIEW: ${{ inputs.submit_chrome_review }}
-        run: |
-          if [ "$SUBMIT_REVIEW" = "true" ]; then
-            node tools/chrome-store.js --submit-review
-          else
-            node tools/chrome-store.js
-          fi
+          git archive --format=zip --output=dist/kareer-amo-source.zip HEAD \
+            src tools/build.js tools/zip.js package.json package-lock.json LICENSE README.md SECURITY.md TRADEMARK.md docs/reviewer-build.md
+
       - uses: actions/upload-artifact@v4
         with:
-          name: kareer-store-candidate
+          name: kareer-store-packages
+          if-no-files-found: error
           path: |
             dist/kareer-chrome.zip
             dist/kareer-firefox.xpi
-            dist/kareer-source.zip
-            dist/signed-firefox/*.xpi
-            docs/store-disclosures.md
+            dist/kareer-amo-source.zip

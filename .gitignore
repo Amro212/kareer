@@ -15,8 +15,7 @@ site-dist/
 test-results/
 playwright-report/
 .playwright/
-.impeccable/review/
-.impeccable/config.local.json
+.impeccable/
 coverage/
 .nyc_output/
 sample-output/
@@ -32,12 +31,46 @@ sample-output/
 scratch/
 pages/*
 docs/*.json
-!docs/release-checklist.json
+/AGENTS.md
+/CONTEXT_AND_FINDINGS.md
+/DESIGN.md
+/PRODUCT.md
+/site/DESIGN.md
+/docs/plans/
+/docs/qa/
+/docs/store-assets/
+/docs/chrome-web-store.md
+/docs/store-disclosures.md
+/docs/store-policy-review.md
+/tools/chrome-store.js
+/tools/release-gate.js
+/tools/prepare-store-promos.ps1
+/tools/compile-samples.js
+/tools/render-preview.js
+/tools/verify-*.js
+/tools/fixtures/
+/tests/unit/chrome-store.test.js
+/tests/unit/release-gate.test.js
+/tests/unit/narrative-verifiers.test.js
+/tests/e2e/store-assets.spec.js
+/site/assets/kareer-app-icon.png
+/site/assets/kareer-logo-horizontal.png
+/site/assets/kareer-mark-lime.png
+/site/assets/kareer-mark-lime.svg
+/site/assets/kareer-promo-banner.png
+/src/assets/brand/*
+!/src/assets/brand/kareer-logo-horizontal.png
+
+# Archived captures superseded by the regression fixtures in use
+/fixtures/ashby-1password-captured.html
+/fixtures/phreesia.wd1.myworkdayjobs.com-2026-10-06-03-56.html
+/fixtures/workday-ciena-recovery-captured.html
 
 # Editor, AI workspace, and IDE metadata
 .agents/
 .cursor/
 .codex/
+/skills-lock.json
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json

@@ -64,7 +64,7 @@ Kareer is a source-available browser assistant that scans job application forms,
 
 Unlike autofill extensions that store your sensitive resume data on third-party servers, Kareer:
 - **Keeps your profile, resume and files in your browser** with **zero telemetry**.
-- Fills from your saved profile for free. AI answers come from **Kareer AI**, which works right after install (new users get 10 free credits), or from **your own OpenRouter key** if you build Kareer yourself.
+- Fills from your saved profile for free. AI answers come from **Kareer AI**, which works right after install (new users get 20 free credits), or from **your own OpenRouter key** if you build Kareer yourself.
 - Uses a **non-intrusive Shadow DOM floating panel** that never conflicts with website stylesheets.
 
 ---
@@ -102,6 +102,8 @@ Kareer includes dedicated adapters for major Applicant Tracking Systems (ATS) as
 ## Quick Start for Job Seekers
 
 Follow this simple 4-step guide to get up and running in less than 5 minutes.
+
+<a name="installation"></a>
 
 ### Step 1: Install Kareer
 
@@ -144,7 +146,7 @@ Self-built copies are for your own personal use (see [License](#license--securit
 
 Filling from your saved profile works without AI. For AI answers, open **Settings → AI & billing**:
 
-- **Kareer AI (official builds and self-built copies):** choose **Try Kareer AI free** for 10 free credits, or pick a plan. No account and no setup. Filling a page costs 1 credit; generating a resume or cover letter costs 3, and rewriting part of one costs 2.
+- **Kareer AI (official builds and self-built copies):** choose **Try Kareer AI free** for 20 free credits, or pick a plan. No account and no setup. Filling a page costs 1 credit; generating a resume or cover letter costs 3, and rewriting part of one costs 2.
 - **Your own OpenRouter key (self-built copies only):**
   1. Create an account at [openrouter.ai](https://openrouter.ai/), open **Keys** and click **Create Key**.
   2. Add a small credit balance (e.g., $3–$5 is typically enough for hundreds of applications).
@@ -198,7 +200,7 @@ For full details, please review our [SECURITY.md](./SECURITY.md).
 Contributions, issue reports, and ATS adapters are welcome!
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) v18.0.0 or higher
+- [Node.js](https://nodejs.org/) 24 (the version used by CI)
 - npm v9 or higher
 
 ### Project Architecture
@@ -235,9 +237,7 @@ build reports `Could not resolve "@tiptap/..."`, rerun `npm ci` before building.
 Deprecation/funding notices and audit findings can appear after a successful
 install. Inspect findings with `npm audit`; avoid `npm audit fix --force` on this
 branch. It can downgrade `web-ext` and `mammoth` to obsolete major versions and
-introduce additional vulnerable dependencies. Compatible fixes and outstanding
-upstream findings are recorded in
-[the dependency audit](docs/qa/2026-10-13-dependency-audit.md).
+introduce additional vulnerable dependencies.
 
 ```bash
 # Install the locked dependencies, including after branch updates
@@ -270,12 +270,17 @@ origin into the background script and both manifests' host permissions.
 |---|---|---|
 | `npm run build` / `npm run build:extension` / `npm run dev` | staging Worker (`https://kareer-gateway-staging.amromousa8.workers.dev`) | `dist/chrome`, `dist/firefox` (load unpacked / temporary add-on) |
 | `node tools/build.js --target=extension --staging` | staging Worker; named "Kareer (Staging)", Kareer AI on by default, separate Firefox ID, no version bump | `dist/staging/chrome`, `dist/staging/firefox` |
-| `npm run build -- --production` | `KAREER_GATEWAY_ORIGIN` if set, otherwise `https://api.kareer.itsamro.me` | `dist/chrome`, `dist/firefox`, `dist/kareer-chrome.zip`, `dist/kareer-firefox.xpi` |
+| `node tools/build.js --target=extension --production --amo` | `KAREER_GATEWAY_ORIGIN` if set, otherwise `https://api.kareer.itsamro.me` | `dist/chrome`, `dist/firefox`, `dist/kareer-chrome.zip`, `dist/kareer-firefox.xpi` |
+
+Run **Prepare store packages** in GitHub Actions after committing a new release
+version. Download the Chrome ZIP, listed Firefox XPI, and matching Firefox source
+ZIP from the run, then upload them to the existing store listings. The website
+has its own deployment workflow.
 
 Only `--production` builds can use the production gateway, and they can't use
 the staging one. `--production` builds are the official store packages: they
 use Kareer AI only and leave out the "Use my own OpenRouter key" option. Every
-other build keeps it. The release workflows build with `--production` and read
+other build keeps it. The store packaging workflow builds with `--production` and reads
 `KAREER_GATEWAY_ORIGIN` from the repository variable of the same name.
 `--gateway=https://…` overrides the gateway for non-production builds. Plan
 prices and credits come from `src/core/offers.json`, which the gateway, the
