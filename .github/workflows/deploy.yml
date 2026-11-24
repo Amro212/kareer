@@ -1,23 +1,18 @@
-name: Build, Sign & Deploy
+name: Deploy website
 
 on:
   push:
-    branches:
-      - master
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '.gitignore'
-      - '.vscode/**'
-      - 'scratch/**'
+    branches: [master]
+    paths:
+      - 'site/**'
+      - 'src/core/credits.json'
+      - 'src/core/offers.json'
+      - 'package.json'
+      - 'tools/sync-amo.js'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
-    inputs:
-      sync_only:
-        description: 'Sync latest approved XPI from Mozilla without rebuilding'
-        type: boolean
-        default: false
   schedule:
-    # Hourly check to promote asynchronously approved versions from Mozilla
+    # Keep the existing self-hosted Firefox download and update feed available.
     - cron: '0 * * * *'
 
 permissions:
@@ -26,139 +21,42 @@ permissions:
   id-token: write
 
 concurrency:
-  group: 'pages'
+  group: pages
   cancel-in-progress: false
 
 jobs:
   deploy:
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            site/package-lock.json
+          cache-dependency-path: site/package-lock.json
 
-      - name: Determine run mode & versions
-        shell: bash
+      - name: Stage the approved Firefox download
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
         run: |
-          IS_SYNC_ONLY="false"
-          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event.inputs.sync_only }}" = "true" ]; then
-            IS_SYNC_ONLY="true"
-          elif [ "${{ github.event_name }}" = "push" ] && [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
-            if git rev-parse --verify "${{ github.event.before }}" >/dev/null 2>&1; then
-              EXT_CHANGED=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- src package.json package-lock.json tools/build.js tools/build-user-script.js)
-              if [ -z "$EXT_CHANGED" ]; then
-                echo "No extension source files changed in this push. Running in sync/deploy mode without building a new add-on version."
-                IS_SYNC_ONLY="true"
-              else
-                echo "Extension source files changed in this push:"
-                echo "$EXT_CHANGED"
-              fi
-            fi
+          if ! node tools/sync-amo.js || [ ! -s site/downloads/kareer-firefox.xpi ]; then
+            echo 'Mozilla did not provide an XPI. Carrying forward the published Firefox download and update feed.'
+            node tools/sync-amo.js --from-pages
           fi
-          echo "IS_SYNC_ONLY=$IS_SYNC_ONLY" >> "$GITHUB_ENV"
 
-          BASE_VERSION=$(node -p "require('./package.json').version")
-          VERSION="${BASE_VERSION}.${GITHUB_RUN_NUMBER}"
-          echo "BASE_VERSION=$BASE_VERSION" >> "$GITHUB_ENV"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "Run mode: is_sync_only=$IS_SYNC_ONLY, canonical site version: $BASE_VERSION, target build version: $VERSION"
+      - uses: actions/configure-pages@v5
+      - run: npm ci --prefix site
+      - run: node --test tests/unit/site-build.test.js
+      - run: npm run build --prefix site
 
-      - name: Install dependencies
-        if: env.IS_SYNC_ONLY != 'true'
-        run: npm ci
-
-      - name: Run test suite
-        if: env.IS_SYNC_ONLY != 'true'
-        run: npm test
-
-      - name: Build Firefox extension
-        if: env.IS_SYNC_ONLY != 'true'
-        env:
-          MANAGED_AI_RELEASE: ${{ vars.MANAGED_AI_RELEASE }}
-          KAREER_GATEWAY_ORIGIN: ${{ vars.KAREER_GATEWAY_ORIGIN }}
-        run: |
-          # Kareer AI release evidence is checked once it is recorded.
-          if [ "$MANAGED_AI_RELEASE" = "true" ]; then node tools/release-gate.js --submission; fi
-          npm run build:extension -- --production
-          npx web-ext lint --source-dir=dist/firefox --self-hosted
-
-      - name: Stamp unique version in extension manifest
-        if: env.IS_SYNC_ONLY != 'true'
-        shell: bash
-        run: |
-          VERSION="$VERSION" node <<'NODE'
-          const fs = require('fs');
-          const path = 'dist/firefox/manifest.json';
-          const manifest = JSON.parse(fs.readFileSync(path, 'utf8'));
-          manifest.version = process.env.VERSION;
-          fs.writeFileSync(path, JSON.stringify(manifest, null, 2) + '\n');
-          NODE
-
-      - name: Sign extension with Mozilla (Unlisted)
-        if: env.IS_SYNC_ONLY != 'true'
-        continue-on-error: true
-        id: mozilla_sign
-        env:
-          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
-          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
-        run: |
-          mkdir -p dist/signed
-          git archive --format=zip --output=dist/kareer-source.zip HEAD src tools package.json package-lock.json LICENSE README.md
-          npx web-ext sign \
-            --source-dir=dist/firefox \
-            --artifacts-dir=dist/signed \
-            --channel=unlisted \
-            --upload-source-code=dist/kareer-source.zip \
-            --api-key="$AMO_JWT_ISSUER" \
-            --api-secret="$AMO_JWT_SECRET" \
-            --approval-timeout=480000 \
-            --no-input
-
-      - name: Sync AMO and stage site assets
-        id: sync_amo
-        env:
-          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
-          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
-          VERSION: ${{ env.VERSION }}
-          BASE_VERSION: ${{ env.BASE_VERSION }}
-        run: node tools/sync-amo.js
-
-      - name: Setup Pages
-        if: steps.sync_amo.outputs.deploy_needed == 'true'
-        uses: actions/configure-pages@v5
-
-      - name: Install website dependencies
-        if: steps.sync_amo.outputs.deploy_needed == 'true'
-        run: npm ci --prefix site
-
-      - name: Check website public asset staging
-        if: steps.sync_amo.outputs.deploy_needed == 'true'
-        run: node --test tests/unit/site-build.test.js
-
-      - name: Build website and preserve Firefox distribution files
-        if: steps.sync_amo.outputs.deploy_needed == 'true'
-        run: npm run build --prefix site
-
-      - name: Upload Pages artifact
-        if: steps.sync_amo.outputs.deploy_needed == 'true'
-        uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v3
         with:
-          path: 'site-dist'
+          path: site-dist
 
-      - name: Deploy to GitHub Pages
-        if: steps.sync_amo.outputs.deploy_needed == 'true'
+      - uses: actions/deploy-pages@v4
         id: deployment
-        uses: actions/deploy-pages@v4

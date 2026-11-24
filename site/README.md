@@ -14,8 +14,11 @@ npm run preview --prefix site -- --host 127.0.0.1 --port 4177
 Production output is `site-dist/`. The build prerenders home, privacy, terms, pricing,
 setup and 404 HTML. Vite copies `public/robots.txt` and `public/sitemap.xml`, and the
 build preserves the custom domain, verification file, and signed Firefox download and
-update feed staged by `tools/sync-amo.js`. The **Build, Sign & Deploy** workflow runs
-on `master` and uploads `site-dist/` to GitHub Pages.
+update feed staged by `tools/sync-amo.js`. **Deploy website** uploads `site-dist/`
+to GitHub Pages on relevant pushes to `master`, on manual runs, and hourly. When
+Mozilla cannot supply a signed file, the workflow carries forward the live
+download and update feed together. Store packages are built by the separate
+**Prepare store packages** workflow.
 
 Focused checks (Playwright uses the root repository's existing test dependency):
 

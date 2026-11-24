@@ -76,6 +76,4 @@ Do not publish applicant information, credentials, payment details or raw reques
 dumps in issues. Billing uses Stripe's customer portal; lost keys are recovered by
 email to kareer@itsamro.me after the purchase is confirmed in Stripe.
 
-Real staging payments, Chrome/Firefox flows, cost measurements, production setup
-and store approval remain explicit gates in `docs/release-checklist.json`. Local
-tests do not establish external payment behavior or store approval.
+Live payment behavior and store approval are verified separately from local tests.

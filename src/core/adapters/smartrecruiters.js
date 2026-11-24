@@ -1,9 +1,7 @@
 /**
  * SmartRecruiters one-click form (Angular + open-shadow spl-* components).
- * Local recipes authored from the public Simplify SmartRecruiters inventory;
- * see docs/plans/2026-11-10-smartrecruiters-coverage.md. The top resume parser
- * is never used: the resume goes to the Resume widget and rows come from the
- * saved profile.
+ * Local recipes are based on the public Simplify SmartRecruiters inventory.
+ * The resume goes to the Resume widget and rows come from the saved profile.
  */
 import { genericAdapter } from './generic.js';
 import { applicationAnswer, applicationProfileValue, applicationOptionMatches, applicationNeedsFill, canonicalField, DISCLOSURES } from './application-fields.js';

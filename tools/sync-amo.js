@@ -5,6 +5,9 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, '..');
+const addonIdDefault = 'kareer@amro212';
+const publishedSite = 'https://kareer.itsamro.me';
+const publishedXpiUrl = `${publishedSite}/downloads/kareer-firefox.xpi`;
 
 export function generateAmoJwt(apiKey, apiSecret) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
@@ -19,7 +22,7 @@ export function generateAmoJwt(apiKey, apiSecret) {
   return `JWT ${header}.${payload}.${signature}`;
 }
 
-export function updateSiteFiles({ root = rootDir, baseVersion, xpiVersion, addonId = 'kareer@amro212' }) {
+export function updateSiteFiles({ root = rootDir, baseVersion, xpiVersion, addonId = addonIdDefault }) {
   const siteDir = path.join(root, 'site');
   const siteVersionPath = path.join(siteDir, 'version.json');
   const siteUpdatesPath = path.join(siteDir, 'firefox-updates.json');
@@ -31,7 +34,7 @@ export function updateSiteFiles({ root = rootDir, baseVersion, xpiVersion, addon
         [addonId]: {
           updates: [{
             version: xpiVersion,
-            update_link: 'https://kareer.itsamro.me/downloads/kareer-firefox.xpi',
+            update_link: publishedXpiUrl,
           }],
         },
       },
@@ -108,6 +111,32 @@ export async function downloadAmoFile({ fileUrl, destPath, apiKey, apiSecret, fe
   fs.writeFileSync(destPath, Buffer.from(arrayBuffer));
 }
 
+export async function stagePublishedFirefox({ root = rootDir, fetchFn = globalThis.fetch } = {}) {
+  const signal = AbortSignal.timeout(15_000);
+  const [feedResponse, xpiResponse] = await Promise.all([
+    fetchFn(`${publishedSite}/firefox-updates.json`, { signal }),
+    fetchFn(publishedXpiUrl, { signal }),
+  ]);
+  if (!feedResponse.ok || !xpiResponse.ok) {
+    throw new Error(`Published Firefox fallback failed (feed HTTP ${feedResponse.status}, XPI HTTP ${xpiResponse.status})`);
+  }
+
+  const [feed, contents] = await Promise.all([feedResponse.text(), xpiResponse.arrayBuffer()]);
+  const xpi = Buffer.from(contents);
+  const update = JSON.parse(feed).addons?.[addonIdDefault]?.updates?.[0];
+  if (!update?.version || update.update_link !== publishedXpiUrl || !xpi.subarray(0, 4).equals(Buffer.from('PK\x03\x04'))) {
+    throw new Error('Published Firefox fallback has an invalid update feed or XPI');
+  }
+
+  const siteDir = path.join(root, 'site');
+  const downloadsDir = path.join(siteDir, 'downloads');
+  fs.mkdirSync(downloadsDir, { recursive: true });
+  fs.writeFileSync(path.join(downloadsDir, 'kareer-firefox.xpi'), xpi);
+  fs.writeFileSync(path.join(siteDir, 'firefox-updates.json'), feed);
+  console.log(`[sync-amo] Kept the published Firefox download and update feed at v${update.version}.`);
+  return { success: true, source: 'pages', version: update.version, deployNeeded: true };
+}
+
 export async function syncAmo({
   root = rootDir,
   apiKey = process.env.AMO_JWT_ISSUER,
@@ -120,7 +149,7 @@ export async function syncAmo({
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
   const baseVersion = envBaseVersion || pkg.version;
 
-  let addonId = 'kareer@amro212';
+  let addonId = addonIdDefault;
   const manifestPath = path.join(root, 'dist', 'firefox', 'manifest.json');
   if (fs.existsSync(manifestPath)) {
     try {
@@ -213,7 +242,8 @@ export async function syncAmo({
 
 // When run directly as a script
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  syncAmo()
+  const stageDownload = process.argv.includes('--from-pages') ? stagePublishedFirefox : syncAmo;
+  stageDownload()
     .then((result) => {
       console.log(`[sync-amo] Complete: ${JSON.stringify(result)}`);
       if (process.env.GITHUB_OUTPUT) {
