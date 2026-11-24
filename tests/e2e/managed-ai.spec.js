@@ -309,7 +309,7 @@ test('local-only autofill links directly to AI setup without blocking saved prof
   await page.getByRole('button', { name: 'Connect AI', exact: true }).click();
   const options = await opened;
   await expect(options).toHaveURL(`${kr.optionsUrl()}#connection`);
-  await expect(options.locator('#start-checkout')).toBeVisible();
+  await expect(options.getByRole('button', { name: 'Start free trial' })).toBeVisible();
   await mockGateway(kr);
   await options.locator('#license-activation summary').click();
   await options.locator('#license-key').fill('private-managed-license');
