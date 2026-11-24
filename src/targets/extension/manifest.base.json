@@ -8,7 +8,6 @@
     "webNavigation"
   ],
   "host_permissions": [
-    "https://openrouter.ai/*",
     "<all_urls>"
   ],
   "content_scripts": [

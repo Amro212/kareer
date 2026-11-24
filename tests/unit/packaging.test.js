@@ -39,3 +39,10 @@ test('Chrome uses host access instead of a redundant tabs permission', () => {
   assert.ok(!base.permissions.includes('tabs'));
   assert.ok(base.host_permissions.includes('<all_urls>'));
 });
+
+test('manifest templates leave the OpenRouter host permission to the build mode', () => {
+  const base = JSON.parse(fs.readFileSync(new URL('../../src/targets/extension/manifest.base.json', import.meta.url), 'utf8'));
+  const firefox = JSON.parse(fs.readFileSync(new URL('../../src/targets/extension/manifest.firefox.json', import.meta.url), 'utf8'));
+  assert.ok(!base.host_permissions.includes('https://openrouter.ai/*'));
+  assert.ok(!firefox.optional_host_permissions.includes('https://openrouter.ai/*'));
+});

@@ -23,7 +23,6 @@
     }
   },
   "optional_host_permissions": [
-    "<all_urls>",
-    "https://openrouter.ai/*"
+    "<all_urls>"
   ]
 }
