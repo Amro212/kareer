@@ -55,8 +55,31 @@ jobs:
       - run: npm run build --prefix site
 
       - uses: actions/upload-pages-artifact@v3
+        id: pages-artifact
         with:
           path: site-dist
+
+      # The Actions artifact can take time to appear in the lookup Pages uses.
+      - name: Check that the Pages artifact is available
+        id: pages-artifact-check
+        uses: actions/download-artifact@v7
+        continue-on-error: true
+        timeout-minutes: 1
+        with:
+          artifact-ids: ${{ steps.pages-artifact.outputs.artifact_id }}
+          path: ${{ runner.temp }}/pages-artifact-check
+
+      - name: Wait for artifact visibility before retrying
+        if: steps.pages-artifact-check.outcome == 'failure'
+        run: sleep 10
+
+      - name: Retry the Pages artifact check
+        if: steps.pages-artifact-check.outcome == 'failure'
+        uses: actions/download-artifact@v7
+        timeout-minutes: 1
+        with:
+          artifact-ids: ${{ steps.pages-artifact.outputs.artifact_id }}
+          path: ${{ runner.temp }}/pages-artifact-check
 
       - uses: actions/deploy-pages@v4
         id: deployment

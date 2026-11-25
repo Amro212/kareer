@@ -1,0 +1,27 @@
+[
+  {
+    "id": "browser-data",
+    "title": "Application data in your browser",
+    "html": "<p>Kareer stores your profile, saved answers, application sessions, and documents in extension-controlled browser storage. Application sites receive the information Kareer fills or attaches. Backups can contain personal information. Keep exported backups somewhere private.</p>"
+  },
+  {
+    "id": "credentials-and-payments",
+    "title": "Credentials and payments",
+    "html": "<p>Kareer keeps activation keys and checkout secrets in privileged extension storage and excludes them from backups and application pages. The gateway stores hashes of activation keys. Anyone with a copy of your Kareer key can use its credits, so keep it private.</p><p>Stripe handles card details and billing through its hosted checkout and customer portal. Kareer verifies payments before granting credits.</p>"
+  },
+  {
+    "id": "ai-requests",
+    "title": "Optional AI requests",
+    "html": "<p>When you use Kareer AI, the extension sends profile and application context over HTTPS through Kareer’s gateway to OpenRouter and its AI provider. The gateway caps requests, validates response structure, and retains billing and usage records. It keeps prompt bodies and generated content in memory during processing. External providers have their own retention practices. The <a href=\"/privacy/#ai-transmission\">privacy policy</a> explains what can be sent.</p>"
+  },
+  {
+    "id": "application-controls",
+    "title": "Application controls",
+    "html": "<p>Kareer fills forms in your browser, including supported embedded forms. You can pause a run and review the filled answers. Auto Submit is off by default. Review inferred or guessed values for accuracy before sending an application.</p>"
+  },
+  {
+    "id": "report-a-vulnerability",
+    "title": "Report a vulnerability",
+    "html": "<p><a href=\"https://github.com/Amro212/kareer/security/advisories/new\">Report a vulnerability privately</a> using GitHub’s security reporting form. Include the Kareer version, browser, and steps to reproduce the issue. Use fictional data in screenshots and examples.</p><p>For ordinary bugs, use <a href=\"https://github.com/Amro212/kareer/issues\">GitHub Issues</a>. Keep applicant details, credentials, and payment information out of public reports.</p>"
+  }
+]

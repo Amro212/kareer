@@ -98,12 +98,13 @@ test('linked buttons retain accessible text contrast on hover and keyboard focus
   }
 });
 
-test('fictional autofill demo completes, explains answers and replays without AI requests', async ({ page }) => {
+test('fictional autofill demo completes, explains answers and replays without AI requests', async ({ page, baseURL }) => {
   const externalRequests = [];
   const pageErrors = [];
+  const siteOrigin = new URL(baseURL).origin;
   page.on('pageerror', error => pageErrors.push(error.message));
   page.on('request', request => {
-    if (!request.url().startsWith('http://127.0.0.1:4177')) externalRequests.push(request.url());
+    if (new URL(request.url()).origin !== siteOrigin) externalRequests.push(request.url());
   });
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Job hunting takes enough out of you.' })).toBeVisible();
@@ -207,7 +208,7 @@ test('pricing credit estimator gives a labeled range and a plan fit', async ({ p
   await expect(page.locator('.estimate-fit')).toContainText('At the high end, add a Credit Pack');
 });
 
-test('setup, privacy and terms are directly accessible static pages', async ({ page }) => {
+test('setup, privacy, security and terms are directly accessible static pages', async ({ page }) => {
   await page.goto('/setup/');
   await expect(page.getByRole('heading', { name: 'A little setup. A lot less repetition.' })).toBeVisible();
   await page.getByRole('tab', { name: 'Chrome & Edge' }).click();
@@ -220,6 +221,12 @@ test('setup, privacy and terms are directly accessible static pages', async ({ p
   await expect(page.locator('#retention')).toBeVisible();
   await expect(page.locator('#billing')).toContainText('Stripe');
   await expect(page.locator('main')).not.toContainText(/Lemon Squeezy|receipt email/);
+  const securityLink = page.locator('#security').getByRole('link', { name: 'Kareer security' });
+  await expect(securityLink).toHaveAttribute('href', '/security/');
+  await securityLink.click();
+  await expect(page).toHaveURL(/\/security\/$/);
+  await expect(page.getByRole('heading', { name: 'Kareer Security', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Report a vulnerability privately' })).toHaveAttribute('href', 'https://github.com/Amro212/kareer/security/advisories/new');
   await page.getByRole('contentinfo').getByRole('link', { name: 'Terms', exact: true }).click();
   await expect(page).toHaveURL(/\/terms\/$/);
   await expect(page.getByRole('heading', { name: 'Plain terms. No surprises.' })).toBeVisible();
@@ -253,7 +260,7 @@ test('pricing lists both plans from the shared offers and explains that purchase
 test('mobile navigation, reduced-motion demo and pages fit a narrow viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  for (const route of ['/', '/setup/', '/privacy/', '/terms/', '/pricing/']) {
+  for (const route of ['/', '/setup/', '/privacy/', '/security/', '/terms/', '/pricing/']) {
     await page.goto(route);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `No overflow on ${route}`).toBe(true);
   }
@@ -265,13 +272,14 @@ test('mobile navigation, reduced-motion demo and pages fit a narrow viewport', a
   await expect(page.getByRole('status').filter({ hasText: 'Ready for your review' })).toBeVisible();
 });
 
-test('content and installation links are available without JavaScript', async ({ browser }) => {
-  const context = await browser.newContext({ javaScriptEnabled: false });
+test('content and installation links are available without JavaScript', async ({ browser, baseURL }) => {
+  const context = await browser.newContext({ baseURL, javaScriptEnabled: false });
   const page = await context.newPage();
-  for (const [route, heading] of [['/', 'Job hunting takes enough out of you.'], ['/setup/', 'A little setup. A lot less repetition.'], ['/privacy/', 'Your data. Your business.'], ['/terms/', 'Plain terms. No surprises.'], ['/pricing/', 'Simple pricing. Pay only for AI.']]) {
-    await page.goto(`http://127.0.0.1:4177${route}`);
+  for (const [route, heading] of [['/', 'Job hunting takes enough out of you.'], ['/setup/', 'A little setup. A lot less repetition.'], ['/privacy/', 'Your data. Your business.'], ['/security/', 'Kareer Security'], ['/terms/', 'Plain terms. No surprises.'], ['/pricing/', 'Simple pricing. Pay only for AI.']]) {
+    await page.goto(route);
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Privacy', exact: true })).toBeVisible();
+    await expect(page.getByRole('contentinfo').getByRole('link', { name: 'Security', exact: true })).toHaveAttribute('href', '/security/');
     await expect(page.getByRole('link', { name: 'Terms', exact: true })).toBeVisible();
   }
   await context.close();
@@ -284,7 +292,7 @@ test('robots and sitemap point to the canonical indexable pages', async ({ reque
   expect(await robots.text()).toContain(`Sitemap: ${origin}/sitemap.xml`);
   const sitemap = await request.get('/sitemap.xml');
   expect(sitemap.ok()).toBe(true);
-  const paths = ['/', '/setup/', '/pricing/', '/privacy/', '/terms/'];
+  const paths = ['/', '/setup/', '/pricing/', '/privacy/', '/security/', '/terms/'];
   expect(Array.from((await sitemap.text()).matchAll(/<loc>([^<]+)<\/loc>/g), match => match[1])).toEqual(paths.map(path => origin + path));
   for (const path of paths) {
     const response = await request.get(path);

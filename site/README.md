@@ -11,7 +11,7 @@ npm run typecheck --prefix site
 npm run preview --prefix site -- --host 127.0.0.1 --port 4177
 ```
 
-Production output is `site-dist/`. The build prerenders home, privacy, terms, pricing,
+Production output is `site-dist/`. The build prerenders home, privacy, security, terms, pricing,
 setup and 404 HTML. Vite copies `public/robots.txt` and `public/sitemap.xml`, and the
 build preserves the custom domain, verification file, and signed Firefox download and
 update feed staged by `tools/sync-amo.js`. **Deploy website** uploads `site-dist/`

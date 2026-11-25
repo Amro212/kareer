@@ -62,7 +62,7 @@
   {
     "id": "security",
     "title": "Security and Review",
-    "html": "<p>The gateway verifies payment state, caps requests, reserves credits transactionally and validates output structure before settlement. Structural validation does not guarantee factual accuracy. Review inferred and guessed answers. Auto Submit defaults off. See <a href=\"https://github.com/Amro212/kareer/blob/master/SECURITY.md\">SECURITY.md</a>.</p>"
+    "html": "<p>The gateway verifies payment state, caps requests, reserves credits transactionally and validates output structure before settlement. Structural validation does not guarantee factual accuracy. Review inferred and guessed answers. Auto Submit defaults off. Read more about <a href=\"/security/\">Kareer security</a>.</p>"
   },
   {
     "id": "open-source",

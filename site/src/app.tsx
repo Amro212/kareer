@@ -9,6 +9,7 @@ import { Icon } from '@/components/site-icon';
 import { AutofillDemo } from '@/components/autofill-demo';
 import { DocumentStudio } from '@/components/document-studio';
 import privacySections from './privacy-content.json';
+import securitySections from './security-content.json';
 import termsSections from './terms-content.json';
 import offers from '../../src/core/offers.json';
 import credits from '../../src/core/credits.json';
@@ -44,7 +45,7 @@ function Footer() {
   }, []);
   return <footer className="site-footer wrap" id="open-source">
     <div><Brand /><p>A little less busywork.<br />A little more you.</p></div>
-    <div className="footer-links"><a href="/setup/">Install & setup</a><a href="/pricing/">Pricing</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a href={github} target="_blank" rel="noopener noreferrer">GitHub <Icon name="diagonal" size={14} /></a><a href={`${github}/issues`} target="_blank" rel="noopener noreferrer">Report a bug</a></div>
+    <div className="footer-links"><a href="/setup/">Install & setup</a><a href="/pricing/">Pricing</a><a href="/privacy/">Privacy</a><a href="/security/">Security</a><a href="/terms/">Terms</a><a href={github} target="_blank" rel="noopener noreferrer">GitHub <Icon name="diagonal" size={14} /></a><a href={`${github}/issues`} target="_blank" rel="noopener noreferrer">Report a bug</a></div>
     <div className="footer-note"><span>Made for the other side of the application.</span><span>Source available · FSL-1.1-MIT{version ? ` · v${version}` : ''}</span></div>
   </footer>;
 }
@@ -154,7 +155,29 @@ function Terms() {
   return <div className="reading-page wrap"><div className="reading-intro"><a href="/" className="back-link">← Back to Kareer</a><h1>Plain terms.<br />No surprises.</h1><p>What Kareer does, what credits are,<br />and what happens when you cancel. See <a href="/pricing/">current pricing</a>.</p><span className="policy-date">Terms of Service · November 21, 2026 · Version 1.2</span></div><div className="reading-layout"><aside className="reading-toc"><span>THE TERMS OF SERVICE</span>{termsSections.map(section => <a href={`#${section.id}`} key={section.id}>{section.title}</a>)}</aside><article className="reading-content policy-content">{termsSections.map(section => <section key={section.id} id={section.id}><h2>{section.title}</h2><div dangerouslySetInnerHTML={{ __html: section.html }} /></section>)}</article></div></div>;
 }
 
+function Security() {
+  return <div className="reading-page wrap">
+    <div className="reading-intro">
+      <a href="/" className="back-link">← Back to Kareer</a>
+      <h1>Kareer Security</h1>
+      <p>How Kareer handles application data, protects credentials, and receives vulnerability reports.</p>
+    </div>
+    <div className="reading-layout">
+      <nav className="reading-toc" aria-label="On this page">
+        <span>ON THIS PAGE</span>
+        {securitySections.map(section => <a href={`#${section.id}`} key={section.id}>{section.title}</a>)}
+      </nav>
+      <article className="reading-content policy-content">
+        {securitySections.map(section => <section key={section.id} id={section.id}>
+          <h2>{section.title}</h2>
+          <div dangerouslySetInnerHTML={{ __html: section.html }} />
+        </section>)}
+      </article>
+    </div>
+  </div>;
+}
+
 export function App({ page = 'home' }: { page?: string }) {
   const home = page === 'home';
-  return <TooltipProvider><a className="skip-link" href="#main">Skip to content</a><Header home={home} /><main id="main">{home ? <Home /> : page === 'setup' ? <Setup /> : page === 'privacy' ? <Privacy /> : page === 'terms' ? <Terms /> : page === 'pricing' ? <Pricing /> : <section className="not-found wrap"><h1>This page went<br />off-script.</h1><p>Let’s get you back to something useful.</p><Button asChild className="lime-button"><a href="/">Back to Kareer <Icon name="arrow" /></a></Button></section>}</main><Footer /></TooltipProvider>;
+  return <TooltipProvider><a className="skip-link" href="#main">Skip to content</a><Header home={home} /><main id="main">{home ? <Home /> : page === 'setup' ? <Setup /> : page === 'privacy' ? <Privacy /> : page === 'security' ? <Security /> : page === 'terms' ? <Terms /> : page === 'pricing' ? <Pricing /> : <section className="not-found wrap"><h1>This page went<br />off-script.</h1><p>Let’s get you back to something useful.</p><Button asChild className="lime-button"><a href="/">Back to Kareer <Icon name="arrow" /></a></Button></section>}</main><Footer /></TooltipProvider>;
 }
