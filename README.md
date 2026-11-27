@@ -19,7 +19,7 @@
     <a href="./LICENSE"><img src="https://img.shields.io/badge/License-FSL--1.1--MIT-blue.svg" alt="License: FSL-1.1-MIT" /></a>
     <a href="./package.json"><img src="https://img.shields.io/github/package-json/v/Amro212/kareer?color=A3E635" alt="Version" /></a>
     <a href="#installation"><img src="https://img.shields.io/badge/platform-Chrome%20%7C%20Firefox%20%7C%20Tampermonkey-orange.svg" alt="Platform" /></a>
-    <a href="./SECURITY.md"><img src="https://img.shields.io/badge/security-Local--first%20%7C%20Zero%20Telemetry-purple.svg" alt="Security: Local-first & Isolated" /></a>
+    <a href="./SECURITY.md"><img src="https://img.shields.io/badge/security-Local--first%20%7C%20Key%20Isolation-purple.svg" alt="Security: Local-first & Key Isolation" /></a>
   </p>
 
   <p><em>Fill job application forms from your saved profile, then review the answers.<br />Local profile tools with optional AI-assisted writing.</em></p>
@@ -33,7 +33,7 @@
 </div>
 
 > [!TIP]
-> 🚀 **Official Website & Downloads**: Visit **[kareer.itsamro.me](https://kareer.itsamro.me/)** for the interactive autofill demo, browser-specific setup guide, direct Firefox `.xpi` installation, and privacy policy.
+> 🚀 **Official Website & Downloads**: Visit **[kareer.itsamro.me](https://kareer.itsamro.me/)** for the interactive autofill demo, Chrome Web Store and Mozilla Add-ons setup guide, [compatibility matrix](https://kareer.itsamro.me/compatibility/), [pricing](https://kareer.itsamro.me/pricing/), and [privacy policy](https://kareer.itsamro.me/privacy/).
 
 ---
 
@@ -86,14 +86,15 @@ Kareer is a source-available browser assistant that scans job application forms,
 
 ## Supported ATS Matrix
 
-Kareer includes dedicated adapters for major Applicant Tracking Systems (ATS) as well as an intelligent generic fallback:
+Kareer includes dedicated adapters for major Applicant Tracking Systems (ATS) as well as an intelligent generic fallback (see [tested workflows and limits](https://kareer.itsamro.me/compatibility/)):
 
 | ATS / Platform | Adapter | Searchable Comboboxes | Multi-Page Steps | File Uploads | Repeatable Rows |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Ashby** | ✅ Dedicated | ✅ Supported | ✅ Supported | ✅ Supported | ✅ Supported |
+| **Workday** | ✅ Dedicated | ✅ Supported | ✅ Supported | ✅ Supported | ✅ Supported |
 | **Greenhouse** | ✅ Dedicated | ✅ Supported | ✅ Supported | ✅ Supported | ✅ Supported |
 | **Lever** | ✅ Dedicated | ✅ Supported | ✅ Supported | ✅ Supported | ✅ Supported |
-| **Workday** | ✅ Dedicated | ✅ Supported | ✅ Supported | ✅ Supported | ✅ Supported |
+| **Ashby** | ✅ Dedicated | ✅ Supported | ✅ Supported | ✅ Supported | ✅ Supported |
+| **SmartRecruiters** | ✅ Dedicated | ✅ Supported | ✅ Supported | ✅ Supported | ✅ Supported |
 | **Generic Forms** | ✅ Fallback | ✅ Standard HTML | ✅ Standard Forms | ✅ Standard Inputs | ✅ Preserved |
 
 ---
@@ -106,50 +107,34 @@ Follow this simple 4-step guide to get up and running in less than 5 minutes.
 
 ### Step 1: Install Kareer
 
-#### Option A: Firefox (Signed Add-on)
-1. Download the latest signed extension directly:
-   **[Download Kareer for Firefox (.xpi)](https://kareer.itsamro.me/downloads/kareer-firefox.xpi)**
-2. In Firefox, open the downloaded `.xpi` file (or drag it into any open Firefox tab).
-3. Firefox will detect Mozilla's signature and prompt: *"Add Kareer? This extension has been verified by Mozilla"*. Click **Add** to install.
+#### Install from a browser store
 
-#### Option B: Build it yourself (Chrome, Brave, Edge, Firefox, or Tampermonkey)
-Self-built copies are for your own personal use (see [License](#license--security)). They can use either Kareer AI or your own OpenRouter key.
+- Install for Google Chrome from the **[Chrome Web Store](https://chromewebstore.google.com/detail/kareer/gnbkbdbpajlpclicmapjghpodogkgblf)** and receive automatic updates.
+- Install for Firefox from **[Mozilla Add-ons](https://addons.mozilla.org/addon/kareer/)** and receive automatic updates.
+- See the **[Setup Guide](https://kareer.itsamro.me/setup/)** for walkthrough steps and troubleshooting.
 
-**Chromium browsers:**
-1. Download or clone this repository to your computer.
-2. Build the project (or use the pre-built `dist/chrome` directory):
-   ```bash
-   npm install
-   npm run build:extension
-   ```
-3. Open your browser and navigate to the Extensions page:
-   - **Chrome**: `chrome://extensions`
-   - **Brave**: `brave://extensions`
-   - **Edge**: `edge://extensions`
-4. Toggle on **Developer mode** (usually a switch in the top-right corner).
-5. Click **Load unpacked** and select the `dist/chrome` folder inside this project.
+#### Build Kareer from source
 
-**Firefox:** run the same build, then load `dist/firefox` temporarily via `about:debugging`.
+You can clone and build Kareer for your own use under the [project license](./LICENSE). Install Node.js 24 and run these commands:
 
-**Tampermonkey / Violentmonkey (userscript, uses your own OpenRouter key):**
-1. Install the [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/) browser extension.
-2. Build the userscript:
-   ```bash
-   npm run build:userscript
-   ```
-3. Open `dist/kareer.user.js` in your browser or import it into your Tampermonkey dashboard.
+```bash
+git clone https://github.com/Amro212/kareer.git
+cd kareer
+npm ci
+npm run build:extension
+```
+
+- **Chrome, Brave, or Edge** — Open `chrome://extensions`, `brave://extensions`, or `edge://extensions`. Enable **Developer mode**, choose **Load unpacked**, and select `dist/chrome`.
+- **Firefox** — Open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**, and select `dist/firefox/manifest.json`. Firefox unloads temporary add-ons when it restarts.
+- **Tampermonkey or Violentmonkey** — Run `npm run build:userscript` and import `dist/kareer.user.js` into your userscript manager.
 
 ---
 
 ### Step 2: Turn On AI
 
-Filling from your saved profile works without AI. For AI answers, open **Settings → AI & billing**:
+Filling from your saved profile works without AI. For AI answers, open **Settings → AI & billing** and choose **Start free trial** for 20 free credits over 30 days, or pick a plan. No account is required. See [pricing and request costs](https://kareer.itsamro.me/pricing/).
 
-- **Kareer AI (official builds and self-built copies):** choose **Try Kareer AI free** for 20 free credits, or pick a plan. No account and no setup. Filling a page costs 1 credit; generating a resume or cover letter costs 3, and rewriting part of one costs 2.
-- **Your own OpenRouter key (self-built copies only):**
-  1. Create an account at [openrouter.ai](https://openrouter.ai/), open **Keys** and click **Create Key**.
-  2. Add a small credit balance (e.g., $3–$5 is typically enough for hundreds of applications).
-  3. In Settings, choose **Use my own OpenRouter key** and paste it. We recommend **`google/gemini-2.5-flash-lite`**; all testing was done using this model.
+Self-built copies can also use your own OpenRouter key. Create and fund a key in OpenRouter, then choose **Use my own OpenRouter key** in the local build’s settings. If the request returns “Unauthorized,” check the key, credit balance, and connection. [OpenRouter credits](https://openrouter.ai/credits)
 
 ---
 
@@ -166,7 +151,7 @@ Filling from your saved profile works without AI. For AI answers, open **Setting
 
 ### Step 4: Autofill Your First Job Application
 
-1. Navigate to any supported job application page (e.g., Greenhouse, Lever, Ashby, or Workday).
+1. Navigate to any supported job application page (e.g., Workday, Greenhouse, Lever, Ashby, or SmartRecruiters).
 2. The **Kareer** instrument panel appears on the right (or press `Alt+Shift+J` to toggle).
 3. Under the **Run** tab, job title and company metadata are automatically captured.
 4. Click **Autofill Application** (or **Scan Fields** to inspect detected fields).
@@ -210,7 +195,7 @@ Kareer is structured as a unified monorepo building multiple distribution target
 kareer/
 ├── src/
 │   ├── core/                    # Host-agnostic core logic
-│   │   ├── adapters/            # ATS-specific logic (Greenhouse, Lever, Ashby, Workday)
+│   │   ├── adapters/            # ATS-specific logic (Workday, Greenhouse, Lever, Ashby, SmartRecruiters)
 │   │   ├── fields/              # Field actuators (fillers, comboboxes, observers)
 │   │   ├── ai.js                # Prompt construction & OpenRouter API client
 │   │   ├── application.js       # High-level autofill coordinator
@@ -269,12 +254,12 @@ origin into the background script and both manifests' host permissions.
 |---|---|---|
 | `npm run build` / `npm run build:extension` / `npm run dev` | staging Worker (`https://kareer-gateway-staging.amromousa8.workers.dev`) | `dist/chrome`, `dist/firefox` (load unpacked / temporary add-on) |
 | `node tools/build.js --target=extension --staging` | staging Worker; named "Kareer (Staging)", Kareer AI on by default, separate Firefox ID, no version bump | `dist/staging/chrome`, `dist/staging/firefox` |
-| `node tools/build.js --target=extension --production --amo` | `KAREER_GATEWAY_ORIGIN` if set, otherwise `https://api.kareer.itsamro.me` | `dist/chrome`, `dist/firefox`, `dist/kareer-chrome.zip`, `dist/kareer-firefox.xpi` |
+| `node tools/build.js --target=extension --production` | `KAREER_GATEWAY_ORIGIN` if set, otherwise `https://api.kareer.itsamro.me` | `dist/chrome`, `dist/firefox`, `dist/kareer-chrome.zip`, `dist/kareer-firefox.xpi` |
 
 Run **Prepare store packages** in GitHub Actions after committing a new release
-version. Download the Chrome ZIP, listed Firefox XPI, and matching Firefox source
-ZIP from the run, then upload them to the existing store listings. The website
-has its own deployment workflow.
+version. Submit the Chrome ZIP to the Chrome Web Store and the unsigned Firefox
+XPI with its matching source ZIP to Mozilla Add-ons. The website has its own
+deployment workflow.
 
 Only `--production` builds can use the production gateway, and they can't use
 the staging one. `--production` builds are the official store packages: they
@@ -307,14 +292,6 @@ If you encounter a form or ATS edge case that doesn't fill correctly:
 ---
 
 ## Troubleshooting & FAQ
-
-<details>
-<summary><b>Q: My API key returns an error or "Unauthorized"</b></summary>
-
-- Verify that your OpenRouter API key starts with `sk-or-v1-`.
-- Check that your OpenRouter account has an active credit balance at [openrouter.ai/credits](https://openrouter.ai/credits).
-- Ensure your browser or network does not block requests to `openrouter.ai`.
-</details>
 
 <details>
 <summary><b>Q: The floating panel is not appearing on a job page</b></summary>

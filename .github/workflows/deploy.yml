@@ -8,12 +8,8 @@ on:
       - 'src/core/credits.json'
       - 'src/core/offers.json'
       - 'package.json'
-      - 'tools/sync-amo.js'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
-  schedule:
-    # Keep the existing self-hosted Firefox download and update feed available.
-    - cron: '0 * * * *'
 
 permissions:
   contents: read
@@ -38,16 +34,6 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: site/package-lock.json
-
-      - name: Stage the approved Firefox download
-        env:
-          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
-          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
-        run: |
-          if ! node tools/sync-amo.js || [ ! -s site/downloads/kareer-firefox.xpi ]; then
-            echo 'Mozilla did not provide an XPI. Carrying forward the published Firefox download and update feed.'
-            node tools/sync-amo.js --from-pages
-          fi
 
       - uses: actions/configure-pages@v5
       - run: npm ci --prefix site

@@ -12,7 +12,6 @@ const rootDir = path.join(__dirname, '..');
 const srcDir = path.join(rootDir, 'src');
 const staging = process.argv.includes('--staging');
 const production = process.argv.includes('--production');
-const amo = process.argv.includes('--amo');
 if (staging && production) throw new Error('Choose --staging or --production, not both.');
 const gatewayArg = process.argv.find(arg => arg.startsWith('--gateway='))?.slice('--gateway='.length);
 if (gatewayArg && production) throw new Error('Production builds read KAREER_GATEWAY_ORIGIN, not --gateway.');
@@ -79,30 +78,12 @@ function saveBuildCache(hash, version) {
   } catch {}
 }
 
-function syncSiteAndUpdates(version) {
+function syncSiteVersion(version) {
   const siteVersionPath = path.join(rootDir, 'site', 'version.json');
   if (fs.existsSync(siteVersionPath)) {
     try {
       fs.writeFileSync(siteVersionPath, JSON.stringify({ version }, null, 2) + '\n', 'utf8');
     } catch {}
-  }
-
-  // A listed AMO build is not the signed XPI served by the website's update feeds.
-  const updateFiles = amo ? [] : ['site/firefox-updates.json', 'firefox-updates.json'];
-  for (const file of updateFiles) {
-    const p = path.join(rootDir, file);
-    if (fs.existsSync(p)) {
-      try {
-        const manifest = JSON.parse(fs.readFileSync(p, 'utf8'));
-        if (manifest?.addons?.['kareer@amro212']) {
-          manifest.addons['kareer@amro212'].updates = [{
-            version,
-            update_link: 'https://kareer.itsamro.me/downloads/kareer-firefox.xpi',
-          }];
-          fs.writeFileSync(p, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
-        }
-      } catch {}
-    }
   }
 
   const siteIndexPath = path.join(rootDir, 'site', 'index.html');
@@ -130,7 +111,7 @@ function prepareVersion() {
     pkg.version = incrementVersion(oldVersion, explicitBump);
     fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
     saveBuildCache(currentHash, pkg.version);
-    syncSiteAndUpdates(pkg.version);
+    syncSiteVersion(pkg.version);
     console.log(`[build] Explicit version bump (${explicitBump}): ${oldVersion} -> ${pkg.version}`);
     return pkg;
   }
@@ -141,12 +122,12 @@ function prepareVersion() {
     pkg.version = incrementVersion(oldVersion, 'patch');
     fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
     saveBuildCache(currentHash, pkg.version);
-    syncSiteAndUpdates(pkg.version);
+    syncSiteVersion(pkg.version);
     console.log(`[build] Source changes detected. Version incremented: ${oldVersion} -> ${pkg.version}`);
     return pkg;
   }
 
-  syncSiteAndUpdates(pkg.version);
+  syncSiteVersion(pkg.version);
 
   if (!cache || !fs.existsSync(userscriptFile)) {
     saveBuildCache(currentHash, pkg.version);
@@ -245,11 +226,8 @@ function writeExtensionStaticFiles(pkg, browser) {
     manifest.name += ' (Staging)';
     if (manifest.browser_specific_settings?.gecko) {
       manifest.browser_specific_settings.gecko.id = 'kareer-staging@amro212';
-      delete manifest.browser_specific_settings.gecko.update_url;
     }
   }
-  // AMO rejects listed (Mozilla-hosted) uploads that declare update_url.
-  if (amo) delete manifest.browser_specific_settings?.gecko?.update_url;
   fs.mkdirSync(outDir, { recursive: true });
   fs.copyFileSync(path.join(rootDir, 'LICENSE'), path.join(outDir, 'LICENSE'));
   fs.writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8');

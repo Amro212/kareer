@@ -53,7 +53,7 @@ function Footer() {
 const faqs: [string, React.ReactNode][] = [
   ['What does Kareer cost?', <>Local autofill is free. New users can try Kareer AI with {creditCount(credits.trial.credits)} for {credits.trial.days} days. The monthly plan costs {offers.monthly.price}/month for {creditCount(offers.monthly.credits)}. A one-time {offers.pack.price} pack adds {creditCount(offers.pack.credits)} that never expire. See <a href="/pricing/">Kareer pricing and request costs</a>.</>],
   ['Do I need an AI account?', 'No. Kareer AI activates with a reusable Kareer key that appears in Settings when you start the free trial or pay. No Kareer registration or AI provider account is needed. Developers who build Kareer from source can connect their own OpenRouter key instead. Never paste credentials into this website or a job application.'],
-  ['Which browsers can I use?', <>Kareer is available for desktop Chrome and Firefox. Install from the <a href={chromeStore}>Chrome Web Store</a> or <a href={firefoxStore}>Mozilla Add-ons</a>. See the <a href="/setup/#browser">setup guide</a> for manual installation on Chrome, Edge and Brave.</>],
+  ['Which browsers can I use?', <>Kareer is available for desktop Chrome and Firefox. Install from the <a href={chromeStore}>Chrome Web Store</a> or <a href={firefoxStore}>Mozilla Add-ons</a>. The <a href="/setup/#browser">setup guide</a> also covers building from source and loading a local copy.</>],
   ['Will it work on every application?', <>Kareer has dedicated support for Workday, Greenhouse, Lever, Ashby, and SmartRecruiters, plus a generic form engine. Application forms vary, so some fields may need your attention. See <a href="/compatibility/">tested workflows and limits</a>.</>],
   ['Does my résumé leave my browser?', <>Your profile and documents are stored locally. Employers receive the information you submit or attach. If you use optional Kareer AI, relevant context goes through Kareer’s gateway to OpenRouter and its provider. See the <a href="/privacy/#ai-transmission">privacy policy</a> for details.</>],
   ['Can I review and edit the answers?', 'Yes. Kareer distinguishes saved, inferred, guessed, verified, and unresolved values so you can review the result. You can adjust answers and control Auto Continue and Auto Submit in settings. The website demo shows all five with fictional data.'],
@@ -114,7 +114,16 @@ function Setup() {
           <p className="helper-text">Mozilla Add-ons · automatic updates</p>
         </div>
       </div>
-      <details><summary>Build for Chrome, Edge or Brave from source</summary><p>You can also install manually with Node.js and Git.</p><ol><li>Clone <a href={github}>the Kareer repository</a> and open a terminal in its folder.</li><li>Run <code>npm ci</code>, then <code>npm run build:extension</code>.</li><li>Open <code>chrome://extensions</code> (or <code>edge://extensions</code>) and enable Developer mode.</li><li>Choose <strong>Load unpacked</strong> and select the repository’s <code>dist/chrome</code> folder.</li></ol><a className="text-link" href={`${github}#installation`}>Read the source installation guide <Icon name="diagonal" size={16} /></a></details>
+      <details>
+        <summary>Build Kareer from source</summary>
+        <p>Clone <a href={github}>the Kareer repository</a> to build a local copy under the <a href={github + "/blob/master/LICENSE"}>project license</a>.</p>
+        <ol>
+          <li>From the repository folder, run <code>npm ci</code>, then <code>npm run build:extension</code>.</li>
+          <li><strong>Chrome:</strong> Open <code>chrome://extensions</code>, enable Developer mode, and choose <strong>Load unpacked</strong>. Select <code>dist/chrome</code>.</li>
+          <li><strong>Firefox:</strong> Open <code>about:debugging#/runtime/this-firefox</code>, choose <strong>Load Temporary Add-on</strong>, and select <code>dist/firefox/manifest.json</code>.</li>
+        </ol>
+        <a className="text-link" href={github + "#build-kareer-from-source"}>Read the source build guide <Icon name="diagonal" size={16} /></a>
+      </details>
     </section>
     <section id="profile"><h2>Save your profile</h2><p>Open <strong>Profile</strong> and add your contact details, education, work experience, projects, and other relevant facts. Save your changes. More useful context means fewer fields to fix later.</p><p>Keep your structured profile records current. The <a href="/guides/tailor-resume-and-cover-letter/">résumé and cover letter guide</a> shows how to use and review those facts in a draft.</p></section>
     <section id="first-run"><h2>Fill your first job application</h2><ol><li>Open a job application and launch Kareer.</li><li>Choose <strong>Autofill</strong>. Kareer scans the form and resolves its fields.</li><li>Review the answers and their source labels. Edit anything that needs attention.</li><li>Continue or submit when you’re ready. Auto Continue and Auto Submit are settings you control.</li></ol><p>Check <a href="/compatibility/">tested application platforms</a> or <a href="/#demo">try the fictional demo</a> first.</p></section>

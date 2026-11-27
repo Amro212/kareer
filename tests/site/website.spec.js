@@ -255,8 +255,11 @@ test('setup, privacy, security and terms are directly accessible static pages', 
   await expect(chromeInstall).toHaveAttribute('href', 'https://chromewebstore.google.com/detail/kareer/gnbkbdbpajlpclicmapjghpodogkgblf');
   await expect(firefoxInstall).toBeVisible();
   await expect(firefoxInstall).toHaveAttribute('href', 'https://addons.mozilla.org/addon/kareer/');
-  await page.getByText('Build for Chrome, Edge or Brave from source', { exact: true }).click();
-  await expect(page.getByText('chrome://extensions', { exact: true })).toBeVisible();
+  const sourceBuild = page.locator('#browser details');
+  await sourceBuild.getByText('Build Kareer from source', { exact: true }).click();
+  await expect(sourceBuild.getByText('Load unpacked', { exact: true })).toBeVisible();
+  await expect(sourceBuild.getByText('Load Temporary Add-on', { exact: true })).toBeVisible();
+  await expect(sourceBuild.getByText('dist/firefox/manifest.json', { exact: true })).toBeVisible();
   await expect(page.locator('#browser a[href*=".xpi"]')).toHaveCount(0);
   await page.goto('/privacy/');
   await expect(page.getByRole('heading', { name: 'Kareer Privacy Policy' })).toBeVisible();

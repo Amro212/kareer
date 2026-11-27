@@ -21,7 +21,7 @@ jobs:
       - name: Build production store packages
         env:
           KAREER_GATEWAY_ORIGIN: ${{ vars.KAREER_GATEWAY_ORIGIN }}
-        run: node tools/build.js --target=extension --production --amo
+        run: node tools/build.js --target=extension --production
       - run: npx --no-install web-ext lint --source-dir=dist/firefox
 
       - name: Archive the exact reviewer source

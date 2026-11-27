@@ -15,17 +15,16 @@ Production output is `site-dist/`. The build prerenders home, setup, pricing, co
 the tailoring guide, privacy, security, terms and the 404 page. Vite copies `robots.txt`,
 `sitemap.xml` and `llms.txt` from `public/`. The build generates `pricing.md` from the
 same plan and request-cost data used by the pricing page. The build preserves the
-custom domain, verification file, and signed Firefox download and
-update feed staged by `tools/sync-amo.js`. **Deploy website** uploads `site-dist/`
-to GitHub Pages on relevant pushes to `master`, on manual runs, and hourly. When
-Mozilla cannot supply a signed file, the workflow carries forward the live
-download and update feed together. Store packages are built by the separate
-**Prepare store packages** workflow.
+custom domain, verification file, and version metadata. **Deploy website**
+uploads `site-dist/` to GitHub Pages on relevant pushes to `master` and on
+manual runs. The setup page links to both browser stores and documents how to
+build Kareer locally. The separate **Prepare store packages** workflow builds
+submissions for the Chrome Web Store and Mozilla Add-ons.
 
 Focused checks (Playwright uses the root repository's existing test dependency):
 
 ```sh
-node --test tests/unit/site-build.test.js tests/unit/sync-amo.test.js
+node --test tests/unit/site-build.test.js
 npx playwright test --config tests/site/playwright.config.js
 ```
 
