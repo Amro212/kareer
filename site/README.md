@@ -11,19 +11,20 @@ npm run typecheck --prefix site
 npm run preview --prefix site -- --host 127.0.0.1 --port 4177
 ```
 
-Production output is `site-dist/`. The build prerenders home, privacy, security, terms, pricing,
-setup and 404 HTML. Vite copies `public/robots.txt` and `public/sitemap.xml`, and the
-build preserves the custom domain, verification file, and signed Firefox download and
-update feed staged by `tools/sync-amo.js`. **Deploy website** uploads `site-dist/`
-to GitHub Pages on relevant pushes to `master`, on manual runs, and hourly. When
-Mozilla cannot supply a signed file, the workflow carries forward the live
-download and update feed together. Store packages are built by the separate
-**Prepare store packages** workflow.
+Production output is `site-dist/`. The build prerenders home, setup, pricing, compatibility,
+the tailoring guide, privacy, security, terms and the 404 page. Vite copies `robots.txt`,
+`sitemap.xml` and `llms.txt` from `public/`. The build generates `pricing.md` from the
+same plan and request-cost data used by the pricing page. The build preserves the
+custom domain, verification file, and version metadata. **Deploy website**
+uploads `site-dist/` to GitHub Pages on relevant pushes to `master` and on
+manual runs. The setup page links to both browser stores and documents how to
+build Kareer locally. The separate **Prepare store packages** workflow builds
+submissions for the Chrome Web Store and Mozilla Add-ons.
 
 Focused checks (Playwright uses the root repository's existing test dependency):
 
 ```sh
-node --test tests/unit/site-build.test.js tests/unit/sync-amo.test.js
+node --test tests/unit/site-build.test.js
 npx playwright test --config tests/site/playwright.config.js
 ```
 
@@ -50,13 +51,46 @@ of extension storage. Reduced-motion preferences override animation.
 `src/components/autofill-demo.tsx` scripts the hero run (23 fictional fields, row
 matching and creation, one unresolved field resolved by a second pass) and
 `src/components/document-studio.tsx` swaps tailored documents per fictional posting.
-Cojeev provides headline reveal, presence transitions, buttons, tabs, badges, switches,
-progress, accordion and their interaction motion. `ScrollReveal` composes its existing
-MotionSurface and visibility handling for one-time entrances; hero typography
-uses TextReveal's folded-line preset. No second animation engine is installed.
+Cojeev provides presence transitions, buttons, tabs, badges, switches, progress,
+and their interaction motion. `ScrollReveal` composes its MotionSurface and visibility
+handling for one-time entrances.
 
-TextReveal has a small local playback-state extension (recorded in provenance)
-to start headline and demo together, then copy, then buttons on actual completion.
-The home entry conceals pending motion before hydration, with readable static,
-reduced-motion and startup-failure fallbacks. Keyboard focus settles an entrance
-immediately rather than making navigation wait for animation.
+The homepage heading, definition and setup links are visible before hydration.
+The demo and other sections that opt into a scroll entrance respect reduced motion.
+Keyboard focus settles a pending entrance immediately.
+
+## Search visibility checks
+
+Before publishing SEO changes, export the previous 28 days from Google Search
+Console, Bing Webmaster Tools, Chrome Web Store, and Mozilla Add-ons wherever
+access is available. Inspect index and canonical status for the homepage, setup,
+and pricing. Record organic clicks, impressions, and store installs. Include
+store referral attribution only where the dashboards expose it.
+
+For an AI search baseline, run each prompt below three times in separate sessions
+on Google AI Overviews, ChatGPT Search, and Perplexity. Use a consistent English
+locale. Record the date, platform, whether an AI answer appeared, the cited URLs,
+whether Kareer was mentioned or recommended, and any factual errors. Keep missing
+answers and inaccessible runs visible in the sample counts.
+
+| Topic | Prompt |
+| --- | --- |
+| Autofill | How can I autofill job application forms from a saved profile? |
+| Chrome | Which Chrome extensions autofill job applications for free? |
+| Firefox | What is a good Firefox extension for job application autofill? |
+| Workday | Which extensions can fill Workday work history and education? |
+| Greenhouse | Can a browser extension fill a Greenhouse application and attach my résumé? |
+| Other platforms | Which job application autofill tools work on Lever, Ashby, and SmartRecruiters? |
+| Privacy | Where does Kareer store my profile and what is sent when I use AI? |
+| Submission | Can I review answers before Kareer submits a job application? |
+| Pricing | Is Kareer free, and how much do its AI credits cost? |
+| Documents | How do I tailor a résumé and cover letter to the same job in Kareer? |
+| Simplify | What are alternatives to Simplify Copilot for local job application autofill? |
+| SpeedyApply | How do Kareer and SpeedyApply compare for autofill in Firefox? |
+
+After a successful Pages deploy, check live URL statuses, redirects, canonicals,
+and search crawler access. Submit the sitemap and inspect the changed URLs in
+Google and Bing. Measure mobile home, setup, and pricing under the same conditions
+as the baseline. At 30, 60, and 90 days, compare search and install trends and
+repeat the AI prompts. Correct any inaccurate claims on their canonical page and
+check public store and GitHub descriptions for agreement.

@@ -1,0 +1,17 @@
+# Kareer
+
+> Kareer is a desktop Chrome and Firefox extension that fills job application forms from a saved profile. Local autofill is free. Optional Kareer AI helps answer application questions and draft tailored résumés and cover letters.
+
+## Product and setup
+
+- [Kareer](https://kareer.itsamro.me/): Product overview, interactive demo, and frequently asked questions.
+- [Install and use Kareer](https://kareer.itsamro.me/setup/): Official browser stores, profile setup, first run, and troubleshooting.
+- [Application compatibility](https://kareer.itsamro.me/compatibility/): Tested workflows and limits for Workday, Greenhouse, Lever, Ashby, SmartRecruiters, and generic forms.
+- [Résumé and cover letter guide](https://kareer.itsamro.me/guides/tailor-resume-and-cover-letter/): Example of tailoring two documents from the same saved facts.
+
+## Pricing and data handling
+
+- [Kareer pricing](https://kareer.itsamro.me/pricing/): Free local tools, the AI trial, paid credits, and request costs.
+- [Pricing in Markdown](https://kareer.itsamro.me/pricing.md): The same plan and credit-cost data in plain text.
+- [Privacy policy](https://kareer.itsamro.me/privacy/): Local storage, AI requests, and provider handling.
+- [Security](https://kareer.itsamro.me/security/): Credentials, payments, application controls, and vulnerability reporting.

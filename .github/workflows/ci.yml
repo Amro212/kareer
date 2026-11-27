@@ -33,7 +33,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - run: npx web-ext lint --source-dir=dist/firefox --self-hosted
+      - run: npx web-ext lint --source-dir=dist/firefox
       - run: npm ci --prefix site
       - run: npm run typecheck --prefix site
       - run: npm run build --prefix site

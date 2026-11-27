@@ -6,7 +6,7 @@ Use Node.js 24 and npm on Windows, Linux or macOS:
 
 ```sh
 npm ci
-node tools/build.js --target=extension --production --amo
+node tools/build.js --target=extension --production
 ```
 
 Outputs:

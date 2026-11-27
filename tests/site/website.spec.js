@@ -1,4 +1,68 @@
 import { test, expect } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+
+const offers = JSON.parse(readFileSync(new URL('../../src/core/offers.json', import.meta.url), 'utf8'));
+const credits = JSON.parse(readFileSync(new URL('../../src/core/credits.json', import.meta.url), 'utf8'));
+
+test('SEO pages expose their core content without scripts', async ({ browser, baseURL, request }) => {
+  const context = await browser.newContext({ baseURL, javaScriptEnabled: false });
+  try {
+    const page = await context.newPage();
+    await page.goto('/');
+    await expect(page.locator('h1')).toHaveText('Job application autofill for Chrome and Firefox');
+    const faq = page.locator('#faq details').filter({ hasText: 'What does Kareer cost?' });
+    await expect(faq.locator('p')).toContainText(offers.monthly.price);
+    await faq.locator('summary').focus();
+    await page.keyboard.press('Enter');
+    await expect(faq.locator('p')).toBeVisible();
+    const app = JSON.parse(await page.locator('script[type="application/ld+json"]').textContent())['@graph']
+      .find(entity => entity['@type'] === 'SoftwareApplication');
+    expect(app.offers).toMatchObject({ price: 0, priceCurrency: 'USD' });
+
+    await expect(page.getByRole('link', { name: 'See tested application platforms' })).toHaveAttribute('href', '/compatibility/');
+    await expect(page.getByRole('link', { name: 'Read the tailoring guide' })).toHaveAttribute('href', '/guides/tailor-resume-and-cover-letter/');
+    await page.goto('/compatibility/');
+    const matrix = page.getByRole('table');
+    for (const platform of ['Workday', 'Greenhouse', 'Lever', 'Ashby', 'SmartRecruiters', 'Generic forms']) {
+      await expect(matrix.getByRole('rowheader', { name: platform })).toBeVisible();
+    }
+    await page.goto('/guides/tailor-resume-and-cover-letter/');
+    await expect(page.getByRole('main')).toContainText('Harbor Health');
+    await expect(page.getByRole('main')).toContainText('Word (.docx)');
+  } finally {
+    await context.close();
+  }
+  expect((await request.get('/missing-seo-check/')).status()).toBe(404);
+});
+
+test('the pricing comparison and AI discovery files use the published offer data', async ({ page, request }) => {
+  await page.goto('/pricing/');
+  const table = page.getByRole('table', { name: 'Compare Kareer plans' });
+  const mirror = await request.get('/pricing.md');
+  expect(mirror.ok()).toBe(true);
+  const markdown = await mirror.text();
+  const local = table.getByRole('row').filter({ hasText: 'Local tools' });
+  await expect(local).toContainText('Free');
+  for (const offer of [offers.monthly, offers.pack]) {
+    const row = table.getByRole('row').filter({ hasText: offer.name });
+    await expect(row).toContainText(offer.price);
+    await expect(row).toContainText(offer.credits.toLocaleString('en-US'));
+    expect(markdown).toContain(offer.price);
+    expect(markdown).toContain(offer.credits.toLocaleString('en-US'));
+  }
+  const trial = table.getByRole('row').filter({ hasText: 'Kareer AI trial' });
+  await expect(trial).toContainText(`${credits.trial.credits} credits`);
+  await expect(trial).toContainText(`${credits.trial.days} days`);
+  expect(markdown).toContain(`${credits.trial.credits} credits`);
+  expect(markdown).toContain(`${credits.trial.days} days`);
+  await expect(page.getByRole('link', { name: 'Pricing in Markdown' })).toHaveAttribute('href', '/pricing.md');
+  const discovery = await request.get('/llms.txt');
+  expect(discovery.ok()).toBe(true);
+  const links = await discovery.text();
+  for (const path of ['/', '/pricing/', '/pricing.md', '/compatibility/', '/setup/', '/privacy/']) {
+    expect(links).toContain(`(https://kareer.itsamro.me${path})`);
+  }
+});
 
 test('purchase return and legacy link direct buyers to verification in the extension', async ({ page }) => {
   for (const route of ['/purchase/complete/', '/setup/?purchase=complete']) {
@@ -7,65 +71,39 @@ test('purchase return and legacy link direct buyers to verification in the exten
     await expect(page.getByRole('heading', { name: 'Back from checkout' })).toBeVisible();
     await expect(page.getByText('Kareer → Settings → AI & billing', { exact: true })).toBeVisible();
     await expect(page.getByText(/Kareer verifies your purchase there/)).toBeVisible();
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex');
   }
 });
 
-test('hero stays hidden before hydration, then enters headline and demo, copy, buttons', async ({ page }) => {
+test('hero heading, explanation and install link are visible before hydration', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   let release;
   const blocked = new Promise(resolve => { release = resolve; });
   await page.route('**/assets/main-*.js', async route => { await blocked; await route.continue(); });
-  await page.addInitScript(() => {
-    window.__heroStages = [];
-    new MutationObserver(records => {
-      for (const { target, attributeName } of records) {
-        const name = target.id === 'hero-title' ? 'headline' : target.dataset.heroStage;
-        if (!name) continue;
-        const phase = target.getAttribute(attributeName);
-        if (phase === 'playing' || phase === 'done') window.__heroStages.push({ name, phase, time: performance.now() });
-      }
-    }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-reveal-state', 'data-scroll-reveal'] });
-  });
   const loaded = page.goto('/');
   try {
-    await expect(page.locator('.site-header')).toBeVisible();
-    await expect(page.locator('#hero-title [data-reveal-visual]')).toBeHidden();
-    for (const stage of ['demo', 'copy', 'buttons']) await expect(page.locator(`[data-hero-stage="${stage}"]`)).toHaveCSS('opacity', '0');
+    const hero = page.locator('.hero');
+    await expect(hero.getByRole('heading', { name: 'Job application autofill for Chrome and Firefox' })).toBeVisible();
+    await expect(hero.locator('.hero-description')).toHaveCSS('opacity', '1');
+    await expect(hero.locator('.hero-actions').getByRole('link', { name: 'Get Kareer' })).toBeVisible();
   } finally {
     release();
     await loaded;
   }
-  await expect(page.locator('[data-hero-stage="buttons"]')).toHaveAttribute('data-scroll-reveal', 'done');
-  const events = await page.evaluate(() => window.__heroStages);
-  const at = (name, phase) => {
-    const event = events.find(event => event.name === name && event.phase === phase);
-    expect(event, `${name} must reach ${phase}`).toBeDefined();
-    return event.time;
-  };
-  expect(Math.abs(at('headline', 'playing') - at('demo', 'playing'))).toBeLessThan(100);
-  expect(at('demo', 'done') - at('demo', 'playing')).toBeGreaterThan(600);
-  expect(at('copy', 'done') - at('copy', 'playing')).toBeGreaterThan(150);
-  expect(at('buttons', 'done') - at('buttons', 'playing')).toBeGreaterThan(130);
-  expect(at('copy', 'playing')).toBeGreaterThanOrEqual(at('demo', 'done'));
-  expect(at('copy', 'playing') - at('headline', 'playing')).toBeLessThan(900);
-  expect(at('buttons', 'playing')).toBeGreaterThanOrEqual(at('copy', 'done'));
 });
 
-test('mobile hero sequence completes even when the demo starts below the fold', async ({ page }) => {
+test('mobile install link is ready when the demo starts below the fold', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 500 });
   await page.goto('/');
   await expect(page.locator('.hero-demo-entrance')).not.toBeInViewport();
-  await expect(page.locator('[data-hero-stage="buttons"]')).toHaveAttribute('data-scroll-reveal', 'done');
-  await expect(page.getByRole('button', { name: 'Try the demo', exact: true })).toBeVisible();
+  await expect(page.locator('.hero-actions').getByRole('link', { name: 'Get Kareer' })).toBeVisible();
 });
 
-test('a failed script load restores the prerendered content', async ({ page }) => {
+test('a failed script load keeps prerendered install content readable', async ({ page }) => {
   await page.route('**/assets/main-*.js', route => route.abort());
   await page.goto('/');
-  await expect(page.locator('[data-hero-stage="buttons"]')).toHaveCSS('opacity', '0');
-  await expect(page.locator('html')).not.toHaveAttribute('data-entrances', 'pending', { timeout: 6000 });
-  await expect(page.locator('#hero-title [data-reveal-visual]')).toBeVisible();
-  await expect(page.locator('[data-hero-stage="buttons"]')).toHaveCSS('opacity', '1');
+  await expect(page.locator('#hero-title')).toBeVisible();
+  await expect(page.locator('.hero-actions')).toHaveCSS('opacity', '1');
 });
 
 test('linked buttons retain accessible text contrast on hover and keyboard focus', async ({ page }) => {
@@ -107,7 +145,7 @@ test('fictional autofill demo completes, explains answers and replays without AI
     if (new URL(request.url()).origin !== siteOrigin) externalRequests.push(request.url());
   });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Job hunting takes enough out of you.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Job application autofill for Chrome and Firefox' })).toBeVisible();
   await page.getByRole('button', { name: 'Try the demo', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Ready for your review' })).toBeVisible({ timeout: 15000 });
   await page.getByRole('button', { name: 'Explain answer: Why do you want to work at Northwind Labs?' }).click();
@@ -196,7 +234,7 @@ for (const width of [1440, 600, 390]) test(`switching document tabs and postings
 
 test('pricing credit estimator gives a labeled range and a plan fit', async ({ page }) => {
   await page.goto('/pricing/');
-  await expect(page.getByRole('heading', { name: 'Local tools' })).toBeVisible();
+  await expect(page.getByRole('rowheader', { name: 'Local tools' })).toBeVisible();
   const slider = page.getByLabel('Applications with AI help each month');
   await expect(page.locator('.estimate strong')).toHaveText('40–120');
   await expect(page.locator('.estimate-fit')).toContainText('Credit Pack');
@@ -210,18 +248,21 @@ test('pricing credit estimator gives a labeled range and a plan fit', async ({ p
 
 test('setup, privacy, security and terms are directly accessible static pages', async ({ page }) => {
   await page.goto('/setup/');
-  await expect(page.getByRole('heading', { name: 'A little setup. A lot less repetition.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Install and use Kareer' })).toBeVisible();
   const chromeInstall = page.locator('#browser').getByRole('link', { name: 'Add to Chrome', exact: true });
   const firefoxInstall = page.locator('#browser').getByRole('link', { name: 'Add to Firefox', exact: true });
   await expect(chromeInstall).toBeVisible();
   await expect(chromeInstall).toHaveAttribute('href', 'https://chromewebstore.google.com/detail/kareer/gnbkbdbpajlpclicmapjghpodogkgblf');
   await expect(firefoxInstall).toBeVisible();
   await expect(firefoxInstall).toHaveAttribute('href', 'https://addons.mozilla.org/addon/kareer/');
-  await page.getByText('Build for Chrome, Edge or Brave from source', { exact: true }).click();
-  await expect(page.getByText('chrome://extensions', { exact: true })).toBeVisible();
+  const sourceBuild = page.locator('#browser details');
+  await sourceBuild.getByText('Build Kareer from source', { exact: true }).click();
+  await expect(sourceBuild.getByText('Load unpacked', { exact: true })).toBeVisible();
+  await expect(sourceBuild.getByText('Load Temporary Add-on', { exact: true })).toBeVisible();
+  await expect(sourceBuild.getByText('dist/firefox/manifest.json', { exact: true })).toBeVisible();
   await expect(page.locator('#browser a[href*=".xpi"]')).toHaveCount(0);
   await page.goto('/privacy/');
-  await expect(page.getByRole('heading', { name: 'Your data. Your business.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Kareer Privacy Policy' })).toBeVisible();
   await expect(page.locator('#ai-transmission')).toContainText('OpenRouter');
   await expect(page.locator('#retention')).toBeVisible();
   await expect(page.locator('#billing')).toContainText('Stripe');
@@ -234,7 +275,7 @@ test('setup, privacy, security and terms are directly accessible static pages', 
   await expect(page.getByRole('link', { name: 'Report a vulnerability privately' })).toHaveAttribute('href', 'https://github.com/Amro212/kareer/security/advisories/new');
   await page.getByRole('contentinfo').getByRole('link', { name: 'Terms', exact: true }).click();
   await expect(page).toHaveURL(/\/terms\/$/);
-  await expect(page.getByRole('heading', { name: 'Plain terms. No surprises.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Kareer Terms of Service' })).toBeVisible();
   await expect(page.locator('#about')).toContainText('form-filling assistant');
   await expect(page.locator('#refunds')).toContainText('All sales are final');
   await expect(page.locator('#keys').getByRole('link', { name: 'kareer@itsamro.me' })).toHaveAttribute('href', 'mailto:kareer@itsamro.me');
@@ -245,16 +286,8 @@ test('pricing lists both plans from the shared offers and explains that purchase
   await page.goto('/');
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Pricing', exact: true }).click();
   await expect(page).toHaveURL(/\/pricing\/$/);
-  await expect(page.getByRole('heading', { name: 'Simple pricing. Pay only for AI.' })).toBeVisible();
-  const monthly = page.locator('.pricing-card').filter({ has: page.getByRole('heading', { name: 'Kareer Monthly' }) });
-  await expect(monthly).toContainText('US$9.99');
-  await expect(monthly).toContainText('1,000 credits each month');
-  const pack = page.locator('.pricing-card').filter({ has: page.getByRole('heading', { name: 'Kareer Credit Pack' }) });
-  await expect(pack).toContainText('US$4.99');
-  await expect(pack).toContainText('300 credits');
-  await expect(pack.getByRole('link', { name: 'Get Kareer to buy' })).toHaveAttribute('href', '/setup/');
-  await expect(monthly.getByRole('link', { name: 'Get Kareer to buy' })).toHaveAttribute('href', '/setup/');
-  await expect(page.locator('.pricing-free').getByRole('link', { name: 'Get Kareer' })).toHaveAttribute('href', '/setup/');
+  await expect(page.getByRole('heading', { name: 'Kareer pricing and AI credits' })).toBeVisible();
+  await expect(page.locator('.comparison-actions').getByRole('link', { name: 'Get Kareer' })).toHaveAttribute('href', '/setup/');
   await expect(page.locator('#buy-in-extension')).toContainText('All sales are final');
   await expect(page.locator('#buy-in-extension')).toContainText('20 free credits');
   await expect(page.locator('#buy-in-extension').getByRole('link', { name: 'kareer@itsamro.me' })).toHaveAttribute('href', 'mailto:kareer@itsamro.me');
@@ -267,7 +300,7 @@ test('pricing lists both plans from the shared offers and explains that purchase
 test('mobile navigation, reduced-motion demo and pages fit a narrow viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  for (const route of ['/', '/setup/', '/privacy/', '/security/', '/terms/', '/pricing/']) {
+  for (const route of ['/', '/setup/', '/privacy/', '/security/', '/terms/', '/pricing/', '/compatibility/', '/guides/tailor-resume-and-cover-letter/']) {
     await page.goto(route);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `No overflow on ${route}`).toBe(true);
   }
@@ -283,7 +316,7 @@ test('homepage routes generic install CTAs to setup and links both official stor
   await page.goto('/');
   const chromeStore = 'https://chromewebstore.google.com/detail/kareer/gnbkbdbpajlpclicmapjghpodogkgblf';
   const firefoxStore = 'https://addons.mozilla.org/addon/kareer/';
-  for (const selector of ['.nav-install', '.hero-actions a', '.documents-copy a.text-link', '.closing-section a.v-btn']) {
+  for (const selector of ['.nav-install', '.hero-actions a', '.closing-section a.v-btn']) {
     await expect(page.locator(selector)).toHaveAttribute('href', '/setup/');
   }
   for (const [name, url] of [['Chrome', chromeStore], ['Firefox', firefoxStore]]) {
@@ -305,7 +338,7 @@ test('homepage routes generic install CTAs to setup and links both official stor
 test('content and installation links are available without JavaScript', async ({ browser, baseURL }) => {
   const context = await browser.newContext({ baseURL, javaScriptEnabled: false });
   const page = await context.newPage();
-  for (const [route, heading] of [['/', 'Job hunting takes enough out of you.'], ['/setup/', 'A little setup. A lot less repetition.'], ['/privacy/', 'Your data. Your business.'], ['/security/', 'Kareer Security'], ['/terms/', 'Plain terms. No surprises.'], ['/pricing/', 'Simple pricing. Pay only for AI.']]) {
+  for (const [route, heading] of [['/', 'Job application autofill for Chrome and Firefox'], ['/setup/', 'Install and use Kareer'], ['/privacy/', 'Kareer Privacy Policy'], ['/security/', 'Kareer Security'], ['/terms/', 'Kareer Terms of Service'], ['/pricing/', 'Kareer pricing and AI credits']]) {
     await page.goto(route);
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Privacy', exact: true })).toBeVisible();
@@ -327,7 +360,9 @@ test('robots and sitemap point to the canonical indexable pages', async ({ reque
   expect(await robots.text()).toContain(`Sitemap: ${origin}/sitemap.xml`);
   const sitemap = await request.get('/sitemap.xml');
   expect(sitemap.ok()).toBe(true);
-  const paths = ['/', '/setup/', '/pricing/', '/privacy/', '/security/', '/terms/'];
+  const paths = ['/', '/setup/', '/pricing/', '/compatibility/', '/guides/tailor-resume-and-cover-letter/', '/privacy/', '/security/', '/terms/'];
+  const titles = new Set();
+  const descriptions = new Set();
   expect(Array.from((await sitemap.text()).matchAll(/<loc>([^<]+)<\/loc>/g), match => match[1])).toEqual(paths.map(path => origin + path));
   for (const path of paths) {
     const response = await request.get(path);
@@ -335,7 +370,15 @@ test('robots and sitemap point to the canonical indexable pages', async ({ reque
     const html = await response.text();
     expect(html).toContain(`<link rel="canonical" href="${origin}${path}"`);
     expect(html).not.toMatch(/name="robots" content="noindex/);
+    expect(html.match(/<h1[ >]/g)).toHaveLength(1);
+    expect(html.match(/data-rendered="true"/g)).toHaveLength(1);
+    titles.add(html.match(/<title>([^<]+)<\/title>/)?.[1]);
+    descriptions.add(html.match(/name="description"\s+content="([^"]+)"/)?.[1]);
   }
+  expect(titles).toHaveProperty('size', paths.length);
+  expect(descriptions).toHaveProperty('size', paths.length);
+  expect(titles.has(undefined)).toBe(false);
+  expect(descriptions.has(undefined)).toBe(false);
 });
 
 test('document tabs, FAQ disclosures and keyboard activation work', async ({ page }) => {
@@ -348,23 +391,19 @@ test('document tabs, FAQ disclosures and keyboard activation work', async ({ pag
   await expect(page.getByText('US$9.99/month for 1,000 credits', { exact: false }).last()).toBeVisible();
 });
 
-test('hero typography and scroll entrances animate once without shifting section layout', async ({ page }) => {
+test('scroll entrances animate once without shifting section layout', async ({ page }) => {
   await page.addInitScript(() => {
     window.__siteMotionSamples = [];
     new MutationObserver(records => {
       for (const record of records) {
         const element = record.target;
         if (!(element instanceof HTMLElement)) continue;
-        const hero = element.closest('#hero-title');
-        const reveal = element.matches('[data-scroll-reveal]');
-        const value = hero ? element.style.getPropertyValue('--reveal-fold') : reveal ? element.style.getPropertyValue('--presence-y') : '';
-        if (value && value !== '0deg' && value !== '0px') window.__siteMotionSamples.push({ kind: hero ? 'hero' : 'scroll', section: element.closest('section')?.id, value });
+        const value = element.matches('[data-scroll-reveal]') ? element.style.getPropertyValue('--presence-y') : '';
+        if (value && value !== '0px') window.__siteMotionSamples.push({ section: element.closest('section')?.id, value });
       }
     }).observe(document, { subtree: true, attributes: true, attributeFilter: ['style'] });
   });
   await page.goto('/');
-  await expect(page.locator('#hero-title [data-reveal-line]')).toHaveCount(3);
-  await expect.poll(() => page.evaluate(() => window.__siteMotionSamples.some(sample => sample.kind === 'hero'))).toBe(true);
   const position = () => page.locator('#documents').evaluate(element => Math.round(element.getBoundingClientRect().top + scrollY));
   const before = await position();
   await page.locator('#documents').scrollIntoViewIfNeeded();
@@ -381,15 +420,13 @@ test('hero typography and scroll entrances animate once without shifting section
   expect(await page.evaluate(() => window.__siteMotionSamples.filter(sample => sample.section === 'documents').length)).toBe(count);
 });
 
-test('changing to reduced motion settles typography and section entrances immediately', async ({ page }) => {
+test('changing to reduced motion settles section entrances immediately', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('#hero-title [data-reveal-line]')).toHaveCount(3);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect.poll(() => page.locator('[data-scroll-reveal]').evaluateAll(elements => elements.every(element => {
     const style = getComputedStyle(element);
     return style.opacity === '1' && style.translate === 'none' && style.filter === 'none';
   }))).toBe(true);
-  await expect.poll(() => page.locator('#hero-title [data-reveal-line]').evaluateAll(elements => elements.every(element => getComputedStyle(element).transform === 'none'))).toBe(true);
   await page.locator('#documents').scrollIntoViewIfNeeded();
   await expect(page.getByRole('tab', { name: 'Résumé', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Try the demo', exact: true })).toBeEnabled();

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
   base: '/',
+  appType: 'mpa',
   plugins: [react(), tailwindcss()],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   build: {
@@ -18,6 +19,8 @@ export default defineConfig({
       terms: fileURLToPath(new URL('./terms/index.html', import.meta.url)),
       pricing: fileURLToPath(new URL('./pricing/index.html', import.meta.url)),
       setup: fileURLToPath(new URL('./setup/index.html', import.meta.url)),
+      compatibility: fileURLToPath(new URL('./compatibility/index.html', import.meta.url)),
+      tailoring: fileURLToPath(new URL('./guides/tailor-resume-and-cover-letter/index.html', import.meta.url)),
       notFound: fileURLToPath(new URL('./404.html', import.meta.url)),
     }, output: { codeSplitting: { groups: [
       { name: 'motion', test: /node_modules[\\/](motion|motion-dom|motion-utils|framer-motion)[\\/]/ },

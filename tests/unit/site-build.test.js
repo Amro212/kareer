@@ -4,24 +4,24 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-test('website staging preserves download bytes, update feeds, domain and verification files', async () => {
+test('website staging preserves public files and excludes legacy Firefox downloads', async () => {
   const { stagePublicFiles } = await import('../../site/build.mjs');
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'kareer-site-'));
   try {
     const source = path.join(root, 'source');
     const output = path.join(root, 'output');
-    await fs.mkdir(path.join(source, 'downloads'), { recursive: true });
     await fs.mkdir(path.join(source, 'assets'), { recursive: true });
+    await fs.mkdir(path.join(source, 'downloads'));
     await fs.mkdir(output);
     const files = {
       'CNAME': 'kareer.itsamro.me\n',
       'version.json': '{"version":"0.5.143"}',
-      'firefox-updates.json': '{"addons":{"kareer@amro212":{"updates":[]}}}',
       'googleac1b6f91c85aa7d4.html': 'google-site-verification: test',
-      'downloads/kareer-firefox.xpi': 'signed-xpi-bytes',
       'assets/mark.svg': '<svg></svg>',
     };
     for (const [name, content] of Object.entries(files)) await fs.writeFile(path.join(source, name), content);
+    await fs.writeFile(path.join(source, 'firefox-updates.json'), '{}');
+    await fs.writeFile(path.join(source, 'downloads', 'kareer-firefox.xpi'), 'old-xpi');
     await fs.writeFile(path.join(output, 'index.html'), 'built-homepage');
     await stagePublicFiles(source, output);
     for (const [name, content] of Object.entries(files)) {
@@ -30,12 +30,14 @@ test('website staging preserves download bytes, update feeds, domain and verific
     }
     assert.equal(await fs.readFile(path.join(output, 'index.html'), 'utf8'), 'built-homepage');
     assert.equal(await fs.readFile(path.join(output, '.nojekyll'), 'utf8'), '');
+    await assert.rejects(fs.access(path.join(output, 'firefox-updates.json')), { code: 'ENOENT' });
+    await assert.rejects(fs.access(path.join(output, 'downloads')), { code: 'ENOENT' });
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
 });
 
-test('website staging works before a signed Firefox download is available', async () => {
+test('website staging works when only CNAME is present', async () => {
   const { stagePublicFiles } = await import('../../site/build.mjs');
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'kareer-site-'));
   try {
