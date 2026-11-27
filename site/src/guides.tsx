@@ -3,6 +3,7 @@ const compatibility = [
   ['Greenhouse', 'Fills saved fields on hosted and embedded forms, and attaches a saved résumé on tested file controls.', 'Some forms keep the cover letter upload manual. Check that the site accepted the résumé.'],
   ['Lever', 'Fills profile fields on hosted applications, including tested university selectors and custom checkboxes.', 'Review employer-specific questions and any required choice Kareer could not match.'],
   ['Ashby', 'Fills saved fields on hosted and embedded forms, and verifies accepted résumé uploads on tested layouts.', 'Check custom fields and attachments before submitting, especially when the form refreshes after parsing.'],
+  ['SmartRecruiters', 'Fills profile fields, screening questions, résumé uploads, and work and education rows on one-click applications without duplicating existing entries.', 'Review screening questions, attachments, and saved experience or education cards before continuing.'],
   ['Generic forms', 'Fills standard web fields on recognized job applications, including tested embedded forms.', 'Custom widgets and multi-step controls vary by employer. Complete anything marked unresolved.'],
 ] as const;
 
@@ -11,7 +12,7 @@ export function Compatibility() {
     <div className="reading-intro">
       <a className="back-link" href="/">← Back to Kareer</a>
       <h1>Job application autofill compatibility</h1>
-      <p>Kareer autofills tested Workday, Greenhouse, Lever, Ashby, and standard web forms. Exact fields and steps depend on the employer’s application.</p>
+      <p>Kareer autofills tested Workday, Greenhouse, Lever, Ashby, SmartRecruiters, and standard web forms. Exact fields and steps depend on the employer’s application.</p>
     </div>
     <div className="table-scroll" role="region" aria-label="Application platform coverage" tabIndex={0}>
       <table className="comparison-table">

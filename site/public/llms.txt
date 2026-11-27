@@ -6,7 +6,7 @@
 
 - [Kareer](https://kareer.itsamro.me/): Product overview, interactive demo, and frequently asked questions.
 - [Install and use Kareer](https://kareer.itsamro.me/setup/): Official browser stores, profile setup, first run, and troubleshooting.
-- [Application compatibility](https://kareer.itsamro.me/compatibility/): Tested workflows and limits for Workday, Greenhouse, Lever, Ashby, and generic forms.
+- [Application compatibility](https://kareer.itsamro.me/compatibility/): Tested workflows and limits for Workday, Greenhouse, Lever, Ashby, SmartRecruiters, and generic forms.
 - [Résumé and cover letter guide](https://kareer.itsamro.me/guides/tailor-resume-and-cover-letter/): Example of tailoring two documents from the same saved facts.
 
 ## Pricing and data handling

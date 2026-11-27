@@ -81,7 +81,7 @@ answers and inaccessible runs visible in the sample counts.
 | Firefox | What is a good Firefox extension for job application autofill? |
 | Workday | Which extensions can fill Workday work history and education? |
 | Greenhouse | Can a browser extension fill a Greenhouse application and attach my résumé? |
-| Other platforms | Which job application autofill tools work on Lever and Ashby? |
+| Other platforms | Which job application autofill tools work on Lever, Ashby, and SmartRecruiters? |
 | Privacy | Where does Kareer store my profile and what is sent when I use AI? |
 | Submission | Can I review answers before Kareer submits a job application? |
 | Pricing | Is Kareer free, and how much do its AI credits cost? |

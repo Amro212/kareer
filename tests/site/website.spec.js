@@ -23,7 +23,7 @@ test('SEO pages expose their core content without scripts', async ({ browser, ba
     await expect(page.getByRole('link', { name: 'Read the tailoring guide' })).toHaveAttribute('href', '/guides/tailor-resume-and-cover-letter/');
     await page.goto('/compatibility/');
     const matrix = page.getByRole('table');
-    for (const platform of ['Workday', 'Greenhouse', 'Lever', 'Ashby', 'Generic forms']) {
+    for (const platform of ['Workday', 'Greenhouse', 'Lever', 'Ashby', 'SmartRecruiters', 'Generic forms']) {
       await expect(matrix.getByRole('rowheader', { name: platform })).toBeVisible();
     }
     await page.goto('/guides/tailor-resume-and-cover-letter/');
