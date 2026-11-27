@@ -217,8 +217,9 @@ test('setup, privacy, security and terms are directly accessible static pages', 
   await expect(page.getByText('chrome://extensions', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Firefox' }).click();
   await expect(page.getByRole('heading', { name: 'Firefox coming soon' })).toBeVisible();
-  await page.getByText('Existing signed Firefox download', { exact: true }).click();
-  await expect(page.getByRole('link', { name: 'Download signed Firefox build' })).toHaveAttribute('href', '/downloads/kareer-firefox.xpi');
+  await expect(page.getByText('Kareer will be available on Mozilla Add-ons soon.', { exact: true })).toBeVisible();
+  await expect(page.locator('#browser a[href*=".xpi"]')).toHaveCount(0);
+  await expect(page.getByRole('tabpanel', { name: 'Firefox' }).getByRole('link')).toHaveCount(0);
   await page.goto('/privacy/');
   await expect(page.getByRole('heading', { name: 'Your data. Your business.' })).toBeVisible();
   await expect(page.locator('#ai-transmission')).toContainText('OpenRouter');
