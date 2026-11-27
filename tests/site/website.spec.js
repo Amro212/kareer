@@ -211,10 +211,15 @@ test('pricing credit estimator gives a labeled range and a plan fit', async ({ p
 test('setup, privacy, security and terms are directly accessible static pages', async ({ page }) => {
   await page.goto('/setup/');
   await expect(page.getByRole('heading', { name: 'A little setup. A lot less repetition.' })).toBeVisible();
-  await page.getByRole('tab', { name: 'Chrome & Edge' }).click();
-  await expect(page.getByRole('link', { name: 'Open Chrome Web Store' })).toHaveAttribute('href', /chromewebstore\.google\.com\/detail\/.*gnbkbdbpajlpclicmapjghpodogkgblf$/);
+  const chromeInstall = page.locator('#browser').getByRole('link', { name: 'Add to Chrome', exact: true });
+  const firefoxInstall = page.locator('#browser').getByRole('link', { name: 'Add to Firefox', exact: true });
+  await expect(chromeInstall).toBeVisible();
+  await expect(chromeInstall).toHaveAttribute('href', 'https://chromewebstore.google.com/detail/kareer/gnbkbdbpajlpclicmapjghpodogkgblf');
+  await expect(firefoxInstall).toBeVisible();
+  await expect(firefoxInstall).toHaveAttribute('href', 'https://addons.mozilla.org/addon/kareer/');
   await page.getByText('Build for Chrome, Edge or Brave from source', { exact: true }).click();
   await expect(page.getByText('chrome://extensions', { exact: true })).toBeVisible();
+  await expect(page.locator('#browser a[href*=".xpi"]')).toHaveCount(0);
   await page.goto('/privacy/');
   await expect(page.getByRole('heading', { name: 'Your data. Your business.' })).toBeVisible();
   await expect(page.locator('#ai-transmission')).toContainText('OpenRouter');
@@ -247,7 +252,9 @@ test('pricing lists both plans from the shared offers and explains that purchase
   const pack = page.locator('.pricing-card').filter({ has: page.getByRole('heading', { name: 'Kareer Credit Pack' }) });
   await expect(pack).toContainText('US$4.99');
   await expect(pack).toContainText('300 credits');
-  await expect(pack.getByRole('link', { name: /Get Kareer to buy/ })).toHaveAttribute('href', '/setup/#browser');
+  await expect(pack.getByRole('link', { name: 'Get Kareer to buy' })).toHaveAttribute('href', '/setup/');
+  await expect(monthly.getByRole('link', { name: 'Get Kareer to buy' })).toHaveAttribute('href', '/setup/');
+  await expect(page.locator('.pricing-free').getByRole('link', { name: 'Get Kareer' })).toHaveAttribute('href', '/setup/');
   await expect(page.locator('#buy-in-extension')).toContainText('All sales are final');
   await expect(page.locator('#buy-in-extension')).toContainText('20 free credits');
   await expect(page.locator('#buy-in-extension').getByRole('link', { name: 'kareer@itsamro.me' })).toHaveAttribute('href', 'mailto:kareer@itsamro.me');
@@ -272,6 +279,29 @@ test('mobile navigation, reduced-motion demo and pages fit a narrow viewport', a
   await expect(page.getByRole('status').filter({ hasText: 'Ready for your review' })).toBeVisible();
 });
 
+test('homepage routes generic install CTAs to setup and links both official stores', async ({ page }) => {
+  await page.goto('/');
+  const chromeStore = 'https://chromewebstore.google.com/detail/kareer/gnbkbdbpajlpclicmapjghpodogkgblf';
+  const firefoxStore = 'https://addons.mozilla.org/addon/kareer/';
+  for (const selector of ['.nav-install', '.hero-actions a', '.documents-copy a.text-link', '.closing-section a.v-btn']) {
+    await expect(page.locator(selector)).toHaveAttribute('href', '/setup/');
+  }
+  for (const [name, url] of [['Chrome', chromeStore], ['Firefox', firefoxStore]]) {
+    await expect(page.locator('.hero-copy .browser-availability').getByRole('link', { name, exact: true })).toHaveAttribute('href', url);
+    await expect(page.locator('.closing-section .browser-availability').getByRole('link', { name, exact: true })).toHaveAttribute('href', url);
+  }
+  await expect(page.getByRole('contentinfo').getByRole('link', { name: 'Chrome Web Store' })).toHaveAttribute('href', chromeStore);
+  await expect(page.getByRole('contentinfo').getByRole('link', { name: 'Firefox Add-ons' })).toHaveAttribute('href', firefoxStore);
+  await page.getByText('Which browsers can I use?', { exact: true }).click();
+  await expect(page.locator('#faq').getByRole('link', { name: 'Chrome Web Store' })).toHaveAttribute('href', chromeStore);
+  await expect(page.locator('#faq').getByRole('link', { name: 'Mozilla Add-ons' })).toHaveAttribute('href', firefoxStore);
+  await expect(page.locator('main')).not.toContainText(/Firefox coming soon|pending review/i);
+  await page.locator('.nav-install').click();
+  await expect(page).toHaveURL(/\/setup\/$/);
+  await expect(page.locator('#browser').getByRole('link', { name: 'Add to Chrome' })).toBeVisible();
+  await expect(page.locator('#browser').getByRole('link', { name: 'Add to Firefox' })).toBeVisible();
+});
+
 test('content and installation links are available without JavaScript', async ({ browser, baseURL }) => {
   const context = await browser.newContext({ baseURL, javaScriptEnabled: false });
   const page = await context.newPage();
@@ -279,6 +309,11 @@ test('content and installation links are available without JavaScript', async ({
     await page.goto(route);
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Privacy', exact: true })).toBeVisible();
+    await expect(page.locator('.nav-install')).toHaveAttribute('href', '/setup/');
+    if (route === '/setup/') {
+      await expect(page.locator('#browser').getByRole('link', { name: 'Add to Chrome' })).toHaveAttribute('href', 'https://chromewebstore.google.com/detail/kareer/gnbkbdbpajlpclicmapjghpodogkgblf');
+      await expect(page.locator('#browser').getByRole('link', { name: 'Add to Firefox' })).toHaveAttribute('href', 'https://addons.mozilla.org/addon/kareer/');
+    }
     await expect(page.getByRole('contentinfo').getByRole('link', { name: 'Security', exact: true })).toHaveAttribute('href', '/security/');
     await expect(page.getByRole('link', { name: 'Terms', exact: true })).toBeVisible();
   }

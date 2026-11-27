@@ -19,6 +19,7 @@ playwright-report/
 coverage/
 .nyc_output/
 sample-output/
+.playwright-mcp/
 
 # Environment, credentials, and private keys
 .env
