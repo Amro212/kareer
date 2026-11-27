@@ -3,7 +3,7 @@
     <img src="./src/assets/brand/kareer-logo-horizontal.png" alt="Kareer Logo" width="380" />
   </a>
 
-  <p><strong>AI-powered job application autofill for Chrome, Firefox, and Tampermonkey.</strong></p>
+  <p><strong>Free local job application autofill for Chrome and Firefox, with optional AI.</strong></p>
 
   <p>
     <a href="https://kareer.itsamro.me/">
@@ -62,9 +62,8 @@
 
 Kareer is a source-available browser assistant that scans job application forms, matches questions to your resume and experience, and accurately fills out inputs, comboboxes, dropdowns, radio buttons, and textareas.
 
-Unlike autofill extensions that store your sensitive resume data on third-party servers, Kareer:
-- **Keeps your profile, resume and files in your browser** with **zero telemetry**.
-- Fills from your saved profile for free. AI answers come from **Kareer AI**, which works right after install (new users get 20 free credits), or from **your own OpenRouter key** if you build Kareer yourself.
+- **Stores your profile, resume and files in your browser.** Optional Kareer AI sends relevant context through the Kareer gateway to OpenRouter and its provider. See the [privacy policy](https://kareer.itsamro.me/privacy/#ai-transmission) for details.
+- Fills from your saved profile for free. You can start an optional **Kareer AI** trial in the official extension. See [current plan and trial details](https://kareer.itsamro.me/pricing/). Self-built copies can use **your own OpenRouter key**.
 - Uses a **non-intrusive Shadow DOM floating panel** that never conflicts with website stylesheets.
 
 ---

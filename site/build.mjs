@@ -21,13 +21,20 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const server = await createServer({ configFile: path.join(site, 'vite.config.ts'), server: { middlewareMode: true }, appType: 'custom' });
   try {
     const { App } = await server.ssrLoadModule('/src/app.tsx');
+    const { renderPricingMarkdown } = await server.ssrLoadModule('/src/pricing.ts');
     const { renderToString } = await import('react-dom/server');
     const { createElement } = await import('react');
-    for (const [name, page] of [['index.html', 'home'], ['privacy/index.html', 'privacy'], ['security/index.html', 'security'], ['terms/index.html', 'terms'], ['pricing/index.html', 'pricing'], ['setup/index.html', 'setup'], ['404.html', '404']]) {
+    for (const [name, page] of [
+      ['index.html', 'home'], ['privacy/index.html', 'privacy'], ['security/index.html', 'security'],
+      ['terms/index.html', 'terms'], ['pricing/index.html', 'pricing'], ['setup/index.html', 'setup'],
+      ['compatibility/index.html', 'compatibility'],
+      ['guides/tailor-resume-and-cover-letter/index.html', 'tailoring'], ['404.html', '404'],
+    ]) {
       const destination = path.join(output, name);
       const html = await fs.readFile(destination, 'utf8');
       await fs.writeFile(destination, html.replace('<div id="root"><!--app--></div>', `<div id="root" data-rendered="true">${renderToString(createElement(App, { page }))}</div>`));
     }
+    await fs.writeFile(path.join(output, 'pricing.md'), renderPricingMarkdown());
   } finally {
     await server.close();
   }
