@@ -216,7 +216,7 @@ test('setup, privacy, security and terms are directly accessible static pages', 
   await page.getByText('Build for Chrome, Edge or Brave from source', { exact: true }).click();
   await expect(page.getByText('chrome://extensions', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Firefox' }).click();
-  await expect(page.getByRole('heading', { name: 'Firefox store listing pending review' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Firefox coming soon' })).toBeVisible();
   await page.getByText('Existing signed Firefox download', { exact: true }).click();
   await expect(page.getByRole('link', { name: 'Download signed Firefox build' })).toHaveAttribute('href', '/downloads/kareer-firefox.xpi');
   await page.goto('/privacy/');
@@ -285,10 +285,10 @@ test('homepage install links use the public Chrome listing and disclose Firefox 
     await expect(page.locator(selector)).toHaveAttribute('href', chromeStore);
   }
   await expect(page.getByRole('contentinfo').getByRole('link', { name: 'Chrome Web Store' })).toHaveAttribute('href', chromeStore);
-  await expect(page.locator('.hero-copy')).toContainText('Firefox listing pending review');
+  await expect(page.locator('.hero-copy')).toContainText('Firefox coming soon');
   await page.getByText('Which browsers can I use?', { exact: true }).click();
   await expect(page.locator('#faq').getByRole('link', { name: 'Chrome Web Store' })).toHaveAttribute('href', chromeStore);
-  await expect(page.locator('#faq')).toContainText('official Firefox store listing is pending review');
+  await expect(page.locator('#faq')).toContainText('Firefox is coming soon to Mozilla Add-ons');
 });
 
 test('content and installation links are available without JavaScript', async ({ browser, baseURL }) => {
