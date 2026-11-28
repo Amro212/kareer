@@ -420,6 +420,35 @@ test('scroll entrances animate once without shifting section layout', async ({ p
   expect(await page.evaluate(() => window.__siteMotionSamples.filter(sample => sample.section === 'documents').length)).toBe(count);
 });
 
+test('the mobile pricing receipt sharpens while it is still fading in', async ({ page }) => {
+  const start = new Date('2026-01-01T00:00:00Z');
+  await page.clock.install({ time: start });
+  await page.clock.pauseAt(new Date(start.getTime() + 1000));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveAttribute('data-entrances', 'ready');
+  const receipt = page.locator('.cost-receipt');
+  await expect(receipt).toHaveAttribute('data-scroll-reveal', 'waiting');
+  const appearance = () => receipt.evaluate(element => {
+    const { opacity, filter } = getComputedStyle(element);
+    return { opacity: Number(opacity), blur: filter === 'none' ? 0 : Number.parseFloat(filter.slice(5)) };
+  });
+  await receipt.evaluate(element => window.scrollTo({
+    top: window.scrollY + element.getBoundingClientRect().top - 360, behavior: 'instant',
+  }));
+  await expect(receipt).toHaveAttribute('data-scroll-reveal', 'playing');
+  await page.clock.runFor(96);
+  expect((await appearance()).blur).toBeGreaterThan(1);
+  await page.clock.runFor(128);
+  const fading = await appearance();
+  expect(fading.opacity).toBeGreaterThan(0.5);
+  expect(fading.opacity).toBeLessThan(0.85);
+  expect(fading.blur).toBeLessThan(0.2);
+  await page.clock.runFor(650);
+  await expect(receipt).toHaveAttribute('data-scroll-reveal', 'done');
+  expect(await appearance()).toEqual({ opacity: 1, blur: 0 });
+});
+
 test('changing to reduced motion settles section entrances immediately', async ({ page }) => {
   await page.goto('/');
   await page.emulateMedia({ reducedMotion: 'reduce' });
