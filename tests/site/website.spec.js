@@ -99,6 +99,22 @@ test('mobile install link is ready when the demo starts below the fold', async (
   await expect(page.locator('.hero-actions').getByRole('link', { name: 'Get Kareer' })).toBeVisible();
 });
 
+test('hero motion is staggered without fading content and respects reduced motion', async ({ page }) => {
+  await page.goto('/');
+  const stages = page.locator('.hero-heading span, .hero-description, .hero-actions');
+  const appearance = () => stages.evaluateAll(elements => elements.map(element => {
+    const { animationName, animationDelay, opacity } = getComputedStyle(element);
+    return { animationName, delay: Number.parseFloat(animationDelay), opacity };
+  }));
+  const frames = await appearance();
+  expect(frames.map(({ animationName }) => animationName)).toEqual(['hero-highlight', 'hero-settle', 'hero-settle']);
+  expect(frames[0].delay).toBeLessThan(frames[1].delay);
+  expect(frames[1].delay).toBeLessThan(frames[2].delay);
+  expect(frames.map(({ opacity }) => opacity)).toEqual(['1', '1', '1']);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  expect((await appearance()).map(({ animationName }) => animationName)).toEqual(['none', 'none', 'none']);
+});
+
 test('a failed script load keeps prerendered install content readable', async ({ page }) => {
   await page.route('**/assets/main-*.js', route => route.abort());
   await page.goto('/');
